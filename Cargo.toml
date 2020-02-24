@@ -14,6 +14,7 @@ exclude = [ ".gitignore",
 [dependencies]
 curve25519-dalek = { version = "2.0", default-features = false }
 bulletproofs = { version = "2.0", default-features = false }
+sha3 = { version = "0.8", default-features = false }
 rand = { version = "0.7.3", default-features = false, optional = true }
 rand_core = { version = "0.5.1", default-features = false }
 getrandom = { version = "0.1.14", default-features = false, optional = true }
