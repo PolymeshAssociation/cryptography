@@ -90,24 +90,25 @@ pub struct PedersenLabelGenerators {
 impl PedersenLabelGenerators {
     /// Create a set Pedersen generators.
     pub fn new() -> Self {
-        // Generate the Pedersen generators.
-        // [PA] todo: This must be refactored to work with any PEDERSEN_COMMITMENT_NUM_GENERATORS value.
+        let mut generators: [RistrettoPoint; PEDERSEN_COMMITMENT_NUM_GENERATORS] =
+            [RistrettoPoint::default(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
+
         let mut ristretto_base_bytes = Vec::with_capacity(
             PEDERSEN_COMMITMENT_LABEL.len() +
             RISTRETTO_BASEPOINT_COMPRESSED.as_bytes().len());
         ristretto_base_bytes.extend_from_slice(&PEDERSEN_COMMITMENT_LABEL.to_vec());
         ristretto_base_bytes.extend_from_slice(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
 
-        let g0 = RistrettoPoint::hash_from_bytes::<Sha3_512>(
-            ristretto_base_bytes.as_slice(),
-        );
-
-        let g1 = RistrettoPoint::hash_from_bytes::<Sha3_512>(
-            g0.compress().as_bytes(),
-        );
+        for i in 0..(PEDERSEN_COMMITMENT_NUM_GENERATORS - 1) {
+            generators[i] = RistrettoPoint::hash_from_bytes::<Sha3_512>(
+                ristretto_base_bytes.as_slice(),
+            );
+            ristretto_base_bytes = generators[i].compress().as_bytes().to_vec();
+        }
+        generators[PEDERSEN_COMMITMENT_NUM_GENERATORS - 1] = RISTRETTO_BASEPOINT_POINT;
 
         PedersenLabelGenerators {
-            generators: [g0, g1, RISTRETTO_BASEPOINT_POINT],
+            generators: generators,
         }
     }
 
