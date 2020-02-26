@@ -14,7 +14,7 @@
 //! ```
 //! use pedersen_commitments::*;
 //!
-//! let plg: PedersenLabelGenerators = PedersenLabelGenerators::new();
+//! let plg: PedersenLabelGenerators = PedersenLabelGenerators::default();
 //! ```
 //!
 //! The pedersen commitments are calculated as:
@@ -28,7 +28,7 @@
 //! use rand_core::OsRng;
 //! use pedersen_commitments::*;
 //!
-//! let plg: PedersenLabelGenerators = PedersenLabelGenerators::new();
+//! let plg: PedersenLabelGenerators = PedersenLabelGenerators::default();
 //! let mut rng = OsRng;
 //! let rand_values: Vec<Scalar> = (0..PEDERSEN_COMMITMENT_NUM_GENERATORS)
 //!     .map(|_| Scalar::random(&mut rng))
@@ -43,7 +43,7 @@
 //! use curve25519_dalek::ristretto::CompressedRistretto;
 //! use pedersen_commitments::*;
 //!
-//! let plg: PedersenLabelGenerators = PedersenLabelGenerators::new();
+//! let plg: PedersenLabelGenerators = PedersenLabelGenerators::default();
 //! // Generate 3 random values to commit to.
 //! let id_bytes: [u8; 32] = [
 //!     107, 60, 69, 84, 64, 107, 158, 230,
@@ -66,15 +66,21 @@
 //! ```
 //!
 
-use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_COMPRESSED;
-use curve25519_dalek::traits::MultiscalarMul;
+use curve25519_dalek::ristretto::RistrettoPoint;
 use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::traits::MultiscalarMul;
 use sha3::Sha3_512;
 
-pub const PEDERSEN_COMMITMENT_LABEL: [u8; 16] = *b"PolymathIdentity";
+pub const PEDERSEN_COMMITMENT_LABEL: &[u8; 16] = b"PolymathIdentity";
 pub const PEDERSEN_COMMITMENT_NUM_GENERATORS: usize = 3;
+
+/// Pre-calculate because they are going to be the same.
+pub const POLYMATH_RISTRETTO_BASE: &[u8; 48] = &[
+    80, 111, 108, 121, 109, 97, 116, 104, 73, 100, 101, 110, 116, 105, 116, 121, 226, 242, 174, 10,
+    106, 188, 78, 113, 168, 132, 169, 97, 197, 0, 81, 95, 88, 227, 11, 106, 165, 130, 221, 141,
+    182, 166, 89, 69, 224, 141, 45, 118,
+];
 
 pub struct PedersenLabelGenerators {
     /// Bases for the Pedersen commitment.
@@ -89,28 +95,6 @@ pub struct PedersenLabelGenerators {
 
 impl PedersenLabelGenerators {
     /// Create a set Pedersen generators.
-    pub fn new() -> Self {
-        let mut generators: [RistrettoPoint; PEDERSEN_COMMITMENT_NUM_GENERATORS] =
-            [RistrettoPoint::default(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
-
-        let mut ristretto_base_bytes = Vec::with_capacity(
-            PEDERSEN_COMMITMENT_LABEL.len() +
-            RISTRETTO_BASEPOINT_COMPRESSED.as_bytes().len());
-        ristretto_base_bytes.extend_from_slice(&PEDERSEN_COMMITMENT_LABEL.to_vec());
-        ristretto_base_bytes.extend_from_slice(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
-
-        for i in 0..(PEDERSEN_COMMITMENT_NUM_GENERATORS - 1) {
-            generators[i] = RistrettoPoint::hash_from_bytes::<Sha3_512>(
-                ristretto_base_bytes.as_slice(),
-            );
-            ristretto_base_bytes = generators[i].compress().as_bytes().to_vec();
-        }
-        generators[PEDERSEN_COMMITMENT_NUM_GENERATORS - 1] = RISTRETTO_BASEPOINT_POINT;
-
-        PedersenLabelGenerators {
-            generators: generators,
-        }
-    }
 
     /// Commit to a set of `PEDERSEN_COMMITMENT_NUM_GENERATORS` scalars.
     /// # Input
@@ -137,18 +121,34 @@ impl PedersenLabelGenerators {
     }
 }
 
+impl Default for PedersenLabelGenerators {
+    fn default() -> Self {
+        let mut generators = [RistrettoPoint::default(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
+
+        let mut ristretto_base_bytes = POLYMATH_RISTRETTO_BASE.to_vec();
+        for i in 0..(PEDERSEN_COMMITMENT_NUM_GENERATORS - 1) {
+            generators[i] =
+                RistrettoPoint::hash_from_bytes::<Sha3_512>(ristretto_base_bytes.as_slice());
+            ristretto_base_bytes = generators[i].compress().as_bytes().to_vec();
+        }
+        generators[PEDERSEN_COMMITMENT_NUM_GENERATORS - 1] = RISTRETTO_BASEPOINT_POINT;
+
+        PedersenLabelGenerators { generators }
+    }
+}
+
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
-    use rand_core::OsRng;
     use super::*;
+    use rand_core::OsRng;
 
     #[test]
     fn commit_randoms() {
-        let plg: PedersenLabelGenerators = PedersenLabelGenerators::new();
+        let plg = PedersenLabelGenerators::default();
         // Generate 3 random values to commit to.
         let mut rng = OsRng;
         let rand_values: Vec<Scalar> = (0..PEDERSEN_COMMITMENT_NUM_GENERATORS)
@@ -163,8 +163,9 @@ mod tests {
 
     #[test]
     fn commit_zeros() {
-        let plg: PedersenLabelGenerators = PedersenLabelGenerators::new();
-        let zeros: [Scalar; PEDERSEN_COMMITMENT_NUM_GENERATORS] = [Scalar::default(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
+        let plg: PedersenLabelGenerators = PedersenLabelGenerators::default();
+        let zeros: [Scalar; PEDERSEN_COMMITMENT_NUM_GENERATORS] =
+            [Scalar::default(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
         let result = plg.commit(&zeros);
 
         assert_eq!(result, RistrettoPoint::default());
@@ -173,7 +174,7 @@ mod tests {
 
     #[test]
     fn random_labels() {
-        let plg: PedersenLabelGenerators = PedersenLabelGenerators::new();
+        let plg: PedersenLabelGenerators = PedersenLabelGenerators::default();
         // Generate 3 random values to commit to.
         let mut rng = OsRng;
         let rand_values: Vec<Scalar> = (0..PEDERSEN_COMMITMENT_NUM_GENERATORS)
