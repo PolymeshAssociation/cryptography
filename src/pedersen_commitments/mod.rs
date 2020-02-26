@@ -30,10 +30,8 @@
 //!
 //! let plg: PedersenLabelGenerators = PedersenLabelGenerators::default();
 //! let mut rng = OsRng;
-//! let rand_values: Vec<Scalar> = (0..PEDERSEN_COMMITMENT_NUM_GENERATORS)
-//!     .map(|_| Scalar::random(&mut rng))
-//!     .collect();
-//! let result = plg.commit(&rand_values);
+//! let rand_values = PedersenGenerators::random();
+//! let result = plg.commit(rand_values);
 //! ```
 //!
 //! To calculate the label_prime:
@@ -66,11 +64,13 @@
 //! ```
 //!
 
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::ristretto::RistrettoPoint;
-use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::traits::MultiscalarMul;
+use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+    traits::MultiscalarMul,
+};
+use rand_core::OsRng;
 use sha3::Sha3_512;
+use std::ops::Index;
 
 pub const PEDERSEN_COMMITMENT_LABEL: &[u8; 16] = b"PolymathIdentity";
 pub const PEDERSEN_COMMITMENT_NUM_GENERATORS: usize = 3;
@@ -81,6 +81,35 @@ pub const POLYMATH_RISTRETTO_BASE: &[u8; 48] = &[
     106, 188, 78, 113, 168, 132, 169, 97, 197, 0, 81, 95, 88, 227, 11, 106, 165, 130, 221, 141,
     182, 166, 89, 69, 224, 141, 45, 118,
 ];
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct PedersenGenerators([Scalar; PEDERSEN_COMMITMENT_NUM_GENERATORS]);
+
+impl PedersenGenerators {
+    pub fn random() -> PedersenGenerators {
+        let mut rng = OsRng;
+        let values = [
+            Scalar::random(&mut rng),
+            Scalar::random(&mut rng),
+            Scalar::random(&mut rng),
+        ];
+
+        PedersenGenerators(values)
+    }
+
+    #[inline]
+    pub fn as_slice(&self) -> &[Scalar] {
+        &self.0[..]
+    }
+}
+
+impl Index<usize> for PedersenGenerators {
+    type Output = Scalar;
+
+    fn index(&self, idx: usize) -> &Self::Output {
+        &self.0[idx]
+    }
+}
 
 pub struct PedersenLabelGenerators {
     /// Bases for the Pedersen commitment.
@@ -102,9 +131,8 @@ impl PedersenLabelGenerators {
     ///
     /// # Output
     /// A Ristretto point.
-    pub fn commit(&self, values: &[Scalar]) -> RistrettoPoint {
-        assert_eq!(values.len(), PEDERSEN_COMMITMENT_NUM_GENERATORS);
-        RistrettoPoint::multiscalar_mul(values, &self.generators)
+    pub fn commit(&self, values: PedersenGenerators) -> RistrettoPoint {
+        RistrettoPoint::multiscalar_mul(values.as_slice(), &self.generators)
     }
 
     /// Calculate the label prime:
@@ -144,17 +172,13 @@ impl Default for PedersenLabelGenerators {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand_core::OsRng;
 
     #[test]
     fn commit_randoms() {
         let plg = PedersenLabelGenerators::default();
         // Generate 3 random values to commit to.
-        let mut rng = OsRng;
-        let rand_values: Vec<Scalar> = (0..PEDERSEN_COMMITMENT_NUM_GENERATORS)
-            .map(|_| Scalar::random(&mut rng))
-            .collect();
-        let result = plg.commit(&rand_values);
+        let generator = PedersenGenerators::random();
+        let result = plg.commit(generator);
         println!("g0: {:?}", plg.generators[0].compress().as_bytes());
         println!("g1: {:?}", plg.generators[1].compress().as_bytes());
         println!("g2: {:?}", plg.generators[2].compress().as_bytes());
@@ -164,9 +188,8 @@ mod tests {
     #[test]
     fn commit_zeros() {
         let plg: PedersenLabelGenerators = PedersenLabelGenerators::default();
-        let zeros: [Scalar; PEDERSEN_COMMITMENT_NUM_GENERATORS] =
-            [Scalar::default(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
-        let result = plg.commit(&zeros);
+        let zeros = PedersenGenerators::default();
+        let result = plg.commit(zeros);
 
         assert_eq!(result, RistrettoPoint::default());
         assert_eq!(result.compress().as_bytes(), &[0; 32]);
@@ -176,12 +199,9 @@ mod tests {
     fn random_labels() {
         let plg: PedersenLabelGenerators = PedersenLabelGenerators::default();
         // Generate 3 random values to commit to.
-        let mut rng = OsRng;
-        let rand_values: Vec<Scalar> = (0..PEDERSEN_COMMITMENT_NUM_GENERATORS)
-            .map(|_| Scalar::random(&mut rng))
-            .collect();
-        let result = plg.commit(&rand_values);
+        let random_gen = PedersenGenerators::random();
+        let result = plg.commit(random_gen);
 
-        plg.label_prime(result, rand_values[0]);
+        plg.label_prime(result, random_gen[0]);
     }
 }
