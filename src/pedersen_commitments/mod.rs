@@ -12,55 +12,58 @@
 //! In this setup the entire system is using the same set of
 //! 3 Pedersen generators: G0, G1, and G2. To create thse generators:
 //! ```
-//! use pedersen_commitments::*;
+//! use cryptography::pedersen_commitments::*;
 //!
 //! let plg = PedersenLabelGenerators::default();
 //! ```
-//!
-//! The pedersen commitments are calculated as:
-//! commitment = commit(values_0, values_1, values_2) =
-//!     values_0 * G_0 + values_1 * G_1 + values_2 * G2
-//! The result is a Ristretto point.
-//! To commit to a set 3 scalars:
-//! ```
-//! use curve25519_dalek::scalar::Scalar;
-//! use curve25519_dalek::ristretto::RistrettoPoint;
-//! use rand_core::OsRng;
-//! use pedersen_commitments::*;
-//!
-//! let plg = PedersenLabelGenerators::default();
-//! let mut rng = OsRng;
-//! let rand_values: [Scalar; 3] =
-//!     [Scalar::random(&mut rng), Scalar::random(&mut rng), Scalar::random(&mut rng)];
-//! let result = plg.commit(&rand_values);
-//! ```
-//!
-//! To calculate the label_prime:
-//! ```
-//! use curve25519_dalek::scalar::Scalar;
-//! use curve25519_dalek::ristretto::RistrettoPoint;
-//! use curve25519_dalek::ristretto::CompressedRistretto;
-//! use pedersen_commitments::*;
-//!
-//! let plg = PedersenLabelGenerators::default();
-//! let id_bytes: [u8; 32] = [
-//!     0xb5, 0xde, 0xb8, 0x5b, 0x87, 0x4a, 0x81, 0x6a,
-//!     0x9f, 0x28, 0xd, 0xbc, 0x87, 0xef, 0x6a, 0xb8,
-//!     0x6f, 0x54, 0xe4, 0xa1, 0xf, 0x7f, 0xcd, 0x7a,
-//!     0x27, 0xe1, 0x2c, 0x9b, 0x42, 0xd7, 0x9b, 0x9 ];
-//! let id: Scalar = Scalar::from_bits(id_bytes);
-//!
-//! let label_bytes: [u8; 32] = [
-//!     0xec, 0x97, 0xad, 0x35, 0x2f, 0x9a, 0x22, 0x73,
-//!     0x93, 0x23, 0x8c, 0x21, 0x87, 0x70, 0xa0, 0x6,
-//!     0xa2, 0x7e, 0xcd, 0x4b, 0xa0, 0x89, 0x4a, 0x34,
-//!     0x7e, 0x5, 0xc7, 0x7b, 0x12, 0x7, 0xa5, 0x3 ];
-//! let label: RistrettoPoint =
-//!     CompressedRistretto::from_slice(&label_bytes).decompress().unwrap();
-//!
-//! let label_prime = plg.label_prime(label, id);
-//! ```
-//!
+// [PA] todo: now that we use an older version of Dalec, fix the documentation here.
+//
+// ! The pedersen commitments are calculated as:
+// ! commitment = commit(values_0, values_1, values_2) =
+// !     values_0 * G_0 + values_1 * G_1 + values_2 * G2
+// ! The result is a Ristretto point.
+// ! To commit to a set 3 scalars:
+// ! ```
+// ! use curve25519_dalek::scalar::Scalar;
+// ! use curve25519_dalek::ristretto::RistrettoPoint;
+// ! use rand_core::OsRng;
+// ! use cryptography::pedersen_commitments::*;
+// !
+// ! let plg = PedersenLabelGenerators::default();
+// ! let mut rng = OsRng;
+// ! let rand_values: [Scalar; 3] =
+// !     [Scalar::random(&mut rng), Scalar::random(&mut rng), Scalar::random(&mut rng)];
+// ! let result = plg.commit(&rand_values);
+// ! ```
+// !
+// ! To calculate the label_prime:
+// ! ```
+// ! use curve25519_dalek::scalar::Scalar;
+// ! use curve25519_dalek::ristretto::RistrettoPoint;
+// ! use curve25519_dalek::ristretto::CompressedRistretto;
+// ! use cryptography::pedersen_commitments::*;
+// !
+// ! let plg = PedersenLabelGenerators::default();
+// ! let id_bytes: [u8; 32] = [
+// !     0xb5, 0xde, 0xb8, 0x5b, 0x87, 0x4a, 0x81, 0x6a,
+// !     0x9f, 0x28, 0xd, 0xbc, 0x87, 0xef, 0x6a, 0xb8,
+// !     0x6f, 0x54, 0xe4, 0xa1, 0xf, 0x7f, 0xcd, 0x7a,
+// !     0x27, 0xe1, 0x2c, 0x9b, 0x42, 0xd7, 0x9b, 0x9 ];
+// ! let id: Scalar = Scalar::from_bits(id_bytes);
+// !
+// ! let label_bytes: [u8; 32] = [
+// !     0xec, 0x97, 0xad, 0x35, 0x2f, 0x9a, 0x22, 0x73,
+// !     0x93, 0x23, 0x8c, 0x21, 0x87, 0x70, 0xa0, 0x6,
+// !     0xa2, 0x7e, 0xcd, 0x4b, 0xa0, 0x89, 0x4a, 0x34,
+// !     0x7e, 0x5, 0xc7, 0x7b, 0x12, 0x7, 0xa5, 0x3 ];
+// ! let label: RistrettoPoint =
+// !     CompressedRistretto::from_slice(&label_bytes).decompress().unwrap();
+// !
+// ! let label_prime = plg.label_prime(label, id);
+// ! ```
+// !
+// !
+// #![deny(missing_docs)]
 
 use curve25519_dalek::{
     ristretto::RistrettoPoint,
@@ -142,8 +145,13 @@ impl PedersenLabelGenerators {
 
 #[cfg(test)]
 mod tests {
-    use curve25519_dalek::ristretto::CompressedRistretto;
-    use super::*;
+    use curve25519_dalek::{
+        ristretto::RistrettoPoint,
+        ristretto::CompressedRistretto,
+        constants::RISTRETTO_BASEPOINT_COMPRESSED,
+        scalar::Scalar,
+    };
+    use crate::pedersen_commitments::{PedersenLabelGenerators, PEDERSEN_COMMITMENT_NUM_GENERATORS};
 
     /// The snippet that was used to generate the test vectors:
     /// ```
