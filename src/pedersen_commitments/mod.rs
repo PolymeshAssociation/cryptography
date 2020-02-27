@@ -87,6 +87,8 @@ pub struct PedersenLabelGenerators {
 
 impl Default for PedersenLabelGenerators {
     /// Create the default set of Pedersen generators.
+    /// This will always return the same set of generators, so it will be more
+    /// efficient to precalculate and define them as `const static`s.
     fn default() -> Self {
         let mut generators: [RistrettoPoint; PEDERSEN_COMMITMENT_NUM_GENERATORS] =
             [RistrettoPoint::default(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
@@ -208,7 +210,7 @@ mod tests {
 
     #[test]
     fn commit_fixed_values() {
-        let values: [Scalar; 3] = [
+        let values = [
             Scalar::from_bits(V0_BYTES),
             Scalar::from_bits(V1_BYTES),
             Scalar::from_bits(V2_BYTES) ];
@@ -223,7 +225,7 @@ mod tests {
     #[test]
     fn commit_zeros() {
         let plg = PedersenLabelGenerators::default();
-        let zeros: [Scalar; PEDERSEN_COMMITMENT_NUM_GENERATORS] = [Scalar::zero(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
+        let zeros = [Scalar::zero(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
         let result = plg.commit(&zeros);
 
         assert_eq!(result, RistrettoPoint::default());
@@ -243,7 +245,7 @@ mod tests {
             0xf7, 0xcd, 0xe0, 0x2f, 0xf8, 0xde, 0xea, 0x27, ];
 
         let plg = PedersenLabelGenerators::default();
-        let values_0: Scalar = Scalar::from_bits(V0_BYTES);
+        let values_0 = Scalar::from_bits(V0_BYTES);
         let commit_result = CompressedRistretto::from_slice(&COMMIT_RESULT_BYTES).decompress().unwrap();
         let commit_result_prime = plg.label_prime(commit_result, values_0);
 
