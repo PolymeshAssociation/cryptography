@@ -6,7 +6,7 @@ use curve25519_dalek::{
 };
 use sha3::Sha3_512;
 use schnorrkel::{Keypair, signing_context, Signature, PublicKey};
-use crate::pedersen_commitments::{PedersenLabelGenerators};
+use crate::pedersen_commitments::{PedersenGenerators};
 
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
@@ -44,36 +44,29 @@ pub struct ProofPair {
     keypair: Keypair,
 }
 
+/*
 /// compute_did_label( KYC_id, investor_unique_id): Output(did_label
 /// A Pedersen commitment with respect to the fixed generators and serialized))
 ///
 /// DID_LABEL = p_hash(INVESTOR_DID, INVESTOR_UNIQUE_ID, RANDOM_BLIND)
 /// CLAIM_LABEL = p_hash(TARGET_ASSET_ISSUER, INVESTOR_UNIQUE_ID, SHA(TARGET_ASSET_ISSUER, INVESTOR_UNIQUE_ID))
-pub fn compute_did_labels(id:[u8; 32], unique_id: [u8; 32], blind: [u8; 32]) -> RistrettoPoint {
-    // println!("compute_did_labels: {:?}", id);
-    let plg = PedersenLabelGenerators::default();
-    let c = plg.commit(&[
+*/
+pub fn compute_label(id:[u8; 32], unique_id: [u8; 32], blind: Option<[u8; 32]>) -> RistrettoPoint {
+    let third_term: Vec<u8> = match blind {
+        Some(t) => t.to_vec(),
+        None => {
+            let mut t = Vec::with_capacity(id.len() + unique_id.len());
+            t.extend_from_slice(&id.to_vec());
+            t.extend_from_slice(&unique_id.to_vec());
+            t
+        },
+    };
+
+    let pg = PedersenGenerators::default();
+    pg.commit(&[
         Scalar::hash_from_bytes::<Sha3_512>(&id),
         Scalar::hash_from_bytes::<Sha3_512>(&unique_id),
-        Scalar::hash_from_bytes::<Sha3_512>(&blind)]);
-
-    // [PA] This is technically calculating the label_prime, maybe move it to ProofPublicKey.
-    plg.label_prime(c, Scalar::hash_from_bytes::<Sha3_512>(&id))
-}
-
-pub fn compute_claim_label(id: [u8; 32], did: [u8; 32]) -> RistrettoPoint {
-    let plg = PedersenLabelGenerators::default();
-    let mut third_term = Vec::with_capacity(id.len() + did.len());
-    third_term.extend_from_slice(&id.to_vec());
-    third_term.extend_from_slice(&did.to_vec());
-
-    let c = plg.commit(&[
-        Scalar::hash_from_bytes::<Sha3_512>(&id),
-        Scalar::hash_from_bytes::<Sha3_512>(&did),
-        Scalar::hash_from_bytes::<Sha3_512>(&third_term)]);
-
-    // [PA] This is technically calculating the label_prime, maybe move it to ProofPublicKey.
-    plg.label_prime(c, Scalar::hash_from_bytes::<Sha3_512>(&id))
+        Scalar::hash_from_bytes::<Sha3_512>(&third_term)])
 }
 
 impl ProofPair {
@@ -107,8 +100,12 @@ impl ProofPair {
 }
 
 impl ProofPublicKey {
-    pub fn new(did_label: RistrettoPoint, claim_label: RistrettoPoint) -> Self {
-        let pub_key = PublicKey::from_point(did_label - claim_label);
+    pub fn new(did_label: RistrettoPoint, investor_public_value: [u8; 32], claim_label: RistrettoPoint, issuer_public_value: [u8; 32]) -> Self {
+        let pg = PedersenGenerators::default();
+        let did_label_prime = pg.label_prime(did_label, Scalar::hash_from_bytes::<Sha3_512>(&investor_public_value));
+        let claim_label_prime = pg.label_prime(claim_label, Scalar::hash_from_bytes::<Sha3_512>(&issuer_public_value));
+
+        let pub_key = PublicKey::from_point(did_label_prime - claim_label_prime);
         ProofPublicKey {
             pub_key: pub_key,
         }
@@ -141,18 +138,11 @@ mod tests {
         // Commiter side.
         let d = Data::new(a0, a1, a2, b0);
         let pair = ProofPair::new(d);
+        let did_label = compute_label(a0, a1, Some(a2));
+        let claim_label = compute_label(b0, a1, None);
 
         // Verifier side.
-        let did_label = compute_did_labels(a0, a1, a2);
-        let claim_label = compute_claim_label(b0, a1);
-
-        // let plg = PedersenLabelGenerators::default();
-        // let values_0 = Scalar::from_bits(a0);
-        // let commit_result = CompressedRistretto::from_slice(&did_label).decompress().unwrap();
-        // let did_label_prime = plg.label_prime(did_label, values_0);
-        // let claim_label_prime = plg.label_prime(claim_label, Scalar::from_bits(b0));
-
-        let verifier_pub = ProofPublicKey::new(did_label, claim_label);
+        let verifier_pub = ProofPublicKey::new(did_label, a0, claim_label, b0);
 
         assert_eq!(pair.keypair.public, verifier_pub.pub_key);
     }
@@ -170,14 +160,14 @@ mod tests {
         let pair = ProofPair::new(d);
         let sig = pair.generate_id_match_proof(message);
 
-        let did_label = compute_did_labels(a0, a1, a2);
-        let claim_label = compute_claim_label(b0, a1);
+        let did_label = compute_label(a0, a1, Some(a2));
+        let claim_label = compute_label(b0, a1, None);
 
         // Verifier side.
         // Verifier receives the did_label, claim_label, a message,
         // and a proof for it. And it verifies the proof on the message
         // given the labels.
-        let verifier_pub = ProofPublicKey::new(did_label, claim_label);
+        let verifier_pub = ProofPublicKey::new(did_label, a0, claim_label, b0);
         let result = verifier_pub.verify_id_match_proof(message, &sig);
 
         assert!(result);

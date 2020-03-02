@@ -14,7 +14,7 @@
 //! ```
 //! use cryptography::pedersen_commitments::*;
 //!
-//! let plg = PedersenLabelGenerators::default();
+//! let pg = PedersenGenerators::default();
 //! ```
 // [PA] todo: now that we use an older version of Dalec, fix the documentation here.
 //
@@ -29,11 +29,11 @@
 // ! use rand_core::OsRng;
 // ! use cryptography::pedersen_commitments::*;
 // !
-// ! let plg = PedersenLabelGenerators::default();
+// ! let pg = PedersenGenerators::default();
 // ! let mut rng = OsRng;
 // ! let rand_values: [Scalar; 3] =
 // !     [Scalar::random(&mut rng), Scalar::random(&mut rng), Scalar::random(&mut rng)];
-// ! let result = plg.commit(&rand_values);
+// ! let result = pg.commit(&rand_values);
 // ! ```
 // !
 // ! To calculate the label_prime:
@@ -43,7 +43,7 @@
 // ! use curve25519_dalek::ristretto::CompressedRistretto;
 // ! use cryptography::pedersen_commitments::*;
 // !
-// ! let plg = PedersenLabelGenerators::default();
+// ! let pg = PedersenGenerators::default();
 // ! let id_bytes: [u8; 32] = [
 // !     0xb5, 0xde, 0xb8, 0x5b, 0x87, 0x4a, 0x81, 0x6a,
 // !     0x9f, 0x28, 0xd, 0xbc, 0x87, 0xef, 0x6a, 0xb8,
@@ -59,7 +59,7 @@
 // ! let label: RistrettoPoint =
 // !     CompressedRistretto::from_slice(&label_bytes).decompress().unwrap();
 // !
-// ! let label_prime = plg.label_prime(label, id);
+// ! let label_prime = pg.label_prime(label, id);
 // ! ```
 // !
 // !
@@ -77,7 +77,7 @@ pub const PEDERSEN_COMMITMENT_LABEL: &[u8; 16] = b"PolymathIdentity";
 pub const PEDERSEN_COMMITMENT_NUM_GENERATORS: usize = 3;
 
 #[derive(Debug, Copy, Clone)]
-pub struct PedersenLabelGenerators {
+pub struct PedersenGenerators {
     /// Bases for the Pedersen commitment.
     ///
     /// The last generator, G2, is set to the Ristretto's base point,
@@ -88,7 +88,7 @@ pub struct PedersenLabelGenerators {
     generators: [RistrettoPoint; PEDERSEN_COMMITMENT_NUM_GENERATORS]
 }
 
-impl Default for PedersenLabelGenerators {
+impl Default for PedersenGenerators {
     /// Create the default set of Pedersen generators.
     /// This will always return the same set of generators, so it will be more
     /// efficient to precalculate and define them as `const static`s.
@@ -110,11 +110,11 @@ impl Default for PedersenLabelGenerators {
         }
         generators[PEDERSEN_COMMITMENT_NUM_GENERATORS - 1] = RISTRETTO_BASEPOINT_POINT;
 
-        PedersenLabelGenerators { generators }
+        PedersenGenerators { generators }
     }
 }
 
-impl PedersenLabelGenerators {
+impl PedersenGenerators {
     /// Commit to a set of `PEDERSEN_COMMITMENT_NUM_GENERATORS` scalars.
     /// # Input
     /// * `values` are the scalars to commit to.
@@ -151,14 +151,14 @@ mod tests {
         constants::RISTRETTO_BASEPOINT_COMPRESSED,
         scalar::Scalar,
     };
-    use crate::pedersen_commitments::{PedersenLabelGenerators, PEDERSEN_COMMITMENT_NUM_GENERATORS};
+    use crate::pedersen_commitments::{PedersenGenerators, PEDERSEN_COMMITMENT_NUM_GENERATORS};
 
     /// The snippet that was used to generate the test vectors:
     /// ```
-    /// let plg = PedersenLabelGenerators::default();
-    /// println!("expected_g0: {:#x?}", plg.generators[0].compress().as_bytes());
-    /// println!("expected_g1: {:#x?}", plg.generators[1].compress().as_bytes());
-    /// println!("expected_g2: {:#x?}", plg.generators[2].compress().as_bytes());
+    /// let pg = PedersenGenerators::default();
+    /// println!("expected_g0: {:#x?}", pg.generators[0].compress().as_bytes());
+    /// println!("expected_g1: {:#x?}", pg.generators[1].compress().as_bytes());
+    /// println!("expected_g2: {:#x?}", pg.generators[2].compress().as_bytes());
     ///
     /// // Generate 3 random values to commit to.
     /// let mut rng = OsRng;
@@ -168,7 +168,7 @@ mod tests {
     /// println!("V1_BYTES: {:#x?}", rand_values[1].as_bytes());
     /// println!("V2_BYTES: {:#x?}", rand_values[2].as_bytes());
     ///
-    /// let result = plg.commit(&rand_values);
+    /// let result = pg.commit(&rand_values);
     /// println!("COMMIT_RESULT_BYTES: {:#x?}", result.compress().as_bytes());
     /// ```
     static V0_BYTES: [u8; 32] = [
@@ -209,11 +209,11 @@ mod tests {
             0x41, 0x98, 0xba, 0x83, 0x33, 0xb7, 0x5a, 0x40, ];
         let expected_g2 = RISTRETTO_BASEPOINT_COMPRESSED.as_bytes();
 
-        let plg = PedersenLabelGenerators::default();
+        let pg = PedersenGenerators::default();
 
-        assert_eq!(plg.generators[0].compress().as_bytes(), &expected_g0);
-        assert_eq!(plg.generators[1].compress().as_bytes(), &expected_g1);
-        assert_eq!(plg.generators[2].compress().as_bytes(), expected_g2);
+        assert_eq!(pg.generators[0].compress().as_bytes(), &expected_g0);
+        assert_eq!(pg.generators[1].compress().as_bytes(), &expected_g1);
+        assert_eq!(pg.generators[2].compress().as_bytes(), expected_g2);
     }
 
     #[test]
@@ -223,8 +223,8 @@ mod tests {
             Scalar::from_bits(V1_BYTES),
             Scalar::from_bits(V2_BYTES) ];
 
-        let plg = PedersenLabelGenerators::default();
-        let result = plg.commit(&values);
+        let pg = PedersenGenerators::default();
+        let result = pg.commit(&values);
 
         let expected_result = CompressedRistretto::from_slice(&COMMIT_RESULT_BYTES).decompress().unwrap();
         assert_eq!(result, expected_result);
@@ -232,14 +232,14 @@ mod tests {
 
     #[test]
     fn commit_zeros() {
-        let plg = PedersenLabelGenerators::default();
+        let pg = PedersenGenerators::default();
         let zeros = [Scalar::zero(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
-        let result = plg.commit(&zeros);
+        let result = pg.commit(&zeros);
 
         assert_eq!(result, RistrettoPoint::default());
         assert_eq!(result.compress().as_bytes(), &[0; 32]);
 
-        let result_prime = plg.label_prime(result, zeros[0]);
+        let result_prime = pg.label_prime(result, zeros[0]);
         assert_eq!(result_prime, RistrettoPoint::default());
         assert_eq!(result_prime.compress().as_bytes(), &[0; 32]);
     }
@@ -252,10 +252,10 @@ mod tests {
             0xe7, 0xaa, 0xfc, 0x87, 0x96, 0x55, 0xf6, 0xec,
             0xf7, 0xcd, 0xe0, 0x2f, 0xf8, 0xde, 0xea, 0x27, ];
 
-        let plg = PedersenLabelGenerators::default();
+        let pg = PedersenGenerators::default();
         let values_0 = Scalar::from_bits(V0_BYTES);
         let commit_result = CompressedRistretto::from_slice(&COMMIT_RESULT_BYTES).decompress().unwrap();
-        let commit_result_prime = plg.label_prime(commit_result, values_0);
+        let commit_result_prime = pg.label_prime(commit_result, values_0);
 
         assert_eq!(commit_result_prime.compress().as_bytes(), &expected_commit_result_prime);
     }
