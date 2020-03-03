@@ -12,6 +12,7 @@ exclude = [ ".gitignore",
           ]
 
 [dependencies]
+# schnorrkel's latest stable version uses an older version of Dalek.
 curve25519-dalek = { version = "1.2", default-features = false }
 bulletproofs = { version = "2.0", default-features = false }
 sha3 = { version = "0.8", default-features = false }
