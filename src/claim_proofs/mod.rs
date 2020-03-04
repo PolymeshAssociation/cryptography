@@ -10,7 +10,7 @@
 //! its claims.
 //!
 //! ```
-//! use cryptography::claim_proofs::{ClaimData, ProofKeyPair};
+//! use cryptography::claim_proofs::{ClaimData, ProofKeyPair, compute_label};
 //!
 //! // Investor side:
 //! let inv_id_0 = [28, 186, 16, 209, 13, 185, 38, 241, 102, 195, 194, 151, 237, 105, 92, 179, 59, 12, 150, 197, 149, 8, 75, 81, 2, 141, 69, 94, 132, 8, 97, 239];
@@ -130,7 +130,7 @@ impl ProofKeyPair {
         let secret_key_scalar = Scalar::hash_from_bytes::<Sha3_512>(&d.inv_blind) -
             Scalar::hash_from_bytes::<Sha3_512>(&second_term);
 
-        // This will generate a new nondeterministic nonce everytime this constructor is called.
+        // Note: This will generate a new nondeterministic nonce everytime this constructor is called.
         // A potential problem is that the investor will get a different claim proof for the
         // same claim everytime they run this process. It may or may not be an issue.
         // Alternatively this constructor could take in a seed and use a deterministic RNG.
@@ -143,7 +143,7 @@ impl ProofKeyPair {
             .expect("key is always the correct size; qed");
         let public_key = secret.to_public();
 
-        ProofKeyPair{
+        ProofKeyPair {
             keypair: schnorrkel::Keypair { public: public_key, secret: secret },
         }
     }
@@ -187,7 +187,7 @@ impl ProofPublicKey {
     /// * `sig`: the proof.
     ///
     /// # Output
-    /// `true` on successful verification, `false` otherwise.
+    /// `true` on a successful verification, `false` otherwise.
     pub fn verify_id_match_proof(&self, message: &[u8], sig: &Signature) -> bool {
         self.pub_key.verify_simple(SIGNING_CTX, message, sig).is_ok()
     }
