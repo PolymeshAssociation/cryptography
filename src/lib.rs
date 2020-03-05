@@ -5,6 +5,5 @@
 // #![deny(missing_docs)]
 
 pub mod pedersen_commitments;
-//#[cfg(feature = "full_crypto")]
 pub mod claim_proofs;
 

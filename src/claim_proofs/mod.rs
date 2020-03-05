@@ -10,27 +10,27 @@
 //! its claims.
 //!
 //! ```
-//! use cryptography::claim_proofs::{ClaimData, ProofKeyPair, compute_label};
+//! use cryptography::claim_proofs::{RawData, ClaimData, ProofKeyPair, compute_label};
 //!
 //! // Investor side:
-//! let inv_id_0 = [28, 186, 16, 209, 13, 185, 38, 241, 102, 195, 194, 151, 237, 105, 92, 179, 59, 12, 150, 197, 149, 8, 75, 81, 2, 141, 69, 94, 132, 8, 97, 239];
-//! let inv_id_1 = [0, 220, 83, 102, 85, 220, 195, 179, 141, 72, 48, 1, 215, 62, 99, 206, 119, 116, 200, 133, 206, 210, 169, 179, 160, 111, 120, 204, 103, 50, 18, 100];
-//! let inv_blind = [191, 16, 112, 187, 85, 110, 121, 158, 222, 186, 137, 10, 187, 115, 84, 52, 93, 109, 158, 117, 6, 143, 214, 207, 233, 98, 45, 163, 42, 212, 58, 168];
-//! let iss_id = [248, 224, 196, 2, 197, 199, 222, 98, 104, 117, 148, 27, 119, 163, 26, 136, 163, 142, 155, 1, 253, 86, 172, 198, 138, 163, 27, 116, 121, 124, 163, 164];
+//! let message = b"some asset ownership claims!";
 //!
-//! let message = &[73, 32, 100, 105, 100, 110, 39, 116, 32, 99, 108, 97, 105, 109, 32, 97, 110, 121, 116, 104, 105, 110, 103, 33];
+//! let inv_id_0 = RawData([1u8; 32]);
+//! let inv_id_1 = RawData([2u8; 32]);
+//! let inv_blind = RawData([3u8; 32]);
+//! let iss_id = RawData([4u8; 32]);
 //!
-//! let d = ClaimData::new(inv_id_0, inv_id_1, inv_blind, iss_id);
+//! let d = ClaimData {inv_id_0, inv_id_1, inv_blind, iss_id};
 //! let pair = ProofKeyPair::from(d);
 //!
 //! let proof = pair.generate_id_match_proof(message);
-//! let did_label = compute_label(inv_id_0, inv_id_1, Some(inv_blind));
-//! let claim_label = compute_label(iss_id, inv_id_1, None);
+//! let did_label = compute_label(&inv_id_0, &inv_id_1, Some(&inv_blind));
+//! let claim_label = compute_label(&iss_id, &inv_id_1, None);
 //!
 //! // Verifier side:
-//! use cryptography::claim_proofs::{ProofPublicKey};
+//! use cryptography::claim_proofs::ProofPublicKey;
 //!
-//! let verifier_pub = ProofPublicKey::new(did_label, inv_id_0, claim_label, iss_id);
+//! let verifier_pub = ProofPublicKey::new(did_label, &inv_id_0, claim_label, &iss_id);
 //! let result = verifier_pub.verify_id_match_proof(message, &proof);
 //!
 //! assert!(result);
@@ -38,15 +38,24 @@
 //!
 
 use curve25519_dalek::{scalar::Scalar, ristretto::RistrettoPoint};
-use sha3::Sha3_512;
+use sha3::{Sha3_512, Sha3_256, digest::{Input,FixedOutput}};
 use schnorrkel::{Keypair, signing_context, Signature, PublicKey};
-use crate::pedersen_commitments::{PedersenGenerators};
-use rand::{ RngCore, thread_rng };
+use crate::pedersen_commitments::PedersenGenerators;
+
 #[cfg(test)]
-use rand::{ SeedableRng, rngs::StdRng };
+use rand::RngCore;
 
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct RawData(pub [u8; 32]);
+
+impl AsRef<[u8; 32]> for RawData {
+    fn as_ref(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
 
 /// The 4 claims attributes that are used to calculate the claim proofs.
 /// 1. `inv_id_0` corresponds to the `INVESTOR_DID`.
@@ -55,27 +64,16 @@ const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
 /// 4. `iss_id` corresponds to the `TARGET_ASSET_ISSUER`.
 #[derive(Debug, Copy, Clone)]
 pub struct ClaimData {
-    inv_id_0: [u8; 32],
-    inv_id_1: [u8; 32],
-    inv_blind: [u8; 32],
-    iss_id: [u8; 32],
-}
-
-impl ClaimData {
-    pub fn new(inv_id_0: [u8; 32], inv_id_1: [u8; 32], inv_blind: [u8; 32], iss_id: [u8; 32]) -> Self {
-        ClaimData {
-            inv_id_0,
-            inv_id_1,
-            inv_blind,
-            iss_id,
-        }
-    }
+    pub inv_id_0: RawData,
+    pub inv_id_1: RawData,
+    pub inv_blind: RawData,
+    pub iss_id: RawData,
 }
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
 /// This is the construct that the investors will use to generate
 /// claim proofs.
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct ProofKeyPair {
     keypair: Keypair,
 }
@@ -83,7 +81,7 @@ pub struct ProofKeyPair {
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 /// This is the construct that the blockchain validator will use for
 /// claim proof validation.
-#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ProofPublicKey {
     pub_key: PublicKey,
 }
@@ -99,64 +97,55 @@ pub struct ProofPublicKey {
 ///
 /// # Output
 /// The Pedersen commitment result.
-pub fn compute_label(id0:[u8; 32], id1: [u8; 32], blind: Option<[u8; 32]>) -> RistrettoPoint {
+pub fn compute_label(id0: &RawData, id1: &RawData, blind: Option<&RawData>) -> RistrettoPoint {
     let third_term: Vec<u8> = match blind {
-        Some(t) => t.to_vec(),
+        Some(t) => t.0.to_vec(),
         None => {
-            let mut t = Vec::with_capacity(id0.len() + id1.len());
-            t.extend_from_slice(&id0.to_vec());
-            t.extend_from_slice(&id1.to_vec());
+            let mut t = Vec::with_capacity(id0.0.len() + id1.0.len());
+            t.extend_from_slice(id0.as_ref());
+            t.extend_from_slice(id1.as_ref());
             t
         },
     };
 
     let pg = PedersenGenerators::default();
     pg.commit(&[
-        Scalar::hash_from_bytes::<Sha3_512>(&id0),
-        Scalar::hash_from_bytes::<Sha3_512>(&id1),
-        Scalar::hash_from_bytes::<Sha3_512>(&third_term)])
+        Scalar::hash_from_bytes::<Sha3_512>(id0.as_ref()),
+        Scalar::hash_from_bytes::<Sha3_512>(id1.as_ref()),
+        Scalar::hash_from_bytes::<Sha3_512>(third_term.as_ref())])
 }
 
 pub type Seed = [u8; 32];
 
 impl ProofKeyPair {
-    //
-    #[cfg(test)]
-    pub fn new_with_seed( d:ClaimData, seed: Seed) -> Self {
-        Self::new( d, StdRng::from_seed(seed))
-    }
-
-    // NOTE: It is private and shared between `Self::new_with_seed` and `From<ClaimData>`.
-    fn new<R: RngCore + Sized>( d: ClaimData, mut rng: R) -> Self {
-         // Investor's secret key is:
+    pub fn from(d: ClaimData) -> Self {
+        // Investor's secret key is:
         // Hash(RANDOM_BLIND) - Hash([TARGET_ASSET_ISSUER | INVESTOR_UNIQUE_ID])
-        let mut second_term = Vec::with_capacity(d.iss_id.len() + d.inv_id_1.len());
-        second_term.extend_from_slice(&d.iss_id.to_vec());
-        second_term.extend_from_slice(&d.inv_id_1.to_vec());
+        let mut second_term = Vec::with_capacity(d.iss_id.0.len() + d.inv_id_1.0.len());
+        second_term.extend_from_slice(d.iss_id.as_ref());
+        second_term.extend_from_slice(d.inv_id_1.as_ref());
 
-        let secret_key_scalar = Scalar::hash_from_bytes::<Sha3_512>(&d.inv_blind) -
+        let secret_key_scalar = Scalar::hash_from_bytes::<Sha3_512>(d.inv_blind.as_ref()) -
             Scalar::hash_from_bytes::<Sha3_512>(&second_term);
 
-        // Note: This will generate a new nondeterministic nonce everytime this constructor is called.
-        // A potential problem is that the investor will get a different claim proof for the
-        // same claim everytime they run this process. It may or may not be an issue.
-        // Alternatively this constructor could take in a seed and use a deterministic RNG.
-        // TODO: Miguel: Check current status of `std::mem::uninitialized`.
-        let mut nonce =  [0u8; 32];
-        rng.fill_bytes( &mut nonce);
+        // Set the secret key's nonce to : ["nonce" | secret_key]
+        let mut h = Sha3_256::default();
+        h.input("nonce");
+        h.input(&secret_key_scalar.to_bytes());
+        let nonce =  h.fixed_result();
+
         let mut exported_private_key = Vec::with_capacity(64);
         exported_private_key.extend_from_slice(&secret_key_scalar.to_bytes());
         exported_private_key.extend_from_slice(&nonce);
 
         let secret = schnorrkel::SecretKey::from_bytes(&exported_private_key)
-            .expect("key is always the correct size; qed");
+            .expect("key is always the correct size");
         let public = secret.to_public();
 
         ProofKeyPair {
             keypair: schnorrkel::Keypair { public, secret },
         }
     }
-
 
     /// Generate an Id match proof.
     ///
@@ -171,19 +160,6 @@ impl ProofKeyPair {
     }
 }
 
-impl From<ClaimData> for ProofKeyPair {
-    /// Create a key pair object for the investor from the investor id,
-    /// and the claim attributes.
-    ///
-    /// # Input:
-    /// `d`: the claim data.
-    fn from(d: ClaimData) -> Self {
-        ProofKeyPair::new( d, thread_rng())
-    }
-}
-
-
-
 impl ProofPublicKey {
     /// Create a public key object for the blockchain validator.
     ///
@@ -192,10 +168,10 @@ impl ProofPublicKey {
     /// * `investor_public_value`: the investor's DID.
     /// * `claim_label`: the claim's label.
     /// * `issuer_public_value`: the asset issuer's Id.
-    pub fn new(did_label: RistrettoPoint, investor_public_value: [u8; 32], claim_label: RistrettoPoint, issuer_public_value: [u8; 32]) -> Self {
+    pub fn new(did_label: RistrettoPoint, investor_public_value: &RawData, claim_label: RistrettoPoint, issuer_public_value: &RawData) -> Self {
         let pg = PedersenGenerators::default();
-        let did_label_prime = pg.label_prime(did_label, Scalar::hash_from_bytes::<Sha3_512>(&investor_public_value));
-        let claim_label_prime = pg.label_prime(claim_label, Scalar::hash_from_bytes::<Sha3_512>(&issuer_public_value));
+        let did_label_prime = pg.label_prime(did_label, Scalar::hash_from_bytes::<Sha3_512>(investor_public_value.as_ref()));
+        let claim_label_prime = pg.label_prime(claim_label, Scalar::hash_from_bytes::<Sha3_512>(issuer_public_value.as_ref()));
 
         let pub_key = PublicKey::from_point(did_label_prime - claim_label_prime);
         ProofPublicKey { pub_key }
@@ -221,58 +197,80 @@ impl ProofPublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{ SeedableRng, rngs::StdRng };
 
-    const SEED_1 : [u8;32] = [42u8;32];
-    const SEED_2 : [u8;32] = [0u8;32];
+    const SEED_1 : [u8; 32] = [42u8; 32];
+    const SEED_2 : [u8; 32] = [43u8; 32];
+
+    fn random_claim<R: RngCore + Sized>(mut rng: R) -> ClaimData {
+        let mut inv_id_0 = RawData::default();
+        let mut inv_id_1 = RawData::default();
+        let mut inv_blind = RawData::default();
+        let mut iss_id = RawData::default();
+
+        rng.fill_bytes(&mut inv_id_0.0);
+        rng.fill_bytes(&mut inv_id_1.0);
+        rng.fill_bytes(&mut inv_blind.0);
+        rng.fill_bytes(&mut iss_id.0);
+
+        ClaimData {inv_id_0, inv_id_1, inv_blind, iss_id}
+    }
 
     #[test]
     fn match_pub_key_both_sides() {
-        // Note that generally testing with random numbers isn't desirable, since
-        // when/if it fails in production, and you don't have access to the trace
-        // it is not helpful.
-        let inv_id_0: [u8; 32] = rand::random();
-        let inv_id_1: [u8; 32] = rand::random();
-        let inv_blind: [u8; 32] = rand::random();
-        let iss_id: [u8; 32] = rand::random();
+        let expected_public_key =
+            [234, 60, 137, 157, 161, 149, 69, 12,
+             3, 160, 245, 107, 89, 180, 152, 149,
+             227, 128, 37, 233, 161, 36, 95, 205,
+             193, 35, 163, 204, 60, 154, 231, 111];
+
+        let rng = StdRng::from_seed(SEED_1);
+        let d = random_claim(rng);
 
         // Investor side.
-        let d = ClaimData::new(inv_id_0, inv_id_1, inv_blind, iss_id);
-        let pair = ProofKeyPair::new_with_seed(d, SEED_1);
-        let did_label = compute_label(inv_id_0, inv_id_1, Some(inv_blind));
-        let claim_label = compute_label(iss_id, inv_id_1, None);
+        let pair = ProofKeyPair::from(d);
+        let did_label = compute_label(&d.inv_id_0, &d.inv_id_1, Some(&d.inv_blind));
+        let claim_label = compute_label(&d.iss_id, &d.inv_id_1, None);
 
         // Verifier side.
-        let verifier_pub = ProofPublicKey::new(did_label, inv_id_0, claim_label, iss_id);
+        let verifier_pub = ProofPublicKey::new(did_label, &d.inv_id_0, claim_label, &d.iss_id);
 
         // Make sure both sides get the same public key.
         assert_eq!(pair.keypair.public, verifier_pub.pub_key);
 
-        // TODO: assert than expected value is what we get.
+        assert_eq!(verifier_pub.pub_key.to_bytes(), expected_public_key);
     }
 
     #[test]
     fn verify_proofs() {
+        // let expected_proof =
+        //     Signature::from_bytes(&[124, 109, 74, 164, 74, 0, 60, 128,
+        //      214, 67, 247, 194, 100, 178, 109, 56,
+        //      173, 100, 246, 239, 122, 230, 148, 163,
+        //      34, 194, 217, 203, 100, 120, 209, 81,
+        //      28, 41, 226, 183, 18, 35, 172, 239,
+        //      42, 240, 76, 213, 160, 111, 145, 126,
+        //      61, 83, 92, 102, 14, 7, 254, 13,
+        //      110, 211, 244, 182, 99, 54, 81, 128 ]).unwrap();
         let message = &b"I didn't claim anything!".to_vec();
         let bad_message = &b"I claim everything!".to_vec();
 
         // Investor side.
-        let inv_id_0: [u8; 32] = rand::random();
-        let inv_id_1: [u8; 32] = rand::random();
-        let inv_blind: [u8; 32] = rand::random();
-        let iss_id: [u8; 32] = rand::random();
-        let d = ClaimData::new(inv_id_0, inv_id_1, inv_blind, iss_id);
-        let pair = ProofKeyPair::new_with_seed(d, SEED_2);
+        let rng = StdRng::from_seed(SEED_2);
+        let d = random_claim(rng);
+        let pair = ProofKeyPair::from(d);
         let proof = pair.generate_id_match_proof(message);
 
-        // TODO: assert than expected value is what we get.
+        // todo: turns out even when we fix the nonce we get a different proof everytime.
+        // assert_eq!(proof, expected_proof);
 
-        let did_label = compute_label(inv_id_0, inv_id_1, Some(inv_blind));
-        let claim_label = compute_label(iss_id, inv_id_1, None);
+        let did_label = compute_label(&d.inv_id_0, &d.inv_id_1, Some(&d.inv_blind));
+        let claim_label = compute_label(&d.iss_id, &d.inv_id_1, None);
 
         // => Investor makes {did_label, claim_label, inv_id_0, iss_id, message, proof} public knowledge.
 
         // Verifier side.
-        let verifier_pub = ProofPublicKey::new(did_label, inv_id_0, claim_label, iss_id);
+        let verifier_pub = ProofPublicKey::new(did_label, &d.inv_id_0, claim_label, &d.iss_id);
 
         // Positive tests.
         let result = verifier_pub.verify_id_match_proof(message, &proof);
