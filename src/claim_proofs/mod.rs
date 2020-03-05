@@ -21,7 +21,7 @@
 //! let message = &[73, 32, 100, 105, 100, 110, 39, 116, 32, 99, 108, 97, 105, 109, 32, 97, 110, 121, 116, 104, 105, 110, 103, 33];
 //!
 //! let d = ClaimData::new(inv_id_0, inv_id_1, inv_blind, iss_id);
-//! let pair = ProofKeyPair::new(d);
+//! let pair = ProofKeyPair::from(d);
 //!
 //! let proof = pair.generate_id_match_proof(message);
 //! let did_label = compute_label(inv_id_0, inv_id_1, Some(inv_blind));
@@ -41,6 +41,9 @@ use curve25519_dalek::{scalar::Scalar, ristretto::RistrettoPoint};
 use sha3::Sha3_512;
 use schnorrkel::{Keypair, signing_context, Signature, PublicKey};
 use crate::pedersen_commitments::{PedersenGenerators};
+use rand::{ RngCore, thread_rng };
+#[cfg(test)]
+use rand::{ SeedableRng, rngs::StdRng };
 
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
@@ -114,14 +117,18 @@ pub fn compute_label(id0:[u8; 32], id1: [u8; 32], blind: Option<[u8; 32]>) -> Ri
         Scalar::hash_from_bytes::<Sha3_512>(&third_term)])
 }
 
+pub type Seed = [u8; 32];
+
 impl ProofKeyPair {
-    /// Create a key pair object for the investor from the investor id,
-    /// and the claim attributes.
-    ///
-    /// # Input:
-    /// `d`: the claim data.
-    pub fn new(d: ClaimData) -> Self {
-        // Investor's secret key is:
+    //
+    #[cfg(test)]
+    pub fn new_with_seed( d:ClaimData, seed: Seed) -> Self {
+        Self::new( d, StdRng::from_seed(seed))
+    }
+
+    // NOTE: It is private and shared between `Self::new_with_seed` and `From<ClaimData>`.
+    fn new<R: RngCore + Sized>( d: ClaimData, mut rng: R) -> Self {
+         // Investor's secret key is:
         // Hash(RANDOM_BLIND) - Hash([TARGET_ASSET_ISSUER | INVESTOR_UNIQUE_ID])
         let mut second_term = Vec::with_capacity(d.iss_id.len() + d.inv_id_1.len());
         second_term.extend_from_slice(&d.iss_id.to_vec());
@@ -134,19 +141,22 @@ impl ProofKeyPair {
         // A potential problem is that the investor will get a different claim proof for the
         // same claim everytime they run this process. It may or may not be an issue.
         // Alternatively this constructor could take in a seed and use a deterministic RNG.
-        let nonce: [u8; 32] = rand::random();
+        // TODO: Miguel: Check current status of `std::mem::uninitialized`.
+        let mut nonce =  [0u8; 32];
+        rng.fill_bytes( &mut nonce);
         let mut exported_private_key = Vec::with_capacity(64);
         exported_private_key.extend_from_slice(&secret_key_scalar.to_bytes());
         exported_private_key.extend_from_slice(&nonce);
 
         let secret = schnorrkel::SecretKey::from_bytes(&exported_private_key)
             .expect("key is always the correct size; qed");
-        let public_key = secret.to_public();
+        let public = secret.to_public();
 
         ProofKeyPair {
-            keypair: schnorrkel::Keypair { public: public_key, secret: secret },
+            keypair: schnorrkel::Keypair { public, secret },
         }
     }
+
 
     /// Generate an Id match proof.
     ///
@@ -157,9 +167,22 @@ impl ProofKeyPair {
     /// A proof in the form of an Schnorrkel/Ristretto x25519 signature.
     pub fn generate_id_match_proof(&self, message: &[u8]) -> Signature {
         let context = signing_context(SIGNING_CTX);
-        self.keypair.sign(context.bytes(message)).into()
+        self.keypair.sign(context.bytes(message))
     }
 }
+
+impl From<ClaimData> for ProofKeyPair {
+    /// Create a key pair object for the investor from the investor id,
+    /// and the claim attributes.
+    ///
+    /// # Input:
+    /// `d`: the claim data.
+    fn from(d: ClaimData) -> Self {
+        ProofKeyPair::new( d, thread_rng())
+    }
+}
+
+
 
 impl ProofPublicKey {
     /// Create a public key object for the blockchain validator.
@@ -175,9 +198,7 @@ impl ProofPublicKey {
         let claim_label_prime = pg.label_prime(claim_label, Scalar::hash_from_bytes::<Sha3_512>(&issuer_public_value));
 
         let pub_key = PublicKey::from_point(did_label_prime - claim_label_prime);
-        ProofPublicKey {
-            pub_key: pub_key,
-        }
+        ProofPublicKey { pub_key }
     }
 
     /// Verify an Id match proof.
@@ -201,6 +222,9 @@ impl ProofPublicKey {
 mod tests {
     use super::*;
 
+    const SEED_1 : [u8;32] = [42u8;32];
+    const SEED_2 : [u8;32] = [0u8;32];
+
     #[test]
     fn match_pub_key_both_sides() {
         // Note that generally testing with random numbers isn't desirable, since
@@ -213,7 +237,7 @@ mod tests {
 
         // Investor side.
         let d = ClaimData::new(inv_id_0, inv_id_1, inv_blind, iss_id);
-        let pair = ProofKeyPair::new(d);
+        let pair = ProofKeyPair::new_with_seed(d, SEED_1);
         let did_label = compute_label(inv_id_0, inv_id_1, Some(inv_blind));
         let claim_label = compute_label(iss_id, inv_id_1, None);
 
@@ -222,6 +246,8 @@ mod tests {
 
         // Make sure both sides get the same public key.
         assert_eq!(pair.keypair.public, verifier_pub.pub_key);
+
+        // TODO: assert than expected value is what we get.
     }
 
     #[test]
@@ -235,8 +261,10 @@ mod tests {
         let inv_blind: [u8; 32] = rand::random();
         let iss_id: [u8; 32] = rand::random();
         let d = ClaimData::new(inv_id_0, inv_id_1, inv_blind, iss_id);
-        let pair = ProofKeyPair::new(d);
+        let pair = ProofKeyPair::new_with_seed(d, SEED_2);
         let proof = pair.generate_id_match_proof(message);
+
+        // TODO: assert than expected value is what we get.
 
         let did_label = compute_label(inv_id_0, inv_id_1, Some(inv_blind));
         let claim_label = compute_label(iss_id, inv_id_1, None);
