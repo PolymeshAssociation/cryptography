@@ -46,7 +46,7 @@ use sha3::{
 };
 
 #[cfg(test)]
-use rand::RngCore;
+use rand::Rng;
 
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
@@ -225,7 +225,7 @@ mod tests {
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [43u8; 32];
 
-    fn random_claim<R: RngCore + Sized>(mut rng: R) -> ClaimData {
+    fn random_claim<R: Rng + ?Sized>(rng: &mut R) -> ClaimData {
         let mut inv_id_0 = RawData::default();
         let mut inv_id_1 = RawData::default();
         let mut inv_blind = RawData::default();
@@ -251,8 +251,8 @@ mod tests {
             233, 161, 36, 95, 205, 193, 35, 163, 204, 60, 154, 231, 111,
         ];
 
-        let rng = StdRng::from_seed(SEED_1);
-        let d = random_claim(rng);
+        let mut rng = StdRng::from_seed(SEED_1);
+        let d = random_claim(&mut rng);
 
         // Investor side.
         let pair = ProofKeyPair::from(d);
@@ -274,8 +274,8 @@ mod tests {
         let bad_message = &b"I claim everything!".to_vec();
 
         // Investor side.
-        let rng = StdRng::from_seed(SEED_2);
-        let d = random_claim(rng);
+        let mut rng = StdRng::from_seed(SEED_2);
+        let d = random_claim(&mut rng);
         let pair = ProofKeyPair::from(d);
         let proof = pair.generate_id_match_proof(message);
 
