@@ -37,10 +37,13 @@
 //! ```
 //!
 
-use curve25519_dalek::{scalar::Scalar, ristretto::RistrettoPoint};
-use sha3::{Sha3_512, Sha3_256, digest::{Input,FixedOutput}};
-use schnorrkel::{Keypair, signing_context, Signature, PublicKey};
 use crate::pedersen_commitments::PedersenGenerators;
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use schnorrkel::{signing_context, Keypair, PublicKey, Signature};
+use sha3::{
+    digest::{FixedOutput, Input},
+    Sha3_256, Sha3_512,
+};
 
 #[cfg(test)]
 use rand::RngCore;
@@ -105,37 +108,42 @@ pub fn compute_label(id0: &RawData, id1: &RawData, blind: Option<&RawData>) -> R
             t.extend_from_slice(id0.as_ref());
             t.extend_from_slice(id1.as_ref());
             t
-        },
+        }
     };
 
     let pg = PedersenGenerators::default();
     pg.commit(&[
         Scalar::hash_from_bytes::<Sha3_512>(id0.as_ref()),
         Scalar::hash_from_bytes::<Sha3_512>(id1.as_ref()),
-        Scalar::hash_from_bytes::<Sha3_512>(third_term.as_ref())])
+        Scalar::hash_from_bytes::<Sha3_512>(third_term.as_ref()),
+    ])
 }
 
 pub type Seed = [u8; 32];
 
-impl ProofKeyPair {
-    pub fn from(d: ClaimData) -> Self {
+impl From<ClaimData> for ProofKeyPair {
+    /// Create a key pair object for the investor from a claim data.
+    ///
+    /// # Input:
+    /// `d`: the claim data.
+    fn from(d: ClaimData) -> Self {
         // Investor's secret key is:
         // Hash(RANDOM_BLIND) - Hash([TARGET_ASSET_ISSUER | INVESTOR_UNIQUE_ID])
         let mut second_term = Vec::with_capacity(d.iss_id.0.len() + d.inv_id_1.0.len());
         second_term.extend_from_slice(d.iss_id.as_ref());
         second_term.extend_from_slice(d.inv_id_1.as_ref());
 
-        let secret_key_scalar = Scalar::hash_from_bytes::<Sha3_512>(d.inv_blind.as_ref()) -
-            Scalar::hash_from_bytes::<Sha3_512>(&second_term);
+        let secret_key_scalar = Scalar::hash_from_bytes::<Sha3_512>(d.inv_blind.as_ref())
+            - Scalar::hash_from_bytes::<Sha3_512>(&second_term);
 
         // Set the secret key's nonce to : ["nonce" | secret_key]
         let mut h = Sha3_256::default();
         h.input("nonce");
-        h.input(&secret_key_scalar.to_bytes());
-        let nonce =  h.fixed_result();
+        h.input(&secret_key_scalar.as_bytes());
+        let nonce = h.fixed_result();
 
         let mut exported_private_key = Vec::with_capacity(64);
-        exported_private_key.extend_from_slice(&secret_key_scalar.to_bytes());
+        exported_private_key.extend_from_slice(secret_key_scalar.as_bytes());
         exported_private_key.extend_from_slice(&nonce);
 
         let secret = schnorrkel::SecretKey::from_bytes(&exported_private_key)
@@ -146,7 +154,9 @@ impl ProofKeyPair {
             keypair: schnorrkel::Keypair { public, secret },
         }
     }
+}
 
+impl ProofKeyPair {
     /// Generate an Id match proof.
     ///
     /// # Input
@@ -168,10 +178,21 @@ impl ProofPublicKey {
     /// * `investor_public_value`: the investor's DID.
     /// * `claim_label`: the claim's label.
     /// * `issuer_public_value`: the asset issuer's Id.
-    pub fn new(did_label: RistrettoPoint, investor_public_value: &RawData, claim_label: RistrettoPoint, issuer_public_value: &RawData) -> Self {
+    pub fn new(
+        did_label: RistrettoPoint,
+        investor_public_value: &RawData,
+        claim_label: RistrettoPoint,
+        issuer_public_value: &RawData,
+    ) -> Self {
         let pg = PedersenGenerators::default();
-        let did_label_prime = pg.label_prime(did_label, Scalar::hash_from_bytes::<Sha3_512>(investor_public_value.as_ref()));
-        let claim_label_prime = pg.label_prime(claim_label, Scalar::hash_from_bytes::<Sha3_512>(issuer_public_value.as_ref()));
+        let did_label_prime = pg.label_prime(
+            did_label,
+            Scalar::hash_from_bytes::<Sha3_512>(investor_public_value.as_ref()),
+        );
+        let claim_label_prime = pg.label_prime(
+            claim_label,
+            Scalar::hash_from_bytes::<Sha3_512>(issuer_public_value.as_ref()),
+        );
 
         let pub_key = PublicKey::from_point(did_label_prime - claim_label_prime);
         ProofPublicKey { pub_key }
@@ -186,7 +207,9 @@ impl ProofPublicKey {
     /// # Output
     /// `true` on a successful verification, `false` otherwise.
     pub fn verify_id_match_proof(&self, message: &[u8], sig: &Signature) -> bool {
-        self.pub_key.verify_simple(SIGNING_CTX, message, sig).is_ok()
+        self.pub_key
+            .verify_simple(SIGNING_CTX, message, sig)
+            .is_ok()
     }
 }
 
@@ -197,10 +220,10 @@ impl ProofPublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{ SeedableRng, rngs::StdRng };
+    use rand::{rngs::StdRng, SeedableRng};
 
-    const SEED_1 : [u8; 32] = [42u8; 32];
-    const SEED_2 : [u8; 32] = [43u8; 32];
+    const SEED_1: [u8; 32] = [42u8; 32];
+    const SEED_2: [u8; 32] = [43u8; 32];
 
     fn random_claim<R: RngCore + Sized>(mut rng: R) -> ClaimData {
         let mut inv_id_0 = RawData::default();
@@ -213,16 +236,20 @@ mod tests {
         rng.fill_bytes(&mut inv_blind.0);
         rng.fill_bytes(&mut iss_id.0);
 
-        ClaimData {inv_id_0, inv_id_1, inv_blind, iss_id}
+        ClaimData {
+            inv_id_0,
+            inv_id_1,
+            inv_blind,
+            iss_id,
+        }
     }
 
     #[test]
     fn match_pub_key_both_sides() {
-        let expected_public_key =
-            [234, 60, 137, 157, 161, 149, 69, 12,
-             3, 160, 245, 107, 89, 180, 152, 149,
-             227, 128, 37, 233, 161, 36, 95, 205,
-             193, 35, 163, 204, 60, 154, 231, 111];
+        let expected_public_key = [
+            234, 60, 137, 157, 161, 149, 69, 12, 3, 160, 245, 107, 89, 180, 152, 149, 227, 128, 37,
+            233, 161, 36, 95, 205, 193, 35, 163, 204, 60, 154, 231, 111,
+        ];
 
         let rng = StdRng::from_seed(SEED_1);
         let d = random_claim(rng);
@@ -243,15 +270,6 @@ mod tests {
 
     #[test]
     fn verify_proofs() {
-        // let expected_proof =
-        //     Signature::from_bytes(&[124, 109, 74, 164, 74, 0, 60, 128,
-        //      214, 67, 247, 194, 100, 178, 109, 56,
-        //      173, 100, 246, 239, 122, 230, 148, 163,
-        //      34, 194, 217, 203, 100, 120, 209, 81,
-        //      28, 41, 226, 183, 18, 35, 172, 239,
-        //      42, 240, 76, 213, 160, 111, 145, 126,
-        //      61, 83, 92, 102, 14, 7, 254, 13,
-        //      110, 211, 244, 182, 99, 54, 81, 128 ]).unwrap();
         let message = &b"I didn't claim anything!".to_vec();
         let bad_message = &b"I claim everything!".to_vec();
 
@@ -261,8 +279,8 @@ mod tests {
         let pair = ProofKeyPair::from(d);
         let proof = pair.generate_id_match_proof(message);
 
-        // todo: turns out even when we fix the nonce we get a different proof everytime.
-        // assert_eq!(proof, expected_proof);
+        // Note: the SR 255-19 randomizes the signing process, therefore
+        // we can't check the `proof` against a  test vector here.
 
         let did_label = compute_label(&d.inv_id_0, &d.inv_id_1, Some(&d.inv_blind));
         let claim_label = compute_label(&d.iss_id, &d.inv_id_1, None);

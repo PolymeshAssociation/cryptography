@@ -4,6 +4,5 @@
 #![feature(try_trait)]
 // #![deny(missing_docs)]
 
-pub mod pedersen_commitments;
 pub mod claim_proofs;
-
+pub mod pedersen_commitments;
