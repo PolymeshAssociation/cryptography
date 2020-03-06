@@ -37,13 +37,13 @@
 //! ```
 //!
 
-use curve25519_dalek::{scalar::Scalar, ristretto::RistrettoPoint};
-use sha3::Sha3_512;
-use schnorrkel::{Keypair, signing_context, Signature, PublicKey};
-use crate::pedersen_commitments::{PedersenGenerators};
-use rand::{ RngCore, thread_rng };
+use crate::pedersen_commitments::PedersenGenerators;
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 #[cfg(test)]
-use rand::{ SeedableRng, rngs::StdRng };
+use rand::{rngs::StdRng, SeedableRng};
+use rand::{thread_rng, Rng};
+use schnorrkel::{signing_context, Keypair, PublicKey, Signature};
+use sha3::Sha3_512;
 
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
@@ -62,7 +62,12 @@ pub struct ClaimData {
 }
 
 impl ClaimData {
-    pub fn new(inv_id_0: [u8; 32], inv_id_1: [u8; 32], inv_blind: [u8; 32], iss_id: [u8; 32]) -> Self {
+    pub fn new(
+        inv_id_0: [u8; 32],
+        inv_id_1: [u8; 32],
+        inv_blind: [u8; 32],
+        iss_id: [u8; 32],
+    ) -> Self {
         ClaimData {
             inv_id_0,
             inv_id_1,
@@ -99,7 +104,7 @@ pub struct ProofPublicKey {
 ///
 /// # Output
 /// The Pedersen commitment result.
-pub fn compute_label(id0:[u8; 32], id1: [u8; 32], blind: Option<[u8; 32]>) -> RistrettoPoint {
+pub fn compute_label(id0: [u8; 32], id1: [u8; 32], blind: Option<[u8; 32]>) -> RistrettoPoint {
     let third_term: Vec<u8> = match blind {
         Some(t) => t.to_vec(),
         None => {
@@ -107,14 +112,15 @@ pub fn compute_label(id0:[u8; 32], id1: [u8; 32], blind: Option<[u8; 32]>) -> Ri
             t.extend_from_slice(&id0.to_vec());
             t.extend_from_slice(&id1.to_vec());
             t
-        },
+        }
     };
 
     let pg = PedersenGenerators::default();
     pg.commit(&[
         Scalar::hash_from_bytes::<Sha3_512>(&id0),
         Scalar::hash_from_bytes::<Sha3_512>(&id1),
-        Scalar::hash_from_bytes::<Sha3_512>(&third_term)])
+        Scalar::hash_from_bytes::<Sha3_512>(&third_term),
+    ])
 }
 
 pub type Seed = [u8; 32];
@@ -122,28 +128,28 @@ pub type Seed = [u8; 32];
 impl ProofKeyPair {
     //
     #[cfg(test)]
-    pub fn new_with_seed( d:ClaimData, seed: Seed) -> Self {
-        Self::new( d, StdRng::from_seed(seed))
+    pub fn new_with_seed(d: ClaimData, seed: Seed) -> Self {
+        Self::new(d, &mut StdRng::from_seed(seed))
     }
 
     // NOTE: It is private and shared between `Self::new_with_seed` and `From<ClaimData>`.
-    fn new<R: RngCore + Sized>( d: ClaimData, mut rng: R) -> Self {
-         // Investor's secret key is:
+    fn new<R: Rng + ?Sized>(d: ClaimData, rng: &mut R) -> Self {
+        // Investor's secret key is:
         // Hash(RANDOM_BLIND) - Hash([TARGET_ASSET_ISSUER | INVESTOR_UNIQUE_ID])
         let mut second_term = Vec::with_capacity(d.iss_id.len() + d.inv_id_1.len());
         second_term.extend_from_slice(&d.iss_id.to_vec());
         second_term.extend_from_slice(&d.inv_id_1.to_vec());
 
-        let secret_key_scalar = Scalar::hash_from_bytes::<Sha3_512>(&d.inv_blind) -
-            Scalar::hash_from_bytes::<Sha3_512>(&second_term);
+        let secret_key_scalar = Scalar::hash_from_bytes::<Sha3_512>(&d.inv_blind)
+            - Scalar::hash_from_bytes::<Sha3_512>(&second_term);
 
         // Note: This will generate a new nondeterministic nonce everytime this constructor is called.
         // A potential problem is that the investor will get a different claim proof for the
         // same claim everytime they run this process. It may or may not be an issue.
         // Alternatively this constructor could take in a seed and use a deterministic RNG.
         // TODO: Miguel: Check current status of `std::mem::uninitialized`.
-        let mut nonce =  [0u8; 32];
-        rng.fill_bytes( &mut nonce);
+        let mut nonce = [0u8; 32];
+        rng.fill_bytes(&mut nonce);
         let mut exported_private_key = Vec::with_capacity(64);
         exported_private_key.extend_from_slice(&secret_key_scalar.to_bytes());
         exported_private_key.extend_from_slice(&nonce);
@@ -156,7 +162,6 @@ impl ProofKeyPair {
             keypair: schnorrkel::Keypair { public, secret },
         }
     }
-
 
     /// Generate an Id match proof.
     ///
@@ -178,11 +183,9 @@ impl From<ClaimData> for ProofKeyPair {
     /// # Input:
     /// `d`: the claim data.
     fn from(d: ClaimData) -> Self {
-        ProofKeyPair::new( d, thread_rng())
+        ProofKeyPair::new(d, &mut thread_rng())
     }
 }
-
-
 
 impl ProofPublicKey {
     /// Create a public key object for the blockchain validator.
@@ -192,10 +195,21 @@ impl ProofPublicKey {
     /// * `investor_public_value`: the investor's DID.
     /// * `claim_label`: the claim's label.
     /// * `issuer_public_value`: the asset issuer's Id.
-    pub fn new(did_label: RistrettoPoint, investor_public_value: [u8; 32], claim_label: RistrettoPoint, issuer_public_value: [u8; 32]) -> Self {
+    pub fn new(
+        did_label: RistrettoPoint,
+        investor_public_value: [u8; 32],
+        claim_label: RistrettoPoint,
+        issuer_public_value: [u8; 32],
+    ) -> Self {
         let pg = PedersenGenerators::default();
-        let did_label_prime = pg.label_prime(did_label, Scalar::hash_from_bytes::<Sha3_512>(&investor_public_value));
-        let claim_label_prime = pg.label_prime(claim_label, Scalar::hash_from_bytes::<Sha3_512>(&issuer_public_value));
+        let did_label_prime = pg.label_prime(
+            did_label,
+            Scalar::hash_from_bytes::<Sha3_512>(&investor_public_value),
+        );
+        let claim_label_prime = pg.label_prime(
+            claim_label,
+            Scalar::hash_from_bytes::<Sha3_512>(&issuer_public_value),
+        );
 
         let pub_key = PublicKey::from_point(did_label_prime - claim_label_prime);
         ProofPublicKey { pub_key }
@@ -210,7 +224,9 @@ impl ProofPublicKey {
     /// # Output
     /// `true` on a successful verification, `false` otherwise.
     pub fn verify_id_match_proof(&self, message: &[u8], sig: &Signature) -> bool {
-        self.pub_key.verify_simple(SIGNING_CTX, message, sig).is_ok()
+        self.pub_key
+            .verify_simple(SIGNING_CTX, message, sig)
+            .is_ok()
     }
 }
 
@@ -222,8 +238,8 @@ impl ProofPublicKey {
 mod tests {
     use super::*;
 
-    const SEED_1 : [u8;32] = [42u8;32];
-    const SEED_2 : [u8;32] = [0u8;32];
+    const SEED_1: [u8; 32] = [42u8; 32];
+    const SEED_2: [u8; 32] = [0u8; 32];
 
     #[test]
     fn match_pub_key_both_sides() {
