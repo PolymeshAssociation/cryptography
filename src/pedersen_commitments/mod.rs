@@ -66,6 +66,8 @@ use curve25519_dalek::{
 };
 use sha3::Sha3_512;
 
+use sp_std::prelude::*;
+
 const PEDERSEN_COMMITMENT_LABEL: &[u8; 16] = b"PolymathIdentity";
 const PEDERSEN_COMMITMENT_NUM_GENERATORS: usize = 3;
 
