@@ -45,8 +45,7 @@ use sha3::{
     Sha3_256, Sha3_512,
 };
 
-#[cfg(test)]
-use rand::Rng;
+use sp_std::prelude::*;
 
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
@@ -220,7 +219,7 @@ impl ProofPublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{rngs::StdRng, Rng, SeedableRng};
 
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [43u8; 32];
