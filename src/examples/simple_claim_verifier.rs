@@ -39,13 +39,7 @@ struct Cli {
 fn main() {
     let args = Cli::from_args();
     let proof_str = match args.proof {
-        Some(p) => match std::fs::read_to_string(p) {
-            Ok(ps) => ps,
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(exitcode::DATAERR);
-            }
-        },
+        Some(p) => std::fs::read_to_string(p).expect("Failed to read the proof from file."),
         None => panic!("You must provide a proof!"),
     };
 
@@ -54,7 +48,8 @@ fn main() {
         println!("Message: {:?}", args.message);
     }
 
-    let proof: Proof = serde_json::from_str(&proof_str).unwrap();
+    let proof: Proof = serde_json::from_str(&proof_str)
+        .unwrap_or_else(|error| panic!("Failed to deserialize the proof: {}", error));
     let verifier_pub = ProofPublicKey::new(
         proof.did_label,
         &proof.inv_id_0,
@@ -64,7 +59,8 @@ fn main() {
 
     if verifier_pub.verify_id_match_proof(
         args.message.as_bytes(),
-        &Signature::from_bytes(proof.proof.as_slice()).unwrap(),
+        &Signature::from_bytes(proof.proof.as_slice())
+            .unwrap_or_else(|error| panic!("Failed to parse the proof: {}", error)),
     ) {
         println!("Successfully verified the claim!");
     } else {

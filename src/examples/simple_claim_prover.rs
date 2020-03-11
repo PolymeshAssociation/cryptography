@@ -32,6 +32,8 @@ struct Cli {
     message: String,
 
     /// Get the Json formatted claim from file.
+    /// If this option is provided along with `rand`,
+    /// it will save the randomly generated claim to file.
     #[structopt(short, long, parse(from_os_str))]
     claim: Option<std::path::PathBuf>,
 
@@ -68,17 +70,29 @@ fn main() {
 
     let claim_data: ClaimData = if args.rand {
         let mut rng = StdRng::from_seed([42u8; 32]);
-        random_claim(&mut rng)
+        let rand_claim = random_claim(&mut rng);
+
+        // If user provided the `claim` option, save this to file.
+        if let Some(c) = args.claim {
+            std::fs::write(
+                c,
+                serde_json::to_string(&rand_claim)
+                    .unwrap_or_else(|error| panic!("Failed to serialize the claim: {}", error)),
+            )
+            .expect("Failed to write the claim to file.");
+            if args.verbose {
+                println!("Successfully wrote the claim to file.");
+            }
+        }
+
+        rand_claim
     } else {
         match args.claim {
             Some(c) => {
-                let result = std::fs::read_to_string(&c);
-                match result {
-                    Ok(json_file_content) => serde_json::from_str(&json_file_content).unwrap(),
-                    Err(error) => {
-                        panic!("Can't deal with {}, just exit here", error);
-                    }
-                }
+                let json_file_content =
+                    std::fs::read_to_string(&c).expect("Failed to read the claim from file.");
+                serde_json::from_str(&json_file_content)
+                    .unwrap_or_else(|error| panic!("Failed to deserialize the claim: {}", error))
             }
             None => panic!("You must either pass in a claim file or generate it randomly."),
         }
@@ -108,21 +122,15 @@ fn main() {
         iss_id: claim_data.iss_id,
         proof: proof,
     };
-    let proof_str = serde_json::to_string(&packaged_proof).unwrap();
+    let proof_str = serde_json::to_string(&packaged_proof)
+        .unwrap_or_else(|error| panic!("Failed to serialize the proof: {}", error));
 
     if args.verbose {
         println!("Proof Package: {:?}", proof_str);
     }
 
     if let Some(p) = args.proof {
-        match std::fs::write(p, proof_str.as_bytes()) {
-            Ok(_) => {
-                println!("Successfully wrote the proof.");
-            }
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(exitcode::DATAERR);
-            }
-        }
+        std::fs::write(p, proof_str.as_bytes()).expect("Failed to write the proof to file.");
+        println!("Successfully wrote the proof.");
     }
 }
