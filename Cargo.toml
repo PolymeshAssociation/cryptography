@@ -18,20 +18,22 @@ sha3 = { version = "0.8", default-features = false }
 rand = { version = "0.7.3", default-features = false, optional = true }
 rand_core = { version = "0.5.1", default-features = false }
 getrandom = { version = "0.1.14", default-features = false, optional = true }
-serde = { version = "1.0.104", default-features = false, optional = true }
 schnorrkel = { version = "0.9.0", features = ["u64_backend"], default-features = false, optional = true }
-
-
-[dev-dependencies]
-rand = "0.7.3"
+serde = { version = "1.0.104" }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]}
+structopt = { version = "0.3", default-features = false }
+exitcode = { version = "1.1.2", default-features = false }
 
 [features]
 default = ["std", "rand", "getrandom"]
 std = ["rand", "rand/std", "schnorrkel/std", ]
 nightly = ["curve25519-dalek/nightly", ]
 
-[[example]]
-# Use `cargo +nightly build --example simple` to compile this example.
-name = "simple"
-path = "src/examples/simple.rs"
+[[bin]]
+name = "scp"
+path = "src/examples/simple_claim_prover.rs"
 
+[[bin]]
+name = "scv"
+path = "src/examples/simple_claim_verifier.rs"
