@@ -25,7 +25,6 @@
 //! ```
 //! use curve25519_dalek::scalar::Scalar;
 //! use curve25519_dalek::ristretto::RistrettoPoint;
-//! use rand_core::OsRng;
 //! use cryptography::pedersen_commitments::*;
 //!
 //! let pg = PedersenGenerators::default();
