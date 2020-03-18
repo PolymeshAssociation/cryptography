@@ -40,6 +40,7 @@
 use crate::pedersen_commitments::PedersenGenerators;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use schnorrkel::{signing_context, Keypair, PublicKey, Signature};
+use serde::{Deserialize, Serialize};
 use sha3::{
     digest::{FixedOutput, Input},
     Sha3_256, Sha3_512,
@@ -50,7 +51,7 @@ use sp_std::prelude::*;
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]
 pub struct RawData(pub [u8; 32]);
 
 impl AsRef<[u8; 32]> for RawData {
@@ -64,7 +65,7 @@ impl AsRef<[u8; 32]> for RawData {
 /// 2. `inv_id_1` corresponds to the `INVESTOR_UNIQUE_ID`.
 /// 3. `inv_blind` corresponds to the `RANDOM_BLIND`.
 /// 4. `iss_id` corresponds to the `TARGET_ASSET_ISSUER`.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ClaimData {
     pub inv_id_0: RawData,
     pub inv_id_1: RawData,

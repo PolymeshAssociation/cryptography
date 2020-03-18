@@ -14,36 +14,42 @@ build = "build.rs"
 [dependencies]
 sp-std = { package = "sp-std", git = "https://github.com/paritytech/substrate", default-features = false, rev = "93569d0d1af7aa5eb67b9de8b58d7fffde63b421" }
 
-curve25519-dalek = { version = "2.0.0", default-features = false }
-bulletproofs = { version = "2.0", default-features = false }
-sha3 = { version = "0.8", default-features = false }
-rand = { version = "0.7.3", default-features = false, optional = true }
-rand_core = { version = "0.5.1", default-features = false }
-getrandom = { version = "0.1.14", default-features = false, optional = true }
-serde = { version = "1.0.104", default-features = false, optional = true }
-schnorrkel = { version = "0.9.0", features = ["u64_backend"], default-features = false, optional = true }
+# bulletproofs = { version = "2.0", default-features = false }
+# sha3 = { version = "0.8", default-features = false }
+serde = { version = "1.0.104" }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]}
+structopt = { version = "0.3", default-features = false }
+exitcode = { version = "1.1.2", default-features = false }
 
+# rand_core = { version = "0.5.1", features = ["wasm-bindgen"], default-features = false }
+rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom"], default-features = false }
+# curve25519-dalek = { version = "2.0.0", features = ["u32_backend"], default-features = false }
+# getrandom = { version = "0.1.14", features = ["wasm-bindgen"], default-features = false }
+
+[dependencies.schnorrkel]
+version = "0.9.0"
+default-features = false
+features = ["wasm-bindgen", "u32_backend", "rand"]
 
 [build-dependencies]
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", git = "https://github.com/paritytech/substrate", default-features = false, rev = "93569d0d1af7aa5eb67b9de8b58d7fffde63b421"}
 
 
-[dev-dependencies]
-rand = "0.7.3"
 
 [features]
-default = ["std", "rand", "getrandom"]
+default = ["std"]
 no_std = []
-nightly = ["curve25519-dalek/nightly", ]
+# nightly = ["curve25519-dalek/nightly", ]
 std = [
-	"rand", 
-	"rand/std", 
 	"schnorrkel/std", 
 	"sp-std/std",
 ]
 
-[[example]]
-# Use `cargo +nightly build --example simple` to compile this example.
-name = "simple"
-path = "src/examples/simple.rs"
+[[bin]]
+name = "scp"
+path = "src/examples/simple_claim_prover.rs"
 
+[[bin]]
+name = "scv"
+path = "src/examples/simple_claim_verifier.rs"
