@@ -30,6 +30,7 @@ structopt = { version = "0.3", default-features = false }
 exitcode = { version = "1.1.2", default-features = false }
 
 [build-dependencies]
+# WASM builder is using `WasmBuilderSource::Crates("1.0.8")`, please see `build.rs`. 
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", git = "https://github.com/paritytech/substrate", default-features = false, rev = "93569d0d1af7aa5eb67b9de8b58d7fffde63b421"}
 
 [features]
