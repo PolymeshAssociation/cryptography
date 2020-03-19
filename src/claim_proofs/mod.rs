@@ -10,7 +10,7 @@
 //! its claims.
 //!
 //! ```
-//! use cryptography::claim_proofs::{RawData, ClaimData, ProofKeyPair, compute_label};
+//! use cryptography::claim_proofs::{RawData, ClaimData, ProofKeyPair, compute_claim_label, compute_did_label};
 //!
 //! // Investor side:
 //! let message = b"some asset ownership claims!";
@@ -24,8 +24,8 @@
 //! let pair = ProofKeyPair::from(d);
 //!
 //! let proof = pair.generate_id_match_proof(message);
-//! let did_label = compute_label(&inv_id_0, &inv_id_1, Some(&inv_blind));
-//! let claim_label = compute_label(&iss_id, &inv_id_1, None);
+//! let did_label = compute_did_label(&inv_id_0, &inv_id_1, &inv_blind);
+//! let claim_label = compute_claim_label(&iss_id, &inv_id_1);
 //!
 //! // Verifier side:
 //! use cryptography::claim_proofs::ProofPublicKey;
@@ -90,33 +90,44 @@ pub struct ProofPublicKey {
     pub_key: PublicKey,
 }
 
-/// Compute DID or claim labels. \
+/// Compute the DID label. \
 /// DID_LABEL = PedersenCommitment(INVESTOR_DID, INVESTOR_UNIQUE_ID, RANDOM_BLIND) \
+///
+/// # Inputs
+/// * `id0` is the first value to commit.
+/// * `id1` is the second value to commit.
+/// * `blind` is the third value to commit.
+///
+/// # Output
+/// The Pedersen commitment result.
+pub fn compute_did_label(id0: &RawData, id1: &RawData, blind: &RawData) -> RistrettoPoint {
+    let pg = PedersenGenerators::default();
+    pg.commit(&[
+        Scalar::hash_from_bytes::<Sha3_512>(id0.as_ref()),
+        Scalar::hash_from_bytes::<Sha3_512>(id1.as_ref()),
+        Scalar::hash_from_bytes::<Sha3_512>(blind.as_ref()),
+    ])
+}
+
+/// Compute the claim label. \
 /// CLAIM_LABEL = PedersenCommitment(TARGET_ASSET_ISSUER, INVESTOR_UNIQUE_ID, [TARGET_ASSET_ISSUER | INVESTOR_UNIQUE_ID])
 ///
 /// # Inputs
 /// * `id0` is the first value to commit.
 /// * `id1` is the second value to commit.
-/// * `blind` is the third value to commit. If this term is not provided, `[id0|id1]` will be used as the third value.
 ///
 /// # Output
 /// The Pedersen commitment result.
-pub fn compute_label(id0: &RawData, id1: &RawData, blind: Option<&RawData>) -> RistrettoPoint {
-    let third_term: Vec<u8> = match blind {
-        Some(t) => t.0.to_vec(),
-        None => {
-            let mut t = Vec::with_capacity(id0.0.len() + id1.0.len());
-            t.extend_from_slice(id0.as_ref());
-            t.extend_from_slice(id1.as_ref());
-            t
-        }
-    };
+pub fn compute_claim_label(id0: &RawData, id1: &RawData) -> RistrettoPoint {
+    let mut t = Vec::with_capacity(id0.0.len() + id1.0.len());
+    t.extend_from_slice(id0.as_ref());
+    t.extend_from_slice(id1.as_ref());
 
     let pg = PedersenGenerators::default();
     pg.commit(&[
         Scalar::hash_from_bytes::<Sha3_512>(id0.as_ref()),
         Scalar::hash_from_bytes::<Sha3_512>(id1.as_ref()),
-        Scalar::hash_from_bytes::<Sha3_512>(third_term.as_ref()),
+        Scalar::hash_from_bytes::<Sha3_512>(t.as_ref()),
     ])
 }
 
@@ -257,8 +268,8 @@ mod tests {
 
         // Investor side.
         let pair = ProofKeyPair::from(d);
-        let did_label = compute_label(&d.inv_id_0, &d.inv_id_1, Some(&d.inv_blind));
-        let claim_label = compute_label(&d.iss_id, &d.inv_id_1, None);
+        let did_label = compute_did_label(&d.inv_id_0, &d.inv_id_1, &d.inv_blind);
+        let claim_label = compute_claim_label(&d.iss_id, &d.inv_id_1);
 
         // Verifier side.
         let verifier_pub = ProofPublicKey::new(did_label, &d.inv_id_0, claim_label, &d.iss_id);
@@ -283,8 +294,8 @@ mod tests {
         // Note: the SR 255-19 randomizes the signing process, therefore
         // we can't check the `proof` against a  test vector here.
 
-        let did_label = compute_label(&d.inv_id_0, &d.inv_id_1, Some(&d.inv_blind));
-        let claim_label = compute_label(&d.iss_id, &d.inv_id_1, None);
+        let did_label = compute_did_label(&d.inv_id_0, &d.inv_id_1, &d.inv_blind);
+        let claim_label = compute_claim_label(&d.iss_id, &d.inv_id_1);
 
         // => Investor makes {did_label, claim_label, inv_id_0, iss_id, message, proof} public knowledge.
 

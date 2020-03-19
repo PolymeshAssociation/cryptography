@@ -3,7 +3,7 @@
 //! Use `scp --help` to see the usage.
 //!
 
-use cryptography::claim_proofs::{compute_label, ClaimData, ProofKeyPair, RawData};
+use cryptography::claim_proofs::{compute_claim_label, compute_did_label, ClaimData, ProofKeyPair, RawData};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -107,12 +107,12 @@ fn main() {
     let pair = ProofKeyPair::from(claim_data);
     let proof = pair.generate_id_match_proof(message).to_bytes().to_vec();
 
-    let did_label = compute_label(
+    let did_label = compute_did_label(
         &claim_data.inv_id_0,
         &claim_data.inv_id_1,
-        Some(&claim_data.inv_blind),
+        &claim_data.inv_blind,
     );
-    let claim_label = compute_label(&claim_data.iss_id, &claim_data.inv_id_1, None);
+    let claim_label = compute_claim_label(&claim_data.iss_id, &claim_data.inv_id_1);
 
     // => Investor makes {did_label, claim_label, inv_id_0, iss_id, message, proof} public knowledge.
     let packaged_proof = Proof {
