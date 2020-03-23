@@ -8,27 +8,37 @@ readme = "README.md"
 repository = "https://github.com/PolymathNetwork/cryptography"
 description = "The Repository for cryptographic libraries used in Polymesh"
 edition = "2018"
-exclude = [ ".gitignore",
-          ]
+exclude = [".gitignore"]
+build = "build.rs"
 
 [dependencies]
-curve25519-dalek = { version = "2.0.0", default-features = false }
-bulletproofs = { version = "2.0", default-features = false }
-sha3 = { version = "0.8", default-features = false }
-rand = { version = "0.7.3", default-features = false, optional = true }
-rand_core = { version = "0.5.1", default-features = false }
-getrandom = { version = "0.1.14", default-features = false, optional = true }
-schnorrkel = { version = "0.9.0", features = ["u64_backend"], default-features = false, optional = true }
-serde = { version = "1.0.104" }
+sp-std = { package = "sp-std", git = "https://github.com/paritytech/substrate", default-features = false, rev = "93569d0d1af7aa5eb67b9de8b58d7fffde63b421" }
+
+# Common
+serde = { version = "1.0.104", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]}
+
+# Crypto
+sha3 = { version = "0.8", default-features = false }
+rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
+curve25519-dalek = { version = "2.0.0", features = ["u32_backend", "alloc", "serde"], default-features = false }
+schnorrkel = { version = "0.9.0", features = ["u32_backend", "wasm-bindgen"], default-features = false }
+
+# Only binaries
 structopt = { version = "0.3", default-features = false }
 exitcode = { version = "1.1.2", default-features = false }
 
+[build-dependencies]
+# WASM builder is using `WasmBuilderSource::Crates("1.0.8")`, please see `build.rs`. 
+wasm-builder-runner = { package = "substrate-wasm-builder-runner", git = "https://github.com/paritytech/substrate", default-features = false, rev = "93569d0d1af7aa5eb67b9de8b58d7fffde63b421"}
+
 [features]
-default = ["std", "rand", "getrandom"]
-std = ["rand", "rand/std", "schnorrkel/std", ]
-nightly = ["curve25519-dalek/nightly", ]
+default = ["std"]
+no_std = []
+std = [
+	"sp-std/std",
+]
 
 [[bin]]
 name = "scp"
