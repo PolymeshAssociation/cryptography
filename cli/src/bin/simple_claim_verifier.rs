@@ -3,7 +3,7 @@
 //! Use `scv --help` to see the usage.
 //!
 
-use cryptography::claim_proofs::{ProofPublicKey, RawData};
+use polymesh_crypto::claim_proofs::{ProofPublicKey, RawData};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use schnorrkel::Signature;
 use serde::{Deserialize, Serialize};
