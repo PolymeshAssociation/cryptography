@@ -5,9 +5,8 @@
 
 use cli_common::Proof;
 
-use cryptography::{
-    random_claim,
-    claim_proofs::{ ProofKeyPair, build_scope_claim_proof_data, compute_scope_id, compute_cdd_id }
+use cryptography::claim_proofs::{
+    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, random_claim, ProofKeyPair,
 };
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -42,8 +41,6 @@ struct Cli {
     #[structopt(short, long)]
     verbose: bool,
 }
-
-
 
 fn main() {
     let args = Cli::from_args();
