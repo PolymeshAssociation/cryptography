@@ -14,11 +14,11 @@ exclude = [".gitignore"]
 cli_common = { package = "cli-common", path = "../common/" }
 cryptography = { package = "cryptography", path = "../../cryptography/" }
 
-serde = { version = "1.0.104", features = ["derive"] }
+serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
-curve25519-dalek = { version = "2.0.0", features = ["u32_backend", "alloc", "serde"], default-features = false }
-schnorrkel = { version = "0.9.0", features = ["u32_backend", "wasm-bindgen"], default-features = false }
+curve25519-dalek = { version = "2.0.0", features = ["u64_backend", "alloc", "serde"], default-features = false }
+schnorrkel = { version = "0.9.1", features = ["u64_backend", "wasm-bindgen"], default-features = false }
 
 # Only binaries
 structopt = { version = "0.3", default-features = false }
