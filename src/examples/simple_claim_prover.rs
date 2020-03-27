@@ -3,7 +3,10 @@
 //! Use `scp --help` to see the usage.
 //!
 
-use cryptography::claim_proofs::{compute_cdd_id, compute_scope_id, build_scope_claim_proof_data, CDDClaimData, ScopeClaimData, ProofKeyPair, RawData};
+use cryptography::claim_proofs::{
+    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CDDClaimData, ProofKeyPair,
+    RawData, ScopeClaimData,
+};
 use curve25519_dalek::ristretto::RistrettoPoint;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -52,24 +55,21 @@ struct Cli {
 fn random_claim<R: Rng + ?Sized>(rng: &mut R) -> (CDDClaimData, ScopeClaimData) {
     let mut investor_did = RawData::default();
     let mut investor_unique_id = RawData::default();
-    let mut random_blind = RawData::default();
     let mut scope_did = RawData::default();
 
     rng.fill_bytes(&mut investor_did.0);
     rng.fill_bytes(&mut investor_unique_id.0);
-    rng.fill_bytes(&mut random_blind.0);
     rng.fill_bytes(&mut scope_did.0);
 
     (
         CDDClaimData {
             investor_did,
             investor_unique_id,
-            random_blind,
         },
         ScopeClaimData {
             scope_did,
             investor_unique_id,
-        }
+        },
     )
 }
 
@@ -96,8 +96,9 @@ fn main() {
         if let Some(c) = args.scope_claim {
             std::fs::write(
                 c,
-                serde_json::to_string(&rand_scope_claim)
-                    .unwrap_or_else(|error| panic!("Failed to serialize the scope claim: {}", error)),
+                serde_json::to_string(&rand_scope_claim).unwrap_or_else(|error| {
+                    panic!("Failed to serialize the scope claim: {}", error)
+                }),
             )
             .expect("Failed to write the scope claim to file.");
             if args.verbose {
@@ -111,8 +112,9 @@ fn main() {
             Some(c) => {
                 let json_file_content =
                     std::fs::read_to_string(&c).expect("Failed to read the cdd claim from file.");
-                serde_json::from_str(&json_file_content)
-                    .unwrap_or_else(|error| panic!("Failed to deserialize the cdd claim: {}", error))
+                serde_json::from_str(&json_file_content).unwrap_or_else(|error| {
+                    panic!("Failed to deserialize the cdd claim: {}", error)
+                })
             }
             None => panic!("You must either pass in a claim file or generate it randomly."),
         };
@@ -120,8 +122,9 @@ fn main() {
             Some(c) => {
                 let json_file_content =
                     std::fs::read_to_string(&c).expect("Failed to read the scope claim from file.");
-                serde_json::from_str(&json_file_content)
-                    .unwrap_or_else(|error| panic!("Failed to deserialize the scope claim: {}", error))
+                serde_json::from_str(&json_file_content).unwrap_or_else(|error| {
+                    panic!("Failed to deserialize the scope claim: {}", error)
+                })
             }
             None => panic!("You must either pass in a claim file or generate it randomly."),
         };
@@ -129,8 +132,14 @@ fn main() {
     };
 
     if args.verbose {
-        println!("CDD Claim: {:?}", serde_json::to_string(&cdd_claim).unwrap());
-        println!("Scope Claim: {:?}", serde_json::to_string(&scope_claim).unwrap());
+        println!(
+            "CDD Claim: {:?}",
+            serde_json::to_string(&cdd_claim).unwrap()
+        );
+        println!(
+            "Scope Claim: {:?}",
+            serde_json::to_string(&scope_claim).unwrap()
+        );
         println!("Message: {:?}", args.message);
     }
 

@@ -10,19 +10,19 @@
 //! its claims.
 //!
 //! ```
-//!use cryptography::claim_proofs::{compute_cdd_id, compute_scope_id, build_scope_claim_proof_data, CDDClaimData, ScopeClaimData, ProofKeyPair, RawData};
+//! use cryptography::claim_proofs::{compute_cdd_id, compute_scope_id, build_scope_claim_proof_data,
+//!     CDDClaimData, ScopeClaimData, ProofKeyPair, RawData};
 //!
 //! // Investor side:
 //! let message = b"some asset ownership claims!";
 //!
 //! let investor_did = RawData([1u8; 32]);
 //! let investor_unique_id = RawData([2u8; 32]);
-//! let random_blind = RawData([3u8; 32]);
-//! let cdd_claim = CDDClaimData {investor_did, investor_unique_id, random_blind};
-//! 
+//! let cdd_claim = CDDClaimData {investor_did, investor_unique_id};
+//!
 //! let scope_did = RawData([4u8; 32]);
 //! let scope_claim = ScopeClaimData {scope_did, investor_unique_id};
-//! 
+//!
 //! let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
 //! let pair = ProofKeyPair::from(scope_claim_proof_data);
 //!
@@ -64,12 +64,18 @@ impl AsRef<[u8; 32]> for RawData {
     }
 }
 
+fn concat(a: RawData, b: RawData) -> Vec<u8> {
+    let mut t = Vec::with_capacity(a.0.len() + b.0.len());
+    t.extend_from_slice(a.as_ref());
+    t.extend_from_slice(b.as_ref());
+    t
+}
+
 /// The data needed to generate a CDD ID
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct CDDClaimData {
     pub investor_did: RawData,
     pub investor_unique_id: RawData,
-    pub random_blind: RawData,
 }
 
 /// The data needed to generate a SCOPE ID
@@ -83,8 +89,8 @@ pub struct ScopeClaimData {
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ScopeClaimProofData {
     pub scope_did: RawData,
+    pub investor_did: RawData,
     pub investor_unique_id: RawData,
-    pub random_blind: RawData,
 }
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
@@ -104,7 +110,7 @@ pub struct ProofPublicKey {
 }
 
 /// Compute the CDD_ID. \
-/// CDD_ID = PedersenCommitment(INVESTOR_DID, INVESTOR_UNIQUE_ID, RANDOM_BLIND) \
+/// CDD_ID = PedersenCommitment(INVESTOR_DID, INVESTOR_UNIQUE_ID, [INVESTOR_DID | INVESTOR_UNIQUE_ID]) \
 ///
 /// # Inputs
 /// * `cdd_claim` is the CDD claim from which to generate the CDD_ID
@@ -116,7 +122,9 @@ pub fn compute_cdd_id(cdd_claim: &CDDClaimData) -> RistrettoPoint {
     pg.commit(&[
         Scalar::hash_from_bytes::<Sha3_512>(cdd_claim.investor_did.as_ref()),
         Scalar::hash_from_bytes::<Sha3_512>(cdd_claim.investor_unique_id.as_ref()),
-        Scalar::hash_from_bytes::<Sha3_512>(cdd_claim.random_blind.as_ref()),
+        Scalar::hash_from_bytes::<Sha3_512>(
+            concat(cdd_claim.investor_did, cdd_claim.investor_unique_id).as_ref(),
+        ),
     ])
 }
 
@@ -130,23 +138,24 @@ pub fn compute_cdd_id(cdd_claim: &CDDClaimData) -> RistrettoPoint {
 /// # Output
 /// The Pedersen commitment result.
 pub fn compute_scope_id(scope_claim: &ScopeClaimData) -> RistrettoPoint {
-    let mut t = Vec::with_capacity(scope_claim.scope_did.0.len() + scope_claim.investor_unique_id.0.len());
-    t.extend_from_slice(scope_claim.scope_did.as_ref());
-    t.extend_from_slice(scope_claim.investor_unique_id.as_ref());
-
     let pg = PedersenGenerators::default();
     pg.commit(&[
         Scalar::hash_from_bytes::<Sha3_512>(scope_claim.scope_did.as_ref()),
         Scalar::hash_from_bytes::<Sha3_512>(scope_claim.investor_unique_id.as_ref()),
-        Scalar::hash_from_bytes::<Sha3_512>(t.as_ref()),
+        Scalar::hash_from_bytes::<Sha3_512>(
+            concat(scope_claim.scope_did, scope_claim.investor_unique_id).as_ref(),
+        ),
     ])
 }
 
-pub fn build_scope_claim_proof_data(cdd_claim: &CDDClaimData, scope_claim: &ScopeClaimData) -> ScopeClaimProofData {
+pub fn build_scope_claim_proof_data(
+    cdd_claim: &CDDClaimData,
+    scope_claim: &ScopeClaimData,
+) -> ScopeClaimProofData {
     ScopeClaimProofData {
         scope_did: scope_claim.scope_did,
         investor_unique_id: cdd_claim.investor_unique_id,
-        random_blind: cdd_claim.random_blind,
+        investor_did: cdd_claim.investor_did,
     }
 }
 
@@ -159,12 +168,10 @@ impl From<ScopeClaimProofData> for ProofKeyPair {
     /// `d`: the data required to prove that a SCOPE_ID matches a CDD_ID.
     fn from(d: ScopeClaimProofData) -> Self {
         // Investor's secret key is:
-        // Hash(RANDOM_BLIND) - Hash([SCOPE_DID | INVESTOR_UNIQUE_ID])
-        let mut second_term = Vec::with_capacity(d.scope_did.0.len() + d.investor_unique_id.0.len());
-        second_term.extend_from_slice(d.scope_did.as_ref());
-        second_term.extend_from_slice(d.investor_unique_id.as_ref());
-
-        let secret_key_scalar = Scalar::hash_from_bytes::<Sha3_512>(d.random_blind.as_ref())
+        // Hash([INVESTOR_DID | INVESTOR_UNIQUE_ID]) - Hash([SCOPE_DID | INVESTOR_UNIQUE_ID])
+        let first_term = concat(d.investor_did, d.investor_unique_id);
+        let second_term = concat(d.scope_did, d.investor_unique_id);
+        let secret_key_scalar = Scalar::hash_from_bytes::<Sha3_512>(first_term.as_ref())
             - Scalar::hash_from_bytes::<Sha3_512>(&second_term);
 
         // Set the secret key's nonce to : ["nonce" | secret_key]
@@ -259,32 +266,29 @@ mod tests {
     fn random_claim<R: Rng + ?Sized>(rng: &mut R) -> (CDDClaimData, ScopeClaimData) {
         let mut investor_did = RawData::default();
         let mut investor_unique_id = RawData::default();
-        let mut random_blind = RawData::default();
         let mut scope_did = RawData::default();
 
         rng.fill_bytes(&mut investor_did.0);
         rng.fill_bytes(&mut investor_unique_id.0);
-        rng.fill_bytes(&mut random_blind.0);
         rng.fill_bytes(&mut scope_did.0);
 
         (
             CDDClaimData {
                 investor_did,
                 investor_unique_id,
-                random_blind,
             },
             ScopeClaimData {
                 scope_did,
                 investor_unique_id,
-            }
+            },
         )
     }
 
     #[test]
     fn match_pub_key_both_sides() {
         let expected_public_key = [
-            234, 60, 137, 157, 161, 149, 69, 12, 3, 160, 245, 107, 89, 180, 152, 149, 227, 128, 37,
-            233, 161, 36, 95, 205, 193, 35, 163, 204, 60, 154, 231, 111,
+            48, 37, 28, 128, 48, 60, 182, 218, 99, 119, 36, 30, 184, 242, 122, 224, 253, 90, 103,
+            203, 187, 234, 53, 49, 45, 116, 56, 211, 135, 72, 214, 68,
         ];
 
         let mut rng = StdRng::from_seed(SEED_1);
@@ -297,7 +301,12 @@ mod tests {
         let scope_id = compute_scope_id(&scope_claim);
 
         // Verifier side.
-        let verifier_pub = ProofPublicKey::new(cdd_id, &cdd_claim.investor_did, scope_id, &scope_claim.scope_did);
+        let verifier_pub = ProofPublicKey::new(
+            cdd_id,
+            &cdd_claim.investor_did,
+            scope_id,
+            &scope_claim.scope_did,
+        );
 
         // Make sure both sides get the same public key.
         assert_eq!(pair.keypair.public, verifier_pub.pub_key);
@@ -327,7 +336,12 @@ mod tests {
         // => Investor makes {cdd_id, scope_id, investor_did, scope_did, message, proof} public knowledge.
 
         // Verifier side.
-        let verifier_pub = ProofPublicKey::new(cdd_id, &cdd_claim.investor_did, scope_id, &scope_claim.scope_did);
+        let verifier_pub = ProofPublicKey::new(
+            cdd_id,
+            &cdd_claim.investor_did,
+            scope_id,
+            &scope_claim.scope_did,
+        );
 
         // Positive tests.
         let result = verifier_pub.verify_id_match_proof(message, &proof);
