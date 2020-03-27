@@ -92,11 +92,11 @@ fn main() {
 
     // => Investor makes {did_label, claim_label, inv_id_0, iss_id, message, proof} public knowledge.
     let packaged_proof = Proof {
-        did_label: did_label,
+        did_label,
         inv_id_0: claim_data.inv_id_0,
-        claim_label: claim_label,
+        claim_label,
         iss_id: claim_data.iss_id,
-        proof: proof,
+        proof,
     };
     let proof_str = serde_json::to_string(&packaged_proof)
         .unwrap_or_else(|error| panic!("Failed to serialize the proof: {}", error));
