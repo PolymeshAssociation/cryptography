@@ -3,21 +3,14 @@
 //! Use `scp --help` to see the usage.
 //!
 
-use cryptography::claim_proofs::{compute_label, ClaimData, ProofKeyPair, RawData};
-use curve25519_dalek::ristretto::RistrettoPoint;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use cli_common::{ Proof, random_claim };
+
+use cryptography::claim_proofs::{compute_label, ClaimData, ProofKeyPair };
+use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Proof {
-    claim_label: RistrettoPoint,
-    inv_id_0: RawData,
-    did_label: RistrettoPoint,
-    iss_id: RawData,
-    #[serde(with = "serde_bytes")]
-    proof: Vec<u8>,
-}
+
 
 /// scp -- a simple claim prover.{n}
 /// The scp utility (optionally) creates a random claim and proves it.
@@ -46,24 +39,7 @@ struct Cli {
     verbose: bool,
 }
 
-fn random_claim<R: Rng + ?Sized>(rng: &mut R) -> ClaimData {
-    let mut inv_id_0 = RawData::default();
-    let mut inv_id_1 = RawData::default();
-    let mut inv_blind = RawData::default();
-    let mut iss_id = RawData::default();
 
-    rng.fill_bytes(&mut inv_id_0.0);
-    rng.fill_bytes(&mut inv_id_1.0);
-    rng.fill_bytes(&mut inv_blind.0);
-    rng.fill_bytes(&mut iss_id.0);
-
-    ClaimData {
-        inv_id_0,
-        inv_id_1,
-        inv_blind,
-        iss_id,
-    }
-}
 
 fn main() {
     let args = Cli::from_args();

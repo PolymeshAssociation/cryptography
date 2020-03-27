@@ -3,21 +3,13 @@
 //! Use `scv --help` to see the usage.
 //!
 
-use polymesh_crypto::claim_proofs::{ProofPublicKey, RawData};
-use curve25519_dalek::ristretto::RistrettoPoint;
+use cli_common::Proof;
+use cryptography::claim_proofs::ProofPublicKey;
+
 use schnorrkel::Signature;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-#[derive(Serialize, Deserialize)]
-struct Proof {
-    claim_label: RistrettoPoint,
-    inv_id_0: RawData,
-    did_label: RistrettoPoint,
-    iss_id: RawData,
-    #[serde(with = "serde_bytes")]
-    proof: Vec<u8>,
-}
 
 /// scv -- a simple claim verifier.{n}
 /// The scv utility takes in a message and its proof and verifies it.
@@ -35,6 +27,7 @@ struct Cli {
     #[structopt(short, long)]
     verbose: bool,
 }
+
 
 fn main() {
     let args = Cli::from_args();

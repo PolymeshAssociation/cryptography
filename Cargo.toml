@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+	"cryptography",
+	"cli/common",
+	"cli/scp",
+	"cli/scv"
+]
