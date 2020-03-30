@@ -28,7 +28,6 @@ struct Cli {
     verbose: bool,
 }
 
-
 fn main() {
     let args = Cli::from_args();
     let proof_str = match args.proof {
