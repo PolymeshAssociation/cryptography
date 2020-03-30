@@ -22,7 +22,7 @@ cargo +nightly test -- --nocapture
 
 To run the `simple_claim_prover` example:
 ```
-cargo run --bin scp -- -v -r -c rand_claim.json -p proof.json -m "my claim"
+cargo run --bin scp -- -v -r -c rand_cdd_claim.json -s rand_scope_claim.json -p proof.json -m "my claim"
 ```
 
 It will generate a random claim and save it to `rand_claim.json`. From this claim it will generate a proof of possession of the unique id over the `"my claim"` message, and save it to `proof.json`.

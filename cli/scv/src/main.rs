@@ -43,10 +43,10 @@ fn main() {
     let proof: Proof = serde_json::from_str(&proof_str)
         .unwrap_or_else(|error| panic!("Failed to deserialize the proof: {}", error));
     let verifier_pub = ProofPublicKey::new(
-        proof.did_label,
-        &proof.inv_id_0,
-        proof.claim_label,
-        &proof.iss_id,
+        proof.cdd_id,
+        &proof.investor_did,
+        proof.scope_id,
+        &proof.scope_did,
     );
 
     if verifier_pub.verify_id_match_proof(
