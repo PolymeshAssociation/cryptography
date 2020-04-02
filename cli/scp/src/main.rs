@@ -3,24 +3,15 @@
 //! Use `scp --help` to see the usage.
 //!
 
-use cryptography::claim_proofs::{
-    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CDDClaimData, ProofKeyPair,
-    RawData, ScopeClaimData,
+use cli_common::Proof;
+
+use cryptography::{
+    random_claim,
+    claim_proofs::{ ProofKeyPair, build_scope_claim_proof_data, compute_scope_id, compute_cdd_id }
 };
-use curve25519_dalek::ristretto::RistrettoPoint;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Proof {
-    cdd_id: RistrettoPoint,
-    investor_did: RawData,
-    scope_id: RistrettoPoint,
-    scope_did: RawData,
-    #[serde(with = "serde_bytes")]
-    proof: Vec<u8>,
-}
 
 /// scp -- a simple claim prover.{n}
 /// The scp utility (optionally) creates a random claim and proves it.
@@ -52,26 +43,7 @@ struct Cli {
     verbose: bool,
 }
 
-fn random_claim<R: Rng + ?Sized>(rng: &mut R) -> (CDDClaimData, ScopeClaimData) {
-    let mut investor_did = RawData::default();
-    let mut investor_unique_id = RawData::default();
-    let mut scope_did = RawData::default();
 
-    rng.fill_bytes(&mut investor_did.0);
-    rng.fill_bytes(&mut investor_unique_id.0);
-    rng.fill_bytes(&mut scope_did.0);
-
-    (
-        CDDClaimData {
-            investor_did,
-            investor_unique_id,
-        },
-        ScopeClaimData {
-            scope_did,
-            investor_unique_id,
-        },
-    )
-}
 
 fn main() {
     let args = Cli::from_args();
@@ -158,7 +130,7 @@ fn main() {
         investor_did: cdd_claim.investor_did,
         scope_id: scope_id,
         scope_did: scope_claim.scope_did,
-        proof: proof,
+        proof,
     };
     let proof_str = serde_json::to_string(&packaged_proof)
         .unwrap_or_else(|error| panic!("Failed to serialize the proof: {}", error));

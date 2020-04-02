@@ -49,8 +49,7 @@ use sha3::{
     Sha3_256, Sha3_512,
 };
 
-#[cfg(test)]
-use rand::Rng;
+use sp_std::prelude::*;
 
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
@@ -258,31 +257,11 @@ impl ProofPublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::random_claim;
     use rand::{rngs::StdRng, SeedableRng};
 
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [43u8; 32];
-
-    fn random_claim<R: Rng + ?Sized>(rng: &mut R) -> (CDDClaimData, ScopeClaimData) {
-        let mut investor_did = RawData::default();
-        let mut investor_unique_id = RawData::default();
-        let mut scope_did = RawData::default();
-
-        rng.fill_bytes(&mut investor_did.0);
-        rng.fill_bytes(&mut investor_unique_id.0);
-        rng.fill_bytes(&mut scope_did.0);
-
-        (
-            CDDClaimData {
-                investor_did,
-                investor_unique_id,
-            },
-            ScopeClaimData {
-                scope_did,
-                investor_unique_id,
-            },
-        )
-    }
 
     #[test]
     fn match_pub_key_both_sides() {

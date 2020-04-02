@@ -25,7 +25,6 @@
 //! ```
 //! use curve25519_dalek::scalar::Scalar;
 //! use curve25519_dalek::ristretto::RistrettoPoint;
-//! use rand_core::OsRng;
 //! use cryptography::pedersen_commitments::*;
 //!
 //! let pg = PedersenGenerators::default();
@@ -66,6 +65,8 @@ use curve25519_dalek::{
 };
 use sha3::Sha3_512;
 
+use sp_std::prelude::*;
+
 const PEDERSEN_COMMITMENT_LABEL: &[u8; 16] = b"PolymathIdentity";
 const PEDERSEN_COMMITMENT_NUM_GENERATORS: usize = 3;
 
@@ -95,11 +96,13 @@ impl Default for PedersenGenerators {
         ristretto_base_bytes.extend_from_slice(&PEDERSEN_COMMITMENT_LABEL.to_vec());
         ristretto_base_bytes.extend_from_slice(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
 
-        for i in 0..(PEDERSEN_COMMITMENT_NUM_GENERATORS - 1) {
-            generators[i] =
-                RistrettoPoint::hash_from_bytes::<Sha3_512>(ristretto_base_bytes.as_slice());
-            ristretto_base_bytes = generators[i].compress().as_bytes().to_vec();
-        }
+
+        generators.iter_mut().take(PEDERSEN_COMMITMENT_NUM_GENERATORS - 1)
+            .for_each(|generator| {
+                *generator = RistrettoPoint::hash_from_bytes::<Sha3_512>(ristretto_base_bytes.as_slice());
+                ristretto_base_bytes = generator.compress().as_bytes().to_vec();
+            });
+
         generators[PEDERSEN_COMMITMENT_NUM_GENERATORS - 1] = RISTRETTO_BASEPOINT_POINT;
 
         PedersenGenerators { generators }

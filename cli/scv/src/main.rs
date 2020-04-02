@@ -3,21 +3,13 @@
 //! Use `scv --help` to see the usage.
 //!
 
-use cryptography::claim_proofs::{ProofPublicKey, RawData};
-use curve25519_dalek::ristretto::RistrettoPoint;
+use cli_common::Proof;
+use cryptography::claim_proofs::ProofPublicKey;
+
 use schnorrkel::Signature;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-#[derive(Serialize, Deserialize)]
-pub struct Proof {
-    cdd_id: RistrettoPoint,
-    investor_did: RawData,
-    scope_id: RistrettoPoint,
-    scope_did: RawData,
-    #[serde(with = "serde_bytes")]
-    proof: Vec<u8>,
-}
 
 /// scv -- a simple claim verifier.{n}
 /// The scv utility takes in a message and its proof and verifies it.
