@@ -3,21 +3,13 @@
 //! Use `scv --help` to see the usage.
 //!
 
-use cryptography::claim_proofs::{ProofPublicKey, RawData};
-use curve25519_dalek::ristretto::RistrettoPoint;
+use cli_common::Proof;
+use cryptography::claim_proofs::ProofPublicKey;
+
 use schnorrkel::Signature;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-#[derive(Serialize, Deserialize)]
-struct Proof {
-    claim_label: RistrettoPoint,
-    inv_id_0: RawData,
-    did_label: RistrettoPoint,
-    iss_id: RawData,
-    #[serde(with = "serde_bytes")]
-    proof: Vec<u8>,
-}
 
 /// scv -- a simple claim verifier.{n}
 /// The scv utility takes in a message and its proof and verifies it.
@@ -51,10 +43,10 @@ fn main() {
     let proof: Proof = serde_json::from_str(&proof_str)
         .unwrap_or_else(|error| panic!("Failed to deserialize the proof: {}", error));
     let verifier_pub = ProofPublicKey::new(
-        proof.did_label,
-        &proof.inv_id_0,
-        proof.claim_label,
-        &proof.iss_id,
+        proof.cdd_id,
+        &proof.investor_did,
+        proof.scope_id,
+        &proof.scope_did,
     );
 
     if verifier_pub.verify_id_match_proof(

@@ -1,0 +1,37 @@
+[package]
+name = "cli"
+version = "0.1.0"
+authors = [ "Jesse Lancaster <jesse@polymath.network>",
+            "Parnian Alimi   <parnian@polymath.network>",
+          ]
+readme = "README.md"
+repository = "https://github.com/PolymathNetwork/cryptography"
+description = "The Repository for cryptographic libraries used in Polymesh"
+edition = "2018"
+exclude = [".gitignore"]
+
+[dependencies]
+# Crypto library
+polymesh-crypto = { package = "cryptography", path = "../polymesh_crypto/" }
+curve25519-dalek = { version = "2.0.0", features = ["nightly", "simd_backend"], default-features = false }
+schnorrkel = { version = "0.9.0", features = ["nightly"], default-features = false }
+
+serde = { version = "1.0.104", features = ["derive"] }
+
+# Only binaries
+structopt = { version = "0.3" }
+exitcode = { version = "1.1.2" }
+
+
+[[bin]]
+name = "scp"
+path = "src/bin/simple_claim_prover.rs"
+
+[[bin]]
+name = "scv"
+path = "src/bin/simple_claim_verifier.rs"
+
+[features]
+default = ["std"]
+std = [ ]
+
