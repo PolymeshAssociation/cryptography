@@ -77,6 +77,16 @@ You can run the WASM tests with
 wasm-pack test --node
 ```
 
+To run tests on WASM, follow [wasm-bindgen-test][wasm-bindgen-test].
+
+More specifically, ensure that you have `nodejs` installed and that `wasm-bindgen-test` is a dev dependency.
+Now, you can add `#[wasm_bindgen_test]` to any function that you want to be tested for WASM support.
+
+You can run the WASM tests with
+```
+wasm-pack test --node
+```
+
 [wasm-bindgen-test]: https://rustwasm.github.io/docs/wasm-bindgen/wasm-bindgen-test/usage.html
 [wiki_main_design]: https://polymath.atlassian.net/wiki/spaces/PC/pages/172523576/Asset+Granularity+Unique+Identity
 [wiki_crypto_design]: https://polymath.atlassian.net/wiki/spaces/CE/pages/202571817/Claim+Proof+Prototype
