@@ -10,6 +10,22 @@ To produce the documenation, run:
 cargo +nightly doc --open
 ```
 ### Build Instructions
+
+Install rust!
+
+Install the nightly version of rust and WASM toolchain.
+```
+# In the root directory
+rustup toolchain install nightly
+
+# install wasm pack from https://rustwasm.github.io/wasm-pack/installer/
+# then, inside the cryptography sub-directory, add the nightly version as target
+cd cryptography
+rustup target add wasm32-unknown-unknown --toolchain nightly
+```
+
+If you use a different command to install a specific nightly version, use the same format for adding WASM.
+
 To build the library and examples, run:
 ```
 cargo +nightly build
@@ -51,5 +67,16 @@ $> cd cryptography
 cryptography $> cargo +nightly b --features no_std
 ```
 
+To run tests on WASM, follow [wasm-bindgen-test][wasm-bindgen-test].
+
+More specifically, ensure that you have `nodejs` installed and that `wasm-bindgen-test` is a dev dependency.
+Now, you can add `#[wasm_bindgen_test]` to any function that you want to be tested for WASM support.
+
+You can run the WASM tests with
+```
+wasm-pack test --node
+```
+
+[wasm-bindgen-test]: https://rustwasm.github.io/docs/wasm-bindgen/wasm-bindgen-test/usage.html
 [wiki_main_design]: https://polymath.atlassian.net/wiki/spaces/PC/pages/172523576/Asset+Granularity+Unique+Identity
 [wiki_crypto_design]: https://polymath.atlassian.net/wiki/spaces/CE/pages/202571817/Claim+Proof+Prototype

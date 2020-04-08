@@ -3,6 +3,7 @@ name = "cryptography"
 version = "0.1.0"
 authors = [ "Jesse Lancaster <jesse@polymath.network>",
             "Parnian Alimi   <parnian@polymath.network>",
+            "Arash Afshar    <arash@polymath.network>",
           ]
 readme = "README.md"
 repository = "https://github.com/PolymathNetwork/cryptography"
@@ -28,6 +29,9 @@ schnorrkel = { version = "0.9.0", features = ["u32_backend", "wasm-bindgen"], de
 [build-dependencies]
 # WASM builder is using `WasmBuilderSource::Crates("1.0.8")`, please see `build.rs`. 
 wasm-builder-runner = { package = "substrate-wasm-builder-runner", git = "https://github.com/paritytech/substrate", default-features = false, rev = "93569d0d1af7aa5eb67b9de8b58d7fffde63b421"}
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.10"
 
 [features]
 default = ["std"]
