@@ -96,10 +96,12 @@ impl Default for PedersenGenerators {
         ristretto_base_bytes.extend_from_slice(&PEDERSEN_COMMITMENT_LABEL.to_vec());
         ristretto_base_bytes.extend_from_slice(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
 
-
-        generators.iter_mut().take(PEDERSEN_COMMITMENT_NUM_GENERATORS - 1)
+        generators
+            .iter_mut()
+            .take(PEDERSEN_COMMITMENT_NUM_GENERATORS - 1)
             .for_each(|generator| {
-                *generator = RistrettoPoint::hash_from_bytes::<Sha3_512>(ristretto_base_bytes.as_slice());
+                *generator =
+                    RistrettoPoint::hash_from_bytes::<Sha3_512>(ristretto_base_bytes.as_slice());
                 ristretto_base_bytes = generator.compress().as_bytes().to_vec();
             });
 
@@ -140,11 +142,13 @@ impl PedersenGenerators {
 
 #[cfg(test)]
 mod tests {
+    extern crate wasm_bindgen_test;
     use crate::pedersen_commitments::{PedersenGenerators, PEDERSEN_COMMITMENT_NUM_GENERATORS};
     use curve25519_dalek::{
         constants::RISTRETTO_BASEPOINT_COMPRESSED, ristretto::CompressedRistretto,
         ristretto::RistrettoPoint, scalar::Scalar,
     };
+    use wasm_bindgen_test::*;
 
     /// The snippet that was used to generate the test vectors:
     /// ```
@@ -189,6 +193,7 @@ mod tests {
     ];
 
     #[test]
+    #[wasm_bindgen_test]
     fn default_generators() {
         let expected_g0 = [
             0x90, 0x6b, 0xff, 0x34, 0x42, 0x25, 0x5f, 0xd9, 0x2c, 0xf0, 0x2d, 0xad, 0x4c, 0x86,
@@ -210,6 +215,7 @@ mod tests {
     }
 
     #[test]
+    #[wasm_bindgen_test]
     fn commit_fixed_values() {
         let values = [
             Scalar::from_bits(V0_BYTES),
@@ -227,6 +233,7 @@ mod tests {
     }
 
     #[test]
+    #[wasm_bindgen_test]
     fn commit_zeros() {
         let pg = PedersenGenerators::default();
         let zeros = [Scalar::zero(); PEDERSEN_COMMITMENT_NUM_GENERATORS];
@@ -241,6 +248,7 @@ mod tests {
     }
 
     #[test]
+    #[wasm_bindgen_test]
     fn fixed_label_prime() {
         let expected_commit_result_prime = [
             0xdc, 0xc6, 0x18, 0x1f, 0x65, 0x4d, 0xdf, 0x28, 0x41, 0xb2, 0xd9, 0x57, 0x8d, 0xd0,
