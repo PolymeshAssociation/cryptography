@@ -5,13 +5,15 @@
 
 use crate::asset_proofs::AssetProofError;
 use bulletproofs::PedersenGens;
+use clear_on_drop::clear::Clear;
 use core::ops::{Add, Sub};
 use core::ops::{AddAssign, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 /// Prover's representation of the commitment secret.
-#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct CommitmentWitness {
     /// The value to encrypt.
     ///
@@ -34,15 +36,37 @@ pub struct CommitmentWitness {
     ///    we won't need to decrypt the encrypted values very often.
     ///    We can recommend that applications use a different faster
     ///    encryption mechanism to store the confidentional values on disk.
-    pub value: u32,
+    value: u32,
 
     // A random blinding factor.
-    pub blinding: Scalar,
+    blinding: Scalar,
 }
 
 impl CommitmentWitness {
-    fn in_range(&self) -> bool {
-        self.value < u32::max_value()
+    pub fn new(value: u32, blinding: Scalar) -> Result<CommitmentWitness, AssetProofError> {
+        // Since Elgamal decryption requires brute forcing over all possible values,
+        // we limit the values to 32-bit integers.
+        if value >= u32::max_value() {
+            return Err(AssetProofError::PlainTextRangeError);
+        }
+
+        Ok(CommitmentWitness { value, blinding })
+    }
+}
+
+impl TryFrom<u32> for CommitmentWitness {
+    type Error = AssetProofError;
+
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
+        CommitmentWitness::new(v, Scalar::random(&mut rand::thread_rng()))
+    }
+}
+
+/// Zeroize the secret values before witness goes out of scope.
+impl Drop for CommitmentWitness {
+    fn drop(&mut self) {
+        self.value = 0;
+        self.blinding.clear();
     }
 }
 
@@ -116,7 +140,7 @@ define_sub_assign_variants!(LHS = CipherText, RHS = CipherText);
 /// where g and h are 2 orthogonal generators.
 
 /// An Elgamal Secret Key is a random scalar.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElgamalSecretKey {
     secret: Scalar,
 }
@@ -128,23 +152,21 @@ pub struct ElgamalPublicKey {
 }
 
 impl ElgamalPublicKey {
-    pub fn encrypt(&self, witness: CommitmentWitness) -> Result<CipherText, AssetProofError> {
-        // Since Elgamal decryption requires brute forcing over all possible values,
-        // we limit the values to 32-bit integers.
-        if !witness.in_range() {
-            return Err(AssetProofError::PlainTextRangeError);
-        }
-
+    pub fn encrypt(&self, witness: CommitmentWitness) -> CipherText {
         let x = witness.blinding * self.pub_key;
         let gens = PedersenGens::default();
         let y = gens.commit(Scalar::from(witness.value), witness.blinding);
-        Ok(CipherText { x, y })
+        CipherText { x, y }
+    }
+
+    pub fn encrypt_value(&self, value: u32) -> Result<CipherText, AssetProofError> {
+        Ok(self.encrypt(CommitmentWitness::try_from(value)?))
     }
 }
 
 impl ElgamalSecretKey {
-    pub fn new(sk: Scalar) -> Self {
-        ElgamalSecretKey { secret: sk }
+    pub fn new(secret: Scalar) -> Self {
+        ElgamalSecretKey { secret }
     }
 
     pub fn get_public_key(&self) -> ElgamalPublicKey {
@@ -171,6 +193,13 @@ impl ElgamalSecretKey {
     }
 }
 
+/// Zeroize the secret key before it goes out of scope.
+impl Drop for ElgamalSecretKey {
+    fn drop(&mut self) {
+        self.secret.clear();
+    }
+}
+
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -186,19 +215,21 @@ mod tests {
     #[test]
     fn basic_enc_dec() {
         let mut rng = StdRng::from_seed(SEED_1);
-        let r = Scalar::random(&mut rng);
         let v = 256u32;
-        let w = CommitmentWitness {
-            value: v,
-            blinding: r,
-        };
+        let w = CommitmentWitness::new(v, Scalar::random(&mut rng)).unwrap();
 
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
-
         let elg_pub = elg_secret.get_public_key();
-        let cipher = elg_pub.encrypt(w);
 
-        let message = elg_secret.decrypt(&cipher.unwrap()).unwrap();
+        // Test encrypt().
+        let mut cipher = elg_pub.encrypt(w);
+
+        let mut message = elg_secret.decrypt(&cipher).unwrap();
+        assert_eq!(v, message);
+
+        // Test encrypt_value().
+        cipher = elg_pub.encrypt_value(v).unwrap();
+        message = elg_secret.decrypt(&cipher).unwrap();
         assert_eq!(v, message);
     }
 
@@ -213,35 +244,27 @@ mod tests {
         let elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret_key.get_public_key();
 
-        let cipher1 = elg_pub
-            .encrypt(CommitmentWitness {
-                value: v1,
-                blinding: r1,
-            })
-            .unwrap();
-        let cipher2 = elg_pub
-            .encrypt(CommitmentWitness {
-                value: v2,
-                blinding: r2,
-            })
-            .unwrap();
+        let cipher1 = elg_pub.encrypt(CommitmentWitness {
+            value: v1,
+            blinding: r1,
+        });
+        let cipher2 = elg_pub.encrypt(CommitmentWitness {
+            value: v2,
+            blinding: r2,
+        });
 
-        let mut cipher12 = elg_pub
-            .encrypt(CommitmentWitness {
-                value: v1 + v2,
-                blinding: r1 + r2,
-            })
-            .unwrap();
+        let mut cipher12 = elg_pub.encrypt(CommitmentWitness {
+            value: v1 + v2,
+            blinding: r1 + r2,
+        });
         assert_eq!(cipher1 + cipher2, cipher12);
         cipher12 -= cipher2;
         assert_eq!(cipher1, cipher12);
 
-        cipher12 = elg_pub
-            .encrypt(CommitmentWitness {
-                value: v1 - v2,
-                blinding: r1 - r2,
-            })
-            .unwrap();
+        cipher12 = elg_pub.encrypt(CommitmentWitness {
+            value: v1 - v2,
+            blinding: r1 - r2,
+        });
         assert_eq!(cipher1 - cipher2, cipher12);
         cipher12 += cipher2;
         assert_eq!(cipher1, cipher12);
