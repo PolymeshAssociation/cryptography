@@ -33,11 +33,8 @@ fn bench_elgamal(c: &mut Criterion) {
     let encrypted_values: Vec<CipherText> = (0..3)
         .map(|i| {
             let value = 2u32 << i;
-            let w = CommitmentWitness {
-                value: value,
-                blinding: r,
-            };
-            elg_pub.encrypt(w).unwrap()
+            let w = CommitmentWitness::new(value, r).unwrap();
+            elg_pub.encrypt(w)
         })
         .collect();
 

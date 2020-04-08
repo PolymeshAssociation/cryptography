@@ -3,11 +3,11 @@
 //! plain text. For example proving that the value that was encrypted
 //! is within a range.
 
-use bulletproofs::PedersenGens;
-use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
-use bulletproofs::{BulletproofGens, RangeProof};
-use merlin::Transcript;
 use crate::asset_proofs::AssetProofError;
+use bulletproofs::PedersenGens;
+use bulletproofs::{BulletproofGens, RangeProof};
+use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
+use merlin::Transcript;
 
 const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 
@@ -32,17 +32,15 @@ pub fn prove_within_range(
     // the Fiat-Shamir huristic.
     let mut prover_transcript = Transcript::new(RANGE_PROOF_LABEL);
 
-    match RangeProof::prove_single(
+    RangeProof::prove_single(
         &bp_gens,
         &pc_gens,
         &mut prover_transcript,
         secret_value,
         &rand_blind,
         range,
-    ) {
-        Ok(x) => Ok(x),
-        Err(e) => Err(AssetProofError::from(e)),
-    }
+    )
+    .map_err(|e| AssetProofError::ProvingError(e))
 }
 
 /// Verify that a range proof is valid given a commitment to a secret value.
@@ -93,13 +91,10 @@ mod tests {
         assert!(verify_within_range(proof, commitment));
 
         // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.
-        let w = CommitmentWitness {
-            value: secret_value,
-            blinding: rand_blind,
-        };
+        let w = CommitmentWitness::new(secret_value, rand_blind).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let cipher = elg_pub.encrypt(w).unwrap();
+        let cipher = elg_pub.encrypt(w);
         assert_eq!(commitment, cipher.y.compress());
 
         // Negative test: secret value outside the allowed range
