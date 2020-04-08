@@ -10,6 +10,23 @@ To produce the documenation, run:
 cargo +nightly doc --open
 ```
 ### Build Instructions
+
+Install rust!
+
+
+Install the nightly version of rust and WASM toolchain.
+```
+# In te root directory
+rustup toolchain install nightly
+
+# install wasm pack from https://rustwasm.github.io/wasm-pack/installer/
+# then, inside the cryptography sub-directory, add the nightly version as target
+cd cryptography
+rustup target add wasm32-unknown-unknown --toolchain nightly
+```
+
+If you use a different command to install a specific nightly version, use the same format for adding WASM.
+
 To build the library and examples, run:
 ```
 cargo +nightly build
