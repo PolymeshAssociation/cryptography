@@ -3,11 +3,11 @@
 //! plain text. For example proving that the value that was encrypted
 //! is within a range.
 
-use bulletproofs::PedersenGens;
-use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
-use bulletproofs::{BulletproofGens, RangeProof};
-use merlin::Transcript;
 use crate::asset_proofs::AssetProofError;
+use bulletproofs::PedersenGens;
+use bulletproofs::{BulletproofGens, RangeProof};
+use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
+use merlin::Transcript;
 
 const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 
@@ -75,13 +75,16 @@ pub fn verify_within_range(proof: RangeProof, commitment: CompressedRistretto) -
 
 #[cfg(test)]
 mod tests {
+    extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
     use rand::{rngs::StdRng, SeedableRng};
+    use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
 
     #[test]
+    #[wasm_bindgen_test]
     fn basic_range_proof() {
         let mut rng = StdRng::from_seed(SEED_1);
         // Positive test: secret value within range [0, 2^32)

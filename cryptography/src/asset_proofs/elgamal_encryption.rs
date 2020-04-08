@@ -177,13 +177,16 @@ impl ElgamalSecretKey {
 
 #[cfg(test)]
 mod tests {
+    extern crate wasm_bindgen_test;
     use super::*;
     use rand::{rngs::StdRng, SeedableRng};
+    use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [56u8; 32];
 
     #[test]
+    #[wasm_bindgen_test]
     fn basic_enc_dec() {
         let mut rng = StdRng::from_seed(SEED_1);
         let r = Scalar::random(&mut rng);
@@ -203,6 +206,7 @@ mod tests {
     }
 
     #[test]
+    #[wasm_bindgen_test]
     fn homomorphic_encryption() {
         let v1 = 623u32;
         let v2 = 456u32;
