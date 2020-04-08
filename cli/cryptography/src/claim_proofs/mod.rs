@@ -256,14 +256,17 @@ impl ProofPublicKey {
 
 #[cfg(test)]
 mod tests {
+    extern crate wasm_bindgen_test;
     use super::*;
     use crate::random_claim;
     use rand::{rngs::StdRng, SeedableRng};
+    use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [43u8; 32];
 
     #[test]
+    #[wasm_bindgen_test]
     fn match_pub_key_both_sides() {
         let expected_public_key = [
             48, 37, 28, 128, 48, 60, 182, 218, 99, 119, 36, 30, 184, 242, 122, 224, 253, 90, 103,
@@ -294,6 +297,7 @@ mod tests {
     }
 
     #[test]
+    #[wasm_bindgen_test]
     fn verify_proofs() {
         let message = &b"I didn't claim anything!".to_vec();
         let bad_message = &b"I claim everything!".to_vec();
