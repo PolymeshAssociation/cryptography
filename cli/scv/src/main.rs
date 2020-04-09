@@ -10,7 +10,6 @@ use schnorrkel::Signature;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-
 /// scv -- a simple claim verifier.{n}
 /// The scv utility takes in a message and its proof and verifies it.
 #[derive(StructOpt, Debug, Serialize, Deserialize)]

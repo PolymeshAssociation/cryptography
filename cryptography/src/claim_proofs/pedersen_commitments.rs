@@ -12,7 +12,7 @@
 //! In this setup the entire system is using the same set of
 //! 3 Pedersen generators: G0, G1, and G2. To create thse generators:
 //! ```
-//! use cryptography::pedersen_commitments::*;
+//! use cryptography::claim_proofs::pedersen_commitments::PedersenGenerators;
 //!
 //! let pg = PedersenGenerators::default();
 //! ```
@@ -25,7 +25,7 @@
 //! ```
 //! use curve25519_dalek::scalar::Scalar;
 //! use curve25519_dalek::ristretto::RistrettoPoint;
-//! use cryptography::pedersen_commitments::*;
+//! use cryptography::claim_proofs::pedersen_commitments::PedersenGenerators;
 //!
 //! let pg = PedersenGenerators::default();
 //! let values: [Scalar; 3] =
@@ -38,7 +38,7 @@
 //! use curve25519_dalek::scalar::Scalar;
 //! use curve25519_dalek::ristretto::RistrettoPoint;
 //! use curve25519_dalek::ristretto::CompressedRistretto;
-//! use cryptography::pedersen_commitments::*;
+//! use cryptography::claim_proofs::pedersen_commitments::PedersenGenerators;
 //!
 //! let pg = PedersenGenerators::default();
 //! let id_bytes: [u8; 32] = [
@@ -68,7 +68,7 @@ use sha3::Sha3_512;
 use sp_std::prelude::*;
 
 const PEDERSEN_COMMITMENT_LABEL: &[u8; 16] = b"PolymathIdentity";
-const PEDERSEN_COMMITMENT_NUM_GENERATORS: usize = 3;
+pub const PEDERSEN_COMMITMENT_NUM_GENERATORS: usize = 3;
 
 #[derive(Debug, Copy, Clone)]
 pub struct PedersenGenerators {
@@ -143,7 +143,7 @@ impl PedersenGenerators {
 #[cfg(test)]
 mod tests {
     extern crate wasm_bindgen_test;
-    use crate::pedersen_commitments::{PedersenGenerators, PEDERSEN_COMMITMENT_NUM_GENERATORS};
+    use super::*;
     use curve25519_dalek::{
         constants::RISTRETTO_BASEPOINT_COMPRESSED, ristretto::CompressedRistretto,
         ristretto::RistrettoPoint, scalar::Scalar,
