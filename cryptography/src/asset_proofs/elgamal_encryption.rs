@@ -5,12 +5,12 @@
 
 use crate::asset_proofs::AssetProofError;
 use bulletproofs::PedersenGens;
-use clear_on_drop::clear::Clear;
 use core::ops::{Add, Sub};
 use core::ops::{AddAssign, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use zeroize::Zeroize;
 
 /// Prover's representation of the commitment secret.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -63,10 +63,10 @@ impl TryFrom<u32> for CommitmentWitness {
 }
 
 /// Zeroize the secret values before witness goes out of scope.
-impl Drop for CommitmentWitness {
-    fn drop(&mut self) {
+impl Zeroize for CommitmentWitness {
+    fn zeroize(&mut self) {
         self.value = 0;
-        self.blinding.clear();
+        self.blinding.zeroize();
     }
 }
 
@@ -194,9 +194,9 @@ impl ElgamalSecretKey {
 }
 
 /// Zeroize the secret key before it goes out of scope.
-impl Drop for ElgamalSecretKey {
-    fn drop(&mut self) {
-        self.secret.clear();
+impl Zeroize for ElgamalSecretKey {
+    fn zeroize(&mut self) {
+        self.secret.zeroize();
     }
 }
 
@@ -206,13 +206,16 @@ impl Drop for ElgamalSecretKey {
 
 #[cfg(test)]
 mod tests {
+    extern crate wasm_bindgen_test;
     use super::*;
     use rand::{rngs::StdRng, SeedableRng};
+    use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [56u8; 32];
 
     #[test]
+    #[wasm_bindgen_test]
     fn basic_enc_dec() {
         let mut rng = StdRng::from_seed(SEED_1);
         let v = 256u32;
@@ -234,6 +237,7 @@ mod tests {
     }
 
     #[test]
+    #[wasm_bindgen_test]
     fn homomorphic_encryption() {
         let v1 = 623u32;
         let v2 = 456u32;
