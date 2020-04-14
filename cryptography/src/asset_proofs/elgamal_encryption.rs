@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use zeroize::Zeroize;
 
+use sp_std::prelude::*;
+
 /// Prover's representation of the commitment secret.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct CommitmentWitness {
@@ -36,10 +38,10 @@ pub struct CommitmentWitness {
     ///    we won't need to decrypt the encrypted values very often.
     ///    We can recommend that applications use a different faster
     ///    encryption mechanism to store the confidentional values on disk.
-    value: u32,
+    pub value: u32,
 
     // A random blinding factor.
-    blinding: Scalar,
+    pub blinding: Scalar,
 }
 
 impl CommitmentWitness {
@@ -148,7 +150,7 @@ pub struct ElgamalSecretKey {
 /// The Elgamal Public Key is the secret key multiplied by the blinding generator (g).
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ElgamalPublicKey {
-    pub_key: RistrettoPoint,
+    pub pub_key: RistrettoPoint,
 }
 
 impl ElgamalPublicKey {
