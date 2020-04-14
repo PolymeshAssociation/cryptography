@@ -31,6 +31,7 @@ curve25519-dalek = { version = "2.0.0", features = ["u64_backend", "alloc", "ser
 schnorrkel = { version = "0.9.1", features = ["u64_backend", "wasm-bindgen"], default-features = false }
 bulletproofs = { version = "2.0.0", features = ["std"], default-features = false }
 merlin = { version = "2.0.0", default-features = false }
+wasm-bindgen = "0.2" # maybe I should replace sp for this.
 
 [build-dependencies]
 # WASM builder is using `WasmBuilderSource::Crates("1.0.8")`, please see `build.rs`.
