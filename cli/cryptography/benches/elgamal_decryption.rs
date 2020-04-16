@@ -34,7 +34,7 @@ fn bench_elgamal(c: &mut Criterion) {
         .map(|i| {
             let value = 2u32 << i;
             let w = CommitmentWitness::new(value, r).unwrap();
-            elg_pub.encrypt(w)
+            elg_pub.encrypt(&w)
         })
         .collect();
 

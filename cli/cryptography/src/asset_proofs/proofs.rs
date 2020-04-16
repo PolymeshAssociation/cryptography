@@ -82,79 +82,86 @@ pub fn verify_within_range(
 // Proof of Correct Encryption of the Given Value
 // ------------------------------------------------------------------------
 
-// todo: turn these into generics
-type RandomCommitment = (RistrettoPoint, RistrettoPoint);
-type RandomChallenge = Scalar;
-type ChallengeResponse = Scalar;
-
 pub trait AssetProofProver {
+    type Commitment;
+    type Challenge;
+    type ChallengeResponse;
+
     fn prover_generate_commitment<T: RngCore + CryptoRng>(
         &mut self,
         pc_gens: &PedersenGens,
         rng: &mut T,
-    ) -> RandomCommitment;
-    fn prover_apply_challenge(&self, c: RandomChallenge) -> ChallengeResponse;
+    ) -> Self::Commitment;
+    fn prover_apply_challenge(&self, c: Self::Challenge) -> Self::ChallengeResponse;
 }
 
 trait AssetProofVerifier {
+    type Commitment;
+    type Challenge;
+    type ChallengeResponse;
+
     fn verifier_generate_challenge<T: RngCore + CryptoRng>(
         &mut self,
-        c: RandomCommitment,
+        c: Self::Commitment,
         rng: &mut T,
-    ) -> RandomChallenge;
-    fn verifier_verify(&self, pc_gens: &PedersenGens, z: ChallengeResponse) -> bool;
+    ) -> Self::Challenge;
+    fn verifier_verify(&self, pc_gens: &PedersenGens, z: Self::ChallengeResponse) -> bool;
 }
 
-struct LCorrectProver {
+pub struct LCorrectProver {
     pub_key: ElgamalPublicKey,
     w: CommitmentWitness,
     u: Scalar,
 }
 
 impl LCorrectProver {
-    pub fn new(pub_key: ElgamalPublicKey, w: CommitmentWitness) -> Self {
+    pub fn new(pub_key: &ElgamalPublicKey, w: &CommitmentWitness) -> Self {
         LCorrectProver {
-            pub_key,
-            w,
+            pub_key: pub_key.clone(),
+            w: w.clone(),
             u: Scalar::default()
         }
     }
 }
 
 impl AssetProofProver for LCorrectProver {
+    type Commitment = (RistrettoPoint, RistrettoPoint);
+    type Challenge = Scalar;
+    type ChallengeResponse = Scalar;
+
     fn prover_generate_commitment<T: RngCore + CryptoRng>(
         &mut self,
         pc_gens: &PedersenGens,
         rng: &mut T,
-    ) -> RandomCommitment {
+    ) -> Self::Commitment {
         let rand_commitment = Scalar::random(rng);
-        self.u = rand_commitment; //.clone();
-                                  // let pc_gens = PedersenGens::default();
+        self.u = rand_commitment;
+
         (
             rand_commitment * self.pub_key.pub_key,
-            rand_commitment * pc_gens.B,
+            rand_commitment * pc_gens.B_blinding,
         )
     }
 
-    fn prover_apply_challenge(&self, c: RandomChallenge) -> ChallengeResponse {
+    fn prover_apply_challenge(&self, c: Self::Challenge) -> Self::ChallengeResponse {
         self.u + c * self.w.blinding
     }
 }
 
-struct LCorrectVerifier {
+pub struct LCorrectVerifier {
     value: u32,
     pub_key: ElgamalPublicKey,
     cipher: CipherText,
-    rc: RandomCommitment,
-    challenge: RandomChallenge,
+    rc: (RistrettoPoint, RistrettoPoint),
+    challenge: Scalar,
 }
 
 impl LCorrectVerifier {
-    pub fn new(value: u32, pub_key: ElgamalPublicKey, cipher: CipherText) -> Self {
+    pub fn new(value: &u32, pub_key: &ElgamalPublicKey, cipher: &CipherText) -> Self {
         LCorrectVerifier {
-            value,
-            pub_key,
-            cipher,
+            value: value.clone(),
+            pub_key: pub_key.clone(),
+            cipher: cipher.clone(),
             rc: (RistrettoPoint::default(), RistrettoPoint::default()),
             challenge: Scalar::default(),
         }
@@ -162,23 +169,27 @@ impl LCorrectVerifier {
 }
 
 impl AssetProofVerifier for LCorrectVerifier {
+    type Commitment = (RistrettoPoint, RistrettoPoint);
+    type Challenge = Scalar;
+    type ChallengeResponse = Scalar;
+
     fn verifier_generate_challenge<T: RngCore + CryptoRng>(
         &mut self,
-        c: RandomCommitment,
+        c: Self::Commitment,
         rng: &mut T,
-    ) -> RandomChallenge {
+    ) -> Self::Challenge {
         self.rc = c;
         let rand_challenge = Scalar::random(rng);
-        self.challenge = rand_challenge;
+        self.challenge = rand_challenge.clone();
         rand_challenge
     }
 
-    fn verifier_verify(&self, pc_gens: &PedersenGens, z: ChallengeResponse) -> bool {
+    fn verifier_verify(&self, pc_gens: &PedersenGens, z: Self::ChallengeResponse) -> bool {
         if z * self.pub_key.pub_key != self.rc.0 + self.challenge * self.cipher.x {
             return false;
         }
-        let y_prime = self.cipher.y - Scalar::from(self.value) * pc_gens.B_blinding;
-        if z * pc_gens.B != self.rc.1 + self.challenge * y_prime {
+        let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
+        if z * pc_gens.B_blinding != self.rc.1 + self.challenge * y_prime {
             return false;
         }
         true
@@ -215,7 +226,7 @@ mod tests {
         let w = CommitmentWitness::new(secret_value, rand_blind).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let cipher = elg_pub.encrypt(w);
+        let cipher = elg_pub.encrypt(&w);
         assert_eq!(commitment, cipher.y.compress());
 
         // Negative test: secret value outside the allowed range
@@ -223,5 +234,32 @@ mod tests {
         let (bad_proof, bad_commitment) =
             prove_within_range(large_secret_value, rand_blind, 32).expect("This shouldn't happen.");
         assert!(!verify_within_range(bad_proof, bad_commitment, 32));
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn test_correctness_proof() {
+        let gens = PedersenGens::default();
+        // todo: turn this into a helper function
+        let mut rng = StdRng::from_seed(SEED_1);
+        // Positive test: secret value within range [0, 2^32)
+        let secret_value = 42u32;
+        let rand_blind = Scalar::random(&mut rng);
+
+        // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.
+        let w = CommitmentWitness::new(secret_value, rand_blind).unwrap();
+        let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let elg_pub = elg_secret.get_public_key();
+        let cipher = elg_pub.encrypt(&w);
+
+        // assert_eq!(cipher.y, Scalar::from(secret_value) * gens.B_blinding + rand_blind * gens.B);
+        let mut prover = LCorrectProver::new(&elg_pub, &w);
+        let mut verifier = LCorrectVerifier::new(&secret_value, &elg_pub, &cipher);
+
+        let commitment = prover.prover_generate_commitment(&gens, &mut rng);
+        let challenge = verifier.verifier_generate_challenge(commitment, &mut rng);
+        let proof = prover.prover_apply_challenge(challenge);
+        let result = verifier.verifier_verify(&gens, proof);
+        assert!(result);
     }
 }
