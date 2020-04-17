@@ -1,0 +1,78 @@
+version: 2
+jobs:
+  lint:
+    docker:
+      - image: maxsam4/rust
+    environment:
+      VERBOSE: "1"
+    steps:
+      - checkout
+      - run:
+          name: Check formatting
+          command: ./scripts/lint
+  build-nightly:
+    docker:
+      - image: maxsam4/rust
+    environment:
+      VERBOSE: "1"
+    steps:
+      - checkout
+      - run:
+          name: Store rust version in an environment var for cache key
+          command: rustc --version > rust.version
+      - restore_cache:
+          keys:
+            - v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+            - v2-nightly-cache-{{ checksum "./rust.version" }}
+            - v2-cli-cache-{{ checksum "./rust.version" }}
+      - run:
+          name: Build nightly
+          command: cargo +nightly build
+          no_output_timeout: 4h
+      - save_cache:
+          key: v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+          paths:
+            - "~/.cargo"
+            - "./target"
+  test:
+    docker:
+      - image: maxsam4/rust
+    environment:
+      VERBOSE: "1"
+    steps:
+      - checkout
+      - run:
+          name: Store rust version in a file for cache key
+          command: rustc --version > rust.version
+      - restore_cache:
+          keys:
+            - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+            - v6-test-cache-{{ checksum "./rust.version" }}
+      - run:
+          name: Run tests
+          command: >-
+            cargo +nightly test &&
+            echo "TODO: add wasm tests"
+          no_output_timeout: 30m
+      - save_cache:
+          key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+          paths:
+            - "~/.cargo"
+            - "./target"
+workflows:
+  version: 2
+  commit:
+    jobs:
+      - lint
+      - test
+  daily-builds:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - master
+                - develop
+    jobs:
+      - build-nightly
