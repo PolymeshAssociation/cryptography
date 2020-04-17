@@ -1,0 +1,111 @@
+version: 2
+jobs:
+  lint:
+    docker:
+      - image: maxsam4/rust
+    environment:
+      VERBOSE: "1"
+    steps:
+      - checkout
+      - run:
+          name: Check formatting
+          command: ./scripts/lint
+  build:
+    docker:
+      - image: maxsam4/rust
+    environment:
+      VERBOSE: "1"
+    steps:
+      - checkout
+      - run:
+          name: Store rust version in an environment var for cache key
+          command: rustc --version > rust.version
+      - restore_cache:
+          keys:
+            - v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+            - v2-nightly-cache-{{ checksum "./rust.version" }}
+            - v2-cli-cache-{{ checksum "./rust.version" }}
+      - run:
+          name: Build nightly
+          command: cargo +nightly build
+          no_output_timeout: 4h
+      - save_cache:
+          key: v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+          paths:
+            - "~/.cargo"
+            - "./target"
+  test:
+    docker:
+      - image: maxsam4/rust
+    environment:
+      VERBOSE: "1"
+    steps:
+      - checkout
+      - run:
+          name: Store rust version in a file for cache key
+          command: rustc --version > rust.version
+      - restore_cache:
+          keys:
+            - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+            - v6-test-cache-{{ checksum "./rust.version" }}
+      - run:
+          name: Run tests
+          command: >-
+            cargo +nightly test &&
+            cargo +nightly build --bench elgamal_decryption &&
+            echo "TODO: add wasm tests"
+          no_output_timeout: 30m
+      - save_cache:
+          key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+          paths:
+            - "~/.cargo"
+            - "./target"
+  bench:
+    docker:
+      - image: maxsam4/rust
+    environment:
+      VERBOSE: "1"
+    steps:
+      - checkout
+      - run:
+          name: Store rust version in a file for cache key
+          command: rustc --version > rust.version
+      - restore_cache:
+          keys:
+            - v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+            - v6-bench-cache-{{ checksum "./rust.version" }}
+      - run:
+          name: Run tests
+          command: cargo +nightly bench
+          no_output_timeout: 30m
+      - save_cache:
+          key: v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+          paths:
+            - "~/.cargo"
+            - "./target"
+workflows:
+  version: 2
+  lint-test-build:
+    jobs:
+      - lint
+      - test
+      - build:
+          requires:
+            - lint
+            - test
+          filters:
+            branches:
+              only:
+                - develop
+                - master
+  benchmark:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - develop
+                - master
+    jobs:
+      - bench
