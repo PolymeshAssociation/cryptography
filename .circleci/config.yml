@@ -52,7 +52,7 @@ jobs:
           name: Run tests
           command: >-
             cargo +nightly test &&
-            cargo build --bench elgamal_decryption &&
+            cargo +nightly build --bench elgamal_decryption &&
             echo "TODO: add wasm tests"
           no_output_timeout: 30m
       - save_cache:
