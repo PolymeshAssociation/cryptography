@@ -11,4 +11,6 @@ pub use errors::AssetProofError;
 mod elgamal_encryption;
 pub use elgamal_encryption::{CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey};
 
-pub mod proofs;
+pub mod correctness_proof;
+pub mod encryption_proofs;
+pub mod range_proof;
