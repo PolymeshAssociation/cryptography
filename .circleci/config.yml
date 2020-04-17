@@ -10,7 +10,7 @@ jobs:
       - run:
           name: Check formatting
           command: ./scripts/lint
-  build-nightly:
+  build:
     docker:
       - image: maxsam4/rust
     environment:
@@ -61,18 +61,16 @@ jobs:
             - "./target"
 workflows:
   version: 2
-  commit:
+  lint-test-build:
     jobs:
       - lint
       - test
-  daily-builds:
-    triggers:
-      - schedule:
-          cron: "0 0 * * *"
+      - build
+          requires:
+            - lint
+            - test
           filters:
             branches:
               only:
-                - master
                 - develop
-    jobs:
-      - build-nightly
+                - master
