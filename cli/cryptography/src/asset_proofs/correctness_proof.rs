@@ -3,7 +3,7 @@
 
 use crate::asset_proofs::{
     encryption_proofs::{
-        AssetProofProver, AssetProofVerifier, UpdateZKDealer, ZKChallenge, ZKDealer,
+        AssetProofProver, AssetProofVerifier, UpdateZKPDealer, ZKPChallenge, ZKPDealer,
     },
     AssetProofError, CipherText, CommitmentWitness, ElgamalPublicKey,
 };
@@ -28,8 +28,9 @@ pub struct CorrectnessPartialProof {
     b: RistrettoPoint,
 }
 
-impl UpdateZKDealer for CorrectnessPartialProof {
-    fn update_dealer(&self, d: &mut ZKDealer) -> Result<(), AssetProofError> {
+impl UpdateZKPDealer for CorrectnessPartialProof {
+    fn update_dealer(&self, d: &mut ZKPDealer) -> Result<(), AssetProofError> {
+        d.dealer_append_message(CORRECTNESS_PROOF_CHALLENGE_LABEL);
         d.dealer_append_validated_point(b"A", &self.a.compress())?;
         d.dealer_append_validated_point(b"B", &self.b.compress())?;
         Ok(())
@@ -60,7 +61,7 @@ impl AssetProofProver for CorrectnessProver {
     type ZKPartialProof = CorrectnessPartialProof;
     type ZKProof = CorrectnessProof;
 
-    fn prover_generate_partial_proof<T: RngCore + CryptoRng>(
+    fn generate_partial_proof<T: RngCore + CryptoRng>(
         &mut self,
         pc_gens: &PedersenGens,
         rng: &mut T,
@@ -74,15 +75,18 @@ impl AssetProofProver for CorrectnessProver {
         }
     }
 
-    fn prover_apply_challenge(&self, c: &ZKChallenge) -> Self::ZKProof {
+    fn apply_challenge(&self, c: &ZKPChallenge) -> Self::ZKProof {
         self.u + c.x * self.w.blinding
     }
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct CorrectnessVerifier {
+    /// The encrypted value (aka the plain text).
     value: u32,
+    /// The public key to which the `value` is encrypted.
     pub_key: ElgamalPublicKey,
+    /// The encryption cipher text.
     cipher: CipherText,
 }
 
@@ -100,10 +104,10 @@ impl AssetProofVerifier for CorrectnessVerifier {
     type ZKPartialProof = CorrectnessPartialProof;
     type ZKProof = CorrectnessProof;
 
-    fn verifier_verify(
+    fn verify(
         &self,
         pc_gens: &PedersenGens,
-        challenge: &ZKChallenge,
+        challenge: &ZKPChallenge,
         partial_proof: &Self::ZKPartialProof,
         z: &Self::ZKProof,
     ) -> Result<(), AssetProofError> {
@@ -127,19 +131,16 @@ mod tests {
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
 
-    const SEED_1: [u8; 32] = [42u8; 32];
+    const SEED_1: [u8; 32] = [17u8; 32];
 
     #[test]
     #[wasm_bindgen_test]
     fn test_correctness_proof() {
-        // todo this unit test could simply call single_property_prover.
         let gens = PedersenGens::default();
-        // todo: turn this into a helper function
         let mut rng = StdRng::from_seed(SEED_1);
-        let secret_value = 42u32;
+        let secret_value = 13u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.
         let w = CommitmentWitness::new(secret_value, rand_blind).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
@@ -147,14 +148,24 @@ mod tests {
 
         let mut prover = CorrectnessProver::new(&elg_pub, &w);
         let verifier = CorrectnessVerifier::new(&secret_value, &elg_pub, &cipher);
-        let mut dealer = ZKDealer::new(CORRECTNESS_PROOF_LABEL);
+        let mut dealer = ZKPDealer::new(CORRECTNESS_PROOF_LABEL);
 
-        let partial_proof = prover.prover_generate_partial_proof(&gens, &mut rng);
+        // Positive tests
+        let partial_proof = prover.generate_partial_proof(&gens, &mut rng);
         partial_proof.update_dealer(&mut dealer).unwrap();
         let challenge = dealer.dealer_scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL);
-        let proof = prover.prover_apply_challenge(&challenge);
+        let proof = prover.apply_challenge(&challenge);
 
-        let result = verifier.verifier_verify(&gens, &challenge, &partial_proof, &proof);
+        let result = verifier.verify(&gens, &challenge, &partial_proof, &proof);
         assert!(result.is_ok());
+
+        // Negative tests
+        let bad_partial_proof = CorrectnessPartialProof {a: RistrettoPoint::default(), b: RistrettoPoint::default()};
+        let result = verifier.verify(&gens, &challenge, &bad_partial_proof, &proof);
+        assert!(result.is_err());
+
+        let bad_proof = Scalar::default();
+        let result = verifier.verify(&gens, &challenge, &partial_proof, &bad_proof);
+        assert!(result.is_err());
     }
 }
