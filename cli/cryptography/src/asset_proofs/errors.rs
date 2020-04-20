@@ -10,6 +10,12 @@ pub enum AssetProofError {
     /// Encrypted value was not found within the valid range.
     CipherTextDecryptionError,
 
+    /// A proof verification error occured.
+    VerificationError,
+
+    /// Failed to verify a correctness proof.
+    CorrectnessProofVerificationError,
+
     /// A range proof error occured.
     ProvingError(ProofError),
 }
