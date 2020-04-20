@@ -1,12 +1,20 @@
+//! The proof of correct encryption of the given value.
+//! For more details see section 5.2 of the whitepaper.
+
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofVerifier, UpdateZKDealer, ZKChallenge, ZKDealer,
     },
-    CipherText, CommitmentWitness, ElgamalPublicKey,
+    AssetProofError, CipherText, CommitmentWitness, ElgamalPublicKey,
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_core::{CryptoRng, RngCore};
+
+/// The domain label for the correctness proof.
+pub const CORRECTNESS_PROOF_LABEL: &[u8] = b"PolymathCorrectnessProof";
+/// The domain label for the challenge.
+pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessProofChallenge";
 
 // ------------------------------------------------------------------------
 // Proof of Correct Encryption of the Given Value
@@ -14,22 +22,27 @@ use rand_core::{CryptoRng, RngCore};
 
 pub type CorrectnessProof = Scalar;
 
+#[derive(Copy, Clone, Debug)]
 pub struct CorrectnessPartialProof {
     a: RistrettoPoint,
     b: RistrettoPoint,
 }
 
 impl UpdateZKDealer for CorrectnessPartialProof {
-    fn update_dealer(&self, d: &mut ZKDealer) {
-        d.dealer_append_point(b"A", &self.a.compress());
-        d.dealer_append_point(b"B", &self.b.compress());
+    fn update_dealer(&self, d: &mut ZKDealer) -> Result<(), AssetProofError> {
+        d.dealer_append_validated_point(b"A", &self.a.compress())?;
+        d.dealer_append_validated_point(b"B", &self.b.compress())?;
+        Ok(())
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct CorrectnessProver {
+    /// The public key used for the elgamal encryption.
     pub_key: ElgamalPublicKey,
+    /// The secret commitment witness.
     w: CommitmentWitness,
+    /// The randomness generate in the first round.
     u: Scalar,
 }
 
@@ -66,7 +79,7 @@ impl AssetProofProver for CorrectnessProver {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct CorrectnessVerifier {
     value: u32,
     pub_key: ElgamalPublicKey,
@@ -91,17 +104,18 @@ impl AssetProofVerifier for CorrectnessVerifier {
         &self,
         pc_gens: &PedersenGens,
         challenge: &ZKChallenge,
-        pp: &Self::ZKPartialProof,
+        partial_proof: &Self::ZKPartialProof,
         z: &Self::ZKProof,
-    ) -> bool {
-        if z * self.pub_key.pub_key != pp.a + challenge.x * self.cipher.x {
-            return false;
-        }
+    ) -> Result<(), AssetProofError> {
         let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
-        if z * pc_gens.B_blinding != pp.b + challenge.x * y_prime {
-            return false;
+
+        if z * self.pub_key.pub_key != partial_proof.a + challenge.x * self.cipher.x {
+            Err(AssetProofError::CorrectnessProofVerificationError)
+        } else if z * pc_gens.B_blinding != partial_proof.b + challenge.x * y_prime {
+            Err(AssetProofError::CorrectnessProofVerificationError)
+        } else {
+            Ok(())
         }
-        true
     }
 }
 
@@ -118,10 +132,10 @@ mod tests {
     #[test]
     #[wasm_bindgen_test]
     fn test_correctness_proof() {
+        // todo this unit test could simply call single_property_prover.
         let gens = PedersenGens::default();
         // todo: turn this into a helper function
         let mut rng = StdRng::from_seed(SEED_1);
-        // Positive test: secret value within range [0, 2^32)
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
 
@@ -131,19 +145,16 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        // assert_eq!(cipher.y, Scalar::from(secret_value) * gens.B_blinding + rand_blind * gens.B);
         let mut prover = CorrectnessProver::new(&elg_pub, &w);
         let verifier = CorrectnessVerifier::new(&secret_value, &elg_pub, &cipher);
-        // todo use a different label.
-        // let mut t = Transcript::new(RANGE_PROOF_LABEL);
-        let mut dealer = ZKDealer::new();
+        let mut dealer = ZKDealer::new(CORRECTNESS_PROOF_LABEL);
 
         let partial_proof = prover.prover_generate_partial_proof(&gens, &mut rng);
-        partial_proof.update_dealer(&mut dealer);
-        let challenge = dealer.dealer_scalar_challenge(b"finalize");
+        partial_proof.update_dealer(&mut dealer).unwrap();
+        let challenge = dealer.dealer_scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL);
         let proof = prover.prover_apply_challenge(&challenge);
 
         let result = verifier.verifier_verify(&gens, &challenge, &partial_proof, &proof);
-        assert!(result);
+        assert!(result.is_ok());
     }
 }
