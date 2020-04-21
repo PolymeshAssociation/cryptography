@@ -122,7 +122,6 @@ pub trait UpdateZKPDealer {
 // Sigma Protocol's Prover and Verifier Interfaces
 // ------------------------------------------------------------------------
 
-// todo better names?
 /// A scalar challenge.
 pub struct ZKPChallenge {
     pub x: Scalar,
@@ -131,11 +130,13 @@ pub struct ZKPChallenge {
 /// The interface for a 3-Sigma protocol.
 /// Abstracting the prover and verifier roles.
 ///
-/// Each proof needs to use the same `ZKPartialProof` and `ZKProof` types.
+/// Each proof needs to use the same `ZKPartialProof` and `ZKProof` types
+/// between the prover and the verifier.
 /// Each `ZKPartialProof` needs to implement the `UpdateZKPDealer` trait.
-pub trait AssetProofProver {
+pub trait AssetProofProverAwaitingChallenge {
     type ZKPartialProof: UpdateZKPDealer;
     type ZKProof;
+    type ZKProver: AssetProofProver<Self::ZKProof>;
 
     /// First round of the Sigma protocol. Prover generates a partial proof.
     ///
@@ -146,11 +147,13 @@ pub trait AssetProofProver {
     /// # Output
     /// A partial proof.
     fn generate_partial_proof<T: RngCore + CryptoRng>(
-        &mut self,
+        &self,
         pc_gens: &PedersenGens,
         rng: &mut T,
-    ) -> Self::ZKPartialProof;
+    ) -> (Self::ZKProver, Self::ZKPartialProof);
+}
 
+pub trait AssetProofProver<ZKProof> {
     /// Third round of the Sigma protocol. Prover receives a challenge and
     /// uses it to generate the proof.
     ///
@@ -159,7 +162,7 @@ pub trait AssetProofProver {
     ///
     /// # Output
     /// A proof.
-    fn apply_challenge(&self, challenge: &ZKPChallenge) -> Self::ZKProof;
+    fn apply_challenge(&self, challenge: &ZKPChallenge) -> ZKProof;
 }
 
 pub trait AssetProofVerifier {
@@ -199,19 +202,22 @@ pub trait AssetProofVerifier {
 ///
 /// # Outputs
 /// A partial proof and a proof on success, or failure on an error.
-pub fn single_property_prover<T: RngCore + CryptoRng, Prover: AssetProofProver>(
-    prover: &mut Prover,
+///
+pub fn single_property_prover<
+    T: RngCore + CryptoRng,
+    ProverAwaitingChallenge: AssetProofProverAwaitingChallenge,
+>(
+    prover_ac: ProverAwaitingChallenge,
     rng: &mut T,
-) -> Result<(Prover::ZKPartialProof, Prover::ZKProof), AssetProofError> {
-    let mut dealer = ZKPDealer::new(ENCRYPTION_PROOFS_LABEL);
-    let gens = PedersenGens::default();
-    let message = prover.generate_partial_proof(&gens, rng);
-
-    message.update_dealer(&mut dealer)?;
-
-    let challenge = dealer.dealer_scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL);
-
-    Ok((message, prover.apply_challenge(&challenge)))
+) -> Result<
+    (
+        ProverAwaitingChallenge::ZKPartialProof,
+        ProverAwaitingChallenge::ZKProof,
+    ),
+    AssetProofError,
+> {
+    let (mut partial_proofs, mut proofs) = prove_multiple_encryption_properties(vec![prover_ac], rng)?;
+    Ok((partial_proofs.remove(0), proofs.remove(0)))
 }
 
 /// The non-interactive implementation of the protocol for a single
@@ -236,37 +242,50 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
 /// the partial proofs to generate a single challenge.
 ///
 /// # Inputs
-/// `provers` An array of provers that implement the `AssetProofProver` trait.
+/// `provers` An array of provers that implement the
+///           `AssetProofProverAwaitingChallenge` trait.
 /// `rng`     An RNG.
 ///
 /// # Outputs
 /// An array of partial proofs and proofs on success, or failure on error.
-pub fn prove_multiple_encryption_properties<T: RngCore + CryptoRng, Prover: AssetProofProver>(
-    provers: &mut Vec<Prover>,
+pub fn prove_multiple_encryption_properties<
+    T: RngCore + CryptoRng,
+    ProverAwaitingChallenge: AssetProofProverAwaitingChallenge,
+>(
+    provers: Vec<ProverAwaitingChallenge>,
     rng: &mut T,
-) -> Result<(Vec<Prover::ZKPartialProof>, Vec<Prover::ZKProof>), AssetProofError> {
+) -> Result<
+    (
+        Vec<ProverAwaitingChallenge::ZKPartialProof>,
+        Vec<ProverAwaitingChallenge::ZKProof>,
+    ),
+    AssetProofError,
+> {
     let mut dealer = ZKPDealer::new(ENCRYPTION_PROOFS_LABEL);
     let gens = PedersenGens::default();
 
-    let partial_proofs: Vec<_> = provers
-        .iter_mut()
-        .map(|prover| prover.generate_partial_proof(&gens, rng))
-        .collect();
+    let mut provers_vec: Vec<_> = Vec::new();
+    let mut partial_proofs_vec = Vec::new();
+    for element in provers.iter() {
+        let (new_prover, partial_proof) = element.generate_partial_proof(&gens, rng);
+        provers_vec.push(new_prover);
+        partial_proofs_vec.push(partial_proof);
+    }
 
     // Combine all the partial proofs to create a single challenge.
-    partial_proofs
+    partial_proofs_vec
         .iter()
         .map(|partial_proof| partial_proof.update_dealer(&mut dealer))
         .collect::<Result<(), _>>()?;
 
     let challenge = dealer.dealer_scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL);
 
-    let proofs: Vec<_> = provers
+    let proofs: Vec<_> = provers_vec
         .iter()
-        .map(|p| p.apply_challenge(&challenge))
+        .map(|prover| prover.apply_challenge(&challenge))
         .collect();
 
-    Ok((partial_proofs, proofs))
+    Ok((partial_proofs_vec, proofs))
 }
 
 /// The non-interactive implementation of the protocol for multiple verifiers
@@ -312,7 +331,9 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::asset_proofs::correctness_proof::{CorrectnessProver, CorrectnessVerifier};
+    use crate::asset_proofs::correctness_proof::{
+        CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+    };
     use crate::asset_proofs::{CommitmentWitness, ElgamalSecretKey};
     use rand::{rngs::StdRng, SeedableRng};
     use rand_core::{CryptoRng, RngCore};
@@ -324,7 +345,7 @@ mod tests {
     fn create_correctness_proof_objects_helper<T: RngCore + CryptoRng>(
         plain_text: u32,
         rng: &mut T,
-    ) -> (CorrectnessProver, CorrectnessVerifier) {
+    ) -> (CorrectnessProverAwaitingChallenge, CorrectnessVerifier) {
         let rand_blind = Scalar::random(rng);
         let w = CommitmentWitness::new(plain_text, rand_blind).unwrap();
 
@@ -332,7 +353,7 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        let prover = CorrectnessProver::new(&elg_pub, &w);
+        let prover = CorrectnessProverAwaitingChallenge::new(&elg_pub, &w);
         let verifier = CorrectnessVerifier::new(&plain_text, &elg_pub, &cipher);
 
         (prover, verifier)
@@ -345,8 +366,9 @@ mod tests {
         let secret_value = 42u32;
 
         let (prover, verifier) = create_correctness_proof_objects_helper(secret_value, &mut rng);
-        let mut cloned_prover = prover.clone();
-        let (partial_proof, proof) = single_property_prover(&mut cloned_prover, &mut rng).unwrap();
+        let (partial_proof, proof) =
+            single_property_prover::<StdRng, CorrectnessProverAwaitingChallenge>(prover, &mut rng)
+                .unwrap();
 
         assert!(single_property_verifier(&verifier, partial_proof, proof).is_ok());
     }
@@ -365,8 +387,11 @@ mod tests {
         provers_vec.push(prover1);
         provers_vec.push(prover2);
 
-        let (partial_proofs, proofs) =
-            prove_multiple_encryption_properties(&mut provers_vec, &mut rng).unwrap();
+        let (partial_proofs, proofs) = prove_multiple_encryption_properties::<
+            StdRng,
+            CorrectnessProverAwaitingChallenge,
+        >(provers_vec, &mut rng)
+        .unwrap();
 
         let mut verifiers_vec = Vec::new();
         verifiers_vec.push(&verifier1);
@@ -381,6 +406,8 @@ mod tests {
     #[wasm_bindgen_test]
     fn detect_trivial_message() {
         let mut dealer = ZKPDealer::new(b"unit test");
-        assert!(dealer.dealer_append_validated_point(b"identity", &CompressedRistretto::default()).is_err());
+        assert!(dealer
+            .dealer_append_validated_point(b"identity", &CompressedRistretto::default())
+            .is_err());
     }
 }

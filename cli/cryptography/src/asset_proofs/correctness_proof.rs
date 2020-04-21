@@ -3,7 +3,8 @@
 
 use crate::asset_proofs::{
     encryption_proofs::{
-        AssetProofProver, AssetProofVerifier, UpdateZKPDealer, ZKPChallenge, ZKPDealer,
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, UpdateZKPDealer,
+        ZKPChallenge, ZKPDealer,
     },
     AssetProofError, CipherText, CommitmentWitness, ElgamalPublicKey,
 };
@@ -37,50 +38,60 @@ impl UpdateZKPDealer for CorrectnessPartialProof {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct CorrectnessProver {
+pub struct CorrectnessProverAwaitingChallenge {
     /// The public key used for the elgamal encryption.
     pub_key: ElgamalPublicKey,
+    /// The secret commitment witness.
+    w: CommitmentWitness,
+}
+
+pub struct CorrectnessProver {
     /// The secret commitment witness.
     w: CommitmentWitness,
     /// The randomness generate in the first round.
     u: Scalar,
 }
 
-impl CorrectnessProver {
+impl CorrectnessProverAwaitingChallenge {
     pub fn new(pub_key: &ElgamalPublicKey, w: &CommitmentWitness) -> Self {
-        CorrectnessProver {
+        CorrectnessProverAwaitingChallenge {
             pub_key: pub_key.clone(),
             w: w.clone(),
-            u: Scalar::default(),
         }
     }
 }
 
-impl AssetProofProver for CorrectnessProver {
+impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
     type ZKPartialProof = CorrectnessPartialProof;
     type ZKProof = CorrectnessProof;
+    type ZKProver = CorrectnessProver;
 
     fn generate_partial_proof<T: RngCore + CryptoRng>(
-        &mut self,
+        &self,
         pc_gens: &PedersenGens,
         rng: &mut T,
-    ) -> Self::ZKPartialProof {
+    ) -> (Self::ZKProver, Self::ZKPartialProof) {
         let rand_commitment = Scalar::random(rng);
-        self.u = rand_commitment;
 
-        Self::ZKPartialProof {
-            a: rand_commitment * self.pub_key.pub_key,
-            b: rand_commitment * pc_gens.B_blinding,
-        }
+        (
+            CorrectnessProver {
+                w: self.w.clone(),
+                u: rand_commitment,
+            },
+            CorrectnessPartialProof {
+                a: rand_commitment * self.pub_key.pub_key,
+                b: rand_commitment * pc_gens.B_blinding,
+            },
+        )
     }
+}
 
-    fn apply_challenge(&self, c: &ZKPChallenge) -> Self::ZKProof {
+impl AssetProofProver<CorrectnessProof> for CorrectnessProver {
+    fn apply_challenge(&self, c: &ZKPChallenge) -> CorrectnessProof {
         self.u + c.x * self.w.blinding
     }
 }
 
-#[derive(Copy, Clone, Debug)]
 pub struct CorrectnessVerifier {
     /// The encrypted value (aka the plain text).
     value: u32,
@@ -146,12 +157,12 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        let mut prover = CorrectnessProver::new(&elg_pub, &w);
+        let prover = CorrectnessProverAwaitingChallenge::new(&elg_pub, &w);
         let verifier = CorrectnessVerifier::new(&secret_value, &elg_pub, &cipher);
         let mut dealer = ZKPDealer::new(CORRECTNESS_PROOF_LABEL);
 
         // Positive tests
-        let partial_proof = prover.generate_partial_proof(&gens, &mut rng);
+        let (prover, partial_proof) = prover.generate_partial_proof(&gens, &mut rng);
         partial_proof.update_dealer(&mut dealer).unwrap();
         let challenge = dealer.dealer_scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL);
         let proof = prover.apply_challenge(&challenge);
@@ -160,7 +171,10 @@ mod tests {
         assert!(result.is_ok());
 
         // Negative tests
-        let bad_partial_proof = CorrectnessPartialProof {a: RistrettoPoint::default(), b: RistrettoPoint::default()};
+        let bad_partial_proof = CorrectnessPartialProof {
+            a: RistrettoPoint::default(),
+            b: RistrettoPoint::default(),
+        };
         let result = verifier.verify(&gens, &challenge, &bad_partial_proof, &proof);
         assert!(result.is_err());
 
