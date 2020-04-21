@@ -216,7 +216,8 @@ pub fn single_property_prover<
     ),
     AssetProofError,
 > {
-    let (mut partial_proofs, mut proofs) = prove_multiple_encryption_properties(vec![prover_ac], rng)?;
+    let (mut partial_proofs, mut proofs) =
+        prove_multiple_encryption_properties(vec![prover_ac], rng)?;
     Ok((partial_proofs.remove(0), proofs.remove(0)))
 }
 
