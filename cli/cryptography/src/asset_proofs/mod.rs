@@ -14,3 +14,4 @@ pub use elgamal_encryption::{CipherText, CommitmentWitness, ElgamalPublicKey, El
 pub mod correctness_proof;
 pub mod encryption_proofs;
 pub mod range_proof;
+pub mod transcript;

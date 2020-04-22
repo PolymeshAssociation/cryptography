@@ -3,13 +3,15 @@
 
 use crate::asset_proofs::{
     encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, UpdateZKPDealer,
-        ZKPChallenge, ZKPDealer,
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
     },
+    transcript::{TranscriptProtocol, UpdateTranscript},
     AssetProofError, CipherText, CommitmentWitness, ElgamalPublicKey,
 };
 use bulletproofs::PedersenGens;
+use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 
 /// The domain label for the correctness proof.
@@ -23,17 +25,27 @@ pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessProofC
 
 pub type CorrectnessProof = Scalar;
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug)]
 pub struct CorrectnessPartialProof {
     a: RistrettoPoint,
     b: RistrettoPoint,
 }
 
-impl UpdateZKPDealer for CorrectnessPartialProof {
-    fn update_dealer(&self, d: &mut ZKPDealer) -> Result<(), AssetProofError> {
-        d.dealer_append_message(CORRECTNESS_PROOF_CHALLENGE_LABEL);
-        d.dealer_append_validated_point(b"A", &self.a.compress())?;
-        d.dealer_append_validated_point(b"B", &self.b.compress())?;
+/// A default implementation used for testing.
+impl Default for CorrectnessPartialProof {
+    fn default() -> Self {
+        CorrectnessPartialProof {
+            a: RISTRETTO_BASEPOINT_POINT,
+            b: RISTRETTO_BASEPOINT_POINT,
+        }
+    }
+}
+
+impl UpdateTranscript for CorrectnessPartialProof {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Result<(), AssetProofError> {
+        transcript.append_domain_separator(CORRECTNESS_PROOF_CHALLENGE_LABEL);
+        transcript.append_validated_point(b"A", &self.a.compress())?;
+        transcript.append_validated_point(b"B", &self.b.compress())?;
         Ok(())
     }
 }
@@ -125,9 +137,13 @@ impl AssetProofVerifier for CorrectnessVerifier {
         let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
 
         if z * self.pub_key.pub_key != partial_proof.a + challenge.x * self.cipher.x {
-            Err(AssetProofError::CorrectnessProofVerificationError)
+            Err(AssetProofError::CorrectnessProofVerificationError {
+                str: String::from("First Check"),
+            })
         } else if z * pc_gens.B_blinding != partial_proof.b + challenge.x * y_prime {
-            Err(AssetProofError::CorrectnessProofVerificationError)
+            Err(AssetProofError::CorrectnessProofVerificationError {
+                str: String::from("Second Check"),
+            })
         } else {
             Ok(())
         }
@@ -159,27 +175,33 @@ mod tests {
 
         let prover = CorrectnessProverAwaitingChallenge::new(&elg_pub, &w);
         let verifier = CorrectnessVerifier::new(&secret_value, &elg_pub, &cipher);
-        let mut dealer = ZKPDealer::new(CORRECTNESS_PROOF_LABEL);
+        let mut transcript = Transcript::new(CORRECTNESS_PROOF_LABEL);
 
         // Positive tests
         let (prover, partial_proof) = prover.generate_partial_proof(&gens, &mut rng);
-        partial_proof.update_dealer(&mut dealer).unwrap();
-        let challenge = dealer.dealer_scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL);
+        partial_proof.update_transcript(&mut transcript).unwrap();
+        let challenge = transcript.scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL);
         let proof = prover.apply_challenge(&challenge);
 
         let result = verifier.verify(&gens, &challenge, &partial_proof, &proof);
-        assert!(result.is_ok());
+        assert_eq!(result, Ok(()));
 
         // Negative tests
-        let bad_partial_proof = CorrectnessPartialProof {
-            a: RistrettoPoint::default(),
-            b: RistrettoPoint::default(),
-        };
+        let bad_partial_proof = CorrectnessPartialProof::default();
         let result = verifier.verify(&gens, &challenge, &bad_partial_proof, &proof);
-        assert!(result.is_err());
+        assert_eq!(
+            result,
+            Err(AssetProofError::CorrectnessProofVerificationError {
+                str: String::from("First Check")
+            })
+        );
 
         let bad_proof = Scalar::default();
-        let result = verifier.verify(&gens, &challenge, &partial_proof, &bad_proof);
-        assert!(result.is_err());
+        assert_eq!(
+            verifier.verify(&gens, &challenge, &partial_proof, &bad_proof),
+            Err(AssetProofError::CorrectnessProofVerificationError {
+                str: String::from("First Check")
+            })
+        );
     }
 }
