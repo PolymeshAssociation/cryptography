@@ -23,7 +23,7 @@ pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessProofC
 
 pub type CorrectnessProof = Scalar;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct CorrectnessPartialProof {
     a: RistrettoPoint,
     b: RistrettoPoint,

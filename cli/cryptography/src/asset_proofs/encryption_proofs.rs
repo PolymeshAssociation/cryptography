@@ -333,7 +333,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::correctness_proof::{
-        CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+        CorrectnessPartialProof, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
     };
     use crate::asset_proofs::{CommitmentWitness, ElgamalSecretKey};
     use rand::{rngs::StdRng, SeedableRng};
@@ -372,6 +372,9 @@ mod tests {
                 .unwrap();
 
         assert!(single_property_verifier(&verifier, partial_proof, proof).is_ok());
+
+        // Negative test
+        assert!(single_property_verifier(&verifier, partial_proof, Scalar::one()).is_err());
     }
 
     #[test]
@@ -401,6 +404,34 @@ mod tests {
             verify_multiple_encryption_properties(&verifiers_vec, (&partial_proofs, &proofs))
                 .is_ok()
         );
+
+        // Negative test
+        let mut bad_partial_proofs = partial_proofs.clone();
+        bad_partial_proofs.remove(1);
+        // Missmatched partial proofs and proofs sizes
+        assert!(verify_multiple_encryption_properties(
+            &verifiers_vec,
+            (&bad_partial_proofs, &proofs)
+        )
+        .is_err());
+
+        // Corrupted partial proof
+        bad_partial_proofs.push(CorrectnessPartialProof::default());
+        assert!(verify_multiple_encryption_properties(
+            &verifiers_vec,
+            (&bad_partial_proofs, &proofs)
+        )
+        .is_err());
+
+        // Corrupted proofs
+        let mut bad_proofs = proofs.clone();
+        bad_proofs.remove(1);
+        bad_proofs.push(Scalar::default());
+        assert!(verify_multiple_encryption_properties(
+            &verifiers_vec,
+            (&partial_proofs, &bad_proofs)
+        )
+        .is_err());
     }
 
     #[test]
