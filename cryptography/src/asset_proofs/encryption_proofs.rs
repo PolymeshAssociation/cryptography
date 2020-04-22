@@ -217,7 +217,7 @@ pub fn single_property_prover<
     AssetProofError,
 > {
     let (mut partial_proofs, mut proofs) =
-        prove_multiple_encryption_properties(vec![prover_ac], rng)?;
+        prove_multiple_encryption_properties(&[box(prover_ac)], rng)?;
     Ok((partial_proofs.remove(0), proofs.remove(0)))
 }
 
@@ -253,7 +253,7 @@ pub fn prove_multiple_encryption_properties<
     T: RngCore + CryptoRng,
     ProverAwaitingChallenge: AssetProofProverAwaitingChallenge,
 >(
-    provers: Vec<ProverAwaitingChallenge>,
+    provers: &[Box<ProverAwaitingChallenge>],
     rng: &mut T,
 ) -> Result<
     (
@@ -265,13 +265,10 @@ pub fn prove_multiple_encryption_properties<
     let mut dealer = ZKPDealer::new(ENCRYPTION_PROOFS_LABEL);
     let gens = PedersenGens::default();
 
-    let mut provers_vec: Vec<_> = Vec::new();
-    let mut partial_proofs_vec = Vec::new();
-    for element in provers.iter() {
-        let (new_prover, partial_proof) = element.generate_partial_proof(&gens, rng);
-        provers_vec.push(new_prover);
-        partial_proofs_vec.push(partial_proof);
-    }
+    let (provers_vec, partial_proofs_vec):(Vec<_>,Vec<_>)
+        = provers.iter()
+        .map( |p| p.generate_partial_proof(&gens, rng))
+        .unzip();
 
     // Combine all the partial proofs to create a single challenge.
     partial_proofs_vec
@@ -281,10 +278,9 @@ pub fn prove_multiple_encryption_properties<
 
     let challenge = dealer.dealer_scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL);
 
-    let proofs: Vec<_> = provers_vec
-        .iter()
+    let proofs = provers_vec.into_iter()
         .map(|prover| prover.apply_challenge(&challenge))
-        .collect();
+        .collect::<Vec<_>>();
 
     Ok((partial_proofs_vec, proofs))
 }
@@ -384,14 +380,12 @@ mod tests {
         let (prover1, verifier1) = create_correctness_proof_objects_helper(secret_value1, &mut rng);
         let (prover2, verifier2) = create_correctness_proof_objects_helper(secret_value2, &mut rng);
 
-        let mut provers_vec = Vec::new();
-        provers_vec.push(prover1);
-        provers_vec.push(prover2);
+        let provers_vec = [box(prover1), box(prover2)];
 
         let (partial_proofs, proofs) = prove_multiple_encryption_properties::<
             StdRng,
             CorrectnessProverAwaitingChallenge,
-        >(provers_vec, &mut rng)
+        >(&provers_vec, &mut rng)
         .unwrap();
 
         let mut verifiers_vec = Vec::new();
