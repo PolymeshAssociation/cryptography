@@ -217,7 +217,7 @@ pub fn single_property_prover<
     AssetProofError,
 > {
     let (mut partial_proofs, mut proofs) =
-        prove_multiple_encryption_properties(&[box(prover_ac)], rng)?;
+        prove_multiple_encryption_properties(&[box (prover_ac)], rng)?;
     Ok((partial_proofs.remove(0), proofs.remove(0)))
 }
 
@@ -265,9 +265,9 @@ pub fn prove_multiple_encryption_properties<
     let mut dealer = ZKPDealer::new(ENCRYPTION_PROOFS_LABEL);
     let gens = PedersenGens::default();
 
-    let (provers_vec, partial_proofs_vec):(Vec<_>,Vec<_>)
-        = provers.iter()
-        .map( |p| p.generate_partial_proof(&gens, rng))
+    let (provers_vec, partial_proofs_vec): (Vec<_>, Vec<_>) = provers
+        .iter()
+        .map(|p| p.generate_partial_proof(&gens, rng))
         .unzip();
 
     // Combine all the partial proofs to create a single challenge.
@@ -278,7 +278,8 @@ pub fn prove_multiple_encryption_properties<
 
     let challenge = dealer.dealer_scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL);
 
-    let proofs = provers_vec.into_iter()
+    let proofs = provers_vec
+        .into_iter()
         .map(|prover| prover.apply_challenge(&challenge))
         .collect::<Vec<_>>();
 
@@ -380,7 +381,7 @@ mod tests {
         let (prover1, verifier1) = create_correctness_proof_objects_helper(secret_value1, &mut rng);
         let (prover2, verifier2) = create_correctness_proof_objects_helper(secret_value2, &mut rng);
 
-        let provers_vec = [box(prover1), box(prover2)];
+        let provers_vec = [box (prover1), box (prover2)];
 
         let (partial_proofs, proofs) = prove_multiple_encryption_properties::<
             StdRng,
