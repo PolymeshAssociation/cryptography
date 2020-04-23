@@ -71,7 +71,7 @@ impl TranscriptProtocol for Transcript {
     }
 }
 
-/// A trait that is used to update the transcript with the partial proof
+/// A trait that is used to update the transcript with the proof response
 /// that results from the first round of the protocol.
 pub trait UpdateTranscript {
     fn update_transcript(&self, d: &mut Transcript) -> Result<(), AssetProofError>;
