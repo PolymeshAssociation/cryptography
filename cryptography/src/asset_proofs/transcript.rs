@@ -50,7 +50,6 @@ impl TranscriptProtocol for Transcript {
         use curve25519_dalek::traits::IsIdentity;
 
         if message.is_identity() {
-            // println!("validation fails! point: {:?}", message);
             Err(AssetProofError::VerificationError)
         } else {
             Ok(self.append_message(label, message.as_bytes()))
@@ -71,7 +70,7 @@ impl TranscriptProtocol for Transcript {
     }
 }
 
-/// A trait that is used to update the transcript with the proof response
+/// A trait that is used to update the transcript with the initial message
 /// that results from the first round of the protocol.
 pub trait UpdateTranscript {
     fn update_transcript(&self, d: &mut Transcript) -> Result<(), AssetProofError>;

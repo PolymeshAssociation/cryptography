@@ -96,16 +96,16 @@ mod tests {
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let (proof, proof_response) = prove_within_range(secret_value as u64, rand_blind, 32)
+        let (proof, initial_message) = prove_within_range(secret_value as u64, rand_blind, 32)
             .expect("This shouldn't happen.");
-        assert!(verify_within_range(proof, proof_response, 32));
+        assert!(verify_within_range(proof, initial_message, 32));
 
         // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.
         let w = CommitmentWitness::new(secret_value, rand_blind).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
-        assert_eq!(proof_response, cipher.y.compress());
+        assert_eq!(initial_message, cipher.y.compress());
 
         // Negative test: secret value outside the allowed range
         let large_secret_value: u64 = u64::from(u32::max_value()) + 3;

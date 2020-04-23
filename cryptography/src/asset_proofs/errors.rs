@@ -18,7 +18,7 @@ pub enum AssetProofError {
 
     /// Failed to verify a correctness proof.
     #[fail(display = "Failed to verify the {} of the correctness proof", str)]
-    CorrectnessProofVerificationError { str: String },
+    CorrectnessFinalResponseVerificationError { str: String },
 
     /// A range proof error occured.
     #[fail(display = "A range proof error occured")]
