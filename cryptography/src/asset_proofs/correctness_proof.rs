@@ -26,22 +26,22 @@ pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessProofC
 pub type CorrectnessProof = Scalar;
 
 #[derive(Copy, Clone, Debug)]
-pub struct CorrectnessPartialProof {
+pub struct CorrectnessProofResponse {
     a: RistrettoPoint,
     b: RistrettoPoint,
 }
 
 /// A default implementation used for testing.
-impl Default for CorrectnessPartialProof {
+impl Default for CorrectnessProofResponse {
     fn default() -> Self {
-        CorrectnessPartialProof {
+        CorrectnessProofResponse {
             a: RISTRETTO_BASEPOINT_POINT,
             b: RISTRETTO_BASEPOINT_POINT,
         }
     }
 }
 
-impl UpdateTranscript for CorrectnessPartialProof {
+impl UpdateTranscript for CorrectnessProofResponse {
     fn update_transcript(&self, transcript: &mut Transcript) -> Result<(), AssetProofError> {
         transcript.append_domain_separator(CORRECTNESS_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A", &self.a.compress())?;
@@ -74,15 +74,15 @@ impl CorrectnessProverAwaitingChallenge {
 }
 
 impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
-    type ZKPartialProof = CorrectnessPartialProof;
+    type ZKProofResponse = CorrectnessProofResponse;
     type ZKProof = CorrectnessProof;
     type ZKProver = CorrectnessProver;
 
-    fn generate_partial_proof<T: RngCore + CryptoRng>(
+    fn generate_proof_response<T: RngCore + CryptoRng>(
         &self,
         pc_gens: &PedersenGens,
         rng: &mut T,
-    ) -> (Self::ZKProver, Self::ZKPartialProof) {
+    ) -> (Self::ZKProver, Self::ZKProofResponse) {
         let rand_commitment = Scalar::random(rng);
 
         (
@@ -90,7 +90,7 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
                 w: self.w.clone(),
                 u: rand_commitment,
             },
-            CorrectnessPartialProof {
+            CorrectnessProofResponse {
                 a: rand_commitment * self.pub_key.pub_key,
                 b: rand_commitment * pc_gens.B_blinding,
             },
@@ -124,23 +124,23 @@ impl CorrectnessVerifier {
 }
 
 impl AssetProofVerifier for CorrectnessVerifier {
-    type ZKPartialProof = CorrectnessPartialProof;
+    type ZKProofResponse = CorrectnessProofResponse;
     type ZKProof = CorrectnessProof;
 
     fn verify(
         &self,
         pc_gens: &PedersenGens,
         challenge: &ZKPChallenge,
-        partial_proof: &Self::ZKPartialProof,
+        proof_response: &Self::ZKProofResponse,
         z: &Self::ZKProof,
     ) -> Result<(), AssetProofError> {
         let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
 
-        if z * self.pub_key.pub_key != partial_proof.a + challenge.x * self.cipher.x {
+        if z * self.pub_key.pub_key != proof_response.a + challenge.x * self.cipher.x {
             Err(AssetProofError::CorrectnessProofVerificationError {
                 str: String::from("First Check"),
             })
-        } else if z * pc_gens.B_blinding != partial_proof.b + challenge.x * y_prime {
+        } else if z * pc_gens.B_blinding != proof_response.b + challenge.x * y_prime {
             Err(AssetProofError::CorrectnessProofVerificationError {
                 str: String::from("Second Check"),
             })
@@ -178,17 +178,17 @@ mod tests {
         let mut transcript = Transcript::new(CORRECTNESS_PROOF_LABEL);
 
         // Positive tests
-        let (prover, partial_proof) = prover.generate_partial_proof(&gens, &mut rng);
-        partial_proof.update_transcript(&mut transcript).unwrap();
+        let (prover, proof_response) = prover.generate_proof_response(&gens, &mut rng);
+        proof_response.update_transcript(&mut transcript).unwrap();
         let challenge = transcript.scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL);
         let proof = prover.apply_challenge(&challenge);
 
-        let result = verifier.verify(&gens, &challenge, &partial_proof, &proof);
+        let result = verifier.verify(&gens, &challenge, &proof_response, &proof);
         assert_eq!(result, Ok(()));
 
         // Negative tests
-        let bad_partial_proof = CorrectnessPartialProof::default();
-        let result = verifier.verify(&gens, &challenge, &bad_partial_proof, &proof);
+        let bad_proof_response = CorrectnessProofResponse::default();
+        let result = verifier.verify(&gens, &challenge, &bad_proof_response, &proof);
         assert_eq!(
             result,
             Err(AssetProofError::CorrectnessProofVerificationError {
@@ -198,7 +198,7 @@ mod tests {
 
         let bad_proof = Scalar::default();
         assert_eq!(
-            verifier.verify(&gens, &challenge, &partial_proof, &bad_proof),
+            verifier.verify(&gens, &challenge, &proof_response, &bad_proof),
             Err(AssetProofError::CorrectnessProofVerificationError {
                 str: String::from("First Check")
             })
