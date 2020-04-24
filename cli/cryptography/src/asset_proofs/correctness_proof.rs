@@ -11,6 +11,7 @@ use crate::asset_proofs::{
 use bulletproofs::PedersenGens;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use failure::Error;
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 
@@ -42,7 +43,7 @@ impl Default for CorrectnessProofResponse {
 }
 
 impl UpdateTranscript for CorrectnessProofResponse {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<(), AssetProofError> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Result<(), Error> {
         transcript.append_domain_separator(CORRECTNESS_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A", &self.a.compress())?;
         transcript.append_validated_point(b"B", &self.b.compress())?;
@@ -133,20 +134,19 @@ impl AssetProofVerifier for CorrectnessVerifier {
         challenge: &ZKPChallenge,
         proof_response: &Self::ZKProofResponse,
         z: &Self::ZKProof,
-    ) -> Result<(), AssetProofError> {
+    ) -> Result<(), Error> {
         let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
 
-        if z * self.pub_key.pub_key != proof_response.a + challenge.x * self.cipher.x {
-            Err(AssetProofError::CorrectnessProofVerificationError {
-                str: String::from("First Check"),
-            })
-        } else if z * pc_gens.B_blinding != proof_response.b + challenge.x * y_prime {
-            Err(AssetProofError::CorrectnessProofVerificationError {
-                str: String::from("Second Check"),
-            })
-        } else {
-            Ok(())
-        }
+        ensure!(
+            z * self.pub_key.pub_key == proof_response.a + challenge.x * self.cipher.x,
+            AssetProofError::CorrectnessProofVerificationError1stCheck
+        );
+        ensure!(
+            z * pc_gens.B_blinding != proof_response.b + challenge.x * y_prime,
+            AssetProofError::CorrectnessProofVerificationError2ndCheck
+        );
+
+        Ok(())
     }
 }
 
@@ -155,6 +155,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
+    use frame_support::{assert_err, assert_ok};
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
 
@@ -184,24 +185,20 @@ mod tests {
         let proof = prover.apply_challenge(&challenge);
 
         let result = verifier.verify(&gens, &challenge, &proof_response, &proof);
-        assert_eq!(result, Ok(()));
+        // assert_ok!(result);
 
         // Negative tests
         let bad_proof_response = CorrectnessProofResponse::default();
         let result = verifier.verify(&gens, &challenge, &bad_proof_response, &proof);
-        assert_eq!(
+        assert_err!(
             result,
-            Err(AssetProofError::CorrectnessProofVerificationError {
-                str: String::from("First Check")
-            })
+            AssetProofError::CorrectnessProofVerificationError1stCheck.into()
         );
 
         let bad_proof = Scalar::default();
         assert_eq!(
             verifier.verify(&gens, &challenge, &proof_response, &bad_proof),
-            Err(AssetProofError::CorrectnessProofVerificationError {
-                str: String::from("First Check")
-            })
+            Err(AssetProofError::CorrectnessProofVerificationError1stCheck.into())
         );
     }
 }

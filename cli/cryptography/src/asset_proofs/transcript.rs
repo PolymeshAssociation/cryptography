@@ -7,6 +7,7 @@
 use crate::asset_proofs::encryption_proofs::ZKPChallenge;
 use crate::asset_proofs::errors::AssetProofError;
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
+use failure::Error;
 use merlin::Transcript;
 
 pub trait TranscriptProtocol {
@@ -23,7 +24,7 @@ pub trait TranscriptProtocol {
         &mut self,
         label: &'static [u8],
         message: &CompressedRistretto,
-    ) -> Result<(), AssetProofError>;
+    ) -> Result<(), Error>;
 
     /// Appends a domain separator string to the transcript's state.
     ///
@@ -46,15 +47,11 @@ impl TranscriptProtocol for Transcript {
         &mut self,
         label: &'static [u8],
         message: &CompressedRistretto,
-    ) -> Result<(), AssetProofError> {
+    ) -> Result<(), Error> {
         use curve25519_dalek::traits::IsIdentity;
 
-        if message.is_identity() {
-            // println!("validation fails! point: {:?}", message);
-            Err(AssetProofError::VerificationError)
-        } else {
-            Ok(self.append_message(label, message.as_bytes()))
-        }
+        ensure!(!message.is_identity(), AssetProofError::VerificationError);
+        Ok(self.append_message(label, message.as_bytes()))
     }
 
     fn append_domain_separator(&mut self, message: &'static [u8]) {
@@ -74,7 +71,7 @@ impl TranscriptProtocol for Transcript {
 /// A trait that is used to update the transcript with the proof response
 /// that results from the first round of the protocol.
 pub trait UpdateTranscript {
-    fn update_transcript(&self, d: &mut Transcript) -> Result<(), AssetProofError>;
+    fn update_transcript(&self, d: &mut Transcript) -> Result<(), Error>;
 }
 
 #[cfg(test)]
