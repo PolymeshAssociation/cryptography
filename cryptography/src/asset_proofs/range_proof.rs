@@ -6,6 +6,7 @@
 use crate::asset_proofs::AssetProofError;
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
+use failure::Error;
 use merlin::Transcript;
 
 const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
@@ -21,7 +22,7 @@ pub fn prove_within_range(
     secret_value: u64,
     rand_blind: Scalar,
     range: usize,
-) -> Result<(RangeProof, CompressedRistretto), AssetProofError> {
+) -> Result<(RangeProof, CompressedRistretto), Error> {
     // Generators for Pedersen commitments.
     let pc_gens = PedersenGens::default();
 
@@ -43,7 +44,7 @@ pub fn prove_within_range(
         &rand_blind,
         range,
     )
-    .map_err(|e| AssetProofError::ProvingError(e))
+    .map_err(|e| AssetProofError::ProvingError(e).into())
 }
 
 /// Verify that a range proof is valid given a commitment to a secret value.

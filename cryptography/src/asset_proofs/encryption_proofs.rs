@@ -43,11 +43,14 @@
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
+use failure::Error;
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 
-use crate::asset_proofs::errors::AssetProofError;
-use crate::asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript};
+use crate::asset_proofs::{
+    errors::AssetProofError,
+    transcript::{TranscriptProtocol, UpdateTranscript},
+};
 
 /// The domain label for the encryption proofs.
 pub const ENCRYPTION_PROOFS_LABEL: &[u8] = b"PolymathEncryptionProofs";
@@ -122,7 +125,7 @@ pub trait AssetProofVerifier {
         challenge: &ZKPChallenge,
         proof_response: &Self::ZKProofResponse,
         proof: &Self::ZKProof,
-    ) -> Result<(), AssetProofError>;
+    ) -> Result<(), Error>;
 }
 
 // ------------------------------------------------------------------------
@@ -149,7 +152,7 @@ pub fn single_property_prover<
         ProverAwaitingChallenge::ZKProofResponse,
         ProverAwaitingChallenge::ZKProof,
     ),
-    AssetProofError,
+    Error,
 > {
     let (mut proof_responses, mut proofs) =
         prove_multiple_encryption_properties(&[Box::new(prover_ac)], rng)?;
@@ -169,7 +172,7 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
     verifier: &Verifier,
     proof_response: Verifier::ZKProofResponse,
     proof: Verifier::ZKProof,
-) -> Result<(), AssetProofError> {
+) -> Result<(), Error> {
     verify_multiple_encryption_properties(&[verifier], (&[proof_response], &[proof]))
 }
 
@@ -195,7 +198,7 @@ pub fn prove_multiple_encryption_properties<
         Vec<ProverAwaitingChallenge::ZKProofResponse>,
         Vec<ProverAwaitingChallenge::ZKProof>,
     ),
-    AssetProofError,
+    Error,
 > where {
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
     let gens = PedersenGens::default();
@@ -234,10 +237,11 @@ pub fn prove_multiple_encryption_properties<
 pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
     verifiers: &[&Verifier],
     (proof_responses, proofs): (&[Verifier::ZKProofResponse], &[Verifier::ZKProof]),
-) -> Result<(), AssetProofError> {
-    if proof_responses.len() != proofs.len() || verifiers.len() != proofs.len() {
-        return Err(AssetProofError::VerificationError);
-    }
+) -> Result<(), Error> {
+    ensure!(
+        proof_responses.len() == proofs.len() && verifiers.len() == proofs.len(),
+        AssetProofError::VerificationError
+    );
 
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
     let gens = PedersenGens::default();
