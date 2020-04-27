@@ -3,10 +3,9 @@
 //! plain text. For example proving that the value that was encrypted
 //! is within a range.
 
-use crate::asset_proofs::AssetProofError;
+use crate::errors::{AssetProofError, Result};
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
-use failure::Error;
 use merlin::Transcript;
 
 const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
@@ -22,7 +21,7 @@ pub fn prove_within_range(
     secret_value: u64,
     rand_blind: Scalar,
     range: usize,
-) -> Result<(RangeProof, CompressedRistretto), Error> {
+) -> Result<(RangeProof, CompressedRistretto)> {
     // Generators for Pedersen commitments.
     let pc_gens = PedersenGens::default();
 
@@ -44,7 +43,7 @@ pub fn prove_within_range(
         &rand_blind,
         range,
     )
-    .map_err(|e| AssetProofError::ProvingError(e).into())
+    .map_err(|source| AssetProofError::ProvingError { source }.into())
 }
 
 /// Verify that a range proof is valid given a commitment to a secret value.
@@ -97,16 +96,16 @@ mod tests {
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let (proof, proof_response) = prove_within_range(secret_value as u64, rand_blind, 32)
+        let (proof, initial_message) = prove_within_range(secret_value as u64, rand_blind, 32)
             .expect("This shouldn't happen.");
-        assert!(verify_within_range(proof, proof_response, 32));
+        assert!(verify_within_range(proof, initial_message, 32));
 
         // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.
         let w = CommitmentWitness::new(secret_value, rand_blind).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
-        assert_eq!(proof_response, cipher.y.compress());
+        assert_eq!(initial_message, cipher.y.compress());
 
         // Negative test: secret value outside the allowed range
         let large_secret_value: u64 = u64::from(u32::max_value()) + 3;

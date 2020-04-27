@@ -1,49 +1,51 @@
 //! The proof of correct encryption of the given value.
 //! For more details see section 5.2 of the whitepaper.
 
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    AssetProofError, CipherText, CommitmentWitness, ElgamalPublicKey,
+    errors::{AssetProofError, Result},
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use failure::Error;
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 
 /// The domain label for the correctness proof.
-pub const CORRECTNESS_PROOF_LABEL: &[u8] = b"PolymathCorrectnessProof";
+pub const CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathCorrectnessFinalResponse";
 /// The domain label for the challenge.
-pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessProofChallenge";
+pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessFinalResponseChallenge";
 
 // ------------------------------------------------------------------------
 // Proof of Correct Encryption of the Given Value
 // ------------------------------------------------------------------------
 
-pub type CorrectnessProof = Scalar;
+pub type CorrectnessFinalResponse = Scalar;
 
 #[derive(Copy, Clone, Debug)]
-pub struct CorrectnessProofResponse {
+pub struct CorrectnessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
 }
 
 /// A default implementation used for testing.
-impl Default for CorrectnessProofResponse {
+impl Default for CorrectnessInitialMessage {
     fn default() -> Self {
-        CorrectnessProofResponse {
+        CorrectnessInitialMessage {
             a: RISTRETTO_BASEPOINT_POINT,
             b: RISTRETTO_BASEPOINT_POINT,
         }
     }
 }
 
-impl UpdateTranscript for CorrectnessProofResponse {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<(), Error> {
+impl UpdateTranscript for CorrectnessInitialMessage {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
         transcript.append_domain_separator(CORRECTNESS_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A", &self.a.compress())?;
         transcript.append_validated_point(b"B", &self.b.compress())?;
@@ -75,15 +77,15 @@ impl CorrectnessProverAwaitingChallenge {
 }
 
 impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
-    type ZKProofResponse = CorrectnessProofResponse;
-    type ZKProof = CorrectnessProof;
+    type ZKInitialMessage = CorrectnessInitialMessage;
+    type ZKFinalResponse = CorrectnessFinalResponse;
     type ZKProver = CorrectnessProver;
 
-    fn generate_proof_response<T: RngCore + CryptoRng>(
+    fn generate_initial_message<T: RngCore + CryptoRng>(
         &self,
         pc_gens: &PedersenGens,
         rng: &mut T,
-    ) -> (Self::ZKProver, Self::ZKProofResponse) {
+    ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_commitment = Scalar::random(rng);
 
         (
@@ -91,7 +93,7 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
                 w: self.w.clone(),
                 u: rand_commitment,
             },
-            CorrectnessProofResponse {
+            CorrectnessInitialMessage {
                 a: rand_commitment * self.pub_key.pub_key,
                 b: rand_commitment * pc_gens.B_blinding,
             },
@@ -99,8 +101,8 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
     }
 }
 
-impl AssetProofProver<CorrectnessProof> for CorrectnessProver {
-    fn apply_challenge(&self, c: &ZKPChallenge) -> CorrectnessProof {
+impl AssetProofProver<CorrectnessFinalResponse> for CorrectnessProver {
+    fn apply_challenge(&self, c: &ZKPChallenge) -> CorrectnessFinalResponse {
         self.u + c.x * self.w.blinding
     }
 }
@@ -125,27 +127,26 @@ impl CorrectnessVerifier {
 }
 
 impl AssetProofVerifier for CorrectnessVerifier {
-    type ZKProofResponse = CorrectnessProofResponse;
-    type ZKProof = CorrectnessProof;
+    type ZKInitialMessage = CorrectnessInitialMessage;
+    type ZKFinalResponse = CorrectnessFinalResponse;
 
     fn verify(
         &self,
         pc_gens: &PedersenGens,
         challenge: &ZKPChallenge,
-        proof_response: &Self::ZKProofResponse,
-        z: &Self::ZKProof,
-    ) -> Result<(), Error> {
+        initial_message: &Self::ZKInitialMessage,
+        z: &Self::ZKFinalResponse,
+    ) -> Result<()> {
         let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
 
         ensure!(
-            z * self.pub_key.pub_key == proof_response.a + challenge.x * self.cipher.x,
-            AssetProofError::CorrectnessProofVerificationError1stCheck
+            z * self.pub_key.pub_key == initial_message.a + challenge.x * self.cipher.x,
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * pc_gens.B_blinding != proof_response.b + challenge.x * y_prime,
-            AssetProofError::CorrectnessProofVerificationError2ndCheck
+            z * pc_gens.B_blinding == initial_message.b + challenge.x * y_prime,
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 2 }
         );
-
         Ok(())
     }
 }
@@ -155,7 +156,6 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
-    use frame_support::{assert_err, assert_ok};
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
 
@@ -176,29 +176,30 @@ mod tests {
 
         let prover = CorrectnessProverAwaitingChallenge::new(&elg_pub, &w);
         let verifier = CorrectnessVerifier::new(&secret_value, &elg_pub, &cipher);
-        let mut transcript = Transcript::new(CORRECTNESS_PROOF_LABEL);
+        let mut transcript = Transcript::new(CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL);
 
         // Positive tests
-        let (prover, proof_response) = prover.generate_proof_response(&gens, &mut rng);
-        proof_response.update_transcript(&mut transcript).unwrap();
+        let (prover, initial_message) = prover.generate_initial_message(&gens, &mut rng);
+        initial_message.update_transcript(&mut transcript).unwrap();
         let challenge = transcript.scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL);
-        let proof = prover.apply_challenge(&challenge);
+        let final_response = prover.apply_challenge(&challenge);
 
-        let result = verifier.verify(&gens, &challenge, &proof_response, &proof);
-        // assert_ok!(result);
+        let result = verifier.verify(&gens, &challenge, &initial_message, &final_response);
+        assert!(result.is_ok());
 
         // Negative tests
-        let bad_proof_response = CorrectnessProofResponse::default();
-        let result = verifier.verify(&gens, &challenge, &bad_proof_response, &proof);
+        let bad_initial_message = CorrectnessInitialMessage::default();
+        let result = verifier.verify(&gens, &challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::CorrectnessProofVerificationError1stCheck.into()
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_proof = Scalar::default();
-        assert_eq!(
-            verifier.verify(&gens, &challenge, &proof_response, &bad_proof),
-            Err(AssetProofError::CorrectnessProofVerificationError1stCheck.into())
+        let bad_final_response = Scalar::default();
+        let result = verifier.verify(&gens, &challenge, &initial_message, &bad_final_response);
+        assert_err!(
+            result,
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }
 }
