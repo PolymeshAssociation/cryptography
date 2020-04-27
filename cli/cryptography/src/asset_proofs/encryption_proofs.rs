@@ -47,8 +47,8 @@ use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 
 use crate::{
+    asset_proofs::errors::{AssetProofError, Result},
     asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript},
-    errors::{AssetProofError, Result},
 };
 
 /// The domain label for the encryption proofs.
@@ -264,14 +264,12 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::{
-        asset_proofs::{
-            correctness_proof::{
-                CorrectnessInitialMessage, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
-            },
-            CommitmentWitness, ElgamalSecretKey,
+    use crate::asset_proofs::{
+        correctness_proof::{
+            CorrectnessInitialMessage, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
         },
         errors::AssetProofError,
+        CommitmentWitness, ElgamalSecretKey,
     };
     use rand::{rngs::StdRng, SeedableRng};
     use rand_core::{CryptoRng, RngCore};

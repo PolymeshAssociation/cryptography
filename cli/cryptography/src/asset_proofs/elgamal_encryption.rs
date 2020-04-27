@@ -3,7 +3,7 @@
 //! Since Elgamal is a homomorphic encryption it also provides
 //! addition and subtraction API over the cipher texts.
 
-use crate::errors::{AssetProofError, Result};
+use crate::asset_proofs::errors::{AssetProofError, Result};
 use bulletproofs::PedersenGens;
 use core::ops::{Add, Sub};
 use core::ops::{AddAssign, SubAssign};

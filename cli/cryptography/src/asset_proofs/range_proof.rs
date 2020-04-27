@@ -3,7 +3,7 @@
 //! plain text. For example proving that the value that was encrypted
 //! is within a range.
 
-use crate::errors::{AssetProofError, Result};
+use crate::asset_proofs::errors::{AssetProofError, Result};
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use merlin::Transcript;

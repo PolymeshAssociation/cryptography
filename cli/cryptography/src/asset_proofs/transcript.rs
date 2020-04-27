@@ -6,7 +6,7 @@
 
 use crate::{
     asset_proofs::encryption_proofs::ZKPChallenge,
-    errors::{AssetProofError, Result},
+    asset_proofs::errors::{AssetProofError, Result},
 };
 
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
