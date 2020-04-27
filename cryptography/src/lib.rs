@@ -10,3 +10,4 @@ macro_rules! ensure {
 
 pub mod asset_proofs;
 pub mod claim_proofs;
+pub mod mercat;
