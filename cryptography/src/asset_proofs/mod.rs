@@ -6,6 +6,7 @@
 pub(crate) mod macros;
 
 pub mod errors;
+
 /// Helper macro to assert that `predicate` is an `Error::from( $err)`.
 #[allow(unused_macros)]
 macro_rules! assert_err {
@@ -27,3 +28,4 @@ pub mod correctness_proof;
 pub mod encryption_proofs;
 pub mod range_proof;
 pub mod transcript;
+pub mod wellformedness_proof;
