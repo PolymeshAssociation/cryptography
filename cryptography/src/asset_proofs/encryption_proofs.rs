@@ -71,7 +71,18 @@ pub const ENCRYPTION_PROOFS_CHALLENGE_LABEL: &[u8] = b"PolymathEncryptionProofsC
 
 /// A scalar challenge.
 pub struct ZKPChallenge {
-    pub x: Scalar,
+    x: Scalar,
+}
+
+impl ZKPChallenge {
+    pub fn new(x: Scalar) -> Result<ZKPChallenge> {
+        ensure!(x != Scalar::zero(), AssetProofError::VerificationError);
+        Ok(ZKPChallenge {x} )
+    }
+
+    pub fn get_x(&self) -> Scalar {
+        self.x.clone()
+    }
 }
 
 /// The interface for a 3-Sigma protocol.

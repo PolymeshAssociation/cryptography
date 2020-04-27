@@ -14,6 +14,7 @@ use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
+use zeroize::Zeroize;
 
 /// The domain label for the correctness proof.
 pub const CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathCorrectnessFinalResponse";
@@ -58,6 +59,22 @@ pub struct CorrectnessProverAwaitingChallenge {
     w: CommitmentWitness,
 }
 
+impl CorrectnessProverAwaitingChallenge {
+    pub fn new(pub_key: &ElgamalPublicKey, w: &CommitmentWitness) -> Self {
+        CorrectnessProverAwaitingChallenge {
+            pub_key: pub_key.clone(),
+            w: w.clone(),
+        }
+    }
+}
+
+/// Zeroize the secret values before they go out of scope.
+impl Zeroize for CorrectnessProverAwaitingChallenge {
+    fn zeroize(&mut self) {
+        self.w.zeroize();
+    }
+}
+
 pub struct CorrectnessProver {
     /// The secret commitment witness.
     w: CommitmentWitness,
@@ -65,12 +82,11 @@ pub struct CorrectnessProver {
     u: Scalar,
 }
 
-impl CorrectnessProverAwaitingChallenge {
-    pub fn new(pub_key: &ElgamalPublicKey, w: &CommitmentWitness) -> Self {
-        CorrectnessProverAwaitingChallenge {
-            pub_key: pub_key.clone(),
-            w: w.clone(),
-        }
+/// Zeroize the secret values before they go out of scope.
+impl Zeroize for CorrectnessProver {
+    fn zeroize(&mut self) {
+        self.w.zeroize();
+        self.u.zeroize();
     }
 }
 
@@ -101,7 +117,7 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
 
 impl AssetProofProver<CorrectnessFinalResponse> for CorrectnessProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> CorrectnessFinalResponse {
-        self.u + c.x * self.w.blinding
+        self.u + c.get_x() * self.w.get_blinding_factor()
     }
 }
 
@@ -138,11 +154,11 @@ impl AssetProofVerifier for CorrectnessVerifier {
         let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
 
         ensure!(
-            z * self.pub_key.pub_key == initial_message.a + challenge.x * self.cipher.x,
+            z * self.pub_key.pub_key == initial_message.a + challenge.get_x() * self.cipher.x,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * pc_gens.B_blinding == initial_message.b + challenge.x * y_prime,
+            z * pc_gens.B_blinding == initial_message.b + challenge.get_x() * y_prime,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
