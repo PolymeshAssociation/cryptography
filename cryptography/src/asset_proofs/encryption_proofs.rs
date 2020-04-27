@@ -46,8 +46,10 @@ use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 
-use crate::asset_proofs::errors::AssetProofError;
-use crate::asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript};
+use crate::{
+    asset_proofs::errors::{AssetProofError, Result},
+    asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript},
+};
 
 /// The domain label for the encryption proofs.
 pub const ENCRYPTION_PROOFS_LABEL: &[u8] = b"PolymathEncryptionProofs";
@@ -122,7 +124,7 @@ pub trait AssetProofVerifier {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_proof: &Self::ZKFinalResponse,
-    ) -> Result<(), AssetProofError>;
+    ) -> Result<()>;
 }
 
 // ------------------------------------------------------------------------
@@ -144,13 +146,10 @@ pub fn single_property_prover<
 >(
     prover_ac: ProverAwaitingChallenge,
     rng: &mut T,
-) -> Result<
-    (
-        ProverAwaitingChallenge::ZKInitialMessage,
-        ProverAwaitingChallenge::ZKFinalResponse,
-    ),
-    AssetProofError,
-> {
+) -> Result<(
+    ProverAwaitingChallenge::ZKInitialMessage,
+    ProverAwaitingChallenge::ZKFinalResponse,
+)> {
     let (mut initial_messages, mut final_responses) =
         prove_multiple_encryption_properties(&[Box::new(prover_ac)], rng)?;
     Ok((initial_messages.remove(0), final_responses.remove(0)))
@@ -169,7 +168,7 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
     verifier: &Verifier,
     initial_message: Verifier::ZKInitialMessage,
     final_response: Verifier::ZKFinalResponse,
-) -> Result<(), AssetProofError> {
+) -> Result<()> {
     verify_multiple_encryption_properties(&[verifier], (&[initial_message], &[final_response]))
 }
 
@@ -190,13 +189,10 @@ pub fn prove_multiple_encryption_properties<
 >(
     provers: &[Box<ProverAwaitingChallenge>],
     rng: &mut T,
-) -> Result<
-    (
-        Vec<ProverAwaitingChallenge::ZKInitialMessage>,
-        Vec<ProverAwaitingChallenge::ZKFinalResponse>,
-    ),
-    AssetProofError,
-> where {
+) -> Result<(
+    Vec<ProverAwaitingChallenge::ZKInitialMessage>,
+    Vec<ProverAwaitingChallenge::ZKFinalResponse>,
+)> where {
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
     let gens = PedersenGens::default();
 
@@ -209,7 +205,7 @@ pub fn prove_multiple_encryption_properties<
     initial_messages_vec
         .iter()
         .map(|initial_message| initial_message.update_transcript(&mut transcript))
-        .collect::<Result<(), _>>()?;
+        .collect::<Result<()>>()?;
 
     let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL);
 
@@ -237,10 +233,11 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
         &[Verifier::ZKInitialMessage],
         &[Verifier::ZKFinalResponse],
     ),
-) -> Result<(), AssetProofError> {
-    if initial_messages.len() != final_responses.len() || verifiers.len() != final_responses.len() {
-        return Err(AssetProofError::VerificationError);
-    }
+) -> Result<()> {
+    ensure!(
+        initial_messages.len() == final_responses.len() && verifiers.len() == final_responses.len(),
+        AssetProofError::VerificationError
+    );
 
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
     let gens = PedersenGens::default();
@@ -267,10 +264,13 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::asset_proofs::correctness_proof::{
-        CorrectnessInitialMessage, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+    use crate::asset_proofs::{
+        correctness_proof::{
+            CorrectnessInitialMessage, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+        },
+        errors::AssetProofError,
+        CommitmentWitness, ElgamalSecretKey,
     };
-    use crate::asset_proofs::{CommitmentWitness, ElgamalSecretKey};
     use rand::{rngs::StdRng, SeedableRng};
     use rand_core::{CryptoRng, RngCore};
     use wasm_bindgen_test::*;
@@ -307,26 +307,19 @@ mod tests {
                 .unwrap();
 
         // Positive test
-        assert_eq!(
-            single_property_verifier(&verifier, initial_message, final_response),
-            Ok(())
-        );
+        assert!(single_property_verifier(&verifier, initial_message, final_response).is_ok());
 
         // Negative tests
         let bad_initial_message = CorrectnessInitialMessage::default();
-        assert_eq!(
+        assert_err!(
             single_property_verifier(&verifier, bad_initial_message, final_response),
-            Err(AssetProofError::CorrectnessFinalResponseVerificationError {
-                str: String::from("First Check")
-            })
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = Scalar::one();
-        assert_eq!(
+        assert_err!(
             single_property_verifier(&verifier, initial_message, bad_final_response),
-            Err(AssetProofError::CorrectnessFinalResponseVerificationError {
-                str: String::from("First Check")
-            })
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }
 
@@ -346,50 +339,44 @@ mod tests {
             prove_multiple_encryption_properties(&provers_vec, &mut rng).unwrap();
 
         let verifiers_vec = vec![&verifier1, &verifier2];
-        assert_eq!(
-            verify_multiple_encryption_properties(
-                &verifiers_vec,
-                (&initial_messages, &final_responses)
-            ),
-            Ok(())
-        );
+        assert!(verify_multiple_encryption_properties(
+            &verifiers_vec,
+            (&initial_messages, &final_responses)
+        )
+        .is_ok());
 
         // Negative tests
         let mut bad_initial_messages = initial_messages.clone();
         bad_initial_messages.remove(1);
         // Missmatched initial messages and final responses sizes
-        assert_eq!(
+        assert_err!(
             verify_multiple_encryption_properties(
                 &verifiers_vec,
                 (&bad_initial_messages, &final_responses)
             ),
-            Err(AssetProofError::VerificationError)
+            AssetProofError::VerificationError
         );
 
         // Corrupted initial message
         bad_initial_messages.push(CorrectnessInitialMessage::default());
-        assert_eq!(
+        assert_err!(
             verify_multiple_encryption_properties(
                 &verifiers_vec,
                 (&bad_initial_messages, &final_responses)
             ),
-            Err(AssetProofError::CorrectnessFinalResponseVerificationError {
-                str: String::from("First Check")
-            })
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
         // Corrupted final responses
         let mut bad_final_responses = final_responses.clone();
         bad_final_responses.remove(1);
         bad_final_responses.push(Scalar::default());
-        assert_eq!(
+        assert_err!(
             verify_multiple_encryption_properties(
                 &verifiers_vec,
                 (&initial_messages, &bad_final_responses)
             ),
-            Err(AssetProofError::CorrectnessFinalResponseVerificationError {
-                str: String::from("First Check")
-            })
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }
 }

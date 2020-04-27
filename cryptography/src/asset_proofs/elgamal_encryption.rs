@@ -3,11 +3,12 @@
 //! Since Elgamal is a homomorphic encryption it also provides
 //! addition and subtraction API over the cipher texts.
 
-use crate::asset_proofs::AssetProofError;
+use crate::asset_proofs::errors::{AssetProofError, Result};
 use bulletproofs::PedersenGens;
 use core::ops::{Add, Sub};
 use core::ops::{AddAssign, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use failure::Error;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use zeroize::Zeroize;
@@ -45,21 +46,21 @@ pub struct CommitmentWitness {
 }
 
 impl CommitmentWitness {
-    pub fn new(value: u32, blinding: Scalar) -> Result<CommitmentWitness, AssetProofError> {
+    pub fn new(value: u32, blinding: Scalar) -> Result<CommitmentWitness> {
         // Since Elgamal decryption requires brute forcing over all possible values,
         // we limit the values to 32-bit integers.
-        if value >= u32::max_value() {
-            return Err(AssetProofError::PlainTextRangeError);
-        }
-
+        ensure!(
+            value < u32::max_value(),
+            AssetProofError::PlainTextRangeError
+        );
         Ok(CommitmentWitness { value, blinding })
     }
 }
 
 impl TryFrom<u32> for CommitmentWitness {
-    type Error = AssetProofError;
+    type Error = Error;
 
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
+    fn try_from(v: u32) -> std::result::Result<Self, Self::Error> {
         CommitmentWitness::new(v, Scalar::random(&mut rand::thread_rng()))
     }
 }
@@ -161,7 +162,7 @@ impl ElgamalPublicKey {
         CipherText { x, y }
     }
 
-    pub fn encrypt_value(&self, value: u32) -> Result<CipherText, AssetProofError> {
+    pub fn encrypt_value(&self, value: u32) -> Result<CipherText> {
         Ok(self.encrypt(&CommitmentWitness::try_from(value)?))
     }
 }
@@ -178,7 +179,7 @@ impl ElgamalSecretKey {
         }
     }
 
-    pub fn decrypt(&self, cipher_text: &CipherText) -> Result<u32, AssetProofError> {
+    pub fn decrypt(&self, cipher_text: &CipherText) -> Result<u32> {
         let gens = PedersenGens::default();
         // value * h = Y - X / secret_key
         let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
@@ -191,7 +192,7 @@ impl ElgamalSecretKey {
             }
         }
 
-        Err(AssetProofError::CipherTextDecryptionError)
+        Err(AssetProofError::CipherTextDecryptionError.into())
     }
 }
 

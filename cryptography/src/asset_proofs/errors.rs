@@ -1,4 +1,5 @@
 use bulletproofs::ProofError;
+use failure::{Error, Fail};
 
 /// Represents an error resulted from asset value encryption,
 /// decryption, or proof generation.
@@ -17,16 +18,15 @@ pub enum AssetProofError {
     VerificationError,
 
     /// Failed to verify a correctness proof.
-    #[fail(display = "Failed to verify the {} of the correctness proof", str)]
-    CorrectnessFinalResponseVerificationError { str: String },
+    #[fail(
+        display = "Failed to verify the check number {} of the correctness proof",
+        check
+    )]
+    CorrectnessFinalResponseVerificationError { check: u16 },
 
     /// A range proof error occured.
-    #[fail(display = "A range proof error occured")]
-    ProvingError(ProofError),
+    #[fail(display = "A range proof error occured: {}", source)]
+    ProvingError { source: ProofError },
 }
 
-impl From<ProofError> for AssetProofError {
-    fn from(e: ProofError) -> AssetProofError {
-        AssetProofError::ProvingError(e)
-    }
-}
+pub type Result<T, E = Error> = std::result::Result<T, E>;

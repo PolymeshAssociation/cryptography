@@ -5,8 +5,9 @@ use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
     },
+    errors::{AssetProofError, Result},
     transcript::{TranscriptProtocol, UpdateTranscript},
-    AssetProofError, CipherText, CommitmentWitness, ElgamalPublicKey,
+    CipherText, CommitmentWitness, ElgamalPublicKey,
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
@@ -42,7 +43,7 @@ impl Default for CorrectnessInitialMessage {
 }
 
 impl UpdateTranscript for CorrectnessInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<(), AssetProofError> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
         transcript.append_domain_separator(CORRECTNESS_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A", &self.a.compress())?;
         transcript.append_validated_point(b"B", &self.b.compress())?;
@@ -133,20 +134,18 @@ impl AssetProofVerifier for CorrectnessVerifier {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         z: &Self::ZKFinalResponse,
-    ) -> Result<(), AssetProofError> {
+    ) -> Result<()> {
         let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
 
-        if z * self.pub_key.pub_key != initial_message.a + challenge.x * self.cipher.x {
-            Err(AssetProofError::CorrectnessFinalResponseVerificationError {
-                str: String::from("First Check"),
-            })
-        } else if z * pc_gens.B_blinding != initial_message.b + challenge.x * y_prime {
-            Err(AssetProofError::CorrectnessFinalResponseVerificationError {
-                str: String::from("Second Check"),
-            })
-        } else {
-            Ok(())
-        }
+        ensure!(
+            z * self.pub_key.pub_key == initial_message.a + challenge.x * self.cipher.x,
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+        );
+        ensure!(
+            z * pc_gens.B_blinding == initial_message.b + challenge.x * y_prime,
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 2 }
+        );
+        Ok(())
     }
 }
 
@@ -184,24 +183,21 @@ mod tests {
         let final_response = prover.apply_challenge(&challenge);
 
         let result = verifier.verify(&gens, &challenge, &initial_message, &final_response);
-        assert_eq!(result, Ok(()));
+        assert!(result.is_ok());
 
         // Negative tests
         let bad_initial_message = CorrectnessInitialMessage::default();
         let result = verifier.verify(&gens, &challenge, &bad_initial_message, &final_response);
-        assert_eq!(
+        assert_err!(
             result,
-            Err(AssetProofError::CorrectnessFinalResponseVerificationError {
-                str: String::from("First Check")
-            })
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = Scalar::default();
-        assert_eq!(
-            verifier.verify(&gens, &challenge, &initial_message, &bad_final_response),
-            Err(AssetProofError::CorrectnessFinalResponseVerificationError {
-                str: String::from("First Check")
-            })
+        let result = verifier.verify(&gens, &challenge, &initial_message, &bad_final_response);
+        assert_err!(
+            result,
+            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }
 }
