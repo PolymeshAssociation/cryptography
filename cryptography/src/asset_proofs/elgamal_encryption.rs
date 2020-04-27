@@ -9,6 +9,7 @@ use core::ops::{Add, Sub};
 use core::ops::{AddAssign, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use failure::Error;
+use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use zeroize::Zeroize;
@@ -56,8 +57,8 @@ impl CommitmentWitness {
         Ok(CommitmentWitness { value, blinding })
     }
 
-    pub fn get_blinding_factor(&self) -> Scalar {
-        self.blinding.clone()
+    pub fn blinding(&self) -> &Scalar {
+        &self.blinding
     }
 }
 
@@ -204,6 +205,25 @@ impl ElgamalSecretKey {
 impl Zeroize for ElgamalSecretKey {
     fn zeroize(&mut self) {
         self.secret.zeroize();
+    }
+}
+
+// ------------------------------------------------------------------------
+// CipherText Refreshment Method
+// ------------------------------------------------------------------------
+
+impl CipherText {
+    pub fn ciphertext_refreshment_method<T: RngCore + CryptoRng>(
+        &self,
+        secret_key: &ElgamalSecretKey,
+        rng: &mut T,
+    ) -> Result<CipherText> {
+        let message = secret_key.decrypt(self)?;
+        let pub_key = secret_key.get_public_key();
+        let new_witness = CommitmentWitness::new(message, Scalar::random(rng))?;
+        let new_ciphertext = pub_key.encrypt(&new_witness);
+
+        Ok(new_ciphertext)
     }
 }
 
