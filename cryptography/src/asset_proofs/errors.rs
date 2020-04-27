@@ -24,6 +24,13 @@ pub enum AssetProofError {
     )]
     CorrectnessFinalResponseVerificationError { check: u16 },
 
+    /// Failed to verify a ciphertext refreshment proof.
+    #[fail(
+        display = "Failed to verify the check number {} of the ciphertext refreshment proof",
+        check
+    )]
+    CiphertextRefreshmentFinalResponseVerificationError { check: u16 },
+
     /// A range proof error occured.
     #[fail(display = "A range proof error occured: {}", source)]
     ProvingError { source: ProofError },

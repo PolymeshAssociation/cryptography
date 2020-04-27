@@ -145,7 +145,7 @@ define_sub_assign_variants!(LHS = CipherText, RHS = CipherText);
 /// An Elgamal Secret Key is a random scalar.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElgamalSecretKey {
-    secret: Scalar,
+    pub secret: Scalar,
 }
 
 /// The Elgamal Public Key is the secret key multiplied by the blinding generator (g).
