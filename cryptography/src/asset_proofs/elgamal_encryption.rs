@@ -42,7 +42,7 @@ pub struct CommitmentWitness {
     value: u32,
 
     // A random blinding factor.
-    pub blinding: Scalar,
+    blinding: Scalar,
 }
 
 impl CommitmentWitness {
@@ -54,6 +54,10 @@ impl CommitmentWitness {
             AssetProofError::PlainTextRangeError
         );
         Ok(CommitmentWitness { value, blinding })
+    }
+
+    pub fn get_blinding_factor(&self) -> Scalar {
+        self.blinding.clone()
     }
 }
 

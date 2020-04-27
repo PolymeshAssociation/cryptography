@@ -64,9 +64,8 @@ impl TranscriptProtocol for Transcript {
         let mut buf = [0u8; 64];
         self.challenge_bytes(label, &mut buf);
 
-        ZKPChallenge {
-            x: Scalar::from_bytes_mod_order_wide(&buf),
-        }
+        // todo silently unwrapping here is not a good idea.
+        ZKPChallenge::new(Scalar::from_bytes_mod_order_wide(&buf)).unwrap()
     }
 }
 

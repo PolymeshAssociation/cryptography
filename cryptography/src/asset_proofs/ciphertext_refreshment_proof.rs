@@ -114,7 +114,7 @@ impl AssetProofProverAwaitingChallenge for CipherTextRefreshmentProverAwaitingCh
 
 impl AssetProofProver<CipherTextRefreshmentFinalResponse> for CipherTextRefreshmentProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> CipherTextRefreshmentFinalResponse {
-        self.u + c.x * self.secret_key.secret
+        self.u + c.get_x() * self.secret_key.secret
     }
 }
 
@@ -157,11 +157,11 @@ impl AssetProofVerifier for CipherTextRefreshmentVerifier {
         z: &Self::ZKFinalResponse,
     ) -> Result<()> {
         ensure!(
-            z * self.y == initial_message.a + challenge.x * self.x,
+            z * self.y == initial_message.a + challenge.get_x() * self.x,
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * pc_gens.B_blinding == initial_message.b + challenge.x * self.pub_key.pub_key,
+            z * pc_gens.B_blinding == initial_message.b + challenge.get_x() * self.pub_key.pub_key,
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 2 }
         );
         Ok(())
