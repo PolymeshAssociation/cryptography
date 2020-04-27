@@ -257,14 +257,22 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        let new_cipher = cipher.ciphertext_refreshment_method(&elg_secret, &mut rng).unwrap();
+        let new_cipher = cipher
+            .ciphertext_refreshment_method(&elg_secret, &mut rng)
+            .unwrap();
 
         let prover =
             CipherTextRefreshmentProverAwaitingChallenge::new(&elg_secret, &cipher, &new_cipher);
         let verifier = CipherTextRefreshmentVerifier::new(&elg_pub, &cipher, &new_cipher);
 
-        let (initial_message, final_response) = encryption_proofs::single_property_prover(prover, &mut rng).unwrap();
+        let (initial_message, final_response) =
+            encryption_proofs::single_property_prover(prover, &mut rng).unwrap();
 
-        assert!(encryption_proofs::single_property_verifier(&verifier, initial_message, final_response).is_ok());
+        assert!(encryption_proofs::single_property_verifier(
+            &verifier,
+            initial_message,
+            final_response
+        )
+        .is_ok());
     }
 }
