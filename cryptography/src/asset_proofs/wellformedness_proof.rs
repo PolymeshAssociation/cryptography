@@ -4,8 +4,7 @@
 
 use crate::asset_proofs::{
     encryption_proofs::{
-        single_property_prover, single_property_verifier, AssetProofProver,
-        AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
     },
     errors::{AssetProofError, Result},
     transcript::{TranscriptProtocol, UpdateTranscript},
@@ -169,6 +168,9 @@ impl AssetProofVerifier for WellformednessVerifier {
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
+    use crate::asset_proofs::encryption_proofs::{
+        single_property_prover, single_property_verifier,
+    };
     use crate::asset_proofs::*;
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
