@@ -16,6 +16,7 @@ use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
+use zeroize::Zeroize;
 
 /// The domain label for the wellformedness proof.
 pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathWellformednessFinalResponse";
@@ -61,11 +62,24 @@ pub struct WellformednessProver {
     rand_a: Scalar,
     rand_b: Scalar,
 }
+
+impl Zeroize for WellformednessProver {
+    fn zeroize(&mut self) {
+        self.w.zeroize();
+    }
+}
+
 pub struct WellformednessProverAwaitingChallenge {
     /// The public key used for the elgamal encryption.
     pub_key: ElgamalPublicKey,
     /// The secret commitment witness.
     w: CommitmentWitness,
+}
+
+impl Zeroize for WellformednessProverAwaitingChallenge {
+    fn zeroize(&mut self) {
+        self.w.zeroize();
+    }
 }
 
 impl WellformednessProverAwaitingChallenge {
@@ -219,6 +233,8 @@ mod tests {
         // ------------------------------- Non-interactive case
         let prover = WellformednessProverAwaitingChallenge::new(&elg_pub, &w);
         let verifier = WellformednessVerifier::new(&elg_pub, &cipher);
+
+        // 1st to 3rd rounds
         let (initial_message, final_response) = single_property_prover::<
             StdRng,
             WellformednessProverAwaitingChallenge,
@@ -227,17 +243,20 @@ mod tests {
 
         // Positive test
         assert!(
+            // 4th round
             single_property_verifier(&verifier, initial_message, final_response.clone()).is_ok()
         );
 
         // Negative tests
         let bad_initial_message = WellformednessInitialMessage::default();
         assert_err!(
+            // 4th round
             single_property_verifier(&verifier, bad_initial_message, final_response),
             AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         assert_err!(
+            // 4th round
             single_property_verifier(&verifier, initial_message, bad_final_response),
             AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
         );
