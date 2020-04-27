@@ -18,7 +18,7 @@ use rand_core::{CryptoRng, RngCore};
 /// The domain label for the correctness proof.
 pub const CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathCorrectnessFinalResponse";
 /// The domain label for the challenge.
-pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessFinalResponseChallenge";
+pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessChallenge";
 
 // ------------------------------------------------------------------------
 // Proof of Correct Encryption of the Given Value

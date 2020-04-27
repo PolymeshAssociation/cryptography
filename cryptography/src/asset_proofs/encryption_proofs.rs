@@ -132,7 +132,7 @@ pub trait AssetProofVerifier {
         pc_gens: &PedersenGens,
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
-        final_proof: &Self::ZKFinalResponse,
+        final_response: &Self::ZKFinalResponse,
     ) -> Result<()>;
 }
 
