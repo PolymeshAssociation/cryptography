@@ -3,7 +3,7 @@
 //! Since Elgamal is a homomorphic encryption it also provides
 //! addition and subtraction API over the cipher texts.
 
-use crate::asset_proofs::AssetProofError;
+use crate::errors::{AssetProofError, Result};
 use bulletproofs::PedersenGens;
 use core::ops::{Add, Sub};
 use core::ops::{AddAssign, SubAssign};
@@ -46,7 +46,7 @@ pub struct CommitmentWitness {
 }
 
 impl CommitmentWitness {
-    pub fn new(value: u32, blinding: Scalar) -> Result<CommitmentWitness, Error> {
+    pub fn new(value: u32, blinding: Scalar) -> Result<CommitmentWitness> {
         // Since Elgamal decryption requires brute forcing over all possible values,
         // we limit the values to 32-bit integers.
         ensure!(
@@ -60,7 +60,7 @@ impl CommitmentWitness {
 impl TryFrom<u32> for CommitmentWitness {
     type Error = Error;
 
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
+    fn try_from(v: u32) -> std::result::Result<Self, Self::Error> {
         CommitmentWitness::new(v, Scalar::random(&mut rand::thread_rng()))
     }
 }
@@ -162,7 +162,7 @@ impl ElgamalPublicKey {
         CipherText { x, y }
     }
 
-    pub fn encrypt_value(&self, value: u32) -> Result<CipherText, Error> {
+    pub fn encrypt_value(&self, value: u32) -> Result<CipherText> {
         Ok(self.encrypt(&CommitmentWitness::try_from(value)?))
     }
 }
@@ -179,7 +179,7 @@ impl ElgamalSecretKey {
         }
     }
 
-    pub fn decrypt(&self, cipher_text: &CipherText) -> Result<u32, Error> {
+    pub fn decrypt(&self, cipher_text: &CipherText) -> Result<u32> {
         let gens = PedersenGens::default();
         // value * h = Y - X / secret_key
         let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
@@ -192,7 +192,7 @@ impl ElgamalSecretKey {
             }
         }
 
-        bail!(AssetProofError::CipherTextDecryptionError);
+        Err(AssetProofError::CipherTextDecryptionError.into())
     }
 }
 

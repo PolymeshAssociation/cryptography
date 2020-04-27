@@ -4,10 +4,12 @@
 //! proof system is to provide a challenge without revealing any information
 //! about the secrets while protecting against Chosen Message attacks.
 
-use crate::asset_proofs::encryption_proofs::ZKPChallenge;
-use crate::asset_proofs::errors::AssetProofError;
+use crate::{
+    asset_proofs::encryption_proofs::ZKPChallenge,
+    errors::{AssetProofError, Result},
+};
+
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
-use failure::Error;
 use merlin::Transcript;
 
 pub trait TranscriptProtocol {
@@ -24,7 +26,7 @@ pub trait TranscriptProtocol {
         &mut self,
         label: &'static [u8],
         message: &CompressedRistretto,
-    ) -> Result<(), Error>;
+    ) -> Result<()>;
 
     /// Appends a domain separator string to the transcript's state.
     ///
@@ -47,7 +49,7 @@ impl TranscriptProtocol for Transcript {
         &mut self,
         label: &'static [u8],
         message: &CompressedRistretto,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         use curve25519_dalek::traits::IsIdentity;
 
         ensure!(!message.is_identity(), AssetProofError::VerificationError);
@@ -68,10 +70,10 @@ impl TranscriptProtocol for Transcript {
     }
 }
 
-/// A trait that is used to update the transcript with the proof response
+/// A trait that is used to update the transcript with the initial message
 /// that results from the first round of the protocol.
 pub trait UpdateTranscript {
-    fn update_transcript(&self, d: &mut Transcript) -> Result<(), Error>;
+    fn update_transcript(&self, d: &mut Transcript) -> Result<()>;
 }
 
 #[cfg(test)]
@@ -82,9 +84,9 @@ mod tests {
     fn detect_trivial_message() {
         use curve25519_dalek::ristretto::CompressedRistretto;
         let mut transcript = Transcript::new(b"unit test");
-        assert_eq!(
+        assert_err!(
             transcript.append_validated_point(b"identity", &CompressedRistretto::default()),
-            Err(AssetProofError::VerificationError)
+            AssetProofError::VerificationError
         );
     }
 }
