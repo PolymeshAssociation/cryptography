@@ -48,7 +48,7 @@ use rand_core::{CryptoRng, RngCore};
 
 use crate::{
     asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript},
-    errors::Result,
+    errors::{AssetProofError, Result},
 };
 
 /// The domain label for the encryption proofs.
@@ -234,9 +234,10 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
         &[Verifier::ZKFinalResponse],
     ),
 ) -> Result<()> {
-    // ensure!(
-    //    initial_messages.len() == final_responses.len() && verifiers.len() == final_responses.len(),
-    //    Error::VerificationError);
+    ensure!(
+        initial_messages.len() == final_responses.len() && verifiers.len() == final_responses.len(),
+        AssetProofError::VerificationError
+    );
 
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
     let gens = PedersenGens::default();
@@ -355,7 +356,7 @@ mod tests {
                 &verifiers_vec,
                 (&bad_initial_messages, &final_responses)
             ),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            AssetProofError::VerificationError
         );
 
         // Corrupted initial message
