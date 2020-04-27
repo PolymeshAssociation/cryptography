@@ -77,11 +77,11 @@ pub struct ZKPChallenge {
 impl ZKPChallenge {
     pub fn new(x: Scalar) -> Result<ZKPChallenge> {
         ensure!(x != Scalar::zero(), AssetProofError::VerificationError);
-        Ok(ZKPChallenge {x} )
+        Ok(ZKPChallenge { x })
     }
 
-    pub fn get_x(&self) -> Scalar {
-        self.x.clone()
+    pub fn x(&self) -> &Scalar {
+        &self.x
     }
 }
 
@@ -227,7 +227,9 @@ pub fn prove_multiple_encryption_properties<
         .map(|initial_message| initial_message.update_transcript(&mut transcript))
         .collect::<Result<()>>()?;
 
-    let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL);
+    let challenge = transcript
+        .scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)
+        .unwrap();
 
     let final_responses: Vec<_> = provers_vec
         .into_iter()
@@ -268,7 +270,9 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
         .map(|initial_message| initial_message.update_transcript(&mut transcript))
         .collect::<Result<(), _>>()?;
 
-    let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL);
+    let challenge = transcript
+        .scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)
+        .unwrap();
     for i in 0..verifiers.len() {
         verifiers[i].verify(&gens, &challenge, &initial_messages[i], &final_responses[i])?;
     }

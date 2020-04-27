@@ -41,7 +41,7 @@ pub trait TranscriptProtocol {
     ///
     /// # Output
     /// A scalar challenge.
-    fn scalar_challenge(&mut self, label: &'static [u8]) -> ZKPChallenge;
+    fn scalar_challenge(&mut self, label: &'static [u8]) -> Result<ZKPChallenge>;
 }
 
 impl TranscriptProtocol for Transcript {
@@ -60,12 +60,11 @@ impl TranscriptProtocol for Transcript {
         self.append_message(b"dom-sep", message)
     }
 
-    fn scalar_challenge(&mut self, label: &'static [u8]) -> ZKPChallenge {
+    fn scalar_challenge(&mut self, label: &'static [u8]) -> Result<ZKPChallenge> {
         let mut buf = [0u8; 64];
         self.challenge_bytes(label, &mut buf);
 
-        // todo silently unwrapping here is not a good idea.
-        ZKPChallenge::new(Scalar::from_bytes_mod_order_wide(&buf)).unwrap()
+        ZKPChallenge::new(Scalar::from_bytes_mod_order_wide(&buf))
     }
 }
 

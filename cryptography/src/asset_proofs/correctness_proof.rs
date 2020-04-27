@@ -117,7 +117,7 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
 
 impl AssetProofProver<CorrectnessFinalResponse> for CorrectnessProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> CorrectnessFinalResponse {
-        self.u + c.get_x() * self.w.get_blinding_factor()
+        self.u + c.x() * self.w.blinding()
     }
 }
 
@@ -154,16 +154,20 @@ impl AssetProofVerifier for CorrectnessVerifier {
         let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
 
         ensure!(
-            z * self.pub_key.pub_key == initial_message.a + challenge.get_x() * self.cipher.x,
+            z * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * pc_gens.B_blinding == initial_message.b + challenge.get_x() * y_prime,
+            z * pc_gens.B_blinding == initial_message.b + challenge.x() * y_prime,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
     }
 }
+
+// ------------------------------------------------------------------------
+// Tests
+// ------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -195,7 +199,9 @@ mod tests {
         // Positive tests
         let (prover, initial_message) = prover.generate_initial_message(&gens, &mut rng);
         initial_message.update_transcript(&mut transcript).unwrap();
-        let challenge = transcript.scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL);
+        let challenge = transcript
+            .scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL)
+            .unwrap();
         let final_response = prover.apply_challenge(&challenge);
 
         let result = verifier.verify(&gens, &challenge, &initial_message, &final_response);
