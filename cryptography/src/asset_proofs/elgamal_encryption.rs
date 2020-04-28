@@ -154,12 +154,6 @@ pub struct ElgamalPublicKey {
     pub pub_key: RistrettoPoint,
 }
 
-impl Zeroize for ElgamalPublicKey {
-    fn zeroize(&mut self) {
-        self.pub_key = RistrettoPoint::default();
-    }
-}
-
 impl ElgamalPublicKey {
     pub fn encrypt(&self, witness: &CommitmentWitness) -> CipherText {
         let x = witness.blinding * self.pub_key;

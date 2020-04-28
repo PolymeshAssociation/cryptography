@@ -63,13 +63,18 @@ pub struct WellformednessProver {
     rand_b: Scalar,
 }
 
-#[derive(Clone, Debug, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone, Debug)]
 pub struct WellformednessProverAwaitingChallenge {
     /// The public key used for the elgamal encryption.
     pub_key: ElgamalPublicKey,
     /// The secret commitment witness.
     w: CommitmentWitness,
+}
+
+impl Zeroize for WellformednessProverAwaitingChallenge {
+    fn zeroize(&mut self) {
+        self.w.zeroize();
+    }
 }
 
 impl WellformednessProverAwaitingChallenge {
