@@ -6,6 +6,7 @@ use crate::asset_proofs::wellformedness_proof::{
     WellformednessFinalResponse, WellformednessInitialMessage,
 };
 use crate::asset_proofs::{CipherText, ElgamalPublicKey, ElgamalSecretKey};
+use failure::{Error, Fail};
 
 // ---------------------- START: temporary types, move them to the proper location
 
@@ -95,6 +96,7 @@ pub struct Account {
 
 /// Represents the three substates (started, verified, rejected) of a
 /// on a confidential transaction state.
+#[derive(Debug)]
 pub enum TXSubstate {
     /// The action on transaction has been taken but is not verified yet.
     Started,
@@ -106,19 +108,11 @@ pub enum TXSubstate {
 
 /// Represents the three states (initialized, justified, finalized) of a
 /// confidentional asset issuance transaction.
+#[derive(Debug)]
 pub enum AssetTXState {
     Initialization(TXSubstate),
     InitilaziationJustification(TXSubstate),
     Finalization(TXSubstate),
-}
-
-/// Represents an error in asset issuance transaction which includes the
-/// state of the failed transaction and a reason.
-/// TODO: as we implement the methods, we may find more explicit types for
-/// the reason variable.
-pub struct AssetTXError {
-    state: AssetTXState,
-    reason: String,
 }
 
 /// Holds the public portion of an asset issuance transaction. This can be placed
@@ -158,7 +152,7 @@ pub trait AssetTXer {
         issr_account: PubAccount,
         mdtr_pub_key: ElgamalPublicKey,
         asset_id: u32, // deviation from the paper
-    ) -> Result<(AssetTXData, AssetTXState), AssetTXError>;
+    ) -> Result<(AssetTXData, AssetTXState), Error>;
 
     /// Justifies a confidential asset issue transaction. This method is called
     /// by mediator. Corresponds to `JustifyAssetTx` of MERCAT paper.
@@ -171,10 +165,9 @@ pub trait AssetTXer {
         issr_pub_key: ElgamalPublicKey,
         issr_acount: PubAccount,
         amount: u32, // deviation from the paper
-    ) -> Result<(AssetTXState, Signature), AssetTXError>;
+    ) -> Result<(AssetTXState, Signature), Error>;
 
     /// Processes a confidential asset issue transaction. This method is called
     /// by "system algorithms". Corresponds to part 4 of `ProcessCTX` of MERCAT paper.
-    fn process(self, memo: AssetMemo, issr_account: PubAccount)
-        -> Result<PubAccount, AssetTXError>;
+    fn process(self, memo: AssetMemo, issr_account: PubAccount) -> Result<PubAccount, Error>;
 }
