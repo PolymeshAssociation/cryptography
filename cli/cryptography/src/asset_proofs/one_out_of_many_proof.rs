@@ -4,17 +4,22 @@
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{ristretto::{RistrettoPoint},constants::RISTRETTO_BASEPOINT_COMPRESSED, traits::MultiscalarMul, constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
 //use serde::{Serialize, Deserialize};
-use crate::asset_proofs::AssetProofError;
-//use crate::asset_proofs::{
-//                encryption_proofs::{
-//                        AssetProofProver,
-//                },
-//                transcript::{TranscriptProtocol, UpdateTranscript},
-//};
+
+use crate::asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        errors::{AssetProofError, Result},
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        
+    };
+
+
 use sha3::Sha3_512;
 use std::ops::{Add, Sub, Mul, Neg};
 use std::convert::TryInto;
 use rand::{rngs::StdRng, SeedableRng};
+use rand_core::{CryptoRng, RngCore};
 const SEED_1: [u8; 32] = [42u8; 32];
 
 use std::time::SystemTime;
@@ -26,6 +31,7 @@ use merlin::Transcript;
 const BASE : u32 = 3;
 const EXPONENT : u32 = 2;
 const OOON_PROOF_LABEL : &[u8;14] = b"PolymathMERCAT";
+const OOON_PROOF_CHALLENGE_LABEL : &[u8] = b"PolymathOOONProofChallenge";
 
 // ********************************************************************************************************************
 // ** BEGINING OF THE GENERATORS & UTILS MODULE. IN THE FUTURE THIS PART OF THE CODE SHOULD RESIDE IN SEPARATE FILES **
@@ -319,6 +325,224 @@ impl Polynomial {
         }
 }
 
+//////////////////////////// NEW CODE ///////////////////
+
+
+#[derive(Copy, Clone, Debug)]
+pub struct R1ProofInitialMessage{
+        A       : RistrettoPoint,
+        B       : RistrettoPoint,
+	C       : RistrettoPoint,
+        D       : RistrettoPoint,
+      
+} 
+
+impl Default for R1ProofInitialMessage {
+        fn default() -> Self {
+                R1ProofInitialMessage{
+                        A: RISTRETTO_BASEPOINT_POINT,
+                        B: RISTRETTO_BASEPOINT_POINT,
+                        C: RISTRETTO_BASEPOINT_POINT,
+                        D: RISTRETTO_BASEPOINT_POINT,
+                }
+        }
+}
+
+impl UpdateTranscript for R1ProofInitialMessage{
+        fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+                transcript.append_domain_separator(OOON_PROOF_CHALLENGE_LABEL);
+                transcript.append_validated_point(b"A", &self.A.compress())?;
+                transcript.append_validated_point(b"B", &self.B.compress())?;
+                transcript.append_validated_point(b"C", &self.C.compress())?;
+                transcript.append_validated_point(b"D", &self.D.compress())?;
+                Ok(())
+        }
+}
+
+#[derive(Clone, Debug)]
+pub struct R1ProofFinalResponse{
+        f_elements : Vec<Scalar>,
+	zA      : Scalar,
+        zC      : Scalar,
+        m    : u32,
+        n   : u32,
+} 
+
+pub struct R1Prover {
+        a_values : Vec<Scalar>,
+        b_matrix : Matrix,
+        rA : Scalar,
+        rB : Scalar,
+        rC : Scalar,
+        rD : Scalar,
+        m  : u32,
+        n  : u32,
+}
+
+pub struct R1ProverAwaitingChallenge {
+        // The bit-value matrix, where each row contains only one 1
+        b_matrix : Matrix,
+        // The randomness used for committing to the bit matrix
+        rB       : Scalar,        
+}
+
+impl R1ProverAwaitingChallenge{
+        pub fn new(bit_matrix : &Matrix, random : &Scalar, generators : &OooNProofGenerators ) -> Self {
+                R1ProverAwaitingChallenge {
+                        b_matrix : bit_matrix.clone(),
+                        rB : random.clone(),
+                }
+        }
+}
+
+impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
+        type ZKInitialMessage = R1ProofInitialMessage;
+        type ZKFinalResponse = R1ProofFinalResponse;
+        type ZKProver = R1Prover;
+
+        fn generate_initial_message<T: RngCore + CryptoRng> (
+                &self,
+                p_gens: &PedersenGens,  
+                rng: &mut T,              
+        ) -> (Self::ZKProver, Self::ZKInitialMessage) {
+
+                let rows = self.b_matrix.rows;
+                let columns= self.b_matrix.columns;
+
+                let generators = OooNProofGenerators::new(rows, columns);
+
+                let mut a_values : Vec<Scalar> = Vec::with_capacity((rows * columns) as usize);                
+                for k in 0..(rows * columns) as usize{
+                        a_values[k] = Scalar::random(rng);
+                }
+        
+                let random_A = Scalar::random(rng);
+                let random_C = Scalar::random(rng);
+                let random_D = Scalar::random(rng);
+                
+                let ONE = Matrix::new(rows, columns, Scalar::one());
+                let TWO = Matrix::new(rows, columns, Scalar::one() + Scalar::one());
+                
+                let mut initial_message : R1ProofInitialMessage;
+                
+                let mut a_matrix = Matrix {
+                        rows     : rows,
+                        columns  : columns, 
+                        elements : a_values.clone(),
+                };
+
+                let mut sum : Scalar;
+                for r in 0..a_matrix.rows{
+                        sum = Scalar::zero();
+                        for c in 1..a_matrix.columns{
+                              sum += a_matrix.elements[(r * a_matrix.columns + c) as usize]  
+                        }
+                        //The first element of each row is the negated sum of the row's other elements. 
+                        a_matrix.elements[(r * a_matrix.columns) as usize] = -sum; 
+                }
+                
+                let c_matrix : Matrix = a_matrix.clone().inner_product(&(ONE - TWO.inner_product(&self.b_matrix)));
+                let d_matrix : Matrix = - (a_matrix.clone().inner_product(&a_matrix)); // Implement an associated function taking two matrix parameters
+                                                      
+                (
+                        R1Prover{
+                                a_values : a_values,
+                                b_matrix : self.b_matrix.clone(),
+                                rB : self.rB.clone(),
+                                rA : random_A,
+                                rC : random_C,
+                                rD : random_D,
+                                m : rows,
+                                n : columns,
+                        },
+
+                        R1ProofInitialMessage{
+                                A : generators.vector_commit(&a_matrix.elements, random_A),
+                                B : generators.vector_commit(&self.b_matrix.elements, self.rB),
+                                C : generators.vector_commit(&c_matrix.elements, random_C),
+                                D : generators.vector_commit(&d_matrix.elements, random_D),
+                        }    
+                )
+        }
+}
+
+impl AssetProofProver<R1ProofFinalResponse> for R1Prover{
+        fn apply_challenge(&self, c: &ZKPChallenge) -> R1ProofFinalResponse{
+                
+                let mut f_values : Vec<Scalar> = Vec::with_capacity((self.m * (self.n-1)) as usize);
+                for i in 0..self.m {
+                        for j in 0..(self.n-1) {
+                                f_values[(i * (self.n - 1) + j) as usize] = 
+                                                self.b_matrix.elements[(i * self.n + j + 1) as usize] * c.x + self.a_values[(i * self.n + j + 1) as usize];
+                        }
+
+                }
+                
+                R1ProofFinalResponse{
+                        f_elements : f_values,
+                        zA : self.rA + c.x * self.rB,
+                        zC : self.rD + c.x * self.rC,
+                        m : self.m,
+                        n : self.n,
+                }
+                
+        }
+}
+
+pub struct R1ProofVerifier {
+        B : RistrettoPoint,
+}
+
+impl R1ProofVerifier {
+        pub fn new(bit_commitment : &RistrettoPoint)-> Self{
+                R1ProofVerifier{
+                        B : bit_commitment.clone(),
+                }
+        }
+}
+
+impl AssetProofVerifier for R1ProofVerifier {
+        type ZKInitialMessage = R1ProofInitialMessage;
+        type ZKFinalResponse = R1ProofFinalResponse;
+
+        fn verify(
+                &self,
+                pc_gens : &PedersenGens,
+                c : &ZKPChallenge,
+                initial_message : &Self::ZKInitialMessage,
+                final_response : & Self::ZKFinalResponse,
+        ) -> Result<()> {
+
+                let rows = final_response.m;
+                let columns = final_response.n;
+
+                let mut f_matrix = Matrix::new(rows, columns, c.x);
+                let x_matrix = Matrix::new(rows, columns, c.x);
+                
+                let generators = OooNProofGenerators::new(rows, columns);
+
+                for i in 0..rows {
+                        for j in 1..columns{
+                                f_matrix.elements[(i * columns + j) as usize] = final_response.f_elements[(i * (columns - 1) + (j-1)) as usize];
+                                f_matrix.elements[(i * columns) as usize] -= &final_response.f_elements[(i * (columns - 1) + (j-1)) as usize];
+                        }
+                }
+                
+                let com_f  = generators.vector_commit(&f_matrix.elements, final_response.zA);
+                let com_fx = generators.vector_commit(&f_matrix.inner_product(&(x_matrix - f_matrix.clone())).elements, final_response.zC);
+
+                assert_eq!(c.x * initial_message.B + initial_message.A, com_f);
+                assert_eq!(c.x * initial_message.C + initial_message.D, com_fx);
+                Ok(())
+
+        }
+}
+//////////// OLD CODE BELOW //////////////////
+
+
+
+
+
 struct R1ProofWitness {
         a_values : Vec<Scalar>,
         rA : Scalar,
@@ -326,6 +550,7 @@ struct R1ProofWitness {
         rD : Scalar,
         
 }
+
 
 impl R1ProofWitness {
         fn new (rows:u32, col:u32) -> R1ProofWitness{
@@ -350,6 +575,8 @@ impl R1ProofWitness {
                 
         }
 }
+
+
 pub struct R1Proof{
         A       : RistrettoPoint,
         B       : RistrettoPoint,

@@ -27,3 +27,4 @@ pub mod correctness_proof;
 pub mod encryption_proofs;
 pub mod range_proof;
 pub mod transcript;
+pub mod one_out_of_many_proof;
