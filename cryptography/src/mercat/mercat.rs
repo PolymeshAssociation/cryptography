@@ -22,6 +22,10 @@ pub struct Address {
 pub struct MembershipProofInitialMessage {}
 pub struct MembershipProofFinalResponse {}
 
+// TODO move after CRYP-40
+pub struct RangeProofInitialMessage {}
+pub struct RangeProofFinalResponse {}
+
 // TODO move after CRYP-26
 pub struct CipherEqualityProofInitialMessage {}
 pub struct CipherEqualityProofFinalResponse {}
@@ -47,6 +51,9 @@ pub type CorrectnessProof = (CorrectnessInitialMessage, CorrectnessFinalResponse
 
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for membership.
 pub type MembershipProof = (MembershipProofInitialMessage, MembershipProofFinalResponse);
+
+/// Type alias for the tuple of initial message and final response of a non-interactive ZKP for range.
+pub type RangeProof = (RangeProofInitialMessage, RangeProofFinalResponse);
 
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for cipher
 /// equality under different public key.
@@ -92,7 +99,7 @@ pub struct Account {
 
 // TODO Account creation is part of CRYP-61
 
-// ----------------- State
+// ----------------- States
 
 /// Represents the three substates (started, verified, rejected) of a
 /// on a confidential transaction state.
@@ -115,6 +122,18 @@ pub enum AssetTXState {
     Finalization(TXSubstate),
 }
 
+/// Represents the four states (initialized, justified, finalized, reversed) of a
+/// confidentional transaction.
+#[derive(Debug)]
+pub enum ConfidentialTXState {
+    Initialization(TXSubstate),
+    InitilaziationJustification(TXSubstate),
+    Finalization(TXSubstate),
+    Reversal(TXSubstate),
+}
+
+// ----------------------------- Asset Issuance
+
 /// Holds the public portion of an asset issuance transaction. This can be placed
 /// on the chain.
 pub struct PubAssetTXData {
@@ -135,6 +154,7 @@ pub struct SecAssetTXData {
 
 /// An auxilary type to reflect both the public and private portions of an
 /// asset issuance transaction data.
+/// NOTE: these auxilary types can be removed in favour of more explicit naming
 pub struct AssetTXData {
     pblc: PubAssetTXData,
     scrt: SecAssetTXData,
@@ -146,18 +166,22 @@ pub trait AssetTXer {
     /// values of this function contain sensetive information. Corresponds
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
     fn initialize(
-        self,
+        &self,
         issr_addr: Address,
         amount: u32,
         issr_account: PubAccount,
         mdtr_pub_key: ElgamalPublicKey,
         asset_id: u32, // deviation from the paper
     ) -> Result<(AssetTXData, AssetTXState), Error>;
+    // NOTE: a good convension can be to let all the functions have the following
+    //       format: Result<(public_data, private_data, state), error>
+    //       what do you think?
+    //) -> Result<(PubAssetTXData, SecAssetTXData, AssetTXState), Error>;
 
     /// Justifies a confidential asset issue transaction. This method is called
     /// by mediator. Corresponds to `JustifyAssetTx` of MERCAT paper.
     fn justify(
-        self,
+        &self,
         asset_tx: AssetTXData,
         issr_acc: PubAccount,
         state: AssetTXState,
@@ -169,5 +193,91 @@ pub trait AssetTXer {
 
     /// Processes a confidential asset issue transaction. This method is called
     /// by "system algorithms". Corresponds to part 4 of `ProcessCTX` of MERCAT paper.
-    fn process(self, memo: AssetMemo, issr_account: PubAccount) -> Result<PubAccount, Error>;
+    fn process(
+        &self,
+        memo: AssetMemo,
+        issr_account: PubAccount,
+        state: AssetTXState,
+    ) -> Result<PubAccount, Error>;
+
+    /// verification that is done by validators on the chain
+    /// TODO: missing from the paper. Probably need to verify functions,
+    /// one for initialize and one for justify.
+    fn verify();
+}
+
+// ----------------------------- Confidential Transaction
+
+pub struct ConfidentialTXMemo {
+    enc_amount_using_sndr: EncryptedAmount,
+    enc_amount_using_rcvr: EncryptedAmount,
+    sndr_pub_key: ElgamalPublicKey,
+    rcvr_pub_key: ElgamalPublicKey,
+    enc_refreshed_amount: EncryptedAmount,
+    asset_id_enc_using_rcvr: EncryptedAssetID,
+}
+
+pub struct PubInitConfidentialTXData {
+    amount_equal_cipher_proof: CipherEqualityProof,
+    non_neg_amount_proof: RangeProof,
+    enough_fund_proof: RangeProof,
+    memo: ConfidentialTXMemo,
+    asset_id_equal_cipher_proof: CipherEqualityProof,
+    sig: Signature,
+}
+
+pub struct PubFinalConfidentialTXData {
+    init_data: PubInitConfidentialTXData,
+    asset_id_equal_cipher_proof: CipherEqualityProof,
+    amount_equal_cipher_proof: CipherEqualityProof, // deviation from the paper
+    sig: Signature,
+}
+
+pub trait ConfidentialTXer {
+    /// This is called by the sender of a confidential transaction. The outputs
+    /// can be safely placed on the chain. It corresponds to `CreateCTX` function of
+    /// MERCAT paper.
+    fn create(
+        &self,
+        sndr_addr: Address,
+        sndr_account: PubAccount,
+        rcvr_pub_key: ElgamalPublicKey,
+        rcvr_account: PubAccount,
+        asset_id: u32,
+        amount: u32,
+    ) -> Result<(PubInitConfidentialTXData, ConfidentialTXState), Error>;
+
+    /// Justify the transaction by mediator.
+    /// TODO: missing from the paper.
+    fn justify_init() -> Result<ConfidentialTXState, Error>;
+
+    /// This function is called the receiver of the transaction
+    fn finalize_by_receiver(
+        &self,
+        conf_tx_init_data: PubInitConfidentialTXData,
+        rcvr_addr: Address,
+        sndr_pub_key: ElgamalPublicKey,
+        sndr_account: PubAccount,
+        rcvr_account: PubAccount,
+        enc_asset_id: EncryptedAssetID,
+        amount: u32,
+        state: ConfidentialTXState,
+    ) -> Result<(PubFinalConfidentialTXData, ConfidentialTXState), Error>;
+
+    /// This is called by the validators to verify the finalized transaction.
+    /// TODO: I think we also need verify functions for create and justify_init.
+    fn verify(
+        &self,
+        sndr_account: PubAccount,
+        rcvr_account: PubAccount,
+        conf_tx_final_data: PubFinalConfidentialTXData,
+    ) -> Result<ConfidentialTXState, Error>;
+
+    /// This is called by the system algorithms to update the accounts of
+    /// the sender and receiver once all the above steps have passed.
+    fn process(
+        &self,
+        conf_tx_final_data: PubFinalConfidentialTXData,
+        state: ConfidentialTXState,
+    ) -> Result<(PubAccount, PubAccount, ConfidentialTXState), Error>;
 }

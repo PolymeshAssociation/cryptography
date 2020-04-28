@@ -9,6 +9,15 @@ pub enum AssetTXError {
     ChangeMe,
 }
 
+/// Represents an error in confidential transaction.
+/// TODO: as we implement the methods, we will find more explicit types for
+/// the reason variable.
+#[derive(Fail, Clone, Debug, Eq, PartialEq)]
+pub enum ConfidentialTXError {
+    #[fail(display = "CHANGEME as needed")]
+    ChangeMe,
+}
+
 //    state: AssetTXState,
 //    reason: String,
 pub type Result<T, E = Error> = std::result::Result<T, E>;
