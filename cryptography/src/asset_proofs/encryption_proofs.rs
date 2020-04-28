@@ -45,6 +45,7 @@ use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
+use std::convert::TryFrom;
 
 use crate::{
     asset_proofs::errors::{AssetProofError, Result},
@@ -66,13 +67,17 @@ pub struct ZKPChallenge {
 }
 
 impl ZKPChallenge {
-    pub fn new(x: Scalar) -> Result<ZKPChallenge> {
-        ensure!(x != Scalar::zero(), AssetProofError::VerificationError);
-        Ok(ZKPChallenge { x })
-    }
-
     pub fn x(&self) -> &Scalar {
         &self.x
+    }
+}
+
+impl TryFrom<Scalar> for ZKPChallenge {
+    type Error = failure::Error;
+
+    fn try_from(x: Scalar) -> Result<Self> {
+        ensure!(x != Scalar::zero(), AssetProofError::VerificationError);
+        Ok(ZKPChallenge { x })
     }
 }
 
@@ -218,9 +223,7 @@ pub fn prove_multiple_encryption_properties<
         .map(|initial_message| initial_message.update_transcript(&mut transcript))
         .collect::<Result<()>>()?;
 
-    let challenge = transcript
-        .scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)
-        .unwrap();
+    let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
 
     let final_responses: Vec<_> = provers_vec
         .into_iter()
@@ -261,9 +264,8 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
         .map(|initial_message| initial_message.update_transcript(&mut transcript))
         .collect::<Result<(), _>>()?;
 
-    let challenge = transcript
-        .scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)
-        .unwrap();
+    let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
+
     for i in 0..verifiers.len() {
         verifiers[i].verify(&gens, &challenge, &initial_messages[i], &final_responses[i])?;
     }

@@ -55,6 +55,7 @@ impl UpdateTranscript for CorrectnessInitialMessage {
 pub struct CorrectnessProverAwaitingChallenge {
     /// The public key used for the elgamal encryption.
     pub_key: ElgamalPublicKey,
+
     /// The secret commitment witness.
     w: CommitmentWitness,
 }
@@ -68,26 +69,13 @@ impl CorrectnessProverAwaitingChallenge {
     }
 }
 
-/// Zeroize the secret values before they go out of scope.
-impl Zeroize for CorrectnessProverAwaitingChallenge {
-    fn zeroize(&mut self) {
-        self.w.zeroize();
-    }
-}
-
+#[derive(Zeroize)]
 pub struct CorrectnessProver {
     /// The secret commitment witness.
     w: CommitmentWitness,
+
     /// The randomness generate in the first round.
     u: Scalar,
-}
-
-/// Zeroize the secret values before they go out of scope.
-impl Zeroize for CorrectnessProver {
-    fn zeroize(&mut self) {
-        self.w.zeroize();
-        self.u.zeroize();
-    }
 }
 
 impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
@@ -124,8 +112,10 @@ impl AssetProofProver<CorrectnessFinalResponse> for CorrectnessProver {
 pub struct CorrectnessVerifier {
     /// The encrypted value (aka the plain text).
     value: u32,
+
     /// The public key to which the `value` is encrypted.
     pub_key: ElgamalPublicKey,
+
     /// The encryption cipher text.
     cipher: CipherText,
 }

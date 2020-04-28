@@ -65,7 +65,7 @@ impl CommitmentWitness {
 impl TryFrom<u32> for CommitmentWitness {
     type Error = Error;
 
-    fn try_from(v: u32) -> std::result::Result<Self, Self::Error> {
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
         CommitmentWitness::new(v, Scalar::random(&mut rand::thread_rng()))
     }
 }
@@ -148,7 +148,7 @@ define_sub_assign_variants!(LHS = CipherText, RHS = CipherText);
 /// where g and h are 2 orthogonal generators.
 
 /// An Elgamal Secret Key is a random scalar.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Zeroize)]
 pub struct ElgamalSecretKey {
     pub secret: Scalar,
 }
@@ -198,13 +198,6 @@ impl ElgamalSecretKey {
         }
 
         Err(AssetProofError::CipherTextDecryptionError.into())
-    }
-}
-
-/// Zeroize the secret key before it goes out of scope.
-impl Zeroize for ElgamalSecretKey {
-    fn zeroize(&mut self) {
-        self.secret.zeroize();
     }
 }
 

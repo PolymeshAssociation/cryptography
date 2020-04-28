@@ -81,27 +81,13 @@ impl CipherTextRefreshmentProverAwaitingChallenge {
     }
 }
 
-/// Zeroize the secret values before they go out of scope.
-impl Zeroize for CipherTextRefreshmentProverAwaitingChallenge {
-    fn zeroize(&mut self) {
-        self.secret_key.zeroize();
-    }
-}
-
+#[derive(Zeroize)]
 pub struct CipherTextRefreshmentProver {
     /// The secret key.
     secret_key: ElgamalSecretKey,
 
     /// The randomness generated in the first round.
     u: Scalar,
-}
-
-/// Zeroize the secret values before they go out of scope.
-impl Zeroize for CipherTextRefreshmentProver {
-    fn zeroize(&mut self) {
-        self.secret_key.zeroize();
-        self.u.zeroize();
-    }
 }
 
 impl AssetProofProverAwaitingChallenge for CipherTextRefreshmentProverAwaitingChallenge {
