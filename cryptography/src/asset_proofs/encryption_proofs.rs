@@ -306,8 +306,8 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        let prover = CorrectnessProverAwaitingChallenge::new(&elg_pub, &w);
-        let verifier = CorrectnessVerifier::new(&plain_text, &elg_pub, &cipher);
+        let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w);
+        let verifier = CorrectnessVerifier::new(plain_text, elg_pub, cipher);
 
         (prover, verifier)
     }

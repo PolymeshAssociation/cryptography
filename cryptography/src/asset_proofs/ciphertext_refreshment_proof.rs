@@ -70,12 +70,12 @@ pub struct CipherTextRefreshmentProverAwaitingChallenge {
 
 impl CipherTextRefreshmentProverAwaitingChallenge {
     pub fn new(
-        secret_key: &ElgamalSecretKey,
-        ciphertext1: &CipherText,
-        ciphertext2: &CipherText,
+        secret_key: ElgamalSecretKey,
+        ciphertext1: CipherText,
+        ciphertext2: CipherText,
     ) -> Self {
         CipherTextRefreshmentProverAwaitingChallenge {
-            secret_key: secret_key.clone(),
+            secret_key: secret_key,
             y: ciphertext1.y - ciphertext2.y,
         }
     }
@@ -136,12 +136,12 @@ pub struct CipherTextRefreshmentVerifier {
 
 impl CipherTextRefreshmentVerifier {
     pub fn new(
-        pub_key: &ElgamalPublicKey,
-        ciphertext1: &CipherText,
-        ciphertext2: &CipherText,
+        pub_key: ElgamalPublicKey,
+        ciphertext1: CipherText,
+        ciphertext2: CipherText,
     ) -> Self {
         CipherTextRefreshmentVerifier {
-            pub_key: pub_key.clone(),
+            pub_key: pub_key,
             x: ciphertext1.x - ciphertext2.x,
             y: ciphertext1.y - ciphertext2.y,
         }
@@ -198,12 +198,9 @@ mod tests {
         let ciphertext1 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
         let ciphertext2 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
 
-        let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
-            &elg_secret,
-            &ciphertext1,
-            &ciphertext2,
-        );
-        let verifier = CipherTextRefreshmentVerifier::new(&elg_pub, &ciphertext1, &ciphertext2);
+        let prover =
+            CipherTextRefreshmentProverAwaitingChallenge::new(elg_secret, ciphertext1, ciphertext2);
+        let verifier = CipherTextRefreshmentVerifier::new(elg_pub, ciphertext1, ciphertext2);
         let mut transcript = Transcript::new(CIPHERTEXT_REFRESHMENT_FINAL_RESPONSE_LABEL);
 
         // Positive tests
@@ -248,8 +245,8 @@ mod tests {
             .unwrap();
 
         let prover =
-            CipherTextRefreshmentProverAwaitingChallenge::new(&elg_secret, &cipher, &new_cipher);
-        let verifier = CipherTextRefreshmentVerifier::new(&elg_pub, &cipher, &new_cipher);
+            CipherTextRefreshmentProverAwaitingChallenge::new(elg_secret, cipher, new_cipher);
+        let verifier = CipherTextRefreshmentVerifier::new(elg_pub, cipher, new_cipher);
 
         let (initial_message, final_response) =
             encryption_proofs::single_property_prover(prover, &mut rng).unwrap();

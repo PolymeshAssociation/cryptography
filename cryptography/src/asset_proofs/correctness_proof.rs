@@ -61,11 +61,8 @@ pub struct CorrectnessProverAwaitingChallenge {
 }
 
 impl CorrectnessProverAwaitingChallenge {
-    pub fn new(pub_key: &ElgamalPublicKey, w: &CommitmentWitness) -> Self {
-        CorrectnessProverAwaitingChallenge {
-            pub_key: pub_key.clone(),
-            w: w.clone(),
-        }
+    pub fn new(pub_key: ElgamalPublicKey, w: CommitmentWitness) -> Self {
+        CorrectnessProverAwaitingChallenge { pub_key, w }
     }
 }
 
@@ -121,11 +118,11 @@ pub struct CorrectnessVerifier {
 }
 
 impl CorrectnessVerifier {
-    pub fn new(value: &u32, pub_key: &ElgamalPublicKey, cipher: &CipherText) -> Self {
+    pub fn new(value: u32, pub_key: ElgamalPublicKey, cipher: CipherText) -> Self {
         CorrectnessVerifier {
-            value: value.clone(),
-            pub_key: pub_key.clone(),
-            cipher: cipher.clone(),
+            value,
+            pub_key,
+            cipher,
         }
     }
 }
@@ -182,8 +179,8 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        let prover = CorrectnessProverAwaitingChallenge::new(&elg_pub, &w);
-        let verifier = CorrectnessVerifier::new(&secret_value, &elg_pub, &cipher);
+        let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w);
+        let verifier = CorrectnessVerifier::new(secret_value, elg_pub, cipher);
         let mut transcript = Transcript::new(CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL);
 
         // Positive tests
