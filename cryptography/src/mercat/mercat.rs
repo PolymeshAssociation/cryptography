@@ -6,17 +6,13 @@ use crate::asset_proofs::wellformedness_proof::{
     WellformednessFinalResponse, WellformednessInitialMessage,
 };
 use crate::asset_proofs::{CipherText, ElgamalPublicKey, ElgamalSecretKey};
-use failure::{Error, Fail};
+use failure::Error;
 
 // ---------------------- START: temporary types, move them to the proper location
 
 // TODO move after CRYP-60 is done
 type PubAddress = ElgamalPublicKey;
 type SecAddress = ElgamalSecretKey;
-pub struct Address {
-    pk: PubAddress,
-    sk: SecAddress,
-}
 
 // TODO move after CRYP-40
 pub struct MembershipProofInitialMessage {}
@@ -62,9 +58,19 @@ pub type CipherEqualityProof = (
     CipherEqualityProofFinalResponse,
 );
 
-// Asset memo. TODO: more informative description!
+/// Asset memo. TODO: more informative description!
 pub type AssetMemo = EncryptedAmount;
 
+/// The type of the output of each of the confidential transaction methods.
+pub struct ControlledOutput<P, S, T> {
+    /// The public portion of the output which can be placed safely on the chain.
+    public: P,
+    /// The private portion of the output which should be communicated thourgh
+    /// secure channels.
+    secret: S,
+    /// The state of the transaction ofter the method is performed.
+    State: T,
+}
 // ------------------ account
 
 /// Holds the account memo. TODO: more informative description!
@@ -89,12 +95,6 @@ pub struct SecAccount {
     balance_correctness_proof: CorrectnessProof,
     memo: AccountMemo, // new: deviation from the paper
     sign: Signature,   // new: deviation from the paper
-}
-
-/// Is an auxilary type to hold both public and private portions of an account.
-pub struct Account {
-    pblc: PubAccount,
-    scrt: SecAccount,
 }
 
 // TODO Account creation is part of CRYP-61
@@ -152,14 +152,6 @@ pub struct SecAssetTXData {
     sig: Signature, // new: deviation from the paper
 }
 
-/// An auxilary type to reflect both the public and private portions of an
-/// asset issuance transaction data.
-/// NOTE: these auxilary types can be removed in favour of more explicit naming
-pub struct AssetTXData {
-    pblc: PubAssetTXData,
-    scrt: SecAssetTXData,
-}
-
 /// The interface for the confidential asset issuance.
 pub trait AssetTXer {
     /// Initializes a confidentional asset issue transaction. Note that the returing
@@ -167,29 +159,25 @@ pub trait AssetTXer {
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
     fn initialize(
         &self,
-        issr_addr: Address,
+        issr_addr: (PubAddress, SecAddress),
         amount: u32,
         issr_account: PubAccount,
         mdtr_pub_key: ElgamalPublicKey,
         asset_id: u32, // deviation from the paper
-    ) -> Result<(AssetTXData, AssetTXState), Error>;
-    // NOTE: a good convension can be to let all the functions have the following
-    //       format: Result<(public_data, private_data, state), error>
-    //       what do you think?
-    //) -> Result<(PubAssetTXData, SecAssetTXData, AssetTXState), Error>;
+    ) -> Result<ControlledOutput<PubAssetTXData, SecAssetTXData, AssetTXState>, Error>;
 
     /// Justifies a confidential asset issue transaction. This method is called
     /// by mediator. Corresponds to `JustifyAssetTx` of MERCAT paper.
     fn justify(
         &self,
-        asset_tx: AssetTXData,
+        asset_tx: (PubAssetTXData, SecAssetTXData),
         issr_acc: PubAccount,
         state: AssetTXState,
-        mdtr_addr: Address,
+        mdtr_addr: (PubAddress, SecAddress),
         issr_pub_key: ElgamalPublicKey,
         issr_acount: PubAccount,
         amount: u32, // deviation from the paper
-    ) -> Result<(AssetTXState, Signature), Error>;
+    ) -> Result<ControlledOutput<Signature, (), AssetTXState>, Error>;
 
     /// Processes a confidential asset issue transaction. This method is called
     /// by "system algorithms". Corresponds to part 4 of `ProcessCTX` of MERCAT paper.
@@ -198,12 +186,12 @@ pub trait AssetTXer {
         memo: AssetMemo,
         issr_account: PubAccount,
         state: AssetTXState,
-    ) -> Result<PubAccount, Error>;
+    ) -> Result<ControlledOutput<PubAccount, (), AssetTXState>, Error>;
 
     /// verification that is done by validators on the chain
     /// TODO: missing from the paper. Probably need to verify functions,
     /// one for initialize and one for justify.
-    fn verify();
+    fn verify() -> Result<ControlledOutput<(), (), AssetTXState>, Error>;
 }
 
 // ----------------------------- Confidential Transaction
@@ -239,30 +227,30 @@ pub trait ConfidentialTXer {
     /// MERCAT paper.
     fn create(
         &self,
-        sndr_addr: Address,
+        sndr_addr: (PubAddress, SecAddress),
         sndr_account: PubAccount,
         rcvr_pub_key: ElgamalPublicKey,
         rcvr_account: PubAccount,
         asset_id: u32,
         amount: u32,
-    ) -> Result<(PubInitConfidentialTXData, ConfidentialTXState), Error>;
+    ) -> Result<ControlledOutput<PubInitConfidentialTXData, (), ConfidentialTXState>, Error>;
 
     /// Justify the transaction by mediator.
     /// TODO: missing from the paper.
-    fn justify_init() -> Result<ConfidentialTXState, Error>;
+    fn justify_init() -> Result<ControlledOutput<(), (), ConfidentialTXState>, Error>;
 
     /// This function is called the receiver of the transaction
     fn finalize_by_receiver(
         &self,
         conf_tx_init_data: PubInitConfidentialTXData,
-        rcvr_addr: Address,
+        rcvr_addr: (PubAddress, SecAddress),
         sndr_pub_key: ElgamalPublicKey,
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         enc_asset_id: EncryptedAssetID,
         amount: u32,
         state: ConfidentialTXState,
-    ) -> Result<(PubFinalConfidentialTXData, ConfidentialTXState), Error>;
+    ) -> Result<ControlledOutput<PubFinalConfidentialTXData, (), ConfidentialTXState>, Error>;
 
     /// This is called by the validators to verify the finalized transaction.
     /// TODO: I think we also need verify functions for create and justify_init.
@@ -271,7 +259,7 @@ pub trait ConfidentialTXer {
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         conf_tx_final_data: PubFinalConfidentialTXData,
-    ) -> Result<ConfidentialTXState, Error>;
+    ) -> Result<ControlledOutput<(), (), ConfidentialTXState>, Error>;
 
     /// This is called by the system algorithms to update the accounts of
     /// the sender and receiver once all the above steps have passed.
@@ -279,5 +267,5 @@ pub trait ConfidentialTXer {
         &self,
         conf_tx_final_data: PubFinalConfidentialTXData,
         state: ConfidentialTXState,
-    ) -> Result<(PubAccount, PubAccount, ConfidentialTXState), Error>;
+    ) -> Result<ControlledOutput<(PubAccount, PubAccount), (), ConfidentialTXState>, Error>;
 }
