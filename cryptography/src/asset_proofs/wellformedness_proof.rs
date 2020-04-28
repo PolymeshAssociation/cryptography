@@ -54,6 +54,7 @@ impl UpdateTranscript for WellformednessInitialMessage {
 }
 
 #[derive(Clone, Debug, Zeroize)]
+#[zeroize(drop)]
 pub struct WellformednessProver {
     /// The secret commitment witness.
     w: CommitmentWitness,
@@ -63,6 +64,7 @@ pub struct WellformednessProver {
 }
 
 #[derive(Clone, Debug, Zeroize)]
+#[zeroize(drop)]
 pub struct WellformednessProverAwaitingChallenge {
     /// The public key used for the elgamal encryption.
     pub_key: ElgamalPublicKey,
