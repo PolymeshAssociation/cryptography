@@ -70,6 +70,7 @@ pub struct ControlledOutput<P, S, T> {
     secret: S,
     /// The state of the transaction ofter the method is performed.
     State: T,
+    // TODO: potential improvement: add the list of parties that need to be notified.
 }
 // ------------------ account
 
@@ -196,6 +197,7 @@ pub trait AssetTXer {
 
 // ----------------------------- Confidential Transaction
 
+/// Holds the memo for confidential transaction sent by the sender.
 pub struct ConfidentialTXMemo {
     enc_amount_using_sndr: EncryptedAmount,
     enc_amount_using_rcvr: EncryptedAmount,
@@ -205,6 +207,7 @@ pub struct ConfidentialTXMemo {
     asset_id_enc_using_rcvr: EncryptedAssetID,
 }
 
+/// Holds the public portion of the confidential transaction sent by the sender.
 pub struct PubInitConfidentialTXData {
     amount_equal_cipher_proof: CipherEqualityProof,
     non_neg_amount_proof: RangeProof,
@@ -214,6 +217,8 @@ pub struct PubInitConfidentialTXData {
     sig: Signature,
 }
 
+/// Holds the public portion of the confidential transaction that is finalized by
+/// receiver.
 pub struct PubFinalConfidentialTXData {
     init_data: PubInitConfidentialTXData,
     asset_id_equal_cipher_proof: CipherEqualityProof,
@@ -221,6 +226,7 @@ pub struct PubFinalConfidentialTXData {
     sig: Signature,
 }
 
+/// The interface for confidential transaction.
 pub trait ConfidentialTXer {
     /// This is called by the sender of a confidential transaction. The outputs
     /// can be safely placed on the chain. It corresponds to `CreateCTX` function of
