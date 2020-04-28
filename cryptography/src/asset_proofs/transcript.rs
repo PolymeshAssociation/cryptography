@@ -11,6 +11,7 @@ use crate::{
 
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use merlin::Transcript;
+use std::convert::TryFrom;
 
 pub trait TranscriptProtocol {
     /// If the inputted message is not trivial append it to the
@@ -64,7 +65,7 @@ impl TranscriptProtocol for Transcript {
         let mut buf = [0u8; 64];
         self.challenge_bytes(label, &mut buf);
 
-        ZKPChallenge::new(Scalar::from_bytes_mod_order_wide(&buf))
+        ZKPChallenge::try_from(Scalar::from_bytes_mod_order_wide(&buf))
     }
 }
 
