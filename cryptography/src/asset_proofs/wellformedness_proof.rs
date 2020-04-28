@@ -53,7 +53,7 @@ impl UpdateTranscript for WellformednessInitialMessage {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Zeroize)]
 pub struct WellformednessProver {
     /// The secret commitment witness.
     w: CommitmentWitness,
@@ -62,12 +62,7 @@ pub struct WellformednessProver {
     rand_b: Scalar,
 }
 
-impl Zeroize for WellformednessProver {
-    fn zeroize(&mut self) {
-        self.w.zeroize();
-    }
-}
-
+#[derive(Clone, Debug, Zeroize)]
 pub struct WellformednessProverAwaitingChallenge {
     /// The public key used for the elgamal encryption.
     pub_key: ElgamalPublicKey,
@@ -75,18 +70,9 @@ pub struct WellformednessProverAwaitingChallenge {
     w: CommitmentWitness,
 }
 
-impl Zeroize for WellformednessProverAwaitingChallenge {
-    fn zeroize(&mut self) {
-        self.w.zeroize();
-    }
-}
-
 impl WellformednessProverAwaitingChallenge {
-    pub fn new(pub_key: &ElgamalPublicKey, w: &CommitmentWitness) -> Self {
-        WellformednessProverAwaitingChallenge {
-            pub_key: pub_key.clone(),
-            w: w.clone(),
-        }
+    pub fn new(pub_key: ElgamalPublicKey, w: CommitmentWitness) -> Self {
+        WellformednessProverAwaitingChallenge { pub_key, w }
     }
 }
 
@@ -132,10 +118,10 @@ pub struct WellformednessVerifier {
 }
 
 impl WellformednessVerifier {
-    pub fn new(pub_key: &ElgamalPublicKey, cipher: &CipherText) -> Self {
+    pub fn new(pub_key: ElgamalPublicKey, cipher: CipherText) -> Self {
         WellformednessVerifier {
-            pub_key: pub_key.clone(),
-            cipher: cipher.clone(),
+            pub_key: pub_key,
+            cipher: cipher,
         }
     }
 }
@@ -190,8 +176,8 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        let prover = WellformednessProverAwaitingChallenge::new(&elg_pub, &w);
-        let verifier = WellformednessVerifier::new(&elg_pub, &cipher);
+        let prover = WellformednessProverAwaitingChallenge::new(elg_pub, w.clone());
+        let verifier = WellformednessVerifier::new(elg_pub, cipher);
         let mut dealer_transcript = Transcript::new(WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL);
 
         // ------------------------------- Interactive case
@@ -233,8 +219,8 @@ mod tests {
         );
 
         // ------------------------------- Non-interactive case
-        let prover = WellformednessProverAwaitingChallenge::new(&elg_pub, &w);
-        let verifier = WellformednessVerifier::new(&elg_pub, &cipher);
+        let prover = WellformednessProverAwaitingChallenge::new(elg_pub, w);
+        let verifier = WellformednessVerifier::new(elg_pub, cipher);
 
         // 1st to 3rd rounds
         let (initial_message, final_response) = single_property_prover::<
