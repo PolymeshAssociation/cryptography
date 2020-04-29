@@ -16,6 +16,7 @@ use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 /// The domain label for the encrypting the same value proof.
 pub const ENCRYPTING_SAME_VALUE_PROOF_FINAL_RESPONSE_LABEL: &[u8] =
@@ -71,34 +72,20 @@ pub struct EncryptingSameValueProverAwaitingChallenge {
     pub_key2: ElgamalPublicKey,
 
     /// The secret commitment witness.
-    w: CommitmentWitness,
+    w: Zeroizing<CommitmentWitness>,
 }
 
 #[derive(Zeroize)]
 #[zeroize(drop)]
 pub struct EncryptingSameValueProver {
     /// The secret commitment witness.
-    w: CommitmentWitness,
+    w: Zeroizing<CommitmentWitness>,
 
     /// The randomness generated in the first round.
     u1: Scalar,
 
     /// The randomness generated in the first round.
     u2: Scalar,
-}
-
-impl EncryptingSameValueProverAwaitingChallenge {
-    pub fn new(
-        pub_key1: ElgamalPublicKey,
-        pub_key2: ElgamalPublicKey,
-        w: CommitmentWitness,
-    ) -> Self {
-        EncryptingSameValueProverAwaitingChallenge {
-            pub_key1,
-            pub_key2,
-            w,
-        }
-    }
 }
 
 impl AssetProofProverAwaitingChallenge for EncryptingSameValueProverAwaitingChallenge {
@@ -150,22 +137,6 @@ pub struct EncryptingSameValueVerifier {
 
     /// The second encryption cipher text.
     cipher2: CipherText,
-}
-
-impl EncryptingSameValueVerifier {
-    pub fn new(
-        pub_key1: ElgamalPublicKey,
-        pub_key2: ElgamalPublicKey,
-        cipher1: CipherText,
-        cipher2: CipherText,
-    ) -> Self {
-        EncryptingSameValueVerifier {
-            pub_key1,
-            pub_key2,
-            cipher1,
-            cipher2,
-        }
-    }
 }
 
 impl AssetProofVerifier for EncryptingSameValueVerifier {
@@ -234,8 +205,17 @@ mod tests {
         let elg_pub2 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
         let cipher2 = elg_pub2.encrypt(&w);
 
-        let prover_ac = EncryptingSameValueProverAwaitingChallenge::new(elg_pub1, elg_pub2, w);
-        let verifier = EncryptingSameValueVerifier::new(elg_pub1, elg_pub2, cipher1, cipher2);
+        let prover_ac = EncryptingSameValueProverAwaitingChallenge {
+            pub_key1: elg_pub1,
+            pub_key2: elg_pub2,
+            w: Zeroizing::new(w),
+        };
+        let verifier = EncryptingSameValueVerifier {
+            pub_key1: elg_pub1,
+            pub_key2: elg_pub2,
+            cipher1: cipher1,
+            cipher2: cipher2,
+        };
         let mut transcript = Transcript::new(ENCRYPTING_SAME_VALUE_PROOF_FINAL_RESPONSE_LABEL);
 
         // Positive tests
