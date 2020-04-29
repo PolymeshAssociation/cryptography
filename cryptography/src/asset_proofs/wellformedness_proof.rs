@@ -15,7 +15,7 @@ use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 /// The domain label for the wellformedness proof.
 pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathWellformednessFinalResponse";
@@ -57,7 +57,7 @@ impl UpdateTranscript for WellformednessInitialMessage {
 #[zeroize(drop)]
 pub struct WellformednessProver {
     /// The secret commitment witness.
-    w: CommitmentWitness,
+    w: Zeroizing<CommitmentWitness>,
     /// The randomness generate in the first round.
     rand_a: Scalar,
     rand_b: Scalar,
@@ -68,19 +68,7 @@ pub struct WellformednessProverAwaitingChallenge {
     /// The public key used for the elgamal encryption.
     pub_key: ElgamalPublicKey,
     /// The secret commitment witness.
-    w: CommitmentWitness,
-}
-
-impl Zeroize for WellformednessProverAwaitingChallenge {
-    fn zeroize(&mut self) {
-        self.w.zeroize();
-    }
-}
-
-impl WellformednessProverAwaitingChallenge {
-    pub fn new(pub_key: ElgamalPublicKey, w: CommitmentWitness) -> Self {
-        WellformednessProverAwaitingChallenge { pub_key, w }
-    }
+    w: Zeroizing<CommitmentWitness>,
 }
 
 impl AssetProofProverAwaitingChallenge for WellformednessProverAwaitingChallenge {
@@ -122,15 +110,6 @@ impl AssetProofProver<WellformednessFinalResponse> for WellformednessProver {
 pub struct WellformednessVerifier {
     pub_key: ElgamalPublicKey,
     cipher: CipherText,
-}
-
-impl WellformednessVerifier {
-    pub fn new(pub_key: ElgamalPublicKey, cipher: CipherText) -> Self {
-        WellformednessVerifier {
-            pub_key: pub_key,
-            cipher: cipher,
-        }
-    }
 }
 
 impl AssetProofVerifier for WellformednessVerifier {
@@ -180,11 +159,14 @@ mod tests {
 
         let w = CommitmentWitness::new(secret_value, rand_blind).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
-        let elg_pub = elg_secret.get_public_key();
-        let cipher = elg_pub.encrypt(&w);
+        let pub_key = elg_secret.get_public_key();
+        let cipher = pub_key.encrypt(&w);
 
-        let prover = WellformednessProverAwaitingChallenge::new(elg_pub, w.clone());
-        let verifier = WellformednessVerifier::new(elg_pub, cipher);
+        let prover = WellformednessProverAwaitingChallenge {
+            pub_key,
+            w: Zeroizing::new(w.clone()),
+        };
+        let verifier = WellformednessVerifier { pub_key, cipher };
         let mut dealer_transcript = Transcript::new(WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL);
 
         // ------------------------------- Interactive case
@@ -226,8 +208,11 @@ mod tests {
         );
 
         // ------------------------------- Non-interactive case
-        let prover = WellformednessProverAwaitingChallenge::new(elg_pub, w);
-        let verifier = WellformednessVerifier::new(elg_pub, cipher);
+        let prover = WellformednessProverAwaitingChallenge {
+            pub_key,
+            w: Zeroizing::new(w),
+        };
+        let verifier = WellformednessVerifier { pub_key, cipher };
 
         // 1st to 3rd rounds
         let (initial_message, final_response) = single_property_prover::<
