@@ -84,6 +84,7 @@ mod tests {
     use super::*;
     use crate::asset_proofs::*;
     use rand::{rngs::StdRng, SeedableRng};
+    use std::convert::TryFrom;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
@@ -101,7 +102,7 @@ mod tests {
         assert!(verify_within_range(proof, initial_message, 32));
 
         // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.
-        let w = CommitmentWitness::new(secret_value, rand_blind).unwrap();
+        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
