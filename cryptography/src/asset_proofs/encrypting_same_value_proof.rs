@@ -75,6 +75,7 @@ pub struct EncryptingSameValueProverAwaitingChallenge {
 }
 
 #[derive(Zeroize)]
+#[zeroize(drop)]
 pub struct EncryptingSameValueProver {
     /// The secret commitment witness.
     w: CommitmentWitness,
