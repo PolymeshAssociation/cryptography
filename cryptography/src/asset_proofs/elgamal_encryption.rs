@@ -17,7 +17,8 @@ use zeroize::Zeroize;
 use sp_std::prelude::*;
 
 /// Prover's representation of the commitment secret.
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Zeroize)]
+#[zeroize(drop)]
 pub struct CommitmentWitness {
     /// The value to encrypt.
     ///
@@ -67,19 +68,6 @@ impl TryFrom<u32> for CommitmentWitness {
 
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         CommitmentWitness::new(v, Scalar::random(&mut rand::thread_rng()))
-    }
-}
-
-/// Zeroize the secret values before witness goes out of scope.
-impl Zeroize for CommitmentWitness {
-    fn zeroize(&mut self) {
-        self.value = 0;
-        self.blinding.zeroize();
-    }
-}
-impl Drop for CommitmentWitness {
-    fn drop(&mut self) {
-        self.zeroize();
     }
 }
 
