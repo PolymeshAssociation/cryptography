@@ -67,6 +67,7 @@ impl CorrectnessProverAwaitingChallenge {
 }
 
 #[derive(Zeroize)]
+#[zeroize(drop)]
 pub struct CorrectnessProver {
     /// The secret commitment witness.
     w: CommitmentWitness,
