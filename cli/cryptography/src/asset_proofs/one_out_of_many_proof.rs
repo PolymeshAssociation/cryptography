@@ -368,6 +368,18 @@ pub struct R1ProofFinalResponse{
         n   : u32,
 } 
 
+impl R1ProofFinalResponse{
+        fn new ( base: u32, exp : u32) -> Self{
+                R1ProofFinalResponse {
+                        m : exp,
+                        n : base,
+                        zA : Scalar::zero(),
+                        zC : Scalar::zero(),
+                        f_elements : Vec::with_capacity((exp * (base-1)) as usize),
+                }
+
+        }
+}
 pub struct R1Prover {
         a_values : Vec<Scalar>,
         b_matrix : Matrix,
@@ -384,13 +396,17 @@ pub struct R1ProverAwaitingChallenge {
         b_matrix : Matrix,
         // The randomness used for committing to the bit matrix
         rB       : Scalar,        
+        m : u32,
+        n : u32,
 }
 
 impl R1ProverAwaitingChallenge{
-        pub fn new(bit_matrix : &Matrix, random : &Scalar, generators : &OooNProofGenerators ) -> Self {
+        pub fn new(bit_matrix : &Matrix, random : &Scalar, rows: u32, columns : u32) -> Self {
                 R1ProverAwaitingChallenge {
                         b_matrix : bit_matrix.clone(),
                         rB : random.clone(),
+                        m : rows,
+                        n : columns
                 }
         }
 }
@@ -405,16 +421,19 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
                 p_gens: &PedersenGens,  
                 rng: &mut T,              
         ) -> (Self::ZKProver, Self::ZKInitialMessage) {
-
+                println!("Inside the generate_initial_message.");
                 let rows = self.b_matrix.rows;
                 let columns= self.b_matrix.columns;
-
+                println!("The rows and columns are {} and {}", rows, columns);
                 let generators = OooNProofGenerators::new(rows, columns);
 
                 let mut a_values : Vec<Scalar> = Vec::with_capacity((rows * columns) as usize);                
                 for k in 0..(rows * columns) as usize{
-                        a_values[k] = Scalar::random(rng);
+                        println!("BOOMM");
+                        a_values.push( Scalar::random(rng));
+                        //println!("{:?}", a_values[k]);
                 }
+                println!("A matrix is initialized");
         
                 let random_A = Scalar::random(rng);
                 let random_C = Scalar::random(rng);
@@ -424,6 +443,7 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
                 let TWO = Matrix::new(rows, columns, Scalar::one() + Scalar::one());
                 
                 let mut initial_message : R1ProofInitialMessage;
+                println!("ONE & TWO are computed, initial message initiated.");
                 
                 let mut a_matrix = Matrix {
                         rows     : rows,
@@ -440,10 +460,10 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
                         //The first element of each row is the negated sum of the row's other elements. 
                         a_matrix.elements[(r * a_matrix.columns) as usize] = -sum; 
                 }
-                
+                println!("A matrix is normalized.");
                 let c_matrix : Matrix = a_matrix.clone().inner_product(&(ONE - TWO.inner_product(&self.b_matrix)));
                 let d_matrix : Matrix = - (a_matrix.clone().inner_product(&a_matrix)); // Implement an associated function taking two matrix parameters
-                                                      
+                println!("C & D matrixed are computed.");                                      
                 (
                         R1Prover{
                                 a_values : a_values,
@@ -468,12 +488,16 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
 
 impl AssetProofProver<R1ProofFinalResponse> for R1Prover{
         fn apply_challenge(&self, c: &ZKPChallenge) -> R1ProofFinalResponse{
+
+                println!("CHALLENGE APPLIE~D \n\n");
                 
                 let mut f_values : Vec<Scalar> = Vec::with_capacity((self.m * (self.n-1)) as usize);
                 for i in 0..self.m {
                         for j in 0..(self.n-1) {
-                                f_values[(i * (self.n - 1) + j) as usize] = 
-                                                self.b_matrix.elements[(i * self.n + j + 1) as usize] * c.x + self.a_values[(i * self.n + j + 1) as usize];
+
+                                //f_values[(i * (self.n - 1) + j) as usize] = 
+                                f_values.push(self.b_matrix.elements[(i * self.n + j + 1) as usize] * c.x + self.a_values[(i * self.n + j + 1) as usize]);
+                                //println!("Boom from f matrix initialization");
                         }
 
                 }
@@ -513,6 +537,7 @@ impl AssetProofVerifier for R1ProofVerifier {
                 final_response : & Self::ZKFinalResponse,
         ) -> Result<()> {
 
+                println!("TESTING NEW API \n\n\n\n\n");
                 let rows = final_response.m;
                 let columns = final_response.n;
 
@@ -530,14 +555,298 @@ impl AssetProofVerifier for R1ProofVerifier {
                 
                 let com_f  = generators.vector_commit(&f_matrix.elements, final_response.zA);
                 let com_fx = generators.vector_commit(&f_matrix.inner_product(&(x_matrix - f_matrix.clone())).elements, final_response.zC);
-
+                
                 assert_eq!(c.x * initial_message.B + initial_message.A, com_f);
                 assert_eq!(c.x * initial_message.C + initial_message.D, com_fx);
+
                 Ok(())
 
         }
 }
 //////////// OLD CODE BELOW //////////////////
+
+// New code for OOON Proofs
+
+#[derive(Clone, Debug)]
+pub struct OOONProofInitialMessage{
+        r1_proof_initial_message : R1ProofInitialMessage,
+        //r1_proof_final_response  : R1ProofFinalResponse,
+        G_vec  : Vec<RistrettoPoint>,
+        //z      : Scalar,
+        n      : u32, // n
+        m      : u32, // m  
+} 
+
+impl OOONProofInitialMessage {
+        fn new (base: u32, exp: u32) -> Self {
+                OOONProofInitialMessage{
+                        r1_proof_initial_message : R1ProofInitialMessage::default(),
+                        //r1_proof_final_response : r1_proof_final_response::new(base, exp),
+                        G_vec : Vec::with_capacity(exp as usize),
+                        //z : Scalar::zero(),
+                        n : base,
+                        m : exp,
+                }
+        }
+}
+
+impl Default for OOONProofInitialMessage {
+        fn default() -> Self {
+                OOONProofInitialMessage::new(4,3) // TODO: Replace these constants with system-wide parameters for the BASE and EXPONENT
+        }
+}
+
+impl UpdateTranscript for OOONProofInitialMessage{
+        fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+                transcript.append_domain_separator(OOON_PROOF_CHALLENGE_LABEL);
+                self.r1_proof_initial_message.update_transcript(transcript);
+                for k in 0..self.m as usize{
+                        transcript.append_validated_point(b"Gk", &self.G_vec[k].compress());
+                }
+                
+                Ok(())
+        }
+}
+
+#[derive(Clone, Debug)]
+pub struct OOONProofFinalResponse{
+        r1_proof_final_response : R1ProofFinalResponse,
+	z  : Scalar,
+        m  : u32,
+        n  : u32,
+} 
+
+pub struct OOONProver {
+        rho_values : Vec<Scalar>,
+        r1_prover : R1Prover,
+        m  : u32,
+        n  : u32,
+}
+
+pub struct OOONProverAwaitingChallenge<'a> {
+        // The index of the secret commitment in the given list, which is opening to zero and is blinded by "random"
+        secret_index : u32,
+        random  : Scalar,       
+        // The randomness used for committing to the bit matrix
+        commitments : &'a  Vec<RistrettoPoint>,    
+        base : u32,
+        exp : u32,
+}
+
+impl OOONProverAwaitingChallenge<'_>{
+        pub fn new(l : u32, r : &Scalar, commitments_ref: &'static Vec<RistrettoPoint>, m: u32, n : u32) -> Self {
+                OOONProverAwaitingChallenge {
+                        secret_index : l,
+                        random : r.clone(),
+                        commitments : commitments_ref,
+                        exp : m,
+                        base : n,
+                }
+        }
+}
+
+impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge <'_> {
+        type ZKInitialMessage = OOONProofInitialMessage;
+        type ZKFinalResponse = OOONProofFinalResponse;
+        type ZKProver = OOONProver;
+
+        fn generate_initial_message<T: RngCore + CryptoRng> (
+                &self,
+                pc_gens: &PedersenGens,  
+                rng: &mut T,              
+        ) -> (Self::ZKProver, Self::ZKInitialMessage) {
+                println!("Inside the generate_initial_message.");
+                let columns = self.base;
+                let rows = self.exp;
+                println!("The rows and columns are {} and {}", rows, columns);
+                let generators = OooNProofGenerators::new(rows, columns);
+
+
+                 // We require the actual size of the provided list of commitments to be equal to N = n^m
+                let N = self.base.pow(self.exp) as usize;
+
+                // In case of smaller list, we should pad the commitment list with the last element to make the commitment vector of size N.
+                // We assume the list is padded already before being passed to the OOON proof initialization process.
+                // IMPORTANT: This check has critical security importance
+                 assert_eq!(N,  self.commitments.len()); 
+                 
+ 
+                 let mut rho : Vec<Scalar> = Vec::with_capacity(self.exp as usize);
+                 for k in 0..self.exp  as usize{
+                         rho.push(Scalar::random(rng));
+                 }
+                 
+                                 
+                 ////// ADD THE R1 PROOF INITIAL MESSAGE GENERATION STEP
+ 
+                let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, self.exp);     
+ 
+ 
+                let mut i_rep : Vec<u32> = Vec::with_capacity(self.exp as usize);
+
+                
+
+                let b_comm = generators.vector_commit(&l_bit_matrix, self.random);
+
+                let b_matrix_rep = Matrix{
+                        rows : rows,
+                        columns : columns,
+                        elements : l_bit_matrix.clone(),
+                };
+
+                let r1_prover = R1ProverAwaitingChallenge::new(&b_matrix_rep, &self.random, rows, columns);
+                             
+                let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(pc_gens, rng);
+                
+                //compute the polynomials P_i(X) for i = 0,..,N-1
+                let one = Polynomial::new(self.exp as usize);
+                 
+                let mut polynomials : Vec<Polynomial> = vec![one; N];
+ 
+                for I in 0..N as usize {
+                        i_rep = convert_to_base(I as u32, self.base, self.exp);                         
+                        for k in 0..self.exp as usize{
+                                 let t = k * self.base as usize + i_rep[k] as usize;
+                                 polynomials[I].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);                                                                      
+                        }             
+                }
+                
+                let mut G_values : Vec<RistrettoPoint> = Vec::with_capacity(self.exp as usize);
+                for k in 0..self.exp as usize {
+                        G_values.push(rho[k] * generators.com_gens.B_blinding); // #TODO: Double check if this matches the El-Gamal generators.
+                        for I in 0..N {
+                                G_values[k] += (polynomials[I].coeffs[k]) * self.commitments[I];
+                        }
+                }
+          
+                (
+                        OOONProver {
+                                rho_values : rho,
+                                r1_prover : r1_prover,
+                                m  : self.exp,
+                                n  : self.base,
+                        },
+
+                        OOONProofInitialMessage{
+                                r1_proof_initial_message : r1_initial_message,
+                                G_vec  : G_values,
+                                m  : self.exp,  
+                                n  : self.base, 
+                        }  
+                )
+        }
+}
+
+impl AssetProofProver<OOONProofFinalResponse> for OOONProver{
+        fn apply_challenge(&self, c: &ZKPChallenge) -> OOONProofFinalResponse{
+
+                println!("CHALLENGE APPLIE~D \n\n");
+                
+                let r1_final_response = self.r1_prover.apply_challenge(c);
+                
+                let mut y = Scalar::one();
+                
+                let mut z = Scalar::zero();
+                for k in 0..self.m as usize {
+                        z -= y * self.rho_values[k];
+                        y *= c.x;
+                }
+                
+                z += self.r1_prover.rB * y;
+                
+                OOONProofFinalResponse{
+                        r1_proof_final_response : r1_final_response,
+                        z  : z,
+                        m  : self.m,
+                        n  : self.n,
+                } 
+                
+        }
+}
+
+pub struct OOONProofVerifier <'a> {
+        commitment_list: &'a Vec<RistrettoPoint>,
+}
+
+impl OOONProofVerifier<'_> {
+        pub fn new(list : &'static Vec<RistrettoPoint>)-> Self{
+                OOONProofVerifier{
+                        commitment_list : list,
+                }
+        }
+}
+
+impl AssetProofVerifier for OOONProofVerifier<'_> {
+        type ZKInitialMessage = OOONProofInitialMessage;
+        type ZKFinalResponse = OOONProofFinalResponse;
+
+        fn verify(
+                &self,
+                pc_gens : &PedersenGens,
+                c : &ZKPChallenge,
+                initial_message : &Self::ZKInitialMessage,
+                final_response : & Self::ZKFinalResponse,
+        ) -> Result<()> {
+
+                println!("TESTING NEW OOON PROOFS  VERIFICATION\n\n\n\n\n");
+                
+                let N = final_response.n.pow(final_response.m) as usize;
+                let m = final_response.m as usize;
+                let n = final_response.n as usize;
+                let generators = OooNProofGenerators::new(final_response.m, final_response.n);
+
+                let b_comm = initial_message.r1_proof_initial_message.B;
+                let r1_verifier = R1ProofVerifier::new(&b_comm);
+                
+                //initial_message.update_transcript(&mut transcript).unwrap();                
+                //let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);
+        
+                
+                let result_r1 = r1_verifier.verify(pc_gens, 
+                                                        c, 
+                                                        &initial_message.r1_proof_initial_message, 
+                                                        &final_response.r1_proof_final_response
+                                                );
+
+
+                let mut f_values = vec![c.x; m * n];
+                let proof_f_elements = &final_response.r1_proof_final_response.f_elements;
+
+                for i in 0..m {
+                        for j in 1..n{
+                                f_values[(i * n + j) as usize] = proof_f_elements[(i * (n - 1) + (j-1)) as usize];
+                                f_values[(i * n) as usize] -= proof_f_elements[(i * (n - 1) + (j-1)) as usize];
+                        }
+                }
+
+               
+                let mut p_i : Scalar; 
+                let mut left : RistrettoPoint =  RistrettoPoint::default();
+                let right = final_response.z * generators.com_gens.B_blinding;
+
+
+                for i in 0..N {
+                        p_i  =  Scalar::one();
+                        let i_rep = convert_to_base(i as u32, n as u32, m as u32);
+                        for j in 0..m {
+                                p_i *= f_values [j * n + i_rep[j] as usize];
+                        }                                     
+                        left += (p_i * self.commitment_list[i]);
+                }
+                let mut temp = Scalar::one();
+                for k in 0..m {
+                        left -= temp * initial_message.G_vec[k];  
+                        temp *= c.x;
+                }
+
+                assert_eq!(left, right);
+                
+                Ok(())
+
+        }
+}
+
+// End of new OOON code
 
 
 
@@ -901,8 +1210,57 @@ mod tests {
 
     const SEED_1: [u8; 32] = [42u8; 32];
 
+
 #[test]
 #[wasm_bindgen_test]
+fn test_r1_proof_api(){
+        let pc_gens = PedersenGens::default();
+        let mut rng = StdRng::from_seed(SEED_1);
+        
+
+        let mut transcript = Transcript::new(OOON_PROOF_LABEL);
+
+        println!("TESTING R1Proofs API...");
+
+        const BASE : u32 = 4; //n = 3 : COLUMNS
+        const EXPONENT : u32= 3; //m = 2 : ROWS
+        let generators = OooNProofGenerators::new(EXPONENT, BASE);
+
+
+        let mut base_matrix : Vec<Scalar>;
+        let mut b : Matrix;
+        for i in 0..64
+        {
+                base_matrix = convert_to_matrix_rep(i, BASE , EXPONENT );
+                
+                b = Matrix{
+                        rows : EXPONENT,
+                        columns : BASE,
+                        elements : base_matrix.clone(),
+                };
+                let r = Scalar::from(45728u32);
+                let b_comm = generators.vector_commit(&base_matrix, r);
+                let prover = R1ProverAwaitingChallenge::new(&b, &r, EXPONENT, BASE);
+                
+                let verifier = R1ProofVerifier::new(&b_comm);
+                let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
+                
+                initial_message.update_transcript(&mut transcript).unwrap();
+                
+                let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);
+                
+                let final_response = prover.apply_challenge(&challenge);
+                
+                let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+                println!("{} Verified \n\n", i);
+                assert!(result.is_ok());
+        }
+
+}
+
+
+//#[test]
+//#[wasm_bindgen_test]
 fn test_ooon_proofs(){
         println!("TESTING 1-out-of-Many Proofs...");
 
@@ -939,8 +1297,8 @@ fn test_ooon_proofs(){
         println!("TESTING 1-out-of-Many Proofs FINISHED");
 
 }
-#[test]
-#[wasm_bindgen_test]
+//#[test]
+//#[wasm_bindgen_test]
 fn test_r1_proofs() {
 
         println!("TESTING R1Proofs...");
@@ -970,8 +1328,8 @@ fn test_r1_proofs() {
 
        
 }
-#[test]
-#[wasm_bindgen_test]
+// #[test]
+//#[wasm_bindgen_test]
 fn test_polynomials(){
 
         println!("TESTING POLYNOMIALS...");
