@@ -100,8 +100,8 @@ impl AssetProofProverAwaitingChallenge for WellformednessProverAwaitingChallenge
 impl AssetProofProver<WellformednessFinalResponse> for WellformednessProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> WellformednessFinalResponse {
         WellformednessFinalResponse {
-            z1: self.rand_a + c.x * self.w.blinding,
-            z2: self.rand_b + c.x * Scalar::from(self.w.value),
+            z1: self.rand_a + c.x() * self.w.blinding(),
+            z2: self.rand_b + c.x() * Scalar::from(self.w.value()),
         }
     }
 }
@@ -124,12 +124,12 @@ impl AssetProofVerifier for WellformednessVerifier {
         response: &Self::ZKFinalResponse,
     ) -> Result<()> {
         ensure!(
-            response.z1 * self.pub_key.pub_key == initial_message.a + challenge.x * self.cipher.x,
+            response.z1 * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
             AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
             response.z1 * pc_gens.B_blinding + response.z2 * pc_gens.B
-                == initial_message.b + challenge.x * self.cipher.y,
+                == initial_message.b + challenge.x() * self.cipher.y,
             AssetProofError::WellformednessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
@@ -145,6 +145,7 @@ mod tests {
     };
     use crate::asset_proofs::*;
     use rand::{rngs::StdRng, SeedableRng};
+    use std::convert::TryFrom;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
@@ -157,7 +158,7 @@ mod tests {
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let w = CommitmentWitness::new(secret_value, rand_blind).unwrap();
+        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = elg_secret.get_public_key();
         let cipher = pub_key.encrypt(&w);
@@ -178,7 +179,9 @@ mod tests {
         initial_message
             .update_transcript(&mut dealer_transcript)
             .unwrap();
-        let challenge = dealer_transcript.scalar_challenge(WELLFORMEDNESS_PROOF_CHALLENGE_LABEL);
+        let challenge = dealer_transcript
+            .scalar_challenge(WELLFORMEDNESS_PROOF_CHALLENGE_LABEL)
+            .unwrap();
 
         // 3rd round
         let final_response = prover.apply_challenge(&challenge);
