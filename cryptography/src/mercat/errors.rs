@@ -2,7 +2,7 @@ use failure::{Error, Fail};
 
 /// Represents an error in asset issuance transaction.
 /// TODO: as we implement the methods, we will find more explicit types for
-/// the reason variable.
+/// the error.
 #[derive(Fail, Clone, Debug, Eq, PartialEq)]
 pub enum AssetTXError {
     #[fail(display = "CHANGEME as needed")]
@@ -11,7 +11,7 @@ pub enum AssetTXError {
 
 /// Represents an error in confidential transaction.
 /// TODO: as we implement the methods, we will find more explicit types for
-/// the reason variable.
+/// the error.
 #[derive(Fail, Clone, Debug, Eq, PartialEq)]
 pub enum ConfidentialTXError {
     #[fail(display = "CHANGEME as needed")]

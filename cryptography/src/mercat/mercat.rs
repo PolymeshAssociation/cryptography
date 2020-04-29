@@ -6,6 +6,8 @@ use crate::asset_proofs::wellformedness_proof::{
     WellformednessFinalResponse, WellformednessInitialMessage,
 };
 use crate::asset_proofs::{CipherText, ElgamalPublicKey, ElgamalSecretKey};
+use bulletproofs::RangeProof;
+use curve25519_dalek::ristretto::CompressedRistretto;
 use failure::Error;
 
 // ---------------------- START: temporary types, move them to the proper location
@@ -17,10 +19,6 @@ type SecAddress = ElgamalSecretKey;
 // TODO move after CRYP-40
 pub struct MembershipProofInitialMessage {}
 pub struct MembershipProofFinalResponse {}
-
-// TODO move after CRYP-40
-pub struct RangeProofInitialMessage {}
-pub struct RangeProofFinalResponse {}
 
 // TODO move after CRYP-26
 pub struct CipherEqualityProofInitialMessage {}
@@ -49,7 +47,7 @@ pub type CorrectnessProof = (CorrectnessInitialMessage, CorrectnessFinalResponse
 pub type MembershipProof = (MembershipProofInitialMessage, MembershipProofFinalResponse);
 
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for range.
-pub type RangeProof = (RangeProofInitialMessage, RangeProofFinalResponse);
+pub type InRangeProof = (RangeProof, CompressedRistretto, usize);
 
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for cipher
 /// equality under different public key.
@@ -210,8 +208,8 @@ pub struct ConfidentialTXMemo {
 /// Holds the public portion of the confidential transaction sent by the sender.
 pub struct PubInitConfidentialTXData {
     amount_equal_cipher_proof: CipherEqualityProof,
-    non_neg_amount_proof: RangeProof,
-    enough_fund_proof: RangeProof,
+    non_neg_amount_proof: InRangeProof,
+    enough_fund_proof: InRangeProof,
     memo: ConfidentialTXMemo,
     asset_id_equal_cipher_proof: CipherEqualityProof,
     sig: Signature,
