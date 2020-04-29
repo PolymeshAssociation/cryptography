@@ -41,7 +41,7 @@ pub struct CommitmentWitness {
     ///    we won't need to decrypt the encrypted values very often.
     ///    We can recommend that applications use a different faster
     ///    encryption mechanism to store the confidentional values on disk.
-    pub value: u32,
+    value: u32,
 
     // A random blinding factor.
     blinding: Scalar,
@@ -50,6 +50,10 @@ pub struct CommitmentWitness {
 impl CommitmentWitness {
     pub fn blinding(&self) -> &Scalar {
         &self.blinding
+    }
+
+    pub fn value(&self) -> u32 {
+        self.value
     }
 }
 
