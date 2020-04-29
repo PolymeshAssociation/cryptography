@@ -299,6 +299,7 @@ mod tests {
     };
     use rand::{rngs::StdRng, SeedableRng};
     use rand_core::{CryptoRng, RngCore};
+    use std::convert::TryFrom;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
@@ -309,7 +310,7 @@ mod tests {
         rng: &mut T,
     ) -> (CorrectnessProverAwaitingChallenge, CorrectnessVerifier) {
         let rand_blind = Scalar::random(rng);
-        let w = CommitmentWitness::new(plain_text, rand_blind).unwrap();
+        let w = CommitmentWitness::try_from((plain_text, rand_blind)).unwrap();
 
         let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
         let elg_pub = elg_secret.get_public_key();
