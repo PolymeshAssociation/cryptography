@@ -77,6 +77,11 @@ impl Zeroize for CommitmentWitness {
         self.blinding.zeroize();
     }
 }
+impl Drop for CommitmentWitness {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
 
 /// Prover's representation of the encrypted secret.
 #[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
