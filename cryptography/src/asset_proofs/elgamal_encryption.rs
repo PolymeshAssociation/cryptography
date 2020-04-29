@@ -149,6 +149,7 @@ define_sub_assign_variants!(LHS = CipherText, RHS = CipherText);
 
 /// An Elgamal Secret Key is a random scalar.
 #[derive(Debug, Clone, Serialize, Deserialize, Zeroize)]
+#[zeroize(drop)]
 pub struct ElgamalSecretKey {
     pub secret: Scalar,
 }

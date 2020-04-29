@@ -82,6 +82,7 @@ impl CipherTextRefreshmentProverAwaitingChallenge {
 }
 
 #[derive(Zeroize)]
+#[zeroize(drop)]
 pub struct CipherTextRefreshmentProver {
     /// The secret key.
     secret_key: ElgamalSecretKey,
