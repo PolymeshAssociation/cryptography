@@ -163,6 +163,7 @@ mod tests {
     use super::*;
     use crate::asset_proofs::*;
     use rand::{rngs::StdRng, SeedableRng};
+    use std::convert::TryFrom;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [17u8; 32];
@@ -175,7 +176,7 @@ mod tests {
         let secret_value = 13u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let w = CommitmentWitness::new(secret_value, rand_blind).unwrap();
+        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);

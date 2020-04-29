@@ -47,26 +47,22 @@ pub struct CommitmentWitness {
 }
 
 impl CommitmentWitness {
-    pub fn new(value: u32, blinding: Scalar) -> Result<CommitmentWitness> {
-        // Since Elgamal decryption requires brute forcing over all possible values,
-        // we limit the values to 32-bit integers.
-        ensure!(
-            value < u32::max_value(),
-            AssetProofError::PlainTextRangeError
-        );
-        Ok(CommitmentWitness { value, blinding })
-    }
-
     pub fn blinding(&self) -> &Scalar {
         &self.blinding
     }
 }
 
-impl TryFrom<u32> for CommitmentWitness {
+impl TryFrom<(u32, Scalar)> for CommitmentWitness {
     type Error = Error;
 
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        CommitmentWitness::new(v, Scalar::random(&mut rand::thread_rng()))
+    fn try_from(v: (u32, Scalar)) -> Result<Self, Self::Error> {
+        // Since Elgamal decryption requires brute forcing over all possible values,
+        // we limit the values to 32-bit integers.
+        ensure!(v.0 < u32::max_value(), AssetProofError::PlainTextRangeError);
+        Ok(CommitmentWitness {
+            value: v.0,
+            blinding: v.1,
+        })
     }
 }
 
@@ -174,7 +170,8 @@ impl ElgamalPublicKey {
     }
 
     pub fn encrypt_value(&self, value: u32) -> Result<CipherText> {
-        Ok(self.encrypt(&CommitmentWitness::try_from(value)?))
+        let blinding = Scalar::random(&mut rand::thread_rng());
+        Ok(self.encrypt(&CommitmentWitness::try_from((value, blinding))?))
     }
 }
 
@@ -219,7 +216,8 @@ impl CipherText {
     ) -> Result<CipherText> {
         let message = secret_key.decrypt(self)?;
         let pub_key = secret_key.get_public_key();
-        let new_witness = CommitmentWitness::new(message, Scalar::random(rng))?;
+        let blinding = Scalar::random(rng);
+        let new_witness = CommitmentWitness::try_from((message, blinding))?;
         let new_ciphertext = pub_key.encrypt(&new_witness);
 
         Ok(new_ciphertext)
@@ -245,7 +243,8 @@ mod tests {
     fn basic_enc_dec() {
         let mut rng = StdRng::from_seed(SEED_1);
         let v = 256u32;
-        let w = CommitmentWitness::new(v, Scalar::random(&mut rng)).unwrap();
+        let b = Scalar::random(&mut rng);
+        let w = CommitmentWitness::try_from((v, b)).unwrap();
 
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
