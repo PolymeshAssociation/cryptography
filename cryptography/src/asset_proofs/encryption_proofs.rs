@@ -10,6 +10,15 @@
 //! Sigma protocols are a 3 round interactive protocols where
 //! the prover convinces the verifier that a statement is true.
 //!
+//! There are three roles in this protocol: Prover, Dealer, and
+//! Verifier. The role of the dealer is to generate the
+//! challenge value. In the interactive protocol, Verifier and
+//! Dealer are played by the same party. in the non-interactive
+//! protocol, both the Prover and the Verifier act as dealer
+//! using Fiat-Shamir huristic.
+//!
+//! The following shows the interaction between these roles.
+//!
 //! Prover                         Dealer
 //! - selects some random values
 //!                       -->  [initial message]

@@ -39,7 +39,7 @@ pub struct CommitmentWitness {
     ///    we won't need to decrypt the encrypted values very often.
     ///    We can recommend that applications use a different faster
     ///    encryption mechanism to store the confidentional values on disk.
-    value: u32,
+    pub value: u32,
 
     // A random blinding factor.
     pub blinding: Scalar,
