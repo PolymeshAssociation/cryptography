@@ -11,6 +11,7 @@ use crate::{
 
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use merlin::Transcript;
+use std::convert::TryInto;
 
 pub trait TranscriptProtocol {
     /// If the inputted message is not trivial append it to the
@@ -41,7 +42,7 @@ pub trait TranscriptProtocol {
     ///
     /// # Output
     /// A scalar challenge.
-    fn scalar_challenge(&mut self, label: &'static [u8]) -> ZKPChallenge;
+    fn scalar_challenge(&mut self, label: &'static [u8]) -> Result<ZKPChallenge>;
 }
 
 impl TranscriptProtocol for Transcript {
@@ -60,13 +61,11 @@ impl TranscriptProtocol for Transcript {
         self.append_message(b"dom-sep", message)
     }
 
-    fn scalar_challenge(&mut self, label: &'static [u8]) -> ZKPChallenge {
+    fn scalar_challenge(&mut self, label: &'static [u8]) -> Result<ZKPChallenge> {
         let mut buf = [0u8; 64];
         self.challenge_bytes(label, &mut buf);
 
-        ZKPChallenge {
-            x: Scalar::from_bytes_mod_order_wide(&buf),
-        }
+        Scalar::from_bytes_mod_order_wide(&buf).try_into()
     }
 }
 
