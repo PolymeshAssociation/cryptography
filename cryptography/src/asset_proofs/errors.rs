@@ -38,6 +38,13 @@ pub enum AssetProofError {
     )]
     CiphertextRefreshmentFinalResponseVerificationError { check: u16 },
 
+    /// Failed to verify an encrypting the same value proof.
+    #[fail(
+        display = "Failed to verify the check number {} of the encrypting the same value proof",
+        check
+    )]
+    EncryptingSameValueFinalResponseVerificationError { check: u16 },
+
     /// A range proof error occured.
     #[fail(display = "A range proof error occured: {}", source)]
     ProvingError { source: ProofError },
