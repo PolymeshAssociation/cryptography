@@ -31,7 +31,8 @@ use merlin::Transcript;
 const BASE : u32 = 3;
 const EXPONENT : u32 = 2;
 const OOON_PROOF_LABEL : &[u8;14] = b"PolymathMERCAT";
-const OOON_PROOF_CHALLENGE_LABEL : &[u8] = b"PolymathOOONProofChallenge";
+const OOON_PROOF_CHALLENGE_LABEL : &[u8] = b"PolymathOOONProofChallengeLabel";
+const R1_PROOF_CHALLENGE_LABEL : &[u8] = b"PolymathR1ProofChallengeLabel";
 
 // ********************************************************************************************************************
 // ** BEGINING OF THE GENERATORS & UTILS MODULE. IN THE FUTURE THIS PART OF THE CODE SHOULD RESIDE IN SEPARATE FILES **
@@ -455,7 +456,7 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
                         //The first element of each row is the negated sum of the row's other elements. 
                         a_matrix.elements[(r * a_matrix.columns) as usize] = -sum; 
                 }
-                println!("The A matrix elements in R1ProverAwaitingChallenge are {:?}", a_matrix.elements);
+                
                 let c_matrix : Matrix = a_matrix.clone().inner_product(&(ONE - TWO.inner_product(&self.b_matrix)));
                 let d_matrix : Matrix = - (a_matrix.clone().inner_product(&a_matrix)); // Implement an associated function taking two matrix parameters                                   
                 (
@@ -490,20 +491,6 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover{
                         }
 
                 }
-                /////// DELETE THE F_PRIME_VALUES  CALCULATION BELOW AFTER TESTING
-                let mut f_prime_values : Vec<Scalar> = vec!(c.x; (self.m * self.n) as usize);
-                for i in 0..self.m{
-                        for j in 1..(self.n) { 
-                                f_prime_values[(i*self.n + j) as usize] = f_values[(i*(self.n-1) + (j-1)) as usize];
-                                f_prime_values[(i*self.n) as usize] -= f_values[(i*(self.n-1) + (j-1)) as usize];
-                        }
-
-                }
-                // Let's compute the \prod f_{j_I_j} for all indexes I and the given challenge x1.
-                
-                println!("The m and n values in R1Prover are {} and {}", self.m, self.n);
-                println!("The f_prime_values in R1 prover are {:?}", f_prime_values);
-                println!("The P0's evaluation computed by the product of f_values is {:?}", f_prime_values[0]*f_prime_values[4]);
                 
                 R1ProofFinalResponse{
                         f_elements : f_values,
@@ -511,8 +498,7 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover{
                         zC : self.rD + c.x * self.rC,
                         m : self.m,
                         n : self.n,
-                }
-                
+                }                
         }
 }
 
@@ -571,20 +557,16 @@ impl AssetProofVerifier for R1ProofVerifier {
 #[derive(Clone, Debug)]
 pub struct OOONProofInitialMessage{
         r1_proof_initial_message : R1ProofInitialMessage,
-        //r1_proof_final_response  : R1ProofFinalResponse,
         G_vec  : Vec<RistrettoPoint>,
-        //z      : Scalar,
-        n      : u32, // n
-        m      : u32, // m  
+        n      : u32,
+        m      : u32, 
 } 
 
 impl OOONProofInitialMessage {
         fn new (base: u32, exp: u32) -> Self {
                 OOONProofInitialMessage{
                         r1_proof_initial_message : R1ProofInitialMessage::default(),
-                        //r1_proof_final_response : r1_proof_final_response::new(base, exp),
                         G_vec : Vec::with_capacity(exp as usize),
-                        //z : Scalar::zero(),
                         n : base,
                         m : exp,
                 }
@@ -657,11 +639,12 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
                 pc_gens: &PedersenGens,  
                 rng: &mut T,              
         ) -> (Self::ZKProver, Self::ZKInitialMessage) {
+                
                 let columns = self.base;
                 let rows = self.exp;
-                let generators = OooNProofGenerators::new(rows, columns);
-                println!("\n\n\nThe m(rows) and n(columns) values in OOONProverAwaitingChallenge are {} and {}\n\n\n", self.exp, self.base);
                 let N = self.base.pow(self.exp) as usize;
+                let generators = OooNProofGenerators::new(rows, columns);
+               
                 // We require the actual size of the provided list of commitments to be equal to N = n^m
                 // In case of smaller list, we should pad the commitment list with the last element to make the commitment vector of size N.
                 // We assume the list is padded already before being passed to the OOON proof initialization process.
@@ -686,35 +669,18 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
                 let r1_prover = R1ProverAwaitingChallenge::new(&b_matrix_rep, &self.random, rows, columns);
                              
                 let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(pc_gens, rng);
-                println!("The A matrix inside r1_prover in the OOONProver is {:?}", r1_prover.a_values);
-                let one = Polynomial::new(self.exp as usize);
-                 
+                
+                let one = Polynomial::new(self.exp as usize);                 
                 let mut polynomials : Vec<Polynomial> = vec![one; N];
-                let x1 = Scalar::one() + Scalar::one();
-
-                let mut  P0 = Scalar::one();
+                
                 for I in 0..N as usize {
                         i_rep = convert_to_base(I as u32, self.base, self.exp);                         
                         for k in 0..self.exp as usize{
                                  let t = k * self.base as usize + i_rep[k] as usize;
-                                 polynomials[I].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);        
-                                if I == 0 {
-                                        P0 *= (l_bit_matrix[t] * x1 + r1_prover.a_values[t]);
-                                        println!("The P0's {}-th added factor  is ({:?} , {:?})", k, l_bit_matrix[t],r1_prover.a_values[t]);
-                                        println!("The P0-s at iteration {} is equal to {:?}", k, P0);
-                                }                                                              
+                                 polynomials[I].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);                                                              
                         }  
-                        
-                        println!("The {}-th polynomial evaluation when computing G_K values in the OOONProofGeneration  is {:?}", I,polynomials[I].eval(x1));           
                 }
 
-                //DELETE THE LINES BELOW 
-                //Let's evaluate the polynomials at point X=2.
-                
-                
-                
-
-                
                 let mut G_values : Vec<RistrettoPoint> = Vec::with_capacity(self.exp as usize);
                 for k in 0..self.exp as usize {
                         G_values.push(rho[k] * generators.com_gens.B_blinding); // #TODO: Double check if this matches the El-Gamal generators.
@@ -744,13 +710,11 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
 impl AssetProofProver<OOONProofFinalResponse> for OOONProver{
         fn apply_challenge(&self, c: &ZKPChallenge) -> OOONProofFinalResponse{
 
-                println!("CHALLENGE APPLIE~D \n\n");
-                
                 let r1_final_response = self.r1_prover.apply_challenge(c);
                 
-                let mut y = Scalar::one();
-                
+                let mut y = Scalar::one();                
                 let mut z = Scalar::zero();
+
                 for k in 0..self.m as usize {
                         z -= y * self.rho_values[k];
                         y *= c.x;
@@ -791,9 +755,7 @@ impl AssetProofVerifier for OOONProofVerifier {
                 initial_message : &Self::ZKInitialMessage,
                 final_response : & Self::ZKFinalResponse,
         ) -> Result<()> {
-
-                println!("TESTING NEW OOON PROOFS  VERIFICATION\n\n\n\n\n");
-                
+  
                 let N = final_response.n.pow(final_response.m) as usize;
                 let m = final_response.m as usize;
                 let n = final_response.n as usize;
@@ -801,18 +763,15 @@ impl AssetProofVerifier for OOONProofVerifier {
 
                 let b_comm = initial_message.r1_proof_initial_message.B;
                 let r1_verifier = R1ProofVerifier::new(&b_comm);
-                
-                //initial_message.update_transcript(&mut transcript).unwrap();                
-                //let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);
-        
-                
+             
                 let result_r1 = r1_verifier.verify(pc_gens, 
                                                         c, 
                                                         &initial_message.r1_proof_initial_message, 
                                                         &final_response.r1_proof_final_response
                                                 );
-                assert!(result_r1.is_ok());
-                println!("R1 Proof verification in OOON passed");
+                ensure!(
+                        result_r1.is_ok(), OOONFinalResponseVerificationError { check : 1 }
+                );
 
                 let mut f_values = vec![c.x; m * n];
                 let proof_f_elements = &final_response.r1_proof_final_response.f_elements;
@@ -823,23 +782,18 @@ impl AssetProofVerifier for OOONProofVerifier {
                                 f_values[(i * n) as usize] -= proof_f_elements[(i * (n - 1) + (j-1)) as usize];
                         }
                 }
-
-                println!("The f_values in OOON verifier are {:?}", f_values);
                 
                 let mut p_i : Scalar; 
                 let mut left : RistrettoPoint =  RistrettoPoint::default();
                 let right = final_response.z * generators.com_gens.B_blinding;
-
 
                 for i in 0..N {
                         p_i  =  Scalar::one();
                         let i_rep = convert_to_base(i as u32, n as u32, m as u32);
                         for j in 0..m {
                                 p_i *= f_values [j * n + i_rep[j] as usize];
-                        }                          
-                        println!("The {}-th polynomial evaluation computed by product of the values f_jI_J at point x1 is {:?}", i, p_i);           
+                        }                                     
                         left += (p_i * self.commitment_list[i]);
-                        
                 }
                 let mut temp = Scalar::one();
                 for k in 0..m {
@@ -847,7 +801,9 @@ impl AssetProofVerifier for OOONProofVerifier {
                         temp *= c.x;
                 }
 
-                assert_eq!(left, right);
+                ensure!(
+                        left == right, AssetProofError::OOONFinalResponseVerificationError {check : 2}
+                );
                 
                 Ok(())
 
@@ -1169,11 +1125,9 @@ impl OooNProof{
                         }
                 }
 
-               
                 let mut p_i : Scalar; 
                 let mut left : RistrettoPoint =  RistrettoPoint::default();
                 let right = proof.z * generators.com_gens.B_blinding;
-
 
                 for i in 0..N {
                         p_i  =  Scalar::one();
@@ -1222,33 +1176,26 @@ mod tests {
     #[test]
     #[wasm_bindgen_test]
     fn test_ooon_proof_api(){
-            let pc_gens = PedersenGens::default();
-            let mut rng = StdRng::from_seed(SEED_1);
+        let pc_gens = PedersenGens::default();
+        let mut rng = StdRng::from_seed(SEED_1);
             
+        let mut transcript = Transcript::new(OOON_PROOF_LABEL);
     
-            let mut transcript = Transcript::new(OOON_PROOF_LABEL);
+        const BASE : u32 = 4; //n = 3 : COLUMNS
+        const EXPONENT : u32= 3; //m = 2 : ROWS
+        let generators = OooNProofGenerators::new(EXPONENT, BASE);
     
-            println!("TESTING R1Proofs API...");
-    
-            const BASE : u32 = 4; //n = 3 : COLUMNS
-            const EXPONENT : u32= 3; //m = 2 : ROWS
-            let generators = OooNProofGenerators::new(EXPONENT, BASE);
-    
-            println!("TESTING 1-out-of-Many Proofs...");
+        println!("TESTING 1-out-of-Many Proofs...");
 
-       
         let N = 64; // 4^3
         let size : usize =64 ;
         
-
         let rB = Scalar::random(&mut rng);            
         let C_secret = rB * generators.com_gens.B_blinding ;
-        
-        let x = Scalar::one() + Scalar::one(); 
+     
         let mut commitments = vec![Scalar::random(&mut rng) * generators.com_gens.B + Scalar::random(&mut rng) * generators.com_gens.B_blinding; N];
 
-        for l in 7..size as u32{
-                print!("{}", l);
+        for l in 5..size as u32{
                 
                 commitments[l as usize] = C_secret;
                 
@@ -1256,15 +1203,13 @@ mod tests {
                     
                 let verifier = OOONProofVerifier::new(&commitments);
                 let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
-                initial_message.update_transcript(&mut transcript).unwrap();
-                    
-                let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);
-                //let challenge = ZKPChallenge{x : x};
+                
+                initial_message.update_transcript(&mut transcript).unwrap();                    
+                let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);               
                     
                 let final_response = prover.apply_challenge(&challenge);
                     
                 let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
-                println!("{} Verified \n\n", l);
                 assert!(result.is_ok());
         }
         println!("TESTING 1-out-of-Many Proofs FINISHED");    

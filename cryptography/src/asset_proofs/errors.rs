@@ -24,6 +24,20 @@ pub enum AssetProofError {
     )]
     CorrectnessFinalResponseVerificationError { check: u16 },
 
+    /// Failed to verify a R1 proof.
+    #[fail(
+        display = "Failed to verify the check number {} of the R1 proof",
+        check
+    )]
+    R1FinalResponseVerificationError { check: u16}
+
+    /// Failed to verify a one-out-of-many proof.
+    #[fail(
+        display = "Failed to verify the check number {} of the OOON proof",
+        check
+    )]
+    OOONFinalResponseVerificationError { check: u16},
+
     /// A range proof error occured.
     #[fail(display = "A range proof error occured: {}", source)]
     ProvingError { source: ProofError },
