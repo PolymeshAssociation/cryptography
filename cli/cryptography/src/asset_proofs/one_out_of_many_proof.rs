@@ -34,11 +34,8 @@ const OOON_PROOF_LABEL : &[u8;14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL : &[u8] = b"PolymathOOONProofChallengeLabel";
 const R1_PROOF_CHALLENGE_LABEL : &[u8] = b"PolymathR1ProofChallengeLabel";
 
-// ********************************************************************************************************************
-// ** BEGINING OF THE GENERATORS & UTILS MODULE. IN THE FUTURE THIS PART OF THE CODE SHOULD RESIDE IN SEPARATE FILES **
-// ********************************************************************************************************************
 
-// This utility function is developed for support testing.
+// This utility function is developed for  testing purposes.
 pub fn slice_sum(s: &[Scalar]) ->Scalar{
         let mut sum: Scalar = Scalar::zero();
         for i in 0..s.len(){
@@ -117,6 +114,7 @@ impl OooNProofGenerators{
                 }
 
         }
+
         // This function commits to the given message vector by using the provided blinding randomness.
         // The generator point "g" is used for the blinding factor.
         pub fn vector_commit(&self, m_vec: &Vec<Scalar>, blinding: Scalar)-> RistrettoPoint{
@@ -139,10 +137,11 @@ impl Default for OooNProofGenerators {
                 Self::new(BASE, EXPONENT)
         }
 }
+
 // Basic matrix operations over the Scalar field such are matrix addition, multiplication with
 // constant and inner-product computations are used for one-out-of-many proof generation.
-
 // Matrixes are represented through vectors. The matrix of size M x N is represented by a vector of size M * N.
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Matrix {
         elements: Vec<Scalar>,
@@ -326,16 +325,12 @@ impl Polynomial {
         }
 }
 
-//////////////////////////// NEW CODE ///////////////////
-
-
 #[derive(Copy, Clone, Debug)]
 pub struct R1ProofInitialMessage{
         A       : RistrettoPoint,
         B       : RistrettoPoint,
 	C       : RistrettoPoint,
         D       : RistrettoPoint,
-
 }
 
 impl Default for R1ProofInitialMessage {
@@ -544,15 +539,21 @@ impl AssetProofVerifier for R1ProofVerifier {
                 let com_f  = generators.vector_commit(&f_matrix.elements, final_response.zA);
                 let com_fx = generators.vector_commit(&f_matrix.inner_product(&(x_matrix - f_matrix.clone())).elements, final_response.zC);
 
-                assert_eq!(c.x * initial_message.B + initial_message.A, com_f);
-                assert_eq!(c.x * initial_message.C + initial_message.D, com_fx);
+                ensure!(
+                        c.x * initial_message.B + initial_message.A == com_f,
+                        AssetProofError::R1FinalResponseVerificationError { check : 1 }
+                );
+
+                ensure!(
+                        c.x * initial_message.C + initial_message.D == com_fx,
+                        AssetProofError::R1FinalResponseVerificationError { check : 2 }
+                );
 
                 Ok(())
 
         }
 }
 
-// New code for OOON Proofs
 
 #[derive(Clone, Debug)]
 pub struct OOONProofInitialMessage{
@@ -807,7 +808,6 @@ impl AssetProofVerifier for OOONProofVerifier {
                 );
 
                 Ok(())
-
         }
 }
 
@@ -815,263 +815,124 @@ impl AssetProofVerifier for OOONProofVerifier {
 
 
 
-
-
-struct R1ProofWitness {
-        a_values : Vec<Scalar>,
-        rA : Scalar,
-        rC : Scalar,
-        rD : Scalar,
-
-}
-
-
-impl R1ProofWitness {
-        fn new (rows:u32, col:u32) -> R1ProofWitness{
-                let d = SystemTime::now().
-                                duration_since(SystemTime::UNIX_EPOCH).
-                                expect("Duration since UNIX_EPOCH failed");
-                let mut rng = StdRng::seed_from_u64(d.as_secs());
-                let mut a = vec![Scalar::zero(); (rows * col) as usize];
-
-                for k in 0..(rows * col) as usize{
-                        a[k] = Scalar::random(&mut rng);
-                }
-
-
-                R1ProofWitness{
-                        a_values : a,
-                        rA : Scalar::random(&mut rng),
-                        rC : Scalar::random(&mut rng),
-                        rD : Scalar::random(&mut rng),
-
-                }
-
-        }
-}
-
-
 #[cfg(test)]
 mod tests {
-    extern crate wasm_bindgen_test;
-    use super::*;
-    use crate::asset_proofs::*;
-    use rand::{rngs::StdRng, SeedableRng};
-    use wasm_bindgen_test::*;
+        extern crate wasm_bindgen_test;
+        use super::*;
+        use crate::asset_proofs::*;
+        use rand::{rngs::StdRng, SeedableRng};
+        use wasm_bindgen_test::*;
 
-    const SEED_1: [u8; 32] = [42u8; 32];
-
-
-    #[test]
-    #[wasm_bindgen_test]
-    fn test_ooon_proof_api(){
-        let pc_gens = PedersenGens::default();
-        let mut rng = StdRng::from_seed(SEED_1);
-
-        let mut transcript = Transcript::new(OOON_PROOF_LABEL);
-
-        const BASE : u32 = 4; //n = 3 : COLUMNS
-        const EXPONENT : u32= 3; //m = 2 : ROWS
-        let generators = OooNProofGenerators::new(EXPONENT, BASE);
-
-        println!("TESTING 1-out-of-Many Proofs...");
-
-        let N = 64; // 4^3
-        let size : usize =64 ;
-
-        let rB = Scalar::random(&mut rng);
-        let C_secret = rB * generators.com_gens.B_blinding ;
-
-        let mut commitments = vec![Scalar::random(&mut rng) * generators.com_gens.B + Scalar::random(&mut rng) * generators.com_gens.B_blinding; N];
-
-        for l in 5..size as u32{
-
-                commitments[l as usize] = C_secret;
-
-                let prover = OOONProverAwaitingChallenge::new(l, &rB, &commitments, EXPONENT, BASE);
-
-                let verifier = OOONProofVerifier::new(&commitments);
-                let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
-
-                initial_message.update_transcript(&mut transcript).unwrap();
-                let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);
-
-                let final_response = prover.apply_challenge(&challenge);
-
-                let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
-                assert!(result.is_ok());
-        }
-        println!("TESTING 1-out-of-Many Proofs FINISHED");
+        const SEED_1: [u8; 32] = [42u8; 32];
 
 
-}
+        #[test]
+        #[wasm_bindgen_test]
+        fn test_ooon_proof_api(){
+                let pc_gens = PedersenGens::default();
+                let mut rng = StdRng::from_seed(SEED_1);
 
+                let mut transcript = Transcript::new(OOON_PROOF_LABEL);
 
+                const BASE : u32 = 4; //n = 3 : COLUMNS
+                const EXPONENT : u32= 3; //m = 2 : ROWS
+                let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
-//#[test]
-//#[wasm_bindgen_test]
-fn test_r1_proof_api(){
-        let pc_gens = PedersenGens::default();
-        let mut rng = StdRng::from_seed(SEED_1);
+                let N = 64; // 4^3
+                let size : usize =64 ;
 
+                let rB = Scalar::random(&mut rng);
+                let C_secret = rB * generators.com_gens.B_blinding ;
 
-        let mut transcript = Transcript::new(OOON_PROOF_LABEL);
+                let mut commitments = vec![Scalar::random(&mut rng) * generators.com_gens.B + Scalar::random(&mut rng) * generators.com_gens.B_blinding; N];
 
-        println!("TESTING R1Proofs API...");
+                for l in 5..size as u32 {
 
-        const BASE : u32 = 4; //n = 3 : COLUMNS
-        const EXPONENT : u32= 3; //m = 2 : ROWS
-        let generators = OooNProofGenerators::new(EXPONENT, BASE);
+                        commitments[l as usize] = C_secret;
 
+                        let prover = OOONProverAwaitingChallenge::new(l, &rB, &commitments, EXPONENT, BASE);
 
-        let mut base_matrix : Vec<Scalar>;
-        let mut b : Matrix;
-        for i in 0..64
-        {
-                base_matrix = convert_to_matrix_rep(i, BASE , EXPONENT );
+                        let verifier = OOONProofVerifier::new(&commitments);
+                        let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
 
-                b = Matrix{
-                        rows : EXPONENT,
-                        columns : BASE,
-                        elements : base_matrix.clone(),
-                };
-                let r = Scalar::from(45728u32);
-                let b_comm = generators.vector_commit(&base_matrix, r);
-                let prover = R1ProverAwaitingChallenge::new(&b, &r, EXPONENT, BASE);
+                        initial_message.update_transcript(&mut transcript).unwrap();
+                        let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);
 
-                let verifier = R1ProofVerifier::new(&b_comm);
-                let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
+                        let final_response = prover.apply_challenge(&challenge);
 
-                initial_message.update_transcript(&mut transcript).unwrap();
-
-                let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);
-
-                let final_response = prover.apply_challenge(&challenge);
-
-                let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
-                println!("{} Verified \n\n", i);
-                assert!(result.is_ok());
+                        let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+                        assert!(result.is_ok());
+                }
         }
 
-}
+        #[test]
+        #[wasm_bindgen_test]
+        fn test_r1_proof_api(){
+                let pc_gens = PedersenGens::default();
+                let mut rng = StdRng::from_seed(SEED_1);
 
 
+                let mut transcript = Transcript::new(OOON_PROOF_LABEL);
 
-<<<<<<< HEAD
-=======
-        let d = SystemTime::now().
-                                duration_since(SystemTime::UNIX_EPOCH).
-                                expect("Duration since UNIX_EPOCH failed");
-        let mut rng = StdRng::seed_from_u64(d.as_secs());
-
-        let generators = OooNProofGenerators::new(EXPONENT, BASE);
-
-        let mut proof = OooNProof::new(BASE, EXPONENT);
-        let mut proof1 = OooNProof::new(BASE, EXPONENT);
+                const BASE : u32 = 4; //n = 3 : COLUMNS
+                const EXPONENT : u32= 3; //m = 2 : ROWS
+                let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
 
+                let mut base_matrix : Vec<Scalar>;
+                let mut b : Matrix;
+                for i in 0..64
+                {
+                        base_matrix = convert_to_matrix_rep(i, BASE , EXPONENT );
 
-        let rB = Scalar::random(&mut rng);
-        let C_secret = rB * generators.com_gens.B_blinding ;
+                        b = Matrix{
+                                rows : EXPONENT,
+                                columns : BASE,
+                                elements : base_matrix.clone(),
+                        };
+                        let r = Scalar::from(45728u32);
+                        let b_comm = generators.vector_commit(&base_matrix, r);
+                        let prover = R1ProverAwaitingChallenge::new(&b, &r, EXPONENT, BASE);
 
-        let x = Scalar::one() + Scalar::one();
+                        let verifier = R1ProofVerifier::new(&b_comm);
+                        let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
 
-        for l in 0..size{
-                print!("{}", l);
-                let mut commitments = vec![Scalar::random(&mut rng) * generators.com_gens.B + Scalar::random(&mut rng) * generators.com_gens.B_blinding; size];
-                commitments[l] = C_secret;
-                proof.prove(&mut commitments, l as u32, &rB, &generators);
-                OooNProof::verify(&proof, &x, &generators, & commitments);
-        }
-        println!("TESTING 1-out-of-Many Proofs FINISHED");
+                        initial_message.update_transcript(&mut transcript).unwrap();
 
-}
-//#[test]
-//#[wasm_bindgen_test]
-fn test_r1_proofs() {
+                        let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);
 
-        println!("TESTING R1Proofs...");
+                        let final_response = prover.apply_challenge(&challenge);
 
-        const BASE : u32 = 4; //n = 3 : COLUMNS
-        const EXPONENT : u32= 3; //m = 2 : ROWS
-
-
-        let mut proof = R1Proof::new(BASE, EXPONENT);
-        let mut proof1 = R1Proof::new(BASE, EXPONENT);
-        let mut base_matrix : Vec<Scalar>;
-        let mut b : Matrix;
-        for i in 0..5
-        {
-                base_matrix = convert_to_matrix_rep(i, BASE , EXPONENT );
-
-                b = Matrix{
-                        rows : EXPONENT,
-                        columns : BASE,
-                        elements : base_matrix,
-                };
-                //proof = R1Proof::prove(&b, &Scalar::from(45728u32), EXPONENT, BASE);
-                proof1 = R1Proof::prove(&b, &Scalar::from(45728u32), EXPONENT, BASE);
-                let b = R1Proof::verify(&proof1, EXPONENT, BASE);
-                println!("The proof for {} has passed", i);
+                        let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+        
+                        assert!(result.is_ok());
+                }
         }
 
 
-}
->>>>>>> d5528ff8c184ef7eb7ff581db8bf1e0c4f471516
-// #[test]
-//#[wasm_bindgen_test]
-fn test_polynomials(){
+        // #[test]
+        //#[wasm_bindgen_test]
+        fn test_polynomials(){
 
-        println!("TESTING POLYNOMIALS...");
+                println!("TESTING POLYNOMIALS...");
 
-        let mut p = Polynomial::default();
-        let mut p = Polynomial::new(6);
+                let mut p = Polynomial::default();
+                let mut p = Polynomial::new(6);
 
-        p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
-        p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
-        p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
-        p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
-        p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
-        p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
-        p.print();
-        println!("The evaluation at point 8 is {:?}", p.eval(Scalar::from(8u32)));
-        assert_eq!(p.eval(Scalar::from(8u32)), Scalar::from(10779215329u64));
-
+                p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
+                p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
+                p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
+                p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
+                p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
+                p.add_factor(Scalar::from(5u32), Scalar::from(7u32));
+        
+                assert_eq!(p.eval(Scalar::from(8u32)), Scalar::from(10779215329u64));
+        }
 }
 
 
-// fn main() {
-//         let zero = Scalar::zero();
-//         let one = Scalar::one();
-//         let messages : Vec<Scalar> = vec![zero,one,zero,zero,one,zero,zero,one,zero,zero,one,zero];
-//         let m: Matrix = Matrix::new(3,4,Scalar::from(5u32));
-
-//         //test_r1_proofs();
-
-//         //test_polynomials();
-
-//         test_ooon_proofs();
-
-//         let ROWS = EXPONENT;
-//         let COLUMNS = BASE;
-
-//         let b = Matrix{
-//                 rows : ROWS,
-//                 columns : COLUMNS,
-//                 elements : vec![zero, zero, one,
-//                                 zero, zero, one],
-//         };
 
 
-// 	println!("Hello, 1 out of Many Proofs!");
-//         let proof_generators = OooNProofGenerators::new(3,4);
-//         let commitment = proof_generators.vector_commit(&messages, one+one);
-//         //println!("The vector commitment is {:?}", commitment.compress().to_bytes());
-//         //ProofGenerators.print_generators();
-// }
-
-
-}
 
 
 
