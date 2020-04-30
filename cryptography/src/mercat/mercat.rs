@@ -2,6 +2,9 @@
 //! of the MERCAT, as defined in the section 6 of the whitepaper.
 
 use crate::asset_proofs::correctness_proof::{CorrectnessFinalResponse, CorrectnessInitialMessage};
+use crate::asset_proofs::encrypting_same_value_proof::{
+    EncryptingSameValueFinalResponse, EncryptingSameValueInitialMessage,
+};
 use crate::asset_proofs::wellformedness_proof::{
     WellformednessFinalResponse, WellformednessInitialMessage,
 };
@@ -19,10 +22,6 @@ type SecAddress = ElgamalSecretKey;
 // TODO move after CRYP-40
 pub struct MembershipProofInitialMessage {}
 pub struct MembershipProofFinalResponse {}
-
-// TODO move after CRYP-26
-pub struct CipherEqualityProofInitialMessage {}
-pub struct CipherEqualityProofFinalResponse {}
 
 // TODO move after CRYP-71
 pub struct Signature {}
@@ -52,8 +51,8 @@ pub type InRangeProof = (RangeProof, CompressedRistretto, usize);
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for cipher
 /// equality under different public key.
 pub type CipherEqualityProof = (
-    CipherEqualityProofInitialMessage,
-    CipherEqualityProofFinalResponse,
+    EncryptingSameValueInitialMessage,
+    EncryptingSameValueFinalResponse,
 );
 
 /// Asset memo. TODO: more informative description!
@@ -101,7 +100,7 @@ pub struct SecAccount {
 // ----------------- States
 
 /// Represents the three substates (started, verified, rejected) of a
-/// on a confidential transaction state.
+/// confidential transaction state.
 #[derive(Debug)]
 pub enum TXSubstate {
     /// The action on transaction has been taken but is not verified yet.
