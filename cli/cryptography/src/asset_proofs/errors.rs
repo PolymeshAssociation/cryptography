@@ -29,7 +29,7 @@ pub enum AssetProofError {
         display = "Failed to verify the check number {} of the R1 proof",
         check
     )]
-    R1FinalResponseVerificationError { check: u16}
+    R1FinalResponseVerificationError { check: u16},
 
     /// Failed to verify a one-out-of-many proof.
     #[fail(
