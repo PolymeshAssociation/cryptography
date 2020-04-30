@@ -11,29 +11,19 @@ use crate::asset_proofs::{
         },
         errors::{AssetProofError, Result},
         transcript::{TranscriptProtocol, UpdateTranscript},
-
     };
-
 
 use sha3::Sha3_512;
 use std::ops::{Add, Sub, Mul, Neg};
 use std::convert::TryInto;
 use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
-const SEED_1: [u8; 32] = [42u8; 32];
-
 use std::time::SystemTime;
 use merlin::Transcript;
-//use crate::transcript::TranscriptProtocol;
-//use crate::matrix::Matrix;
 
-
-const BASE : u32 = 3;
-const EXPONENT : u32 = 2;
 const OOON_PROOF_LABEL : &[u8;14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL : &[u8] = b"PolymathOOONProofChallengeLabel";
 const R1_PROOF_CHALLENGE_LABEL : &[u8] = b"PolymathR1ProofChallengeLabel";
-
 
 // This utility function is developed for  testing purposes.
 pub fn slice_sum(s: &[Scalar]) ->Scalar{
@@ -45,6 +35,7 @@ pub fn slice_sum(s: &[Scalar]) ->Scalar{
 }
 
 pub fn convert_to_matrix_rep(number: u32, base: u32, exp : u32) -> Vec<Scalar> {
+        //ensure!(number < base.pow(exp), AssetProofError::OOONProofIndexOutofRange);
         assert!(number < base.pow(exp));
         assert!(number >= 0);
 
@@ -62,7 +53,6 @@ pub fn convert_to_matrix_rep(number: u32, base: u32, exp : u32) -> Vec<Scalar> {
 
 // This function returns the representation of the given number as the given base number
 // The given number should be withing the provided range [0, base^exp)
-
 pub fn convert_to_base(number: u32, base: u32, exp : u32) -> Vec<u32> {
         assert!(number < base.pow(exp));
         assert!(number >= 0);
@@ -76,7 +66,6 @@ pub fn convert_to_base(number: u32, base: u32, exp : u32) -> Vec<u32> {
                 base_rep[j] = rem;
         }
 
-
         base_rep
 }
 
@@ -86,14 +75,12 @@ pub struct OooNProofGenerators {
         // Replace the generators g and h with bulletproof::PedersenGens
         com_gens : PedersenGens,
         h_vec : Vec<RistrettoPoint>
-
 }
 
 impl OooNProofGenerators{
         pub fn new(base:u32, exp:u32) -> Self {
                 let mut generators : Vec<RistrettoPoint> = Vec::with_capacity((exp*base) as usize);
 
-                //creating a base array to feed the generator generation process
                 let mut ristretto_base_bytes = Vec::with_capacity(
                         OOON_PROOF_LABEL.len() + RISTRETTO_BASEPOINT_COMPRESSED.as_bytes().len(),
                         );
@@ -107,12 +94,10 @@ impl OooNProofGenerators{
 
                 }
 
-
                 OooNProofGenerators {
                         com_gens : PedersenGens::default(),
                         h_vec: generators,
                 }
-
         }
 
         // This function commits to the given message vector by using the provided blinding randomness.
@@ -134,7 +119,7 @@ impl OooNProofGenerators{
 
 impl Default for OooNProofGenerators {
         fn default() -> Self {
-                Self::new(BASE, EXPONENT)
+                Self::new(4, 3)
         }
 }
 
@@ -159,14 +144,6 @@ impl Matrix {
                 }
         }
 
-        fn print(&self) {
-                let col:u32 = self.columns;
-                for i in 0..self.rows{
-                        let j : usize = (i*col) as usize;
-                        println!("{}-th row: {:?}", i, &self.elements[j..j+col as usize]);
-                }
-        }
-
         fn inner_product(&self, right : &Matrix)->Matrix{
                 assert_eq!(self.rows, right.rows);
                 assert_eq!(self.columns, right.columns);
@@ -178,6 +155,7 @@ impl Matrix {
                                                         self.elements[k] * right.elements[k];
                                 }
                         }
+
                 inner_product
         }
 
@@ -191,6 +169,7 @@ impl Matrix {
                                 random.elements[k] = Scalar::random(&mut rng);
                         }
                 }
+
                 random
         }
 }
@@ -206,6 +185,7 @@ impl Neg for Matrix {
                                         negated.elements[k] = -self.elements[k];
                                 }
                         }
+
                 negated
         }
 }
@@ -222,6 +202,7 @@ impl Add<Matrix> for Matrix {
                                                         self.elements[k] + right.elements[k];
                                 }
                         }
+
                 sum
         }
 }
@@ -231,15 +212,15 @@ impl Sub<Matrix> for Matrix {
         fn sub (self, right : Matrix) -> Matrix {
                 assert_eq!(self.rows, right.rows);
                 assert_eq!(self.columns, right.columns);
-                let mut sum:Matrix = Matrix::new(self.rows, self.columns,Scalar::zero());
+                let mut sub:Matrix = Matrix::new(self.rows, self.columns,Scalar::zero());
                         for i in 0..self.rows{
                                 for j in 0..self.columns{
                                         let k = (i * self.columns + j) as usize;
-                                        sum.elements[k] =
+                                        sub.elements[k] =
                                                         self.elements[k] - right.elements[k];
                                 }
                         }
-                sum
+                sub
         }
 }
 
@@ -285,18 +266,16 @@ impl Polynomial {
         // "Add_factor" function multiples the given polynomial P(x) with the provided linear (a * x + b).
         fn add_factor(&mut self, a: Scalar, b:Scalar) -> &Polynomial {
 
-
                 let old = self.coeffs.clone();
                 let old_degree = self.degree;
 
                 if a != Scalar::zero() {
-
                         self.degree = self.degree + 1;
-                        // Check if there is enough capacity in the coefficients vector to store the updated coefficients and resize it otherwise.
-                        // Note, that the polynomial can be created with the expected maximum capacity.
+                        
                         if self.coeffs.len() < self.degree + 1 {
                                 self.coeffs.resize(self.degree + 1, Scalar::zero());
                         }
+
                         self.coeffs[self.degree] = (a * old[self.degree - 1]);
                 }
                 for k in 1..=old_degree{
@@ -373,7 +352,6 @@ impl R1ProofFinalResponse{
                         zC : Scalar::zero(),
                         f_elements : Vec::with_capacity((exp * (base-1)) as usize),
                 }
-
         }
 }
 pub struct R1Prover {
@@ -729,7 +707,6 @@ impl AssetProofProver<OOONProofFinalResponse> for OOONProver{
                         m  : self.m,
                         n  : self.n,
                 }
-
         }
 }
 

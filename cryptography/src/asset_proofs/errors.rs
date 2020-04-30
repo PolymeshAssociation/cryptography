@@ -30,6 +30,9 @@ pub enum AssetProofError {
         check
     )]
     R1FinalResponseVerificationError { check: u16},
+    
+    #[fail(display = "The index is out of range")]
+    OOONProofIndexOutofRange,
 
     /// Failed to verify a one-out-of-many proof.
     #[fail(
