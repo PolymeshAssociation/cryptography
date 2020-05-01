@@ -28,7 +28,6 @@ const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathOOONProofChallengeLabel";
 const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 
-
 pub fn convert_to_matrix_rep(number: u32, base: u32, exp: u32) -> Vec<Scalar> {
     //ensure!(number < base.pow(exp), AssetProofError::OOONProofIndexOutofRange);
     assert!(number < base.pow(exp));
@@ -350,7 +349,7 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
         let columns = self.b_matrix.columns;
         let generators = OooNProofGenerators::new(rows, columns);
 
-        let a_values: Vec<Scalar> =(0..(rows * columns)).map(|_| Scalar::random(rng)).collect();
+        let a_values: Vec<Scalar> = (0..(rows * columns)).map(|_| Scalar::random(rng)).collect();
 
         let random_A = Scalar::random(rng);
         let random_C = Scalar::random(rng);
@@ -512,7 +511,8 @@ impl Default for OOONProofInitialMessage {
 impl UpdateTranscript for OOONProofInitialMessage {
     fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
         transcript.append_domain_separator(OOON_PROOF_CHALLENGE_LABEL);
-        self.r1_proof_initial_message.update_transcript(transcript)?;
+        self.r1_proof_initial_message
+            .update_transcript(transcript)?;
         for k in 0..self.m as usize {
             transcript.append_validated_point(b"Gk", &self.G_vec[k].compress())?;
         }
@@ -581,7 +581,7 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
         // IMPORTANT: This check has critical security importance
         assert_eq!(N, self.commitments.len());
 
-        let rho : Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
+        let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
 
         let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, self.exp);
 
@@ -777,7 +777,9 @@ mod tests {
             let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
-            let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL).unwrap();
+            let challenge = transcript
+                .scalar_challenge(OOON_PROOF_CHALLENGE_LABEL)
+                .unwrap();
 
             let final_response = prover.apply_challenge(&challenge);
 
@@ -817,7 +819,9 @@ mod tests {
 
             initial_message.update_transcript(&mut transcript).unwrap();
 
-            let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL).unwrap();
+            let challenge = transcript
+                .scalar_challenge(OOON_PROOF_CHALLENGE_LABEL)
+                .unwrap();
 
             let final_response = prover.apply_challenge(&challenge);
 
@@ -827,7 +831,7 @@ mod tests {
         }
     }
 
-#[test]
+    #[test]
     #[wasm_bindgen_test]
     fn test_polynomials() {
         let mut p = Polynomial::new(6);
