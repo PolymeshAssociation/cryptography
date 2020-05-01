@@ -10,6 +10,15 @@
 //! Sigma protocols are a 3 round interactive protocols where
 //! the prover convinces the verifier that a statement is true.
 //!
+//! There are three roles in this protocol: Prover, Dealer, and
+//! Verifier. The role of the dealer is to generate the
+//! challenge value. In the interactive protocol, Verifier and
+//! Dealer are played by the same party. in the non-interactive
+//! protocol, both the Prover and the Verifier act as dealer
+//! using Fiat-Shamir huristic.
+//!
+//! The following shows the interaction between these roles.
+//!
 //! Prover                         Dealer
 //! - selects some random values
 //!                       -->  [initial message]
@@ -45,6 +54,7 @@ use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
+use std::convert::TryFrom;
 
 use crate::{
     asset_proofs::errors::{AssetProofError, Result},
@@ -62,7 +72,22 @@ pub const ENCRYPTION_PROOFS_CHALLENGE_LABEL: &[u8] = b"PolymathEncryptionProofsC
 
 /// A scalar challenge.
 pub struct ZKPChallenge {
-    pub x: Scalar,
+    x: Scalar,
+}
+
+impl ZKPChallenge {
+    pub fn x(&self) -> &Scalar {
+        &self.x
+    }
+}
+
+impl TryFrom<Scalar> for ZKPChallenge {
+    type Error = failure::Error;
+
+    fn try_from(x: Scalar) -> Result<Self> {
+        ensure!(x != Scalar::zero(), AssetProofError::VerificationError);
+        Ok(ZKPChallenge { x })
+    }
 }
 
 /// The interface for a 3-Sigma protocol.
@@ -123,7 +148,7 @@ pub trait AssetProofVerifier {
         pc_gens: &PedersenGens,
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
-        final_proof: &Self::ZKFinalResponse,
+        final_response: &Self::ZKFinalResponse,
     ) -> Result<()>;
 }
 
@@ -207,7 +232,7 @@ pub fn prove_multiple_encryption_properties<
         .map(|initial_message| initial_message.update_transcript(&mut transcript))
         .collect::<Result<()>>()?;
 
-    let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL);
+    let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
 
     let final_responses: Vec<_> = provers_vec
         .into_iter()
@@ -248,7 +273,8 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
         .map(|initial_message| initial_message.update_transcript(&mut transcript))
         .collect::<Result<(), _>>()?;
 
-    let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL);
+    let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
+
     for i in 0..verifiers.len() {
         verifiers[i].verify(&gens, &challenge, &initial_messages[i], &final_responses[i])?;
     }
@@ -273,6 +299,7 @@ mod tests {
     };
     use rand::{rngs::StdRng, SeedableRng};
     use rand_core::{CryptoRng, RngCore};
+    use std::convert::TryFrom;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
@@ -283,14 +310,14 @@ mod tests {
         rng: &mut T,
     ) -> (CorrectnessProverAwaitingChallenge, CorrectnessVerifier) {
         let rand_blind = Scalar::random(rng);
-        let w = CommitmentWitness::new(plain_text, rand_blind).unwrap();
+        let w = CommitmentWitness::try_from((plain_text, rand_blind)).unwrap();
 
         let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        let prover = CorrectnessProverAwaitingChallenge::new(&elg_pub, &w);
-        let verifier = CorrectnessVerifier::new(&plain_text, &elg_pub, &cipher);
+        let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w);
+        let verifier = CorrectnessVerifier::new(plain_text, elg_pub, cipher);
 
         (prover, verifier)
     }

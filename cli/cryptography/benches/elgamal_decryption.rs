@@ -3,7 +3,7 @@ use cryptography::asset_proofs::{CipherText, CommitmentWitness, ElgamalSecretKey
 use curve25519_dalek::scalar::Scalar;
 
 use rand::{rngs::StdRng, SeedableRng};
-use std::time::Duration;
+use std::{convert::TryFrom, time::Duration};
 
 fn bench_elgamal_decrypt(
     c: &mut Criterion,
@@ -33,7 +33,7 @@ fn bench_elgamal(c: &mut Criterion) {
     let encrypted_values: Vec<CipherText> = (0..3)
         .map(|i| {
             let value = 2u32 << i;
-            let w = CommitmentWitness::new(value, r).unwrap();
+            let w = CommitmentWitness::try_from((value, r)).unwrap();
             elg_pub.encrypt(&w)
         })
         .collect();
