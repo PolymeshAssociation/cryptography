@@ -464,7 +464,7 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover {
         for i in 0..self.m {
             for j in 0..(self.n - 1) {
                 f_values.push(
-                    self.b_matrix.elements[(i * self.n + j + 1) as usize] * c.x
+                    self.b_matrix.elements[(i * self.n + j + 1) as usize] * c.x()
                         + self.a_values[(i * self.n + j + 1) as usize],
                 );
             }
@@ -472,8 +472,8 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover {
 
         R1ProofFinalResponse {
             f_elements: f_values,
-            zA: self.rA + c.x * self.rB,
-            zC: self.rD + c.x * self.rC,
+            zA: self.rA + c.x() * self.rB,
+            zC: self.rD + c.x() * self.rC,
             m: self.m,
             n: self.n,
         }
@@ -506,8 +506,8 @@ impl AssetProofVerifier for R1ProofVerifier {
         let rows = final_response.m;
         let columns = final_response.n;
 
-        let mut f_matrix = Matrix::new(rows, columns, c.x);
-        let x_matrix = Matrix::new(rows, columns, c.x);
+        let mut f_matrix = Matrix::new(rows, columns, *c.x());
+        let x_matrix = Matrix::new(rows, columns, *c.x());
 
         let generators = OooNProofGenerators::new(rows, columns);
 
@@ -529,12 +529,12 @@ impl AssetProofVerifier for R1ProofVerifier {
         );
 
         ensure!(
-            c.x * initial_message.B + initial_message.A == com_f,
+            c.x() * initial_message.B + initial_message.A == com_f,
             AssetProofError::R1FinalResponseVerificationError { check: 1 }
         );
 
         ensure!(
-            c.x * initial_message.C + initial_message.D == com_fx,
+            c.x() * initial_message.C + initial_message.D == com_fx,
             AssetProofError::R1FinalResponseVerificationError { check: 2 }
         );
 
@@ -702,7 +702,7 @@ impl AssetProofProver<OOONProofFinalResponse> for OOONProver {
 
         for k in 0..self.m as usize {
             z -= y * self.rho_values[k];
-            y *= c.x;
+            y *= c.x();
         }
 
         z += self.r1_prover.rB * y;
@@ -758,7 +758,7 @@ impl AssetProofVerifier for OOONProofVerifier {
             AssetProofError::OOONFinalResponseVerificationError { check: 1 }
         );
 
-        let mut f_values = vec![c.x; m * n];
+        let mut f_values = vec![*c.x(); m * n];
         let proof_f_elements = &final_response.r1_proof_final_response.f_elements;
 
         for i in 0..m {
@@ -783,7 +783,7 @@ impl AssetProofVerifier for OOONProofVerifier {
         let mut temp = Scalar::one();
         for k in 0..m {
             left -= temp * initial_message.G_vec[k];
-            temp *= c.x;
+            temp *= c.x();
         }
 
         ensure!(
@@ -840,7 +840,7 @@ mod tests {
             let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
-            let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);
+            let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL).unwrap();
 
             let final_response = prover.apply_challenge(&challenge);
 
@@ -880,7 +880,7 @@ mod tests {
 
             initial_message.update_transcript(&mut transcript).unwrap();
 
-            let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL);
+            let challenge = transcript.scalar_challenge(OOON_PROOF_CHALLENGE_LABEL).unwrap();
 
             let final_response = prover.apply_challenge(&challenge);
 
