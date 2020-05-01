@@ -29,8 +29,8 @@ pub enum AssetProofError {
         display = "Failed to verify the check number {} of the R1 proof",
         check
     )]
-    R1FinalResponseVerificationError { check: u16},
-    
+    R1FinalResponseVerificationError { check: u16 },
+
     #[fail(display = "The index is out of range")]
     OOONProofIndexOutofRange,
 
@@ -39,7 +39,7 @@ pub enum AssetProofError {
         display = "Failed to verify the check number {} of the OOON proof",
         check
     )]
-    OOONFinalResponseVerificationError { check: u16},
+    OOONFinalResponseVerificationError { check: u16 },
 
     /// A range proof error occured.
     #[fail(display = "A range proof error occured: {}", source)]
