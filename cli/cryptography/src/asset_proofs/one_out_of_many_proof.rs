@@ -362,14 +362,10 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
             elements: (0..(rows * columns)).map(|_| Scalar::random(rng)).collect(),
         };
 
-        let mut sum: Scalar;
         for r in 0..a_matrix.rows {
-            sum = Scalar::zero();
-            for c in 1..a_matrix.columns {
-                sum += a_matrix.elements[(r * a_matrix.columns + c) as usize]
-            }
             //The first element of each row is the negated sum of the row's other elements.
-            //let sum = a_matrix.elements.iter().skip(1).fold(Scalar::zero(), |s, x| s+x);
+            let sum = a_matrix.elements[r * a_matrix.columns + 1..(r + 1) * a_matrix.columns]
+                                                .iter().fold(Scalar::zero(), |s, x| s+x);
             a_matrix.elements[(r * a_matrix.columns) as usize] = -sum;
         }
 
