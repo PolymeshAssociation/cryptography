@@ -34,6 +34,9 @@ pub enum AssetProofError {
     #[fail(display = "The index is out of range")]
     OOONProofIndexOutofRange,
 
+    #[fail(display = "The provided matrix or vector size does not match to the expected")]
+    OOONProofWrongSize,
+
     /// Failed to verify a one-out-of-many proof.
     #[fail(
         display = "Failed to verify the check number {} of the OOON proof",
