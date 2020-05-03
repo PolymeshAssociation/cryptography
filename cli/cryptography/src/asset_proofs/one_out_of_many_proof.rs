@@ -1,12 +1,12 @@
-// One-out-of-many proof is a Sigma protocol enabling to efficiently prove the knowledge
-// of a secret commitment among the public list of N commitments which is opening to 0
+//! One-out-of-many proof is a Sigma protocol enabling to efficiently prove the knowledge
+//! of a secret commitment among the public list of N commitments which is opening to 0
 #![allow(non_snake_case)]
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_COMPRESSED, constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::RistrettoPoint, scalar::Scalar, traits::MultiscalarMul,
 };
-//use serde::{Serialize, Deserialize};
+
 
 use crate::asset_proofs::{
     encryption_proofs::{
@@ -17,48 +17,48 @@ use crate::asset_proofs::{
 };
 
 use merlin::Transcript;
-//use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
 use sha3::Sha3_512;
 use std::ops::{Add, Neg, Sub};
-//use std::time::SystemTime;
 use zeroize::{Zeroize, Zeroizing};
 
 const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathOOONProofChallengeLabel";
 const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 
-pub fn convert_to_matrix_rep(number: u32, base: u32, exp: u32) -> Vec<Scalar> {
-    //ensure!(number < base.pow(exp), AssetProofError::OOONProofIndexOutofRange);
-    assert!(number < base.pow(exp));
-
-    let mut rem: u32;
-    let mut number = number;
-    let mut matrix_rep = vec![Scalar::zero(); (exp * base) as usize];
-    for j in 0..exp {
-        rem = number % base;
-        number /= base;
-        matrix_rep[(j * base + rem) as usize] = Scalar::one();
-    }
-
-    matrix_rep
+fn convert_to_matrix_rep(number: u32, base: u32, exp: u32) -> Result<Vec<Scalar>, AssetProofError > {
+        
+        ensure!(number < base.pow(exp), AssetProofError::OOONProofIndexOutofRange);
+    
+        let mut rem: u32;
+        let mut number = number;
+        let mut matrix_rep = vec![Scalar::zero(); (exp * base) as usize];
+        for j in 0..exp {
+            rem = number % base;
+            number /= base;
+            matrix_rep[(j * base + rem) as usize] = Scalar::one();
+        }
+    
+        Ok(matrix_rep)
 }
+    
 
 // This function returns the representation of the input number as the given base number
 // The input number should be within the provided range [0, base^exp)
-pub fn convert_to_base(number: u32, base: u32, exp: u32) -> Vec<u32> {
-    assert!(number < base.pow(exp));
+fn convert_to_base(number: u32, base: u32, exp: u32) -> Result<Vec<u32>, AssetProofError> {
+    
+        ensure!(number < base.pow(exp), AssetProofError::OOONProofIndexOutofRange);
 
-    let mut rem: u32;
-    let mut number = number;
-    let mut base_rep = vec![0u32; exp as usize];
-    for j in 0..exp as usize {
+        let mut rem: u32;
+        let mut number = number;
+        let mut base_rep = vec![0u32; exp as usize];
+        for j in 0..exp as usize {
         rem = number % base;
         number /= base;
         base_rep[j] = rem;
     }
 
-    base_rep
+    Ok(base_rep)
 }
 
 // For the given base n and the exponent value m , we need 2 + n * m orthogonal generator points.
@@ -583,7 +583,7 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
 
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
 
-        let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, self.exp);
+        let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, self.exp).unwrap();
 
         let b_matrix_rep = Matrix {
             rows: rows,
@@ -599,7 +599,7 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
         let mut polynomials: Vec<Polynomial> = vec![one; N];
 
         for I in 0..N as usize {
-            let i_rep = convert_to_base(I as u32, self.base, self.exp);
+            let i_rep = convert_to_base(I as u32, self.base, self.exp).unwrap();
             for k in 0..self.exp as usize {
                 let t = k * self.base as usize + i_rep[k] as usize;
                 polynomials[I].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
@@ -712,7 +712,7 @@ impl AssetProofVerifier for OOONProofVerifier {
 
         for i in 0..N {
             p_i = Scalar::one();
-            let i_rep = convert_to_base(i as u32, n as u32, m as u32);
+            let i_rep = convert_to_base(i as u32, n as u32, m as u32).unwrap();
             for j in 0..m {
                 p_i *= f_values[j * n + i_rep[j] as usize];
             }
@@ -802,8 +802,8 @@ mod tests {
 
         let mut base_matrix: Vec<Scalar>;
         let mut b: Matrix;
-        for i in 0..64 {
-            base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT);
+        for i in 10..64 {
+            base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT).unwrap();
 
             b = Matrix {
                 rows: EXPONENT,
