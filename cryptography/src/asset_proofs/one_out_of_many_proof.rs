@@ -22,9 +22,9 @@ use crate::asset_proofs::{
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 use sha3::Sha3_512;
+use std::convert::TryFrom;
 use std::ops::{Add, Neg, Sub};
 use zeroize::{Zeroize, Zeroizing};
-use std::convert::TryFrom;
 
 const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathOOONProofChallengeLabel";
@@ -45,9 +45,9 @@ fn convert_to_base(number: usize, base: usize, exp: usize) -> Result<Vec<usize>,
     let mut number = number;
     let mut base_rep = Vec::with_capacity(exp);
 
-    for _j in 0..exp  {
+    for _j in 0..exp {
         rem = number % base;
-        number /= base;   
+        number /= base;
         base_rep.push(rem);
     }
 
@@ -547,7 +547,7 @@ impl UpdateTranscript for OOONProofInitialMessage {
         transcript.append_domain_separator(OOON_PROOF_CHALLENGE_LABEL);
         self.r1_proof_initial_message
             .update_transcript(transcript)?;
-        for k in 0..self.m  {
+        for k in 0..self.m {
             transcript.append_validated_point(b"Gk", &self.g_vec[k].compress())?;
         }
 
@@ -618,7 +618,7 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let columns = self.base;
         let rows = self.exp;
-        let n = self.base.pow(self.exp as u32) ;
+        let n = self.base.pow(self.exp as u32);
         let generators = OooNProofGenerators::new(rows, columns);
 
         assert_eq!(n, self.commitments.len());
@@ -637,13 +637,13 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
 
         let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(pc_gens, rng);
 
-        let one = Polynomial::new(self.exp );
+        let one = Polynomial::new(self.exp);
         let mut polynomials: Vec<Polynomial> = Vec::with_capacity(n);
 
         for i in 0..n {
             polynomials.push(one.clone());
             let i_rep = convert_to_base(i, self.base, self.exp).unwrap();
-            for k in 0..self.exp  {
+            for k in 0..self.exp {
                 let t = k * self.base + i_rep[k];
                 polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
             }
@@ -681,7 +681,7 @@ impl AssetProofProver<OOONProofFinalResponse> for OOONProver {
         let mut y = Scalar::one();
         let mut z = Scalar::zero();
 
-        for k in 0..self.m  {
+        for k in 0..self.m {
             z -= y * self.rho_values[k];
             y *= c.x();
         }
@@ -827,7 +827,7 @@ mod tests {
 
         // For different indexes `l`, we set the vec[l] to be our secret commitment `C_secret`.
         // We prove the knowledge of `l` and `r_b` so the commitment vec[l] will be opening to 0.
-        for l in 5..size  {
+        for l in 5..size {
             commitments[l] = C_secret;
 
             let prover =
