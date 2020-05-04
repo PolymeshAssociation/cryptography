@@ -59,12 +59,9 @@ pub type CipherEqualityProof = (
 pub type AssetMemo = EncryptedAmount;
 
 /// The type of the output of each of the confidential transaction methods.
-pub struct ControlledOutput<P, S, T> {
+pub struct ControlledOutput<P, T> {
     /// The public portion of the output which can be placed safely on the chain.
     public: P,
-    /// The private portion of the output which should be communicated thourgh
-    /// secure channels.
-    secret: S,
     /// The state of the transaction ofter the method is performed.
     State: T,
     // TODO: potential improvement: add the list of parties that need to be notified.
@@ -83,16 +80,9 @@ pub struct PubAccount {
     enc_balance: EncryptedAmount,
     asset_wellformedness_proof: WellformednessProof,
     asset_membership_proof: MembershipProof,
+    balance_correctness_proof: CorrectnessProof,
     memo: AccountMemo,
     sign: Signature,
-}
-
-/// Holds the private portion of an account. This should be protected and
-/// communicated between parties through secure channels.
-pub struct SecAccount {
-    balance_correctness_proof: CorrectnessProof,
-    memo: AccountMemo, // new: deviation from the paper
-    sign: Signature,   // new: deviation from the paper
 }
 
 // TODO Account creation is part of CRYP-61
@@ -111,13 +101,12 @@ pub enum TXSubstate {
     Rejected,
 }
 
-/// Represents the three states (initialized, justified, finalized) of a
+/// Represents the two states (initialized, justified) of a
 /// confidentional asset issuance transaction.
 #[derive(Debug)]
 pub enum AssetTXState {
     Initialization(TXSubstate),
-    InitilaziationJustification(TXSubstate),
-    Finalization(TXSubstate),
+    Justification(TXSubstate),
 }
 
 /// Represents the four states (initialized, justified, finalized, reversed) of a
@@ -140,14 +129,8 @@ pub struct PubAssetTXData {
     memo: AssetMemo,
     asset_id_equal_cipher_proof: CipherEqualityProof,
     balance_wellformedness_proof: WellformednessProof,
-    sig: Signature,
-}
-
-/// Holds the secret portion of an asset issuance transaction. This should be
-/// communicated between the issuer and the mediator over a secure channels.
-pub struct SecAssetTXData {
     balance_correctness_proof: CorrectnessProof,
-    sig: Signature, // new: deviation from the paper
+    sig: Signature,
 }
 
 /// The interface for the confidential asset issuance.
@@ -162,34 +145,35 @@ pub trait AssetTXer {
         issr_account: PubAccount,
         mdtr_pub_key: ElgamalPublicKey,
         asset_id: u32, // deviation from the paper
-    ) -> Result<ControlledOutput<PubAssetTXData, SecAssetTXData, AssetTXState>, Error>;
+    ) -> Result<ControlledOutput<PubAssetTXData, AssetTXState>, Error>;
 
-    /// Justifies a confidential asset issue transaction. This method is called
-    /// by mediator. Corresponds to `JustifyAssetTx` of MERCAT paper.
-    fn justify(
+    /// Called by validators to verify the ZKP of the wellformedness of encrypted balance
+    /// and to verify the signature.
+    fn verify_initialization(
         &self,
-        asset_tx: (PubAssetTXData, SecAssetTXData),
-        issr_acc: PubAccount,
+        asset_tx: PubAssetTXData,
+        state: AssetTXState,
+    ) -> Result<ControlledOutput<(), AssetTXState>, Error>;
+
+    /// Justifies and processes a confidential asset issue transaction. This method is called
+    /// by mediator. Corresponds to `JustifyAssetTx` and `ProcessCTX` of MERCAT paper.
+    /// If the trasaction is justified, it will be processed immediately.
+    fn justify_and_process(
+        &self,
+        asset_tx: PubAssetTXData,
+        issr_account: PubAccount,
         state: AssetTXState,
         mdtr_addr: (PubAddress, SecAddress),
         issr_pub_key: ElgamalPublicKey,
         issr_acount: PubAccount,
-        amount: u32, // deviation from the paper
-    ) -> Result<ControlledOutput<Signature, (), AssetTXState>, Error>;
+    ) -> Result<ControlledOutput<(Signature, PubAccount), AssetTXState>, Error>;
 
-    /// Processes a confidential asset issue transaction. This method is called
-    /// by "system algorithms". Corresponds to part 4 of `ProcessCTX` of MERCAT paper.
-    fn process(
+    /// Called by validators to verify the justification and processing of the transaction.
+    fn verify_justification_and_process(
         &self,
-        memo: AssetMemo,
+        sig: Signature,
         issr_account: PubAccount,
-        state: AssetTXState,
-    ) -> Result<ControlledOutput<PubAccount, (), AssetTXState>, Error>;
-
-    /// verification that is done by validators on the chain
-    /// TODO: missing from the paper. Probably need to verify functions,
-    /// one for initialize and one for justify.
-    fn verify() -> Result<ControlledOutput<(), (), AssetTXState>, Error>;
+    ) -> Result<ControlledOutput<(), AssetTXState>, Error>;
 }
 
 // ----------------------------- Confidential Transaction
@@ -236,14 +220,21 @@ pub trait ConfidentialTXer {
         rcvr_account: PubAccount,
         asset_id: u32,
         amount: u32,
-    ) -> Result<ControlledOutput<PubInitConfidentialTXData, (), ConfidentialTXState>, Error>;
+    ) -> Result<ControlledOutput<PubInitConfidentialTXData, ConfidentialTXState>, Error>;
+
+    fn verify_create(
+        &self,
+        transaction: PubInitConfidentialTXData,
+    ) -> Result<ControlledOutput<(), ConfidentialTXState>, Error>;
 
     /// Justify the transaction by mediator.
-    /// TODO: missing from the paper.
-    fn justify_init() -> Result<ControlledOutput<(), (), ConfidentialTXState>, Error>;
+    /// TODO: missing from the paper, will discuss and decide later.
+    fn justify_init() -> Result<ControlledOutput<(), ConfidentialTXState>, Error>;
 
-    /// This function is called the receiver of the transaction
-    fn finalize_by_receiver(
+    /// This function is called the receiver of the transaction to finalize and process
+    /// the transaction. It corresponds to `FinalizeCTX` and `ProcessCTX` functions
+    /// of the MERCAT paper.
+    fn finalize_and_process(
         &self,
         conf_tx_init_data: PubInitConfidentialTXData,
         rcvr_addr: (PubAddress, SecAddress),
@@ -253,22 +244,14 @@ pub trait ConfidentialTXer {
         enc_asset_id: EncryptedAssetID,
         amount: u32,
         state: ConfidentialTXState,
-    ) -> Result<ControlledOutput<PubFinalConfidentialTXData, (), ConfidentialTXState>, Error>;
+    ) -> Result<ControlledOutput<PubFinalConfidentialTXData, ConfidentialTXState>, Error>;
 
     /// This is called by the validators to verify the finalized transaction.
-    /// TODO: I think we also need verify functions for create and justify_init.
-    fn verify(
+    fn verify_finalize_and_process(
         &self,
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         conf_tx_final_data: PubFinalConfidentialTXData,
-    ) -> Result<ControlledOutput<(), (), ConfidentialTXState>, Error>;
-
-    /// This is called by the system algorithms to update the accounts of
-    /// the sender and receiver once all the above steps have passed.
-    fn process(
-        &self,
-        conf_tx_final_data: PubFinalConfidentialTXData,
         state: ConfidentialTXState,
-    ) -> Result<ControlledOutput<(PubAccount, PubAccount), (), ConfidentialTXState>, Error>;
+    ) -> Result<ControlledOutput<(), ConfidentialTXState>, Error>;
 }
