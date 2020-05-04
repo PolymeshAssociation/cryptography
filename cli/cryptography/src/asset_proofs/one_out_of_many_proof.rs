@@ -24,6 +24,7 @@ use rand_core::{CryptoRng, RngCore};
 use sha3::Sha3_512;
 use std::ops::{Add, Neg, Sub};
 use zeroize::{Zeroize, Zeroizing};
+use std::convert::TryFrom;
 
 const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathOOONProofChallengeLabel";
@@ -36,7 +37,7 @@ const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 /// The input number should be within the provided range [0, base^exp)
 fn convert_to_base(number: usize, base: usize, exp: usize) -> Result<Vec<usize>, AssetProofError> {
     ensure!(
-        number < base.pow(exp as u32),
+        number < base.pow(u32::try_from(exp).unwrap()),
         AssetProofError::OOONProofIndexOutofRange
     );
 
@@ -44,9 +45,9 @@ fn convert_to_base(number: usize, base: usize, exp: usize) -> Result<Vec<usize>,
     let mut number = number;
     let mut base_rep = Vec::with_capacity(exp);
 
-    for _j in 0..exp as usize {
+    for _j in 0..exp  {
         rem = number % base;
-        number /= base;
+        number /= base;        
         base_rep.push(rem);
     }
 
@@ -63,7 +64,7 @@ fn convert_to_matrix_rep(
     exp: usize,
 ) -> Result<Vec<Scalar>, AssetProofError> {
     ensure!(
-        number < base.pow(exp as u32),
+        number < base.pow(u32::try_from(exp).unwrap()),
         AssetProofError::OOONProofIndexOutofRange
     );
 
@@ -167,7 +168,7 @@ impl Matrix {
         let mut entrywise_product: Matrix = Matrix::new(self.rows, right.columns, Scalar::zero());
         for i in 0..self.rows {
             for j in 0..self.columns {
-                let k: usize = (i * self.columns + j) as usize;
+                let k: usize = i * self.columns + j;
                 entrywise_product.elements[k] = self.elements[k] * right.elements[k];
             }
         }
@@ -392,7 +393,7 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
             let sum = a_matrix.elements[r * a_matrix.columns + 1..(r + 1) * a_matrix.columns]
                 .iter()
                 .fold(Scalar::zero(), |s, x| s + x);
-            a_matrix.elements[(r * a_matrix.columns) as usize] = -sum;
+            a_matrix.elements[r * a_matrix.columns] = -sum;
         }
 
         let c_matrix: Matrix = a_matrix
@@ -435,8 +436,8 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover {
         for i in 0..self.m {
             for j in 0..(self.n - 1) {
                 f_values.push(
-                    self.b_matrix.elements[(i * self.n + j + 1) as usize] * c.x()
-                        + self.a_values[(i * self.n + j + 1) as usize],
+                    self.b_matrix.elements[i * self.n + j + 1] * c.x()
+                        + self.a_values[i * self.n + j + 1],
                 );
             }
         }
@@ -482,10 +483,10 @@ impl AssetProofVerifier for R1ProofVerifier {
         // Here we f[j][0] = x - (f[j][1]+ ... + f[j][columns - 1])
         for i in 0..rows {
             for j in 1..columns {
-                f_matrix.elements[(i * columns + j) as usize] =
-                    final_response.f_elements[(i * (columns - 1) + (j - 1)) as usize];
-                f_matrix.elements[(i * columns) as usize] -=
-                    &final_response.f_elements[(i * (columns - 1) + (j - 1)) as usize];
+                f_matrix.elements[i * columns + j] =
+                    final_response.f_elements[i * (columns - 1) + (j - 1)];
+                f_matrix.elements[i * columns] -=
+                    &final_response.f_elements[i * (columns - 1) + (j - 1)];
             }
         }
 
@@ -528,7 +529,7 @@ impl OOONProofInitialMessage {
     fn new(base: usize, exp: usize) -> Self {
         OOONProofInitialMessage {
             r1_proof_initial_message: R1ProofInitialMessage::default(),
-            G_vec: Vec::with_capacity(exp as usize),
+            G_vec: Vec::with_capacity(exp),
             n: base,
             m: exp,
         }
@@ -546,7 +547,7 @@ impl UpdateTranscript for OOONProofInitialMessage {
         transcript.append_domain_separator(OOON_PROOF_CHALLENGE_LABEL);
         self.r1_proof_initial_message
             .update_transcript(transcript)?;
-        for k in 0..self.m as usize {
+        for k in 0..self.m  {
             transcript.append_validated_point(b"Gk", &self.G_vec[k].compress())?;
         }
 
@@ -617,10 +618,10 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let columns = self.base;
         let rows = self.exp;
-        let N = self.base.pow(self.exp as u32) as usize;
+        let n = self.base.pow(self.exp as u32) ;
         let generators = OooNProofGenerators::new(rows, columns);
 
-        assert_eq!(N, self.commitments.len());
+        assert_eq!(n, self.commitments.len());
 
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
 
@@ -636,22 +637,23 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
 
         let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(pc_gens, rng);
 
-        let one = Polynomial::new(self.exp as usize);
-        let mut polynomials: Vec<Polynomial> = vec![one; N];
+        let one = Polynomial::new(self.exp );
+        let mut polynomials: Vec<Polynomial> = Vec::with_capacity(n);
 
-        for I in 0..N as usize {
-            let i_rep = convert_to_base(I as usize, self.base, self.exp).unwrap();
-            for k in 0..self.exp as usize {
-                let t = k * self.base as usize + i_rep[k] as usize;
-                polynomials[I].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
+        for i in 0..n {
+            polynomials.push(one.clone());
+            let i_rep = convert_to_base(i, self.base, self.exp).unwrap();
+            for k in 0..self.exp  {
+                let t = k * self.base + i_rep[k];
+                polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
             }
         }
 
-        let mut G_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp as usize);
-        for k in 0..self.exp as usize {
+        let mut G_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp);
+        for k in 0..self.exp {
             G_values.push(rho[k] * generators.com_gens.B_blinding); // #TODO: Double check if this matches the El-Gamal generators.
-            for I in 0..N {
-                G_values[k] += (polynomials[I].coeffs[k]) * self.commitments[I];
+            for i in 0..n {
+                G_values[k] += (polynomials[i].coeffs[k]) * self.commitments[i];
             }
         }
 
@@ -679,7 +681,7 @@ impl AssetProofProver<OOONProofFinalResponse> for OOONProver {
         let mut y = Scalar::one();
         let mut z = Scalar::zero();
 
-        for k in 0..self.m as usize {
+        for k in 0..self.m  {
             z -= y * self.rho_values[k];
             y *= c.x();
         }
@@ -718,7 +720,7 @@ impl AssetProofVerifier for OOONProofVerifier {
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Result<()> {
-        let N = final_response.n.pow(final_response.m as u32) as usize;
+        let size = final_response.n.pow(final_response.m as u32);
         let m = final_response.m;
         let n = final_response.n;
         let generators = OooNProofGenerators::new(final_response.m, final_response.n);
@@ -742,8 +744,8 @@ impl AssetProofVerifier for OOONProofVerifier {
 
         for i in 0..m {
             for j in 1..n {
-                f_values[(i * n + j) as usize] = proof_f_elements[(i * (n - 1) + (j - 1)) as usize];
-                f_values[(i * n) as usize] -= proof_f_elements[(i * (n - 1) + (j - 1)) as usize];
+                f_values[(i * n + j)] = proof_f_elements[(i * (n - 1) + (j - 1))];
+                f_values[(i * n)] -= proof_f_elements[(i * (n - 1) + (j - 1))];
             }
         }
 
@@ -751,11 +753,11 @@ impl AssetProofVerifier for OOONProofVerifier {
         let mut left: RistrettoPoint = RistrettoPoint::default();
         let right = final_response.z * generators.com_gens.B_blinding;
 
-        for i in 0..N {
+        for i in 0..size {
             p_i = Scalar::one();
-            let i_rep = convert_to_base(i as usize, n as usize, m as usize).unwrap();
+            let i_rep = convert_to_base(i, n, m).unwrap();
             for j in 0..m {
-                p_i *= f_values[j * n + i_rep[j] as usize];
+                p_i *= f_values[j * n + i_rep[j]];
             }
             left += p_i * self.commitment_list[i];
         }
@@ -804,7 +806,7 @@ mod tests {
         const EXPONENT: usize = 3; //m = 2 : ROWS
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
-        let N = 64;
+        let n = 64;
         let size: usize = 64;
 
         // Computes the secret commitment which will be opening to 0:
@@ -816,7 +818,7 @@ mod tests {
         // This is the global, public list of commitments where we want to prove the knowledge of
         // one commitment opening to 0 without revealing its index or random factor.
 
-        let mut commitments: Vec<RistrettoPoint> = (0..N)
+        let mut commitments: Vec<RistrettoPoint> = (0..n)
             .map(|_| {
                 Scalar::random(&mut rng) * generators.com_gens.B
                     + Scalar::random(&mut rng) * generators.com_gens.B_blinding
@@ -825,7 +827,7 @@ mod tests {
 
         // For different indexes `l`, we set the vec[l] to be our secret commitment `C_secret`.
         // We prove the knowledge of `l` and `rB` so the commitment vec[l] will be opening to 0.
-        for l in 5..size as usize {
+        for l in 5..size  {
             commitments[l] = C_secret;
 
             let prover =
