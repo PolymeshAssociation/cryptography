@@ -47,7 +47,7 @@ fn convert_to_base(number: usize, base: usize, exp: usize) -> Result<Vec<usize>,
 
     for _j in 0..exp  {
         rem = number % base;
-        number /= base;        
+        number /= base;   
         base_rep.push(rem);
     }
 
@@ -292,19 +292,19 @@ impl Polynomial {
 
 #[derive(Copy, Clone, Debug)]
 pub struct R1ProofInitialMessage {
-    A: RistrettoPoint,
-    B: RistrettoPoint,
-    C: RistrettoPoint,
-    D: RistrettoPoint,
+    a: RistrettoPoint,
+    b: RistrettoPoint,
+    c: RistrettoPoint,
+    d: RistrettoPoint,
 }
 
 impl Default for R1ProofInitialMessage {
     fn default() -> Self {
         R1ProofInitialMessage {
-            A: RISTRETTO_BASEPOINT_POINT,
-            B: RISTRETTO_BASEPOINT_POINT,
-            C: RISTRETTO_BASEPOINT_POINT,
-            D: RISTRETTO_BASEPOINT_POINT,
+            a: RISTRETTO_BASEPOINT_POINT,
+            b: RISTRETTO_BASEPOINT_POINT,
+            c: RISTRETTO_BASEPOINT_POINT,
+            d: RISTRETTO_BASEPOINT_POINT,
         }
     }
 }
@@ -312,10 +312,10 @@ impl Default for R1ProofInitialMessage {
 impl UpdateTranscript for R1ProofInitialMessage {
     fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
         transcript.append_domain_separator(R1_PROOF_CHALLENGE_LABEL);
-        transcript.append_validated_point(b"A", &self.A.compress())?;
-        transcript.append_validated_point(b"B", &self.B.compress())?;
-        transcript.append_validated_point(b"C", &self.C.compress())?;
-        transcript.append_validated_point(b"D", &self.D.compress())?;
+        transcript.append_validated_point(b"A", &self.a.compress())?;
+        transcript.append_validated_point(b"B", &self.b.compress())?;
+        transcript.append_validated_point(b"C", &self.c.compress())?;
+        transcript.append_validated_point(b"D", &self.d.compress())?;
         Ok(())
     }
 }
@@ -323,8 +323,8 @@ impl UpdateTranscript for R1ProofInitialMessage {
 #[derive(Clone, Debug)]
 pub struct R1ProofFinalResponse {
     f_elements: Vec<Scalar>,
-    zA: Scalar,
-    zC: Scalar,
+    z_a: Scalar,
+    z_c: Scalar,
     m: usize,
     n: usize,
 }
@@ -333,10 +333,10 @@ pub struct R1ProofFinalResponse {
 pub struct R1Prover {
     a_values: Vec<Scalar>,
     b_matrix: Zeroizing<Matrix>,
-    rA: Scalar,
-    rB: Scalar,
-    rC: Scalar,
-    rD: Scalar,
+    r_a: Scalar,
+    r_b: Scalar,
+    r_c: Scalar,
+    r_d: Scalar,
     m: usize,
     n: usize,
 }
@@ -345,7 +345,7 @@ pub struct R1ProverAwaitingChallenge {
     /// The bit-value matrix, where each row contains only one 1
     b_matrix: Matrix,
     /// The randomness used for committing to the bit matrix
-    rB: Scalar,
+    r_b: Scalar,
     m: usize,
     n: usize,
 }
@@ -354,7 +354,7 @@ impl R1ProverAwaitingChallenge {
     pub fn new(bit_matrix: Matrix, random: Scalar, rows: usize, columns: usize) -> Self {
         R1ProverAwaitingChallenge {
             b_matrix: bit_matrix,
-            rB: random,
+            r_b: random,
             m: rows,
             n: columns,
         }
@@ -375,9 +375,9 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
         let columns = self.b_matrix.columns;
         let generators = OooNProofGenerators::new(rows, columns);
 
-        let random_A = Scalar::random(rng);
-        let random_C = Scalar::random(rng);
-        let random_D = Scalar::random(rng);
+        let random_a = Scalar::random(rng);
+        let random_c = Scalar::random(rng);
+        let random_d = Scalar::random(rng);
 
         let ONE = Matrix::new(rows, columns, Scalar::one());
         let TWO = Matrix::new(rows, columns, Scalar::one() + Scalar::one());
@@ -405,25 +405,25 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
             R1Prover {
                 a_values: a_matrix.elements.clone(),
                 b_matrix: Zeroizing::new(self.b_matrix.clone()),
-                rB: self.rB.clone(),
-                rA: random_A,
-                rC: random_C,
-                rD: random_D,
+                r_b: self.r_b.clone(),
+                r_a: random_a,
+                r_c: random_c,
+                r_d: random_d,
                 m: rows,
                 n: columns,
             },
             R1ProofInitialMessage {
-                A: generators
-                    .vector_commit(&a_matrix.elements, random_A)
+                a: generators
+                    .vector_commit(&a_matrix.elements, random_a)
                     .unwrap(),
-                B: generators
-                    .vector_commit(&self.b_matrix.elements, self.rB)
+                b: generators
+                    .vector_commit(&self.b_matrix.elements, self.r_b)
                     .unwrap(),
-                C: generators
-                    .vector_commit(&c_matrix.elements, random_C)
+                c: generators
+                    .vector_commit(&c_matrix.elements, random_c)
                     .unwrap(),
-                D: generators
-                    .vector_commit(&d_matrix.elements, random_D)
+                d: generators
+                    .vector_commit(&d_matrix.elements, random_d)
                     .unwrap(),
             },
         )
@@ -444,8 +444,8 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover {
 
         R1ProofFinalResponse {
             f_elements: f_values,
-            zA: self.rA + c.x() * self.rB,
-            zC: self.rD + c.x() * self.rC,
+            z_a: self.r_a + c.x() * self.r_b,
+            z_c: self.r_d + c.x() * self.r_c,
             m: self.m,
             n: self.n,
         }
@@ -453,12 +453,12 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover {
 }
 
 pub struct R1ProofVerifier {
-    B: RistrettoPoint,
+    b: RistrettoPoint,
 }
 
 impl R1ProofVerifier {
     pub fn new(bit_commitment: RistrettoPoint) -> Self {
-        R1ProofVerifier { B: bit_commitment }
+        R1ProofVerifier { b: bit_commitment }
     }
 }
 
@@ -491,7 +491,7 @@ impl AssetProofVerifier for R1ProofVerifier {
         }
 
         let com_f = generators
-            .vector_commit(&f_matrix.elements, final_response.zA)
+            .vector_commit(&f_matrix.elements, final_response.z_a)
             .unwrap();
         let com_fx = generators
             .vector_commit(
@@ -499,17 +499,17 @@ impl AssetProofVerifier for R1ProofVerifier {
                     .entrywise_product(&(&x_matrix - &f_matrix))
                     .unwrap()
                     .elements,
-                final_response.zC,
+                final_response.z_c,
             )
             .unwrap();
 
         ensure!(
-            c.x() * self.B + initial_message.A == com_f,
+            c.x() * self.b + initial_message.a == com_f,
             AssetProofError::R1FinalResponseVerificationError { check: 1 }
         );
 
         ensure!(
-            c.x() * initial_message.C + initial_message.D == com_fx,
+            c.x() * initial_message.c + initial_message.d == com_fx,
             AssetProofError::R1FinalResponseVerificationError { check: 2 }
         );
 
@@ -520,7 +520,7 @@ impl AssetProofVerifier for R1ProofVerifier {
 #[derive(Clone, Debug)]
 pub struct OOONProofInitialMessage {
     r1_proof_initial_message: R1ProofInitialMessage,
-    G_vec: Vec<RistrettoPoint>,
+    g_vec: Vec<RistrettoPoint>,
     n: usize,
     m: usize,
 }
@@ -529,7 +529,7 @@ impl OOONProofInitialMessage {
     fn new(base: usize, exp: usize) -> Self {
         OOONProofInitialMessage {
             r1_proof_initial_message: R1ProofInitialMessage::default(),
-            G_vec: Vec::with_capacity(exp),
+            g_vec: Vec::with_capacity(exp),
             n: base,
             m: exp,
         }
@@ -548,7 +548,7 @@ impl UpdateTranscript for OOONProofInitialMessage {
         self.r1_proof_initial_message
             .update_transcript(transcript)?;
         for k in 0..self.m  {
-            transcript.append_validated_point(b"Gk", &self.G_vec[k].compress())?;
+            transcript.append_validated_point(b"Gk", &self.g_vec[k].compress())?;
         }
 
         Ok(())
@@ -666,7 +666,7 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
             },
             OOONProofInitialMessage {
                 r1_proof_initial_message: r1_initial_message,
-                G_vec: G_values,
+                g_vec: G_values,
                 m: self.exp,
                 n: self.base,
             },
@@ -686,7 +686,7 @@ impl AssetProofProver<OOONProofFinalResponse> for OOONProver {
             y *= c.x();
         }
 
-        z += self.r1_prover.rB * y;
+        z += self.r1_prover.r_b * y;
 
         OOONProofFinalResponse {
             r1_proof_final_response: r1_final_response,
@@ -725,7 +725,7 @@ impl AssetProofVerifier for OOONProofVerifier {
         let n = final_response.n;
         let generators = OooNProofGenerators::new(final_response.m, final_response.n);
 
-        let b_comm = initial_message.r1_proof_initial_message.B;
+        let b_comm = initial_message.r1_proof_initial_message.b;
         let r1_verifier = R1ProofVerifier::new(b_comm);
 
         let result_r1 = r1_verifier.verify(
@@ -763,7 +763,7 @@ impl AssetProofVerifier for OOONProofVerifier {
         }
         let mut temp = Scalar::one();
         for k in 0..m {
-            left -= temp * initial_message.G_vec[k];
+            left -= temp * initial_message.g_vec[k];
             temp *= c.x();
         }
 
@@ -810,9 +810,9 @@ mod tests {
         let size: usize = 64;
 
         // Computes the secret commitment which will be opening to 0:
-        // `C_secret = 0 * pc_gens.B + rB * pc_gens.B_Blinding`
-        let rB = Scalar::random(&mut rng);
-        let C_secret = rB * generators.com_gens.B_blinding;
+        // `C_secret = 0 * pc_gens.B + r_b * pc_gens.B_Blinding`
+        let r_b = Scalar::random(&mut rng);
+        let C_secret = r_b * generators.com_gens.B_blinding;
 
         // Compose a vector of 64 = 4^3 random commitments.
         // This is the global, public list of commitments where we want to prove the knowledge of
@@ -826,12 +826,12 @@ mod tests {
             .collect();
 
         // For different indexes `l`, we set the vec[l] to be our secret commitment `C_secret`.
-        // We prove the knowledge of `l` and `rB` so the commitment vec[l] will be opening to 0.
+        // We prove the knowledge of `l` and `r_b` so the commitment vec[l] will be opening to 0.
         for l in 5..size  {
             commitments[l] = C_secret;
 
             let prover =
-                OOONProverAwaitingChallenge::new(l, rB, commitments.clone(), EXPONENT, BASE);
+                OOONProverAwaitingChallenge::new(l, r_b, commitments.clone(), EXPONENT, BASE);
 
             let verifier = OOONProofVerifier::new(commitments.clone());
             let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
