@@ -1,12 +1,15 @@
 //! One-out-of-many proof is a Sigma protocol enabling to efficiently prove the knowledge
-//! of a secret commitment among the public list of N commitments which is opening to 0
+//! of a secret commitment among the public list of N commitments, which is opening to 0.
+//! It is important to note that the provided list size should be exactly N=n^m.
+//! If the commitment list size is smaller than N, it should be padded with the last commitment.
+//! For more details see the original paper https://eprint.iacr.org/2015/643.pdf
+
 #![allow(non_snake_case)]
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_COMPRESSED, constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::RistrettoPoint, scalar::Scalar, traits::MultiscalarMul,
 };
-
 
 use crate::asset_proofs::{
     encryption_proofs::{
@@ -26,46 +29,62 @@ const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathOOONProofChallengeLabel";
 const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 
-fn convert_to_matrix_rep(number: usize, base: usize, exp: usize) -> Result<Vec<Scalar>, AssetProofError > {
-        
-        ensure!(number < base.pow(exp as u32), AssetProofError::OOONProofIndexOutofRange);
-    
-        let mut rem: usize;
-        let mut number = number;
-        let mut matrix_rep = vec![Scalar::zero(); exp * base];
-        for j in 0..exp {
-            rem = number % base;
-            number /= base;
-            matrix_rep[(j * base + rem) as usize] = Scalar::one();
-        }
-    
-        Ok(matrix_rep)
-}
-    
-
-// This function returns the representation of the input number as the given base number
-// The input number should be within the provided range [0, base^exp)
+/// One-out-of-Many Proofs are instantiated with a fixed value `N = n^m`,
+/// `n` and `m` are system parameters which choice has a significant impact on the final proof sizes and performance.
+/// `n` is the fixed base. Usually we will work with base `4`.
+/// Returns the representation of the input number as the given base number
+/// The input number should be within the provided range [0, base^exp)
 fn convert_to_base(number: usize, base: usize, exp: usize) -> Result<Vec<usize>, AssetProofError> {
-    
-        ensure!(number < base.pow(exp as u32), AssetProofError::OOONProofIndexOutofRange);
+    ensure!(
+        number < base.pow(exp as u32),
+        AssetProofError::OOONProofIndexOutofRange
+    );
 
-        let mut rem: usize;
-        let mut number = number;
-        let mut base_rep = vec![0usize; exp ];
-        for j in 0..exp as usize {
+    let mut rem: usize;
+    let mut number = number;
+    let mut base_rep = Vec::with_capacity(exp);
+
+    for _j in 0..exp as usize {
         rem = number % base;
         number /= base;
-        base_rep[j] = rem;
+        base_rep.push(rem);
     }
 
     Ok(base_rep)
 }
+/// Returns a special bit-matrix representation of the input number.
+/// The input `number` should be within the provided range `[0, base^exp)`
+/// The number is represented as the given base number `n = n0 *base^0 + n1 *base^1 +...+ n_exp *base^{exp-1}`
+/// The return value is a bit-matrix of size `exp x base` where
+/// in the  `j`-th row there is exactly one 1 at the cell matrix[j][n_j].
+fn convert_to_matrix_rep(
+    number: usize,
+    base: usize,
+    exp: usize,
+) -> Result<Vec<Scalar>, AssetProofError> {
+    ensure!(
+        number < base.pow(exp as u32),
+        AssetProofError::OOONProofIndexOutofRange
+    );
 
-// For the given base n and the exponent value m , we need 2 + n * m orthogonal generator points.
-// The first two generators are used for Pedersen commitments and are fixed across the cryptography crate.
+    let mut rem: usize;
+    let mut number = number;
+    let mut matrix_rep = vec![Scalar::zero(); exp * base];
+    for j in 0..exp {
+        rem = number % base;
+        number /= base;
+        matrix_rep[j * base + rem] = Scalar::one();
+    }
+
+    Ok(matrix_rep)
+}
+
+/// Generates `n * m + 2` group generators exploited by the one-out-of-many proof algorithm. The later  
+/// uses vector commitments of size `n * m` and regular Pedersen commitments.
 pub struct OooNProofGenerators {
-    // Replace the generators g and h with bulletproof::PedersenGens
+    /// Generates for computing Pedersen commitments
     com_gens: PedersenGens,
+    /// Generators for computing vector commitments.
     h_vec: Vec<RistrettoPoint>,
 }
 
@@ -93,12 +112,17 @@ impl OooNProofGenerators {
         }
     }
 
-    // This function commits to the given message vector by using the provided blinding randomness.
-    // The generator point "g" is used for the blinding factor.
-    pub fn vector_commit(&self, m_vec: &Vec<Scalar>, blinding: Scalar) -> Result<RistrettoPoint, AssetProofError> {
-        
-        ensure!(&m_vec.len() ==  &self.h_vec.len(), AssetProofError::OOONProofWrongSize);
-        
+    /// Commits to the given vector by using the provided blinding randomness.
+    pub fn vector_commit(
+        &self,
+        m_vec: &Vec<Scalar>,
+        blinding: Scalar,
+    ) -> Result<RistrettoPoint, AssetProofError> {
+        ensure!(
+            &m_vec.len() == &self.h_vec.len(),
+            AssetProofError::OOONProofWrongSize
+        );
+
         let commitment: RistrettoPoint = RistrettoPoint::multiscalar_mul(m_vec, &self.h_vec);
 
         Ok(commitment + (blinding * self.com_gens.B_blinding))
@@ -111,12 +135,12 @@ impl Default for OooNProofGenerators {
     }
 }
 
-// Basic matrix operations over the Scalar field such are matrix addition, multiplication with
-// constant and inner-product computations are used for one-out-of-many proof generation.
-// Matrixes are represented through vectors. The matrix of size M x N is represented by a vector of size M * N.
-
 #[derive(Clone, Debug, PartialEq, Zeroize)]
-#[zeroize(drop)]
+/// Implements basic Matrix functionality over scalars.
+/// The matrix elements are represented through a vector of size row * columns,
+/// where `vec[i * columns + j] := matrix[i][j]`
+/// Matrix entry-wise multiplications, addition and subtraction operations are used
+/// during OOON Proof generation process.
 pub struct Matrix {
     elements: Vec<Scalar>,
     rows: usize,
@@ -124,19 +148,21 @@ pub struct Matrix {
 }
 
 impl Matrix {
-    // Initialize a new matrix of the given sizes and fills it with the provided default value.
+    /// Initializes a new matrix of the given sizes and fills it with the provided default value.
     fn new(r: usize, c: usize, default: Scalar) -> Self {
         Matrix {
             rows: r,
             columns: c,
-            elements: vec![default; (r * c) as usize],
+            elements: vec![default; r * c],
         }
     }
-
-    fn entrywise_product(&self, right: &Matrix) -> Result<Matrix , AssetProofError>{
-        
+    /// Computes the entry-wise (Hadamard) product of two matrixes of the same dimensions.
+    fn entrywise_product(&self, right: &Matrix) -> Result<Matrix, AssetProofError> {
         ensure!(self.rows == right.rows, AssetProofError::OOONProofWrongSize);
-        ensure!(self.columns == right.columns, AssetProofError::OOONProofWrongSize);
+        ensure!(
+            self.columns == right.columns,
+            AssetProofError::OOONProofWrongSize
+        );
 
         let mut entrywise_product: Matrix = Matrix::new(self.rows, right.columns, Scalar::zero());
         for i in 0..self.rows {
@@ -154,7 +180,6 @@ impl Neg for Matrix {
     type Output = Matrix;
 
     fn neg(self) -> Matrix {
-
         let mut negated: Matrix = Matrix::new(self.rows, self.columns, Scalar::zero());
         for i in 0..self.rows {
             for j in 0..self.columns {
@@ -169,10 +194,9 @@ impl Neg for Matrix {
 impl<'a, 'b> Add<&'b Matrix> for &'a Matrix {
     type Output = Matrix;
     fn add(self, right: &'b Matrix) -> Matrix {
-        
         assert_eq!(self.rows, right.rows);
         assert_eq!(self.columns, right.columns);
-        
+
         let mut sum: Matrix = Matrix::new(self.rows, self.columns, Scalar::zero());
         for i in 0..self.rows {
             for j in 0..self.columns {
@@ -188,7 +212,6 @@ impl<'a, 'b> Add<&'b Matrix> for &'a Matrix {
 impl<'a, 'b> Sub<&'b Matrix> for &'a Matrix {
     type Output = Matrix;
     fn sub(self, right: &'b Matrix) -> Matrix {
-
         assert_eq!(self.rows, right.rows);
         assert_eq!(self.columns, right.columns);
 
@@ -205,19 +228,19 @@ impl<'a, 'b> Sub<&'b Matrix> for &'a Matrix {
 
 #[derive(Clone, Debug, PartialEq)]
 
-// The Polynomial struct explicitly stores its degree. 
-// Coefficient vectors can be initiated with  excessed capacity.
-// The first element of the coefficients vector coeffs[0] is the polynomial's free term
-// The coeffs[degree] is the leading coefficient of the polynomial.
+/// Implements a basic polynomial functionality over scalars
+/// The Polynomial struct explicitly stores its degree and the coefficients vector.
+/// The first element of the coefficients vector coeffs[0] is the polynomial's free term
+/// The coeffs[degree] is the leading coefficient of the polynomial.
 pub struct Polynomial {
     degree: usize,
     coeffs: Vec<Scalar>,
 }
 
 impl Polynomial {
-    // Takes as parameter the expected degree of the polynomial
-    // to reserve enough capacity for the coefficient vector.
-    // A vector of size degree + 1 is reserved for storing the polynomial's coefficients.
+    /// Takes as parameter the expected degree of the polynomial
+    /// to reserve enough capacity for the coefficient vector.
+    /// A vector of size degree + 1 is reserved for storing the polynomial's coefficients.
     fn new(expected_degree: usize) -> Polynomial {
         let mut vec = vec![Scalar::zero(); expected_degree + 1];
         vec[0] = Scalar::one();
@@ -227,7 +250,7 @@ impl Polynomial {
         }
     }
 
-    // "Add_factor" function multiples the given polynomial P(x) with the provided linear (a * x + b).
+    /// Multipleis the given polynomial `P(x)` with the provided linear `(a * x + b)`.
     fn add_factor(&mut self, a: Scalar, b: Scalar) -> &Polynomial {
         let old = self.coeffs.clone();
         let old_degree = self.degree;
@@ -248,7 +271,8 @@ impl Polynomial {
 
         self
     }
-    // "eval" computes the polynomial evaluation value at the given point x.
+    /// Computes the polynomial evaluation value at the given point `x`.
+    /// Used for testing purposes.
     fn eval(&self, point: Scalar) -> Scalar {
         let mut value = Scalar::zero();
         let mut x: Scalar = Scalar::one();
@@ -261,6 +285,9 @@ impl Polynomial {
         value
     }
 }
+
+/// The R1 Proof is a zero-knowledge proof for a (bit-matrix) commitment B having an opening
+/// to a bit-matrix, where in each row there is exactly one 1.
 
 #[derive(Copy, Clone, Debug)]
 pub struct R1ProofInitialMessage {
@@ -302,7 +329,6 @@ pub struct R1ProofFinalResponse {
 }
 
 #[derive(Clone, Debug, Zeroize)]
-#[zeroize(drop)]
 pub struct R1Prover {
     a_values: Vec<Scalar>,
     b_matrix: Zeroizing<Matrix>,
@@ -314,11 +340,10 @@ pub struct R1Prover {
     n: usize,
 }
 #[derive(Clone, Debug, Zeroize)]
-#[zeroize(drop)]
 pub struct R1ProverAwaitingChallenge {
-    // The bit-value matrix, where each row contains only one 1
+    /// The bit-value matrix, where each row contains only one 1
     b_matrix: Matrix,
-    // The randomness used for committing to the bit matrix
+    /// The randomness used for committing to the bit matrix
     rB: Scalar,
     m: usize,
     n: usize,
@@ -363,15 +388,17 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
         };
 
         for r in 0..a_matrix.rows {
-            //The first element of each row is the negated sum of the row's other elements.
+            // The first element of each row is the negated sum of the row's other elements.
             let sum = a_matrix.elements[r * a_matrix.columns + 1..(r + 1) * a_matrix.columns]
-                                                .iter().fold(Scalar::zero(), |s, x| s+x);
+                .iter()
+                .fold(Scalar::zero(), |s, x| s + x);
             a_matrix.elements[(r * a_matrix.columns) as usize] = -sum;
         }
 
         let c_matrix: Matrix = a_matrix
             .clone()
-            .entrywise_product(&(&ONE - &TWO.entrywise_product(&self.b_matrix).unwrap())).unwrap();
+            .entrywise_product(&(&ONE - &TWO.entrywise_product(&self.b_matrix).unwrap()))
+            .unwrap();
         let d_matrix: Matrix = -(a_matrix.clone().entrywise_product(&a_matrix).unwrap()); // Implement an associated function taking two matrix parameters
         (
             R1Prover {
@@ -385,10 +412,18 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
                 n: columns,
             },
             R1ProofInitialMessage {
-                A: generators.vector_commit(&a_matrix.elements, random_A).unwrap(),
-                B: generators.vector_commit(&self.b_matrix.elements, self.rB).unwrap(),
-                C: generators.vector_commit(&c_matrix.elements, random_C).unwrap(),
-                D: generators.vector_commit(&d_matrix.elements, random_D).unwrap(),
+                A: generators
+                    .vector_commit(&a_matrix.elements, random_A)
+                    .unwrap(),
+                B: generators
+                    .vector_commit(&self.b_matrix.elements, self.rB)
+                    .unwrap(),
+                C: generators
+                    .vector_commit(&c_matrix.elements, random_C)
+                    .unwrap(),
+                D: generators
+                    .vector_commit(&d_matrix.elements, random_D)
+                    .unwrap(),
             },
         )
     }
@@ -422,9 +457,7 @@ pub struct R1ProofVerifier {
 
 impl R1ProofVerifier {
     pub fn new(bit_commitment: RistrettoPoint) -> Self {
-        R1ProofVerifier {
-            B: bit_commitment,
-        }
+        R1ProofVerifier { B: bit_commitment }
     }
 }
 
@@ -446,7 +479,7 @@ impl AssetProofVerifier for R1ProofVerifier {
         let x_matrix = Matrix::new(rows, columns, *c.x());
 
         let generators = OooNProofGenerators::new(rows, columns);
-
+        // Here we f[j][0] = x - (f[j][1]+ ... + f[j][columns - 1])
         for i in 0..rows {
             for j in 1..columns {
                 f_matrix.elements[(i * columns + j) as usize] =
@@ -456,11 +489,18 @@ impl AssetProofVerifier for R1ProofVerifier {
             }
         }
 
-        let com_f = generators.vector_commit(&f_matrix.elements, final_response.zA).unwrap();
-        let com_fx = generators.vector_commit(
-            &f_matrix.entrywise_product(&(&x_matrix - &f_matrix)).unwrap().elements,
-                                        final_response.zC,
-                                        ).unwrap();
+        let com_f = generators
+            .vector_commit(&f_matrix.elements, final_response.zA)
+            .unwrap();
+        let com_fx = generators
+            .vector_commit(
+                &f_matrix
+                    .entrywise_product(&(&x_matrix - &f_matrix))
+                    .unwrap()
+                    .elements,
+                final_response.zC,
+            )
+            .unwrap();
 
         ensure!(
             c.x() * self.B + initial_message.A == com_f,
@@ -494,7 +534,7 @@ impl OOONProofInitialMessage {
         }
     }
 }
-
+/// A `default` implementation used for testing.
 impl Default for OOONProofInitialMessage {
     fn default() -> Self {
         OOONProofInitialMessage::new(4, 3) // TODO: Replace these constants with system-wide parameters for the BASE and EXPONENT
@@ -522,7 +562,6 @@ pub struct OOONProofFinalResponse {
     n: usize,
 }
 #[derive(Clone, Debug, Zeroize)]
-#[zeroize(drop)]
 pub struct OOONProver {
     rho_values: Vec<Scalar>,
     r1_prover: Zeroizing<R1Prover>,
@@ -530,10 +569,13 @@ pub struct OOONProver {
     n: usize,
 }
 
+/// Given the public list of commitments `C_0, C_1, ..., C_{N-1} where N = base^exp, the prover wants to
+/// prove the knowledge of a secret commitment C_l  which is opening to 0.
+/// The prover witness is comprised of the secret_index `l` and the commitment's random factor `random`
 pub struct OOONProverAwaitingChallenge {
-    // The index of the secret commitment in the given list, which is opening to zero and is blinded by "random"
+    /// The index of the secret commitment in the given list, which is opening to zero and is blinded by "random"
     secret_index: usize,
-    // The randomness used for committing to the bit matrix
+    /// The randomness used in the commitment C_{secret_index}
     random: Scalar,
     // The list of N commitments where one commitment is opening to 0. (#TODO Find a way to avoid of cloning this huge data set)
     commitments: Vec<RistrettoPoint>,
@@ -542,7 +584,13 @@ pub struct OOONProverAwaitingChallenge {
 }
 
 impl OOONProverAwaitingChallenge {
-    pub fn new(l: usize, r: Scalar, commitments_ref: Vec<RistrettoPoint>, m: usize, n: usize) -> Self {
+    pub fn new(
+        l: usize,
+        r: Scalar,
+        commitments_ref: Vec<RistrettoPoint>,
+        m: usize,
+        n: usize,
+    ) -> Self {
         OOONProverAwaitingChallenge {
             secret_index: l,
             random: r,
@@ -558,6 +606,10 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
     type ZKFinalResponse = OOONProofFinalResponse;
     type ZKProver = OOONProver;
 
+    /// We require the actual size of commitments list to be equal exactly to N = n^m
+    /// If the commitment vector size is smaller than N, it should be padded with the last element to make the final commitment vector of size N.
+    /// We assume the list is padded already before being passed to the OOON proof initialization process.
+    /// This has critical security importance, as non-padded list will open doors for serious privacy issues.
     fn generate_initial_message<T: RngCore + CryptoRng>(
         &self,
         pc_gens: &PedersenGens,
@@ -568,10 +620,6 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
         let N = self.base.pow(self.exp as u32) as usize;
         let generators = OooNProofGenerators::new(rows, columns);
 
-        // We require the actual size of the provided list of commitments to be equal to N = n^m
-        // In case of smaller list, we should pad the commitment list with the last element to make the commitment vector of size N.
-        // We assume the list is padded already before being passed to the OOON proof initialization process.
-        // IMPORTANT: This check has critical security importance
         assert_eq!(N, self.commitments.len());
 
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
@@ -671,8 +719,8 @@ impl AssetProofVerifier for OOONProofVerifier {
         final_response: &Self::ZKFinalResponse,
     ) -> Result<()> {
         let N = final_response.n.pow(final_response.m as u32) as usize;
-        let m = final_response.m ;
-        let n = final_response.n ;
+        let m = final_response.m;
+        let n = final_response.n;
         let generators = OooNProofGenerators::new(final_response.m, final_response.n);
 
         let b_comm = initial_message.r1_proof_initial_message.B;
@@ -739,30 +787,49 @@ mod tests {
 
     #[test]
     #[wasm_bindgen_test]
+    /// Tests the whole workflow of one-out-of-many proofs by setting up the parameters base = 4 and exp =3.
+    /// This parameters enable to generate 1-out-of-64 proofs which means the prover can prove the knowledge of
+    /// one commitment among the public list of 64 commitments, which is opening to 0. The prover does this
+    /// without revealing the secret commitment index or its random factor.
+
     fn test_ooon_proof_api() {
         let pc_gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
 
         let mut transcript = Transcript::new(OOON_PROOF_LABEL);
 
+        // Setup the system parameters for base and exponent.
+        // This test enables to create 1-out-of-64 proofs.
         const BASE: usize = 4; //n = 3 : COLUMNS
         const EXPONENT: usize = 3; //m = 2 : ROWS
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
-        let N = 64; // 4^3
+        let N = 64;
         let size: usize = 64;
 
+        // Computes the secret commitment which will be opening to 0:
+        // `C_secret = 0 * pc_gens.B + rB * pc_gens.B_Blinding`
         let rB = Scalar::random(&mut rng);
         let C_secret = rB * generators.com_gens.B_blinding;
 
-        let mut commitments : Vec<RistrettoPoint> = (0..N).map(|_| 
-                Scalar::random(&mut rng) * generators.com_gens.B + Scalar::random(&mut rng) * generators.com_gens.B_blinding
-                ).collect();
+        // Compose a vector of 64 = 4^3 random commitments.
+        // This is the global, public list of commitments where we want to prove the knowledge of
+        // one commitment opening to 0 without revealing its index or random factor.
 
+        let mut commitments: Vec<RistrettoPoint> = (0..N)
+            .map(|_| {
+                Scalar::random(&mut rng) * generators.com_gens.B
+                    + Scalar::random(&mut rng) * generators.com_gens.B_blinding
+            })
+            .collect();
+
+        // For different indexes `l`, we set the vec[l] to be our secret commitment `C_secret`.
+        // We prove the knowledge of `l` and `rB` so the commitment vec[l] will be opening to 0.
         for l in 5..size as usize {
             commitments[l] = C_secret;
 
-            let prover = OOONProverAwaitingChallenge::new(l, rB, commitments.clone(), EXPONENT, BASE);
+            let prover =
+                OOONProverAwaitingChallenge::new(l, rB, commitments.clone(), EXPONENT, BASE);
 
             let verifier = OOONProofVerifier::new(commitments.clone());
             let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
@@ -781,6 +848,12 @@ mod tests {
 
     #[test]
     #[wasm_bindgen_test]
+    /// Tests the R1 proof workflow.
+    /// Generates a special bit-matrix represenation of the given number, and
+    /// each row of the resulted matrix will contain exactly one 1.
+    /// Commits to the bit-matrix and proves its "well-formedness" in a zero-knowledge way
+    /// with help of R1 proofs.
+
     fn test_r1_proof_api() {
         let pc_gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
