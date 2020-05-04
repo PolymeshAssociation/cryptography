@@ -31,9 +31,11 @@ pub enum AssetProofError {
     )]
     R1FinalResponseVerificationError { check: u16 },
 
+    /// The index is out of range.
     #[fail(display = "The index is out of range")]
     OOONProofIndexOutofRange,
 
+    /// Input vector or matrix size does not match to the expected value
     #[fail(display = "The provided matrix or vector size does not match to the expected")]
     OOONProofWrongSize,
 
