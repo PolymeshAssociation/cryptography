@@ -58,14 +58,6 @@ pub type CipherEqualityProof = (
 /// Asset memo. TODO: more informative description!
 pub type AssetMemo = EncryptedAmount;
 
-/// The type of the output of each of the confidential transaction methods.
-pub struct ControlledOutput<P, T> {
-    /// The public portion of the output which can be placed safely on the chain.
-    public: P,
-    /// The state of the transaction ofter the method is performed.
-    State: T,
-    // TODO: potential improvement: add the list of parties that need to be notified.
-}
 // ------------------ account
 
 /// Holds the account memo. TODO: more informative description!
@@ -145,7 +137,7 @@ pub trait AssetTXer {
         issr_account: PubAccount,
         mdtr_pub_key: ElgamalPublicKey,
         asset_id: u32, // deviation from the paper
-    ) -> Result<ControlledOutput<PubAssetTXData, AssetTXState>, Error>;
+    ) -> Result<(PubAssetTXData, AssetTXState), Error>;
 
     /// Called by validators to verify the ZKP of the wellformedness of encrypted balance
     /// and to verify the signature.
@@ -153,7 +145,7 @@ pub trait AssetTXer {
         &self,
         asset_tx: PubAssetTXData,
         state: AssetTXState,
-    ) -> Result<ControlledOutput<(), AssetTXState>, Error>;
+    ) -> Result<AssetTXState, Error>;
 
     /// Justifies and processes a confidential asset issue transaction. This method is called
     /// by mediator. Corresponds to `JustifyAssetTx` and `ProcessCTX` of MERCAT paper.
@@ -166,14 +158,14 @@ pub trait AssetTXer {
         mdtr_addr: (PubAddress, SecAddress),
         issr_pub_key: ElgamalPublicKey,
         issr_acount: PubAccount,
-    ) -> Result<ControlledOutput<(Signature, PubAccount), AssetTXState>, Error>;
+    ) -> Result<(Signature, PubAccount, AssetTXState), Error>;
 
     /// Called by validators to verify the justification and processing of the transaction.
     fn verify_justification_and_process(
         &self,
         sig: Signature,
         issr_account: PubAccount,
-    ) -> Result<ControlledOutput<(), AssetTXState>, Error>;
+    ) -> Result<AssetTXState, Error>;
 }
 
 // ----------------------------- Confidential Transaction
@@ -234,16 +226,16 @@ pub trait ConfidentialTXer {
         rcvr_account: PubAccount,
         asset_id: u32,
         amount: u32,
-    ) -> Result<ControlledOutput<PubInitConfidentialTXData, ConfidentialTXState>, Error>;
+    ) -> Result<(PubInitConfidentialTXData, ConfidentialTXState), Error>;
 
     fn verify_create(
         &self,
         transaction: PubInitConfidentialTXData,
-    ) -> Result<ControlledOutput<(), ConfidentialTXState>, Error>;
+    ) -> Result<ConfidentialTXState, Error>;
 
     /// Justify the transaction by mediator.
     /// TODO: missing from the paper, will discuss and decide later.
-    fn justify_init() -> Result<ControlledOutput<(), ConfidentialTXState>, Error>;
+    fn justify_init() -> Result<ConfidentialTXState, Error>;
 
     /// This function is called the receiver of the transaction to finalize and process
     /// the transaction. It corresponds to `FinalizeCTX` and `ProcessCTX` functions
@@ -258,7 +250,7 @@ pub trait ConfidentialTXer {
         enc_asset_id: EncryptedAssetID,
         amount: u32,
         state: ConfidentialTXState,
-    ) -> Result<ControlledOutput<PubFinalConfidentialTXData, ConfidentialTXState>, Error>;
+    ) -> Result<(PubFinalConfidentialTXData, ConfidentialTXState), Error>;
 
     /// This is called by the validators to verify the finalized transaction.
     fn verify_finalize_and_process(
@@ -267,7 +259,7 @@ pub trait ConfidentialTXer {
         rcvr_account: PubAccount,
         conf_tx_final_data: PubFinalConfidentialTXData,
         state: ConfidentialTXState,
-    ) -> Result<ControlledOutput<(), ConfidentialTXState>, Error>;
+    ) -> Result<ConfidentialTXState, Error>;
 
     /// This function is called by the mediator to reverse and process the reversal of
     /// the transaction. It corresponds to `ReverseCTX` of the MERCAT paper.
@@ -276,7 +268,7 @@ pub trait ConfidentialTXer {
         conf_tx_final_data: PubFinalConfidentialTXData,
         mdtr_addr: SecAddress,
         state: ConfidentialTXState,
-    ) -> Result<ControlledOutput<PubReverseConfidentialTXData, ConfidentialTXState>, Error>;
+    ) -> Result<(PubReverseConfidentialTXData, ConfidentialTXState), Error>;
 
     /// This function is called by validators to verify the reversal and processing of the
     /// reversal transaction.
@@ -284,5 +276,5 @@ pub trait ConfidentialTXer {
         &self,
         reverse_conf_tx_data: PubReverseConfidentialTXData,
         state: ConfidentialTXState,
-    ) -> Result<ControlledOutput<(), ConfidentialTXState>, Error>;
+    ) -> Result<ConfidentialTXState, Error>;
 }
