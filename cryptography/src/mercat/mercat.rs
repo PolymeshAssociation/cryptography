@@ -188,6 +188,13 @@ pub struct ConfidentialTXMemo {
     asset_id_enc_using_rcvr: EncryptedAssetID,
 }
 
+/// Holds the memo for reversal of the confidential transaction sent by the mediator.
+pub struct ReverseConfidentialTXMemo {
+    enc_amount_using_rcvr: EncryptedAmount,
+    enc_refreshed_amount: EncryptedAmount,
+    asset_id_enc_using_rcvr: EncryptedAssetID,
+}
+
 /// Holds the public portion of the confidential transaction sent by the sender.
 pub struct PubInitConfidentialTXData {
     amount_equal_cipher_proof: CipherEqualityProof,
@@ -204,6 +211,13 @@ pub struct PubFinalConfidentialTXData {
     init_data: PubInitConfidentialTXData,
     asset_id_equal_cipher_proof: CipherEqualityProof,
     amount_equal_cipher_proof: CipherEqualityProof, // deviation from the paper
+    sig: Signature,
+}
+
+/// Holds the public portion of the reversal transaction.
+pub struct PubReverseConfidentialTXData {
+    final_data: PubInitConfidentialTXData,
+    memo: ReverseConfidentialTXMemo,
     sig: Signature,
 }
 
@@ -252,6 +266,23 @@ pub trait ConfidentialTXer {
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         conf_tx_final_data: PubFinalConfidentialTXData,
+        state: ConfidentialTXState,
+    ) -> Result<ControlledOutput<(), ConfidentialTXState>, Error>;
+
+    /// This function is called by the mediator to reverse and process the reversal of
+    /// the transaction. It corresponds to `ReverseCTX` of the MERCAT paper.
+    fn reverse_and_process(
+        &self,
+        conf_tx_final_data: PubFinalConfidentialTXData,
+        mdtr_addr: SecAddress,
+        state: ConfidentialTXState,
+    ) -> Result<ControlledOutput<PubReverseConfidentialTXData, ConfidentialTXState>, Error>;
+
+    /// This function is called by validators to verify the reversal and processing of the
+    /// reversal transaction.
+    fn verify_reverse_and_process(
+        &self,
+        reverse_conf_tx_data: PubReverseConfidentialTXData,
         state: ConfidentialTXState,
     ) -> Result<ControlledOutput<(), ConfidentialTXState>, Error>;
 }
