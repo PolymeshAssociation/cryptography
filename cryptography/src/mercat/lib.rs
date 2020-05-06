@@ -18,9 +18,9 @@ use failure::Error;
 // Having separate types for encryption and signature will ensure that the keys used for encryption
 // and signing are different.
 type EncryptionPubKey = ElgamalPublicKey;
-type EncryptionSecretKey = ElgamalSecretKey;
+type EncryptionSecKey = ElgamalSecretKey;
 type SignaturePubKey = ElgamalPublicKey;
-type SignatureretKey = ElgamalSecretKey;
+type SignatureSecKey = ElgamalSecretKey;
 
 // TODO move after CRYP-40
 pub struct MembershipProofInitialMessage {}
@@ -65,7 +65,7 @@ pub type AssetMemo = EncryptedAmount;
 
 /// Holds the account memo. TODO: more informative description!
 pub struct AccountMemo {
-    y: ElgamalPublicKey,
+    y: EncryptionPubKey,
     timestamp: std::time::Instant,
 }
 
@@ -136,10 +136,11 @@ pub trait AssetTXer {
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
     fn initialize(
         &self,
-        issr_addr: (EncryptionPubKey, EncryptionSecretKey),
+        issr_enc_keys: (EncryptionPubKey, EncryptionSecretKey),
+        issr_sign_key: SignatureSecKey,
         amount: u32,
         issr_account: PubAccount,
-        mdtr_pub_key: ElgamalPublicKey,
+        mdtr_pub_key: EncryptionPubKey,
         asset_id: u32, // deviation from the paper
     ) -> Result<(PubAssetTXData, AssetTXState), Error>;
 
@@ -149,6 +150,7 @@ pub trait AssetTXer {
         &self,
         asset_tx: PubAssetTXData,
         state: AssetTXState,
+        issr_sign_pub_key: SignaturePubKey,
     ) -> Result<AssetTXState, Error>;
 
     /// Justifies and processes a confidential asset issue transaction. This method is called
@@ -159,8 +161,9 @@ pub trait AssetTXer {
         asset_tx: PubAssetTXData,
         issr_account: PubAccount,
         state: AssetTXState,
-        mdtr_addr: (EncryptionPubKey, EncryptionSecretKey),
-        issr_pub_key: ElgamalPublicKey,
+        mdtr_enc_keys: (EncryptionPubKey, EncryptionSecretKey),
+        mdtr_sign_key: SignatureSecKey,
+        issr_pub_key: EncryptionPubKey,
         issr_acount: PubAccount,
     ) -> Result<(Signature, PubAccount, AssetTXState), Error>;
 
@@ -169,6 +172,7 @@ pub trait AssetTXer {
         &self,
         sig: Signature,
         issr_account: PubAccount,
+        mdtr_sign_pub_key: SignaturePubKey,
     ) -> Result<AssetTXState, Error>;
 }
 
@@ -180,8 +184,8 @@ pub struct ConfidentialTXMemo {
     rcvr_account_id: u32,
     enc_amount_using_sndr: EncryptedAmount,
     enc_amount_using_rcvr: EncryptedAmount,
-    sndr_pub_key: ElgamalPublicKey,
-    rcvr_pub_key: ElgamalPublicKey,
+    sndr_pub_key: EncryptionPubKey,
+    rcvr_pub_key: EncryptionPubKey,
     enc_refreshed_amount: EncryptedAmount,
     asset_id_enc_using_rcvr: EncryptedAssetID,
 }
@@ -226,9 +230,10 @@ pub trait ConfidentialTXer {
     /// MERCAT paper.
     fn create(
         &self,
-        sndr_addr: (EncryptionPubKey, EncryptionSecretKey),
+        sndr_enc_keys: (EncryptionPubKey, EncryptionSecretKey),
+        sndr_sign_key: SignatureSecKey,
         sndr_account: PubAccount,
-        rcvr_pub_key: ElgamalPublicKey,
+        rcvr_pub_key: EncryptionPubKey,
         rcvr_account: PubAccount,
         asset_id: u32,
         amount: u32,
@@ -237,6 +242,7 @@ pub trait ConfidentialTXer {
     fn verify_create(
         &self,
         transaction: PubInitConfidentialTXData,
+        sndr_sign_pub_key: SignaturePubKey,
     ) -> Result<ConfidentialTXState, Error>;
 
     /// Justify the transaction by mediator.
@@ -249,8 +255,9 @@ pub trait ConfidentialTXer {
     fn finalize_and_process(
         &self,
         conf_tx_init_data: PubInitConfidentialTXData,
-        rcvr_addr: (EncryptionPubKey, EncryptionSecretKey),
-        sndr_pub_key: ElgamalPublicKey,
+        rcvr_enc_keys: (EncryptionPubKey, EncryptionSecretKey),
+        rcvr_sign_key: SignatureSecKey,
+        sndr_pub_key: EncryptionPubKey,
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         enc_asset_id: EncryptedAssetID,
@@ -263,6 +270,7 @@ pub trait ConfidentialTXer {
         &self,
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
+        rcvr_sign_pub_key: SignaturePubKey,
         conf_tx_final_data: PubFinalConfidentialTXData,
         state: ConfidentialTXState,
     ) -> Result<ConfidentialTXState, Error>;
@@ -272,7 +280,8 @@ pub trait ConfidentialTXer {
     fn reverse_and_process(
         &self,
         conf_tx_final_data: PubFinalConfidentialTXData,
-        mdtr_addr: EncryptionSecretKey,
+        mdtr_enc_keys: EncryptionSecretKey,
+        mdtr_sign_key: SignatureSecKey,
         state: ConfidentialTXState,
     ) -> Result<(PubReverseConfidentialTXData, ConfidentialTXState), Error>;
 
@@ -281,6 +290,7 @@ pub trait ConfidentialTXer {
     fn verify_reverse_and_process(
         &self,
         reverse_conf_tx_data: PubReverseConfidentialTXData,
+        mdtr_sign_pub_key: SignaturePubKey,
         state: ConfidentialTXState,
     ) -> Result<ConfidentialTXState, Error>;
 }
