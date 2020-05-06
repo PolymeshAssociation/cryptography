@@ -128,7 +128,7 @@ pub struct PubAssetTXData {
 /// The interface for the confidential asset issuance.
 pub trait AssetTXer {
     /// Initializes a confidentional asset issue transaction. Note that the returing
-    /// values of this function contain sensetive information. Corresponds
+    /// values of this function contain sensitive information. Corresponds
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
     fn initialize(
         &self,
