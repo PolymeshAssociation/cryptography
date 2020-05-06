@@ -15,9 +15,12 @@ use failure::Error;
 
 // ---------------------- START: temporary types, move them to the proper location
 
-// TODO move after CRYP-60 is done
+// Having separate types for encryption and signature will ensure that the keys used for encryption
+// and signing are different.
 type EncryptionPubKey = ElgamalPublicKey;
 type EncryptionSecretKey = ElgamalSecretKey;
+type SignaturePubKey = ElgamalPublicKey;
+type SignatureretKey = ElgamalSecretKey;
 
 // TODO move after CRYP-40
 pub struct MembershipProofInitialMessage {}
