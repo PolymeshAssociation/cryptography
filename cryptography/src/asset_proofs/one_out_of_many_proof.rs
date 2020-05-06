@@ -38,7 +38,7 @@ const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 fn convert_to_base(number: usize, base: usize, exp: usize) -> Result<Vec<usize>, AssetProofError> {
     ensure!(
         number < base.pow(u32::try_from(exp).unwrap()),
-        AssetProofError::OOONProofIndexOutofRange
+        AssetProofError::OOONProofIndexOutofRange { index: number }
     );
 
     let mut rem: usize;
@@ -65,7 +65,7 @@ fn convert_to_matrix_rep(
 ) -> Result<Vec<Scalar>, AssetProofError> {
     ensure!(
         number < base.pow(u32::try_from(exp).unwrap()),
-        AssetProofError::OOONProofIndexOutofRange
+        AssetProofError::OOONProofIndexOutofRange { index: number }
     );
 
     let mut rem: usize;
@@ -114,19 +114,10 @@ impl OooNProofGenerators {
     }
 
     /// Commits to the given vector by using the provided blinding randomness.
-    pub fn vector_commit(
-        &self,
-        m_vec: &Vec<Scalar>,
-        blinding: Scalar,
-    ) -> Result<RistrettoPoint, AssetProofError> {
-        ensure!(
-            &m_vec.len() == &self.h_vec.len(),
-            AssetProofError::OOONProofWrongSize
-        );
-
+    pub fn vector_commit(&self, m_vec: &Vec<Scalar>, blinding: Scalar) -> RistrettoPoint {
         let commitment: RistrettoPoint = RistrettoPoint::multiscalar_mul(m_vec, &self.h_vec);
 
-        Ok(commitment + (blinding * self.com_gens.B_blinding))
+        commitment + (blinding * self.com_gens.B_blinding)
     }
 }
 
@@ -251,8 +242,8 @@ impl Polynomial {
         }
     }
 
-    /// Multipleis the given polynomial `P(x)` with the provided linear `(a * x + b)`.
-    fn add_factor(&mut self, a: Scalar, b: Scalar) -> &Polynomial {
+    /// Multiplies the given polynomial `P(x)` with the provided linear `(a * x + b)`.
+    fn add_factor(&mut self, a: Scalar, b: Scalar) {
         let old = self.coeffs.clone();
         let old_degree = self.degree;
 
@@ -269,8 +260,6 @@ impl Polynomial {
             self.coeffs[k] = b * old[k] + a * old[k - 1];
         }
         self.coeffs[0] = b * old[0];
-
-        self
     }
     /// Computes the polynomial evaluation value at the given point `x`.
     /// Used for testing purposes.
@@ -400,7 +389,7 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
             .clone()
             .entrywise_product(&(&ONE - &TWO.entrywise_product(&self.b_matrix).unwrap()))
             .unwrap();
-        let d_matrix: Matrix = -(a_matrix.clone().entrywise_product(&a_matrix).unwrap()); // Implement an associated function taking two matrix parameters
+        let d_matrix: Matrix = -(a_matrix.clone().entrywise_product(&a_matrix).unwrap());
         (
             R1Prover {
                 a_values: a_matrix.elements.clone(),
@@ -413,18 +402,10 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
                 n: columns,
             },
             R1ProofInitialMessage {
-                a: generators
-                    .vector_commit(&a_matrix.elements, random_a)
-                    .unwrap(),
-                b: generators
-                    .vector_commit(&self.b_matrix.elements, self.r_b)
-                    .unwrap(),
-                c: generators
-                    .vector_commit(&c_matrix.elements, random_c)
-                    .unwrap(),
-                d: generators
-                    .vector_commit(&d_matrix.elements, random_d)
-                    .unwrap(),
+                a: generators.vector_commit(&a_matrix.elements, random_a),
+                b: generators.vector_commit(&self.b_matrix.elements, self.r_b),
+                c: generators.vector_commit(&c_matrix.elements, random_c),
+                d: generators.vector_commit(&d_matrix.elements, random_d),
             },
         )
     }
@@ -490,18 +471,14 @@ impl AssetProofVerifier for R1ProofVerifier {
             }
         }
 
-        let com_f = generators
-            .vector_commit(&f_matrix.elements, final_response.z_a)
-            .unwrap();
-        let com_fx = generators
-            .vector_commit(
-                &f_matrix
-                    .entrywise_product(&(&x_matrix - &f_matrix))
-                    .unwrap()
-                    .elements,
-                final_response.z_c,
-            )
-            .unwrap();
+        let com_f = generators.vector_commit(&f_matrix.elements, final_response.z_a);
+        let com_fx = generators.vector_commit(
+            &f_matrix
+                .entrywise_product(&(&x_matrix - &f_matrix))
+                .unwrap()
+                .elements,
+            final_response.z_c,
+        );
 
         ensure!(
             c.x() * self.b + initial_message.a == com_f,
@@ -807,7 +784,7 @@ mod tests {
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
         let n = 64;
-        let size: usize = 64;
+        let size: usize = 11;
 
         // Computes the secret commitment which will be opening to 0:
         // `C_secret = 0 * pc_gens.B + r_b * pc_gens.B_Blinding`
@@ -825,6 +802,7 @@ mod tests {
             })
             .collect();
 
+        // These are positive tests.
         // For different indexes `l`, we set the vec[l] to be our secret commitment `C_secret`.
         // We prove the knowledge of `l` and `r_b` so the commitment vec[l] will be opening to 0.
         for l in 5..size {
@@ -846,6 +824,76 @@ mod tests {
             let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
             assert!(result.is_ok());
         }
+
+        // These are negative tests.
+        // For the index `l`, we set the vec[l] to be our secret commitment `C_secret`.
+        // Next we try to
+        //      a. prove the vec[l+1] is a commitment opening to 0 by providing the `r_b` as a randomness
+        // so the commitment vec[l] will be opening to 0.
+        //
+        // We are starting from the index size, as all elements C[5]..C[size] have been set to Com(0, r_b)
+        for l in size..size * 2 {
+            commitments[l] = C_secret;
+            let wrong_index = l + 1;
+
+            let prover1 = OOONProverAwaitingChallenge::new(
+                wrong_index,
+                r_b,
+                commitments.clone(),
+                EXPONENT,
+                BASE,
+            );
+
+            let verifier1 = OOONProofVerifier::new(commitments.clone());
+            let (prover1, initial_message1) = prover1.generate_initial_message(&pc_gens, &mut rng);
+
+            initial_message1.update_transcript(&mut transcript).unwrap();
+            let challenge = transcript
+                .scalar_challenge(OOON_PROOF_CHALLENGE_LABEL)
+                .unwrap();
+
+            let final_response1 = prover1.apply_challenge(&challenge);
+
+            let result1 =
+                verifier1.verify(&pc_gens, &challenge, &initial_message1, &final_response1);
+
+            assert!(result1.is_err());
+        }
+
+        // These are negative tests.
+        // For the index `l`, we set the vec[l] to be our secret commitment `C_secret`
+        // so the commitment vec[l] will be opening to 0.
+        // Next we try to
+        //      a. prove the vec[l] is a commitment opening to 0 by providing a
+        //      wrong randomness `r_b + r_b` as a randomness
+        //
+        //
+        for l in 60..64 {
+            commitments[l] = C_secret;
+            let wrong_random = r_b + r_b;
+
+            let prover = OOONProverAwaitingChallenge::new(
+                l,
+                wrong_random,
+                commitments.clone(),
+                EXPONENT,
+                BASE,
+            );
+
+            let verifier = OOONProofVerifier::new(commitments.clone());
+            let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
+
+            initial_message.update_transcript(&mut transcript).unwrap();
+            let challenge = transcript
+                .scalar_challenge(OOON_PROOF_CHALLENGE_LABEL)
+                .unwrap();
+
+            let final_response = prover.apply_challenge(&challenge);
+
+            let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+
+            assert!(result.is_err());
+        }
     }
 
     #[test]
@@ -862,8 +910,8 @@ mod tests {
 
         let mut transcript = Transcript::new(OOON_PROOF_LABEL);
 
-        const BASE: usize = 4; //n = 3 : COLUMNS
-        const EXPONENT: usize = 3; //m = 2 : ROWS
+        const BASE: usize = 4;
+        const EXPONENT: usize = 3;
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
         let mut base_matrix: Vec<Scalar>;
@@ -877,7 +925,7 @@ mod tests {
                 elements: base_matrix.clone(),
             };
             let r = Scalar::from(45728u32);
-            let b_comm = generators.vector_commit(&base_matrix, r).unwrap();
+            let b_comm = generators.vector_commit(&base_matrix, r);
             let prover = R1ProverAwaitingChallenge::new(b, r, EXPONENT, BASE);
 
             let verifier = R1ProofVerifier::new(b_comm);
