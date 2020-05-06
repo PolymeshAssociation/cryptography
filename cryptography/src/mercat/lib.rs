@@ -16,8 +16,8 @@ use failure::Error;
 // ---------------------- START: temporary types, move them to the proper location
 
 // TODO move after CRYP-60 is done
-type PubAddress = ElgamalPublicKey;
-type SecAddress = ElgamalSecretKey;
+type EncryptionPubKey = ElgamalPublicKey;
+type EncryptionSecretKey = ElgamalSecretKey;
 
 // TODO move after CRYP-40
 pub struct MembershipProofInitialMessage {}
@@ -116,6 +116,7 @@ pub enum ConfidentialTXState {
 /// Holds the public portion of an asset issuance transaction. This can be placed
 /// on the chain.
 pub struct PubAssetTXData {
+    account_id: u32,
     enc_asset_id: EncryptedAssetID,
     enc_amount: EncryptedAmount,
     memo: AssetMemo,
@@ -132,7 +133,7 @@ pub trait AssetTXer {
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
     fn initialize(
         &self,
-        issr_addr: (PubAddress, SecAddress),
+        issr_addr: (EncryptionPubKey, EncryptionSecretKey),
         amount: u32,
         issr_account: PubAccount,
         mdtr_pub_key: ElgamalPublicKey,
@@ -155,7 +156,7 @@ pub trait AssetTXer {
         asset_tx: PubAssetTXData,
         issr_account: PubAccount,
         state: AssetTXState,
-        mdtr_addr: (PubAddress, SecAddress),
+        mdtr_addr: (EncryptionPubKey, EncryptionSecretKey),
         issr_pub_key: ElgamalPublicKey,
         issr_acount: PubAccount,
     ) -> Result<(Signature, PubAccount, AssetTXState), Error>;
@@ -172,6 +173,8 @@ pub trait AssetTXer {
 
 /// Holds the memo for confidential transaction sent by the sender.
 pub struct ConfidentialTXMemo {
+    sndr_account_id: u32,
+    rcvr_account_id: u32,
     enc_amount_using_sndr: EncryptedAmount,
     enc_amount_using_rcvr: EncryptedAmount,
     sndr_pub_key: ElgamalPublicKey,
@@ -220,7 +223,7 @@ pub trait ConfidentialTXer {
     /// MERCAT paper.
     fn create(
         &self,
-        sndr_addr: (PubAddress, SecAddress),
+        sndr_addr: (EncryptionPubKey, EncryptionSecretKey),
         sndr_account: PubAccount,
         rcvr_pub_key: ElgamalPublicKey,
         rcvr_account: PubAccount,
@@ -243,7 +246,7 @@ pub trait ConfidentialTXer {
     fn finalize_and_process(
         &self,
         conf_tx_init_data: PubInitConfidentialTXData,
-        rcvr_addr: (PubAddress, SecAddress),
+        rcvr_addr: (EncryptionPubKey, EncryptionSecretKey),
         sndr_pub_key: ElgamalPublicKey,
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
@@ -266,7 +269,7 @@ pub trait ConfidentialTXer {
     fn reverse_and_process(
         &self,
         conf_tx_final_data: PubFinalConfidentialTXData,
-        mdtr_addr: SecAddress,
+        mdtr_addr: EncryptionSecretKey,
         state: ConfidentialTXState,
     ) -> Result<(PubReverseConfidentialTXData, ConfidentialTXState), Error>;
 
