@@ -72,7 +72,7 @@ fn convert_to_matrix_rep(
     let mut rem: usize;
     let mut number = number;
     let mut matrix_rep = vec![Scalar::zero(); (exp as usize) * base];
-    for j in 0..exp as usize{
+    for j in 0..exp as usize {
         rem = number % base;
         number /= base;
         matrix_rep[j * base + rem] = Scalar::one();
@@ -116,7 +116,6 @@ impl OooNProofGenerators {
 
     /// Commits to the given vector using the provided blinding randomness.
     pub fn vector_commit(&self, m_vec: &Vec<Scalar>, blinding: Scalar) -> RistrettoPoint {
-
         RistrettoPoint::multiscalar_mul(m_vec, &self.h_vec) + (blinding * self.com_gens.B_blinding)
     }
 }
@@ -830,14 +829,14 @@ mod tests {
         // For the index `l`, we set the vec[l] to be our secret commitment `C_secret`.
         // Next we try to
         //      a. prove the vec[l+1] is a commitment opening to 0 by providing the `r_b` as a randomness
-        // so the commitment vec[l] will be opening to 0.
+        //         so the commitment vec[l] will be opening to 0.
         //
-        // We are starting from the index size, as all elements C[5]..C[size] have been set to Com(0, r_b)
+        // We are starting from the index `size`, as all elements C[5]..C[size] have been set to Com(0, r_b).
         for l in size..size * 2 {
             commitments[l] = C_secret;
             let wrong_index = l + 1;
 
-            let prover1 = OOONProverAwaitingChallenge::new(
+            let prover = OOONProverAwaitingChallenge::new(
                 wrong_index,
                 r_b,
                 commitments.clone(),
@@ -845,20 +844,23 @@ mod tests {
                 BASE,
             );
 
-            let verifier1 = OOONProofVerifier::new(commitments.clone());
-            let (prover1, initial_message1) = prover1.generate_initial_message(&pc_gens, &mut rng);
+            let verifier = OOONProofVerifier::new(commitments.clone());
+            let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
 
-            initial_message1.update_transcript(&mut transcript).unwrap();
+            initial_message.update_transcript(&mut transcript).unwrap();
             let challenge = transcript
                 .scalar_challenge(OOON_PROOF_CHALLENGE_LABEL)
                 .unwrap();
 
-            let final_response1 = prover1.apply_challenge(&challenge);
+            let final_response = prover.apply_challenge(&challenge);
 
-            let result1 =
-                verifier1.verify(&pc_gens, &challenge, &initial_message1, &final_response1);
+            let result =
+                verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
 
-            assert!(result1.is_err());
+            assert_err!(
+                result,
+                AssetProofError::OOONFinalResponseVerificationError { check: 2 }
+            );
         }
 
         // These are negative tests.
@@ -895,22 +897,22 @@ mod tests {
 
             assert_err!(
                 result,
-                AssetProofError::OOONFinalResponseVerificationError{check:2}
+                AssetProofError::OOONFinalResponseVerificationError { check: 2 }
             );
         }
     }
 
     #[test]
     #[wasm_bindgen_test]
-    /// Tests the R1 proof workflow.
-    /// Positive Tests:
-    ///     Generates a special bit-matrix represenation of the given number. 
-    ///     Each row of the resulted matrix will contain exactly one 1.
-    ///     Commits to the bit-matrix and proves its "well-formedness" in a zero-knowledge way
-    ///     with help of R1 proofs.
-    /// Negative Tests:
-    ///     Generates a invalid matrix comprised of random values instead of each row containing exactly one 1.
-    ///     Checks if the verification step 2 fails.
+    // Tests the R1 proof workflow.
+    // Positive Tests:
+    //     Generates a special bit-matrix represenation of the given number.
+    //     Each row of the resulted matrix will contain exactly one 1.
+    //     Commits to the bit-matrix and proves its "well-formedness" in a zero-knowledge way
+    //     with help of R1 proofs.
+    // Negative Tests:
+    //     Generates a invalid matrix comprised of random values instead of each row containing exactly one 1.
+    //     Checks if the verification step 2 fails.
 
     fn test_r1_proof_api() {
         let pc_gens = PedersenGens::default();
@@ -924,9 +926,9 @@ mod tests {
 
         let mut base_matrix: Vec<Scalar>;
         let mut b: Matrix;
-        /// Positive Tests:
-        /// For each index `i` we compute the corresponding valid bit-matrix representation.
-        /// Next commit to the  bit-matrix represenation and prove its well-formedness.
+        // Positive Tests:
+        // For each index `i` we compute the corresponding valid bit-matrix representation.
+        // Next commit to the  bit-matrix represenation and prove its well-formedness.
         for i in 10..64 {
             base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT as u32).unwrap();
 
@@ -957,7 +959,7 @@ mod tests {
         // Negative test: Commit to matrix where each row has more than one 1.
         let b = Matrix::new(EXPONENT, BASE, Scalar::one());
         let r = Scalar::from(45728u32);
-        let b_comm  = generators.vector_commit(&b.elements, r);
+        let b_comm = generators.vector_commit(&b.elements, r);
         let prover = R1ProverAwaitingChallenge::new(b, r, EXPONENT, BASE);
 
         let verifier = R1ProofVerifier::new(b_comm);
@@ -966,14 +968,17 @@ mod tests {
         initial_message.update_transcript(&mut transcript).unwrap();
 
         let challenge = transcript
-                .scalar_challenge(OOON_PROOF_CHALLENGE_LABEL)
-                .unwrap();
+            .scalar_challenge(OOON_PROOF_CHALLENGE_LABEL)
+            .unwrap();
 
         let final_response = prover.apply_challenge(&challenge);
 
         let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
 
-        assert_err!(result, AssetProofError::R1FinalResponseVerificationError {check:1});
+        assert_err!(
+            result,
+            AssetProofError::R1FinalResponseVerificationError { check: 1 }
+        );
     }
 
     #[test]
