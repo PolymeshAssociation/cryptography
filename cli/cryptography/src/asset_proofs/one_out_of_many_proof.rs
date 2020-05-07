@@ -22,7 +22,7 @@ use crate::asset_proofs::{
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 use sha3::Sha3_512;
-use std::convert::TryFrom;
+
 use std::ops::{Add, Neg, Sub};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -35,15 +35,15 @@ const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 /// `n` is the fixed base. Usually we will work with base `4`.
 /// Returns the representation of the input number as the given base number
 /// The input number should be within the provided range [0, base^exp)
-fn convert_to_base(number: usize, base: usize, exp: usize) -> Result<Vec<usize>, AssetProofError> {
+fn convert_to_base(number: usize, base: usize, exp: u32) -> Result<Vec<usize>, AssetProofError> {
     ensure!(
-        number < base.pow(u32::try_from(exp).unwrap()),
+        number < base.pow(exp),
         AssetProofError::OOONProofIndexOutofRange { index: number }
     );
 
     let mut rem: usize;
     let mut number = number;
-    let mut base_rep = Vec::with_capacity(exp);
+    let mut base_rep = Vec::with_capacity(exp as usize);
 
     for _j in 0..exp {
         rem = number % base;
@@ -53,6 +53,7 @@ fn convert_to_base(number: usize, base: usize, exp: usize) -> Result<Vec<usize>,
 
     Ok(base_rep)
 }
+
 /// Returns a special bit-matrix representation of the input number.
 /// The input `number` should be within the provided range `[0, base^exp)`
 /// The number is represented as the given base number `n = n0 *base^0 + n1 *base^1 +...+ n_exp *base^{exp-1}`
@@ -61,17 +62,17 @@ fn convert_to_base(number: usize, base: usize, exp: usize) -> Result<Vec<usize>,
 fn convert_to_matrix_rep(
     number: usize,
     base: usize,
-    exp: usize,
+    exp: u32,
 ) -> Result<Vec<Scalar>, AssetProofError> {
     ensure!(
-        number < base.pow(u32::try_from(exp).unwrap()),
+        number < base.pow(exp),
         AssetProofError::OOONProofIndexOutofRange { index: number }
     );
 
     let mut rem: usize;
     let mut number = number;
-    let mut matrix_rep = vec![Scalar::zero(); exp * base];
-    for j in 0..exp {
+    let mut matrix_rep = vec![Scalar::zero(); (exp as usize) * base];
+    for j in 0..exp as usize{
         rem = number % base;
         number /= base;
         matrix_rep[j * base + rem] = Scalar::one();
@@ -113,11 +114,10 @@ impl OooNProofGenerators {
         }
     }
 
-    /// Commits to the given vector by using the provided blinding randomness.
+    /// Commits to the given vector using the provided blinding randomness.
     pub fn vector_commit(&self, m_vec: &Vec<Scalar>, blinding: Scalar) -> RistrettoPoint {
-        let commitment: RistrettoPoint = RistrettoPoint::multiscalar_mul(m_vec, &self.h_vec);
 
-        commitment + (blinding * self.com_gens.B_blinding)
+        RistrettoPoint::multiscalar_mul(m_vec, &self.h_vec) + (blinding * self.com_gens.B_blinding)
     }
 }
 
@@ -461,7 +461,7 @@ impl AssetProofVerifier for R1ProofVerifier {
         let x_matrix = Matrix::new(rows, columns, *c.x());
 
         let generators = OooNProofGenerators::new(rows, columns);
-        // Here we f[j][0] = x - (f[j][1]+ ... + f[j][columns - 1])
+        // Here we set f[j][0] = x - (f[j][1]+ ... + f[j][columns - 1])
         for i in 0..rows {
             for j in 1..columns {
                 f_matrix.elements[i * columns + j] =
@@ -595,14 +595,15 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let columns = self.base;
         let rows = self.exp;
-        let n = self.base.pow(self.exp as u32);
+        let exp = self.exp as u32;
+        let n = self.base.pow(exp);
         let generators = OooNProofGenerators::new(rows, columns);
 
         assert_eq!(n, self.commitments.len());
 
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
 
-        let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, self.exp).unwrap();
+        let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, exp).unwrap();
 
         let b_matrix_rep = Matrix {
             rows: rows,
@@ -619,7 +620,7 @@ impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
 
         for i in 0..n {
             polynomials.push(one.clone());
-            let i_rep = convert_to_base(i, self.base, self.exp).unwrap();
+            let i_rep = convert_to_base(i, self.base, exp).unwrap();
             for k in 0..self.exp {
                 let t = k * self.base + i_rep[k];
                 polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
@@ -732,7 +733,7 @@ impl AssetProofVerifier for OOONProofVerifier {
 
         for i in 0..size {
             p_i = Scalar::one();
-            let i_rep = convert_to_base(i, n, m).unwrap();
+            let i_rep = convert_to_base(i, n, m as u32).unwrap();
             for j in 0..m {
                 p_i *= f_values[j * n + i_rep[j]];
             }
@@ -892,17 +893,24 @@ mod tests {
 
             let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
 
-            assert!(result.is_err());
+            assert_err!(
+                result,
+                AssetProofError::OOONFinalResponseVerificationError{check:2}
+            );
         }
     }
 
     #[test]
     #[wasm_bindgen_test]
     /// Tests the R1 proof workflow.
-    /// Generates a special bit-matrix represenation of the given number, and
-    /// each row of the resulted matrix will contain exactly one 1.
-    /// Commits to the bit-matrix and proves its "well-formedness" in a zero-knowledge way
-    /// with help of R1 proofs.
+    /// Positive Tests:
+    ///     Generates a special bit-matrix represenation of the given number. 
+    ///     Each row of the resulted matrix will contain exactly one 1.
+    ///     Commits to the bit-matrix and proves its "well-formedness" in a zero-knowledge way
+    ///     with help of R1 proofs.
+    /// Negative Tests:
+    ///     Generates a invalid matrix comprised of random values instead of each row containing exactly one 1.
+    ///     Checks if the verification step 2 fails.
 
     fn test_r1_proof_api() {
         let pc_gens = PedersenGens::default();
@@ -916,8 +924,11 @@ mod tests {
 
         let mut base_matrix: Vec<Scalar>;
         let mut b: Matrix;
+        /// Positive Tests:
+        /// For each index `i` we compute the corresponding valid bit-matrix representation.
+        /// Next commit to the  bit-matrix represenation and prove its well-formedness.
         for i in 10..64 {
-            base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT).unwrap();
+            base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT as u32).unwrap();
 
             b = Matrix {
                 rows: EXPONENT,
@@ -943,6 +954,26 @@ mod tests {
 
             assert!(result.is_ok());
         }
+        // Negative test: Commit to matrix where each row has more than one 1.
+        let b = Matrix::new(EXPONENT, BASE, Scalar::one());
+        let r = Scalar::from(45728u32);
+        let b_comm  = generators.vector_commit(&b.elements, r);
+        let prover = R1ProverAwaitingChallenge::new(b, r, EXPONENT, BASE);
+
+        let verifier = R1ProofVerifier::new(b_comm);
+        let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
+
+        initial_message.update_transcript(&mut transcript).unwrap();
+
+        let challenge = transcript
+                .scalar_challenge(OOON_PROOF_CHALLENGE_LABEL)
+                .unwrap();
+
+        let final_response = prover.apply_challenge(&challenge);
+
+        let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+
+        assert_err!(result, AssetProofError::R1FinalResponseVerificationError {check:1});
     }
 
     #[test]
