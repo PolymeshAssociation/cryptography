@@ -81,7 +81,7 @@ fn convert_to_matrix_rep(
     Ok(matrix_rep)
 }
 
-/// Generates `n * m + 2` group generators exploited by the one-out-of-many proof algorithm. The later
+/// Generates `n * m + 2` group generators exploited by the one-out-of-many proof algorithm. The later  
 /// uses vector commitments of size `n * m` and regular Pedersen commitments.
 pub struct OooNProofGenerators {
     /// Generates for computing Pedersen commitments
@@ -543,18 +543,36 @@ pub struct OOONProver {
 /// Given the public list of commitments `C_0, C_1, ..., C_{N-1} where N = base^exp, the prover wants to
 /// prove the knowledge of a secret commitment C_l  which is opening to 0.
 /// The prover witness is comprised of the secret_index `l` and the commitment's random factor `random`
-pub struct OOONProverAwaitingChallenge<'a> {
+pub struct OOONProverAwaitingChallenge {
     /// The index of the secret commitment in the given list, which is opening to zero and is blinded by "random"
-    pub secret_index: usize,
+    secret_index: usize,
     /// The randomness used in the commitment C_{secret_index}
-    pub random: Scalar,
+    random: Scalar,
     // The list of N commitments where one commitment is opening to 0. (#TODO Find a way to avoid of cloning this huge data set)
-    pub commitments: &'a [RistrettoPoint],
-    pub base: usize,
-    pub exp: usize,
+    commitments: Vec<RistrettoPoint>,
+    base: usize,
+    exp: usize,
 }
 
-impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
+impl OOONProverAwaitingChallenge {
+    pub fn new(
+        l: usize,
+        r: Scalar,
+        commitments_ref: Vec<RistrettoPoint>,
+        m: usize,
+        n: usize,
+    ) -> Self {
+        OOONProverAwaitingChallenge {
+            secret_index: l,
+            random: r,
+            commitments: commitments_ref,
+            exp: m,
+            base: n,
+        }
+    }
+}
+
+impl AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge {
     type ZKInitialMessage = OOONProofInitialMessage;
     type ZKFinalResponse = OOONProofFinalResponse;
     type ZKProver = OOONProver;
@@ -650,11 +668,19 @@ impl AssetProofProver<OOONProofFinalResponse> for OOONProver {
     }
 }
 
-pub struct OOONProofVerifier<'a> {
-    pub commitments: &'a [RistrettoPoint],
+pub struct OOONProofVerifier {
+    commitment_list: Vec<RistrettoPoint>,
 }
 
-impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
+impl OOONProofVerifier {
+    pub fn new(list: Vec<RistrettoPoint>) -> Self {
+        OOONProofVerifier {
+            commitment_list: list,
+        }
+    }
+}
+
+impl AssetProofVerifier for OOONProofVerifier {
     type ZKInitialMessage = OOONProofInitialMessage;
     type ZKFinalResponse = OOONProofFinalResponse;
 
@@ -704,7 +730,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
             for j in 0..m {
                 p_i *= f_values[j * n + i_rep[j]];
             }
-            left += p_i * self.commitments[i];
+            left += p_i * self.commitment_list[i];
         }
         let mut temp = Scalar::one();
         for k in 0..m {
@@ -773,20 +799,13 @@ mod tests {
         // These are positive tests.
         // For different indexes `l`, we set the vec[l] to be our secret commitment `C_secret`.
         // We prove the knowledge of `l` and `r_b` so the commitment vec[l] will be opening to 0.
-        for secret_index in 5..size {
-            commitments[secret_index] = C_secret;
+        for l in 5..size {
+            commitments[l] = C_secret;
 
-            let prover = OOONProverAwaitingChallenge {
-                secret_index,
-                random: r_b,
-                commitments: commitments.as_slice(),
-                exp: EXPONENT,
-                base: BASE,
-            };
+            let prover =
+                OOONProverAwaitingChallenge::new(l, r_b, commitments.clone(), EXPONENT, BASE);
 
-            let verifier = OOONProofVerifier {
-                commitments: commitments.as_slice(),
-            };
+            let verifier = OOONProofVerifier::new(commitments.clone());
             let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
@@ -811,17 +830,15 @@ mod tests {
             commitments[l] = C_secret;
             let wrong_index = l + 1;
 
-            let prover = OOONProverAwaitingChallenge {
-                secret_index: wrong_index,
-                random: r_b,
-                commitments: commitments.as_slice(),
-                exp: EXPONENT,
-                base: BASE,
-            };
+            let prover = OOONProverAwaitingChallenge::new(
+                wrong_index,
+                r_b,
+                commitments.clone(),
+                EXPONENT,
+                BASE,
+            );
 
-            let verifier = OOONProofVerifier {
-                commitments: commitments.as_slice(),
-            };
+            let verifier = OOONProofVerifier::new(commitments.clone());
             let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
@@ -851,17 +868,15 @@ mod tests {
             commitments[l] = C_secret;
             let wrong_random = r_b + r_b;
 
-            let prover = OOONProverAwaitingChallenge {
-                secret_index: l,
-                random: wrong_random,
-                commitments: commitments.as_slice(),
-                exp: EXPONENT,
-                base: BASE,
-            };
+            let prover = OOONProverAwaitingChallenge::new(
+                l,
+                wrong_random,
+                commitments.clone(),
+                EXPONENT,
+                BASE,
+            );
 
-            let verifier = OOONProofVerifier {
-                commitments: commitments.as_slice(),
-            };
+            let verifier = OOONProofVerifier::new(commitments.clone());
             let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
