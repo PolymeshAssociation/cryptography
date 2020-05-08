@@ -771,8 +771,8 @@ mod tests {
             .collect();
 
         // These are positive tests.
-        // For different indexes `l`, we set the vec[l] to be our secret commitment `C_secret`.
-        // We prove the knowledge of `l` and `r_b` so the commitment vec[l] will be opening to 0.
+        // For different indexes `secret_index`, we set the vec[secret_index] to be our secret commitment `C_secret`.
+        // We prove the knowledge of `secret_index` and `r_b` so the commitment vec[secret_index] will be opening to 0.
         for secret_index in 5..size {
             commitments[secret_index] = C_secret;
 
