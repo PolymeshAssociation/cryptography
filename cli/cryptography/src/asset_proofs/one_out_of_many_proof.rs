@@ -185,6 +185,9 @@ impl Neg for Matrix {
 impl<'a, 'b> Add<&'b Matrix> for &'a Matrix {
     type Output = Matrix;
     fn add(self, right: &'b Matrix) -> Matrix {
+        assert_eq!(self.rows, right.rows);
+        assert_eq!(self.columns, right.columns);
+
         let mut sum: Matrix = Matrix::new(self.rows, self.columns, Scalar::zero());
         for i in 0..self.rows {
             for j in 0..self.columns {
@@ -200,6 +203,9 @@ impl<'a, 'b> Add<&'b Matrix> for &'a Matrix {
 impl<'a, 'b> Sub<&'b Matrix> for &'a Matrix {
     type Output = Matrix;
     fn sub(self, right: &'b Matrix) -> Matrix {
+        assert_eq!(self.rows, right.rows);
+        assert_eq!(self.columns, right.columns);
+
         let mut sub: Matrix = Matrix::new(self.rows, self.columns, Scalar::zero());
         for i in 0..self.rows {
             for j in 0..self.columns {
@@ -831,7 +837,8 @@ mod tests {
 
             let final_response = prover.apply_challenge(&challenge);
 
-            let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+            let result =
+                verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
 
             assert_err!(
                 result,
