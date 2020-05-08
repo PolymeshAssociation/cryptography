@@ -75,7 +75,7 @@ impl CipherTextRefreshmentProverAwaitingChallenge {
         ciphertext2: CipherText,
     ) -> Self {
         CipherTextRefreshmentProverAwaitingChallenge {
-            secret_key: secret_key,
+            secret_key,
             y: ciphertext1.y - ciphertext2.y,
         }
     }
@@ -142,7 +142,7 @@ impl CipherTextRefreshmentVerifier {
         ciphertext2: CipherText,
     ) -> Self {
         CipherTextRefreshmentVerifier {
-            pub_key: pub_key,
+            pub_key,
             x: ciphertext1.x - ciphertext2.x,
             y: ciphertext1.y - ciphertext2.y,
         }
