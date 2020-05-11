@@ -10,36 +10,31 @@ use rand::{rngs::StdRng, SeedableRng};
 
 pub struct ConfTx {}
 
-//impl ConfidentialTransactionReceiver for ConfTx {
-//    fn finalize_and_process(
-//        &self,
-//        conf_tx_init_data: PubInitConfidentialTxData,
-//        rcvr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-//        rcvr_sign_key: SignatureSecKey,
-//        sndr_pub_key: EncryptionPubKey,
-//        sndr_account: PubAccount,
-//        rcvr_account: PubAccount,
-//        enc_asset_id: EncryptedAssetId,
-//        amount: u32,
-//        state: ConfidentialTxState,
-//    ) -> Result<(PubFinalConfidentialTxData, ConfidentialTxState), Error> {
-//        ensure!(
-//            self.finalize_by_receiver(
-//                conf_tx_init_data,
-//                rcvr_enc_keys,
-//                rcvr_sign_key,
-//                sndr_pub_key,
-//                sndr_account,
-//                rcvr_account,
-//                enc_asset_id,
-//                amount,
-//                state
-//            ),
-//            ConfidentialTxError::NotImplemented
-//        );
-//        ensure!(false, ConfidentialTxError::NotImplemented)
-//    }
-//}
+impl ConfidentialTransactionReceiver for ConfTx {
+    fn finalize_and_process(
+        &self,
+        conf_tx_init_data: PubInitConfidentialTxData,
+        rcvr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
+        rcvr_sign_key: SignatureSecKey,
+        sndr_pub_key: EncryptionPubKey,
+        sndr_account: PubAccount,
+        rcvr_account: PubAccount,
+        enc_asset_id: EncryptedAssetId,
+        amount: u32,
+        state: ConfidentialTxState,
+    ) -> Result<(PubFinalConfidentialTxData, ConfidentialTxState), Error> {
+        self.finalize_by_receiver(
+            conf_tx_init_data,
+            rcvr_enc_keys.1,
+            rcvr_sign_key,
+            rcvr_account,
+            state,
+            amount,
+        )?;
+        // TODO: will complete this in the ctx processing story
+        ensure!(false, ConfidentialTxError::NotImplemented)
+    }
+}
 
 impl ConfTx {
     /// This function is called by the receiver of the transaction to finalize the
