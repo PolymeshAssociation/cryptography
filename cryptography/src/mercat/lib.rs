@@ -25,6 +25,7 @@ use std::fmt;
 // and signing are different.
 #[derive(Default, Clone)]
 pub struct EncryptionPubKey(pub ElgamalPublicKey);
+#[derive(Clone)]
 pub struct EncryptionSecKey(pub ElgamalSecretKey);
 pub struct SignaturePubKey(pub ElgamalPublicKey);
 pub struct SignatureSecKey(pub ElgamalSecretKey);
@@ -248,14 +249,14 @@ pub struct ConfidentialTxMemo {
     pub sndr_pub_key: EncryptionPubKey,
     pub rcvr_pub_key: EncryptionPubKey,
     pub enc_refreshed_amount: EncryptedAmount,
-    pub asset_id_enc_using_rcvr: EncryptedAssetId,
+    pub enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
 /// Holds the memo for reversal of the confidential transaction sent by the mediator.
 pub struct ReverseConfidentialTxMemo {
     enc_amount_using_rcvr: EncryptedAmount,
     enc_refreshed_amount: EncryptedAmount,
-    asset_id_enc_using_rcvr: EncryptedAssetId,
+    enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
 /// Holds the public portion of the confidential transaction sent by the sender.

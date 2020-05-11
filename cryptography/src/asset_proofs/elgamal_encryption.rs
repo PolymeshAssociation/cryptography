@@ -148,7 +148,7 @@ pub struct ElgamalSecretKey {
 }
 
 /// The Elgamal Public Key is the secret key multiplied by the blinding generator (g).
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct ElgamalPublicKey {
     pub pub_key: RistrettoPoint,
 }

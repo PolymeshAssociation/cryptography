@@ -19,6 +19,16 @@ pub enum ConfidentialTxError {
     NotImplemented,
     #[fail(display = "Received an invalid previous state: {:?}", state)]
     InvalidPreviousState { state: ConfidentialTxState },
+    #[fail(
+        display = "Expected to receive {:?} form the sender, got {:?}",
+        expected_amount, received_amount
+    )]
+    TransactionAmountMismatch {
+        expected_amount: u32,
+        received_amount: u32,
+    },
+    #[fail(display = "Public keys in the memo and the account are different.")]
+    InputPubKeyMismatch,
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

@@ -7,12 +7,8 @@ use crate::mercat::errors::ConfidentialTxError;
 use crate::mercat::lib::*;
 use failure::Error;
 use rand::{rngs::StdRng, SeedableRng};
-use rand_core::{CryptoRng, RngCore};
-use std::cell::Cell;
 
-pub struct ConfTx {
-    //    rng: Cell<StdRng>,
-}
+pub struct ConfTx {}
 
 //impl ConfidentialTransactionReceiver for ConfTx {
 //    fn finalize_and_process(
@@ -51,10 +47,11 @@ impl ConfTx {
     pub fn finalize_by_receiver(
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
-        rcvr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
+        rcvr_enc_sec: EncryptionSecKey,
         rcvr_sign_key: SignatureSecKey,
         rcvr_account: PubAccount,
         state: ConfidentialTxState,
+        expected_amount: u32,
     ) -> Result<(PubFinalConfidentialTxData, ConfidentialTxState), Error> {
         // ensure that the previous state is correct
         match state {
@@ -62,35 +59,51 @@ impl ConfTx {
             _ => return Err(ConfidentialTxError::InvalidPreviousState { state }.into()),
         }
 
-        // TODO check that amount is correct
-        // TODO check rcvc public key is the same as the one in the memo
-        // TODO check rcvr public key is the same as the one in the account
+        // Check that amount is correct
+        let received_amount = rcvr_enc_sec
+            .clone()
+            .key()
+            .decrypt(&conf_tx_init_data.memo.enc_amount_using_rcvr)?;
 
-        let enc_asset_id_from_sndr = conf_tx_init_data.memo.asset_id_enc_using_rcvr;
-        let enc_asset_id_from_rcvr_acc = rcvr_account.enc_asset_id;
+        ensure!(
+            received_amount == expected_amount,
+            ConfidentialTxError::TransactionAmountMismatch {
+                expected_amount,
+                received_amount
+            }
+        );
+
+        // Check rcvc public keys match
+        let acc_key = conf_tx_init_data.memo.rcvr_pub_key.clone().key();
+        let memo_key = rcvr_account.memo.owner_pub_key.key();
+        ensure!(
+            acc_key == memo_key,
+            ConfidentialTxError::InputPubKeyMismatch
+        );
+
         // Generate proof of equality of asset ids
+        let enc_asset_id_from_sndr = conf_tx_init_data.memo.enc_asset_id_using_rcvr;
+        let enc_asset_id_from_rcvr_acc = rcvr_account.enc_asset_id;
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
-            rcvr_enc_keys.1.key(), // convert to struct?
+            rcvr_enc_sec.key(),
             enc_asset_id_from_rcvr_acc,
             enc_asset_id_from_sndr,
         );
 
-        // I think our api should be such a bad rng such as this would still be safe
+        // TODO: I think our api should be such that a bad rng such as the following would still be safe
         // to pass to our api.
         const SEED: [u8; 32] = [17u8; 32];
         let mut rng = StdRng::from_seed(SEED);
-        // TODO match
-        match single_property_prover(prover, &mut rng) {
-            Ok((initial_message, final_response)) => Ok((
+        single_property_prover(prover, &mut rng).and_then(|(initial_message, final_response)| {
+            Ok((
                 PubFinalConfidentialTxData {
                     init_data: conf_tx_init_data,
                     asset_id_equal_cipher_proof: (initial_message, final_response),
                     sig: Signature {}, // TODO: sign memo + ALL the proofs of init and final
                 },
                 ConfidentialTxState::Finalization(TxSubstate::Started),
-            )),
-            Err(err) => Err(err.into()), // TODO
-        }
+            ))
+        })
     }
 }
 
@@ -102,8 +115,8 @@ impl ConfTx {
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::asset_proofs::{CipherText, ElgamalPublicKey, ElgamalSecretKey};
-    use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+    use crate::asset_proofs::{CipherText, ElgamalSecretKey};
+    use curve25519_dalek::scalar::Scalar;
     use wasm_bindgen_test::*;
 
     // -------------------------- mock helper methods -----------------------
@@ -124,16 +137,20 @@ mod tests {
         (SignaturePubKey(elg_pub), SignatureSecKey(elg_secret))
     }
 
-    fn mock_ctx_init_memo(rcvr_pub_key: EncryptionPubKey) -> ConfidentialTxMemo {
+    fn mock_ctx_init_memo(
+        rcvr_pub_key: EncryptionPubKey,
+        amount: u32,
+        asset_id: u32,
+    ) -> ConfidentialTxMemo {
         ConfidentialTxMemo {
             sndr_account_id: 0,
             rcvr_account_id: 0,
             enc_amount_using_sndr: CipherText::default(),
-            enc_amount_using_rcvr: CipherText::default(),
+            enc_amount_using_rcvr: rcvr_pub_key.clone().key().encrypt_value(amount).unwrap(),
             sndr_pub_key: EncryptionPubKey::default(),
-            rcvr_pub_key: rcvr_pub_key,
+            rcvr_pub_key: rcvr_pub_key.clone(),
             enc_refreshed_amount: CipherText::default(),
-            asset_id_enc_using_rcvr: CipherText::default(),
+            enc_asset_id_using_rcvr: rcvr_pub_key.key().encrypt_value(asset_id).unwrap(),
         }
     }
 
@@ -144,9 +161,9 @@ mod tests {
         }
     }
 
-    fn mock_gen_account(rcvr_pub_key: EncryptionPubKey) -> PubAccount {
+    fn mock_gen_account(rcvr_pub_key: EncryptionPubKey, asset_id: u32) -> PubAccount {
         PubAccount {
-            enc_asset_id: CipherText::default(),
+            enc_asset_id: rcvr_pub_key.clone().key().encrypt_value(asset_id).unwrap(),
             enc_balance: CipherText::default(),
             asset_wellformedness_proof: WellformednessProof::default(),
             asset_membership_proof: MembershipProof::default(),
@@ -160,40 +177,37 @@ mod tests {
 
     #[test]
     #[wasm_bindgen_test]
-    fn test_finalize_ctx_failures() {
+    fn test_finalize_ctx_success() {
         let ctx_rcvr = ConfTx {};
+        let expected_amount = 10;
+        let asset_id = 20;
 
         let rcvr_enc_keys = mock_gen_enc_key_pair();
         let rcvr_sign_keys = mock_gen_sign_key_pair();
 
         let conf_tx_init_data = PubInitConfidentialTxData {
-            memo: mock_ctx_init_memo(rcvr_enc_keys.0.clone()), // should the ".0" be changed into named fields?
+            memo: mock_ctx_init_memo(rcvr_enc_keys.0.clone(), expected_amount, asset_id), // should the ".0" be changed into named fields?
             asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
             amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
             non_neg_amount_proof: InRangeProof::default(),
             enough_fund_proof: InRangeProof::default(),
             sig: Signature::default(),
         };
-        let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone()); // should the ".0" be changed into named fields?
+        let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
-        let invalid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Started);
 
-        // ------------ invalid prev state
-        match ctx_rcvr.finalize_by_receiver(
+        let result = ctx_rcvr.finalize_by_receiver(
             conf_tx_init_data,
-            rcvr_enc_keys,
+            rcvr_enc_keys.1,
             rcvr_sign_keys.1, // should the ".1" be changed into named fields?
             rcvr_account,
-            invalid_state,
-        ) {
-            Err(e) => match e.as_fail() {
-                ConfidentialTxError::InvalidPreviousState {
-                    state: invalid_state,
-                } => println!("aoeu"),
-                _ => assert!(false, "Expected invalid previous state error, got {:?}", e),
-            },
-            Ok(_) => assert!(false, "Expected invalid previous state error, got Ok"),
+            valid_state,
+            expected_amount,
+        );
+
+        match result {
+            Err(e) => assert!(false, "{:?}", e),
+            _ => (),
         }
-        //assert!(result.is_ok());
     }
 }
