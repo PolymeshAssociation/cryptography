@@ -6,7 +6,7 @@ use crate::asset_proofs::encryption_proofs::single_property_prover;
 use crate::mercat::errors::ConfidentialTxError;
 use crate::mercat::lib::*;
 use failure::Error;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::rngs::StdRng;
 
 pub struct ConfTx {}
 
@@ -22,6 +22,7 @@ impl ConfidentialTransactionReceiver for ConfTx {
         enc_asset_id: EncryptedAssetId,
         amount: u32,
         state: ConfidentialTxState,
+        rng: &mut StdRng,
     ) -> Result<(PubFinalConfidentialTxData, ConfidentialTxState), Error> {
         self.finalize_by_receiver(
             conf_tx_init_data,
@@ -30,6 +31,7 @@ impl ConfidentialTransactionReceiver for ConfTx {
             rcvr_account,
             state,
             amount,
+            rng,
         )?;
 
         // TODO: will complete this in the ctx processing story
@@ -49,6 +51,7 @@ impl ConfTx {
         rcvr_account: PubAccount,
         state: ConfidentialTxState,
         expected_amount: u32,
+        rng: &mut StdRng,
     ) -> Result<(PubFinalConfidentialTxData, ConfidentialTxState), Error> {
         // ensure that the previous state is correct
         match state {
@@ -87,12 +90,7 @@ impl ConfTx {
             enc_asset_id_from_sndr,
         );
 
-        // TODO: I think our api should be such that a bad rng such as the following would still be safe
-        // to pass to our api.
-        // Another story will address removing this rng althogether
-        const SEED: [u8; 32] = [17u8; 32];
-        let mut rng = StdRng::from_seed(SEED);
-        single_property_prover(prover, &mut rng).and_then(|(initial_message, final_response)| {
+        single_property_prover(prover, rng).and_then(|(initial_message, final_response)| {
             Ok((
                 PubFinalConfidentialTxData {
                     init_data: conf_tx_init_data,
@@ -208,6 +206,7 @@ mod tests {
             rcvr_account,
             valid_state,
             expected_amount,
+            &mut StdRng::from_seed([17u8; 32]),
         );
 
         match result {
@@ -238,6 +237,7 @@ mod tests {
             rcvr_account,
             invalid_state.clone(),
             expected_amount,
+            &mut StdRng::from_seed([17u8; 32]),
         );
 
         match result {
@@ -273,6 +273,7 @@ mod tests {
             rcvr_account,
             valid_state,
             expected_amount,
+            &mut StdRng::from_seed([17u8; 32]),
         );
 
         match result {
@@ -309,6 +310,7 @@ mod tests {
             rcvr_account,
             valid_state,
             expected_amount,
+            &mut StdRng::from_seed([17u8; 32]),
         );
 
         match result {

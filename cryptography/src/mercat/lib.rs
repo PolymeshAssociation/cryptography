@@ -14,10 +14,9 @@ use crate::asset_proofs::wellformedness_proof::{
 };
 use crate::asset_proofs::{CipherText, ElgamalPublicKey, ElgamalSecretKey};
 use bulletproofs::RangeProof;
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use failure::Error;
-use std::fmt;
+use rand::rngs::StdRng;
 
 // ---------------------- START: temporary types, move them to the proper location
 
@@ -330,6 +329,7 @@ pub trait ConfidentialTransactionReceiver {
         enc_asset_id: EncryptedAssetId,
         amount: u32,
         state: ConfidentialTxState,
+        rng: &mut StdRng,
     ) -> Result<(PubFinalConfidentialTxData, ConfidentialTxState), Error>;
 }
 
