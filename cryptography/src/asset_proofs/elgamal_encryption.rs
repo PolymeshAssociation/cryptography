@@ -72,7 +72,7 @@ impl TryFrom<(u32, Scalar)> for CommitmentWitness {
 }
 
 /// Prover's representation of the encrypted secret.
-#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize, Default)]
 pub struct CipherText {
     pub x: RistrettoPoint,
     pub y: RistrettoPoint,
@@ -148,7 +148,7 @@ pub struct ElgamalSecretKey {
 }
 
 /// The Elgamal Public Key is the secret key multiplied by the blinding generator (g).
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, Default)]
 pub struct ElgamalPublicKey {
     pub pub_key: RistrettoPoint,
 }
