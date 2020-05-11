@@ -7,6 +7,7 @@ use crate::mercat::errors::ConfidentialTxError;
 use crate::mercat::lib::*;
 use failure::Error;
 use rand::rngs::StdRng;
+use rand::SeedableRng;
 
 pub struct ConfTx {}
 
