@@ -210,4 +210,42 @@ mod tests {
             _ => (),
         }
     }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn test_finalize_ctx_failuers() {
+        let ctx_rcvr = ConfTx {};
+        let expected_amount = 10;
+        let asset_id = 20;
+
+        let rcvr_enc_keys = mock_gen_enc_key_pair();
+        let rcvr_sign_keys = mock_gen_sign_key_pair();
+
+        let conf_tx_init_data = PubInitConfidentialTxData {
+            memo: mock_ctx_init_memo(rcvr_enc_keys.0.clone(), expected_amount, asset_id), // should the ".0" be changed into named fields?
+            asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
+            amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
+            non_neg_amount_proof: InRangeProof::default(),
+            enough_fund_proof: InRangeProof::default(),
+            sig: Signature::default(),
+        };
+        let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
+        let invalid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Started);
+
+        // ------------ invalid prev state
+        let result = ctx_rcvr.finalize_by_receiver(
+            conf_tx_init_data,
+            rcvr_enc_keys.1,
+            rcvr_sign_keys.1, // should the ".1" be changed into named fields?
+            rcvr_account,
+            invalid_state,
+            expected_amount,
+        );
+
+        match result {
+            // TODO check if e is of correct type:  ConfidentialTxError::InvalidPreviousState { state: invalid_state }
+            Err(e) => assert!(false, "{:?}", e),
+            _ => (),
+        }
+    }
 }
