@@ -31,8 +31,10 @@ impl ConfidentialTransactionReceiver for ConfTx {
             state,
             amount,
         )?;
+
         // TODO: will complete this in the ctx processing story
-        ensure!(false, ConfidentialTxError::NotImplemented)
+        //ensure!(false, ConfidentialTxError::NotImplemented)
+        Err(ConfidentialTxError::NotImplemented.into())
     }
 }
 
