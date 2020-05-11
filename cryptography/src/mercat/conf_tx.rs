@@ -57,10 +57,9 @@ impl ConfTx {
         state: ConfidentialTxState,
     ) -> Result<(PubFinalConfidentialTxData, ConfidentialTxState), Error> {
         // ensure that the previous state is correct
-        // TODO match
         match state {
             ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified) => (),
-            _ => return Err(ConfidentialTxError::InvalidPreviousState { state }.into()), // TODO
+            _ => return Err(ConfidentialTxError::InvalidPreviousState { state }.into()),
         }
 
         // TODO check that amount is correct
@@ -90,7 +89,7 @@ impl ConfTx {
                 },
                 ConfidentialTxState::Finalization(TxSubstate::Started),
             )),
-            Err(err) => Err(ConfidentialTxError::NotImplemented.into()), // TODO
+            Err(err) => Err(err.into()), // TODO
         }
     }
 }
@@ -161,7 +160,7 @@ mod tests {
 
     #[test]
     #[wasm_bindgen_test]
-    fn test_finalize_ctx_success() {
+    fn test_finalize_ctx_failures() {
         let ctx_rcvr = ConfTx {};
 
         let rcvr_enc_keys = mock_gen_enc_key_pair();
@@ -179,21 +178,21 @@ mod tests {
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
         let invalid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Started);
 
-        // success case
-        let result = ctx_rcvr.finalize_by_receiver(
+        // ------------ invalid prev state
+        match ctx_rcvr.finalize_by_receiver(
             conf_tx_init_data,
             rcvr_enc_keys,
             rcvr_sign_keys.1, // should the ".1" be changed into named fields?
             rcvr_account,
-            valid_state,
-        );
-        match result {
-            Err(e) => {
-                println!("{}", e);
-                assert!(false, e);
-                assert_eq!(1, 2)
-            }
-            Ok(_) => println!("passed"),
+            invalid_state,
+        ) {
+            Err(e) => match e.as_fail() {
+                ConfidentialTxError::InvalidPreviousState {
+                    state: invalid_state,
+                } => println!("aoeu"),
+                _ => assert!(false, "Expected invalid previous state error, got {:?}", e),
+            },
+            Ok(_) => assert!(false, "Expected invalid previous state error, got Ok"),
         }
         //assert!(result.is_ok());
     }
