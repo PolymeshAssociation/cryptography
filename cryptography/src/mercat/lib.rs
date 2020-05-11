@@ -141,7 +141,7 @@ pub struct PubAccount {
 
 /// Represents the three substates (started, verified, rejected) of a
 /// confidential transaction state.
-#[derive(Display, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TxSubstate {
     /// The action on transaction has been taken but is not verified yet.
     Started,

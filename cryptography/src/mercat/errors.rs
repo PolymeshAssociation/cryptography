@@ -17,7 +17,7 @@ pub enum AssetTxError {
 pub enum ConfidentialTxError {
     #[fail(display = "This method is not implemented yet")]
     NotImplemented,
-    #[fail(display = "Received an invalid previous state: {}", state)]
+    #[fail(display = "Received an invalid previous state: {:?}", state)]
     InvalidPreviousState { state: ConfidentialTxState },
 }
 
