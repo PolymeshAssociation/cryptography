@@ -92,6 +92,7 @@ impl ConfTx {
 
         // TODO: I think our api should be such that a bad rng such as the following would still be safe
         // to pass to our api.
+        // Another story will address removing this rng althogether
         const SEED: [u8; 32] = [17u8; 32];
         let mut rng = StdRng::from_seed(SEED);
         single_property_prover(prover, &mut rng).and_then(|(initial_message, final_response)| {
@@ -121,9 +122,8 @@ mod tests {
 
     // -------------------------- mock helper methods -----------------------
 
-    fn mock_gen_enc_key_pair() -> (EncryptionPubKey, EncryptionSecKey) {
-        const SEED: [u8; 32] = [17u8; 32];
-        let mut rng = StdRng::from_seed(SEED);
+    fn mock_gen_enc_key_pair(seed: u8) -> (EncryptionPubKey, EncryptionSecKey) {
+        let mut rng = StdRng::from_seed([seed; 32]);
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         (EncryptionPubKey(elg_pub), EncryptionSecKey(elg_secret))
@@ -173,6 +173,21 @@ mod tests {
         }
     }
 
+    fn mock_ctx_init_data(
+        rcvr_pub_key: EncryptionPubKey,
+        expected_amount: u32,
+        asset_id: u32,
+    ) -> PubInitConfidentialTxData {
+        PubInitConfidentialTxData {
+            memo: mock_ctx_init_memo(rcvr_pub_key, expected_amount, asset_id),
+            asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
+            amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
+            non_neg_amount_proof: InRangeProof::default(),
+            enough_fund_proof: InRangeProof::default(),
+            sig: Signature::default(),
+        }
+    }
+
     // -------------------------- tests -----------------------
 
     #[test]
@@ -182,22 +197,15 @@ mod tests {
         let expected_amount = 10;
         let asset_id = 20;
 
-        let rcvr_enc_keys = mock_gen_enc_key_pair();
+        let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let rcvr_sign_keys = mock_gen_sign_key_pair();
 
-        let conf_tx_init_data = PubInitConfidentialTxData {
-            memo: mock_ctx_init_memo(rcvr_enc_keys.0.clone(), expected_amount, asset_id), // should the ".0" be changed into named fields?
-            asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-            amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-            non_neg_amount_proof: InRangeProof::default(),
-            enough_fund_proof: InRangeProof::default(),
-            sig: Signature::default(),
-        };
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.0.clone(), expected_amount, asset_id); // should the ".0" be changed into named fields?
         let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
 
         let result = ctx_rcvr.finalize_by_receiver(
-            conf_tx_init_data,
+            ctx_init_data,
             rcvr_enc_keys.1,
             rcvr_sign_keys.1, // should the ".1" be changed into named fields?
             rcvr_account,
@@ -209,43 +217,109 @@ mod tests {
             Err(e) => assert!(false, "{:?}", e),
             _ => (),
         }
+        // Correctness of the proof will be verified in the verify function
     }
 
     #[test]
     #[wasm_bindgen_test]
-    fn test_finalize_ctx_failuers() {
+    fn test_finalize_ctx_prev_state_error() {
         let ctx_rcvr = ConfTx {};
         let expected_amount = 10;
         let asset_id = 20;
 
-        let rcvr_enc_keys = mock_gen_enc_key_pair();
+        let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let rcvr_sign_keys = mock_gen_sign_key_pair();
 
-        let conf_tx_init_data = PubInitConfidentialTxData {
-            memo: mock_ctx_init_memo(rcvr_enc_keys.0.clone(), expected_amount, asset_id), // should the ".0" be changed into named fields?
-            asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-            amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-            non_neg_amount_proof: InRangeProof::default(),
-            enough_fund_proof: InRangeProof::default(),
-            sig: Signature::default(),
-        };
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.0.clone(), expected_amount, asset_id); // should the ".0" be changed into named fields?
         let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
         let invalid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Started);
 
-        // ------------ invalid prev state
         let result = ctx_rcvr.finalize_by_receiver(
-            conf_tx_init_data,
+            ctx_init_data,
             rcvr_enc_keys.1,
             rcvr_sign_keys.1, // should the ".1" be changed into named fields?
             rcvr_account,
-            invalid_state,
+            invalid_state.clone(),
             expected_amount,
         );
 
         match result {
-            // TODO check if e is of correct type:  ConfidentialTxError::InvalidPreviousState { state: invalid_state }
-            Err(e) => assert!(false, "{:?}", e),
-            _ => (),
+            Err(e) => assert_eq!(
+                e.downcast::<ConfidentialTxError>().unwrap(),
+                ConfidentialTxError::InvalidPreviousState {
+                    state: invalid_state,
+                }
+            ),
+            _ => assert!(false, "Expected error, got OK!"),
+        }
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn test_finalize_ctx_amount_mismatch_error() {
+        let ctx_rcvr = ConfTx {};
+        let expected_amount = 10;
+        let received_amount = 20;
+        let asset_id = 20;
+
+        let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair();
+
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.0.clone(), received_amount, asset_id); // should the ".0" be changed into named fields?
+        let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
+        let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
+
+        let result = ctx_rcvr.finalize_by_receiver(
+            ctx_init_data,
+            rcvr_enc_keys.1,
+            rcvr_sign_keys.1, // should the ".1" be changed into named fields?
+            rcvr_account,
+            valid_state,
+            expected_amount,
+        );
+
+        match result {
+            Err(e) => assert_eq!(
+                e.downcast::<ConfidentialTxError>().unwrap(),
+                ConfidentialTxError::TransactionAmountMismatch {
+                    expected_amount,
+                    received_amount
+                },
+            ),
+            _ => assert!(false, "Expected error, got OK!"),
+        }
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn test_finalize_ctx_pub_key_mismatch_error() {
+        let ctx_rcvr = ConfTx {};
+        let expected_amount = 10;
+        let asset_id = 20;
+
+        let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
+        let wrong_enc_keys = mock_gen_enc_key_pair(18u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair();
+
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.0.clone(), expected_amount, asset_id); // should the ".0" be changed into named fields?
+        let rcvr_account = mock_gen_account(wrong_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
+        let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
+
+        let result = ctx_rcvr.finalize_by_receiver(
+            ctx_init_data,
+            rcvr_enc_keys.1,
+            rcvr_sign_keys.1, // should the ".1" be changed into named fields?
+            rcvr_account,
+            valid_state,
+            expected_amount,
+        );
+
+        match result {
+            Err(e) => assert_eq!(
+                e.downcast::<ConfidentialTxError>().unwrap(),
+                ConfidentialTxError::InputPubKeyMismatch,
+            ),
+            _ => assert!(false, "Expected error, got OK!"),
         }
     }
 }
