@@ -2,13 +2,155 @@
 
 // TODO check rust guideline for what needs prefixing when importing and calling methods vs calling structs
 use crate::asset_proofs::ciphertext_refreshment_proof::CipherTextRefreshmentProverAwaitingChallenge;
+use crate::asset_proofs::encrypting_same_value_proof::EncryptingSameValueProverAwaitingChallenge;
 use crate::asset_proofs::encryption_proofs::single_property_prover;
+use crate::asset_proofs::range_proof::prove_within_range;
+use crate::asset_proofs::CipherText;
+use crate::asset_proofs::CommitmentWitness;
 use crate::mercat::errors::ConfidentialTxError;
 use crate::mercat::lib::*;
+use bulletproofs::PedersenGens;
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use failure::Error;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use std::convert::TryFrom;
+use zeroize::Zeroizing;
 
+// ------------------------------------------------------------------------------------------------
+// -                                          Receiver                                            -
+// ------------------------------------------------------------------------------------------------
+
+/// The sender of a confidential transaction. Sender creates a transaction
+/// and performs initial proofs.
+pub struct CtxSender {}
+
+impl ConfidentialTransactionSender for CtxSender {
+    fn create(
+        &self,
+        sndr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
+        sndr_sign_key: SignatureSecKey,
+        sndr_account: PubAccount,
+        rcvr_pub_key: EncryptionPubKey,
+        rcvr_account: PubAccount,
+        asset_id: u32,
+        amount: u32,
+        rng: &mut StdRng,
+    ) -> Result<(PubInitConfidentialTxData, ConfidentialTxState), Error> {
+        let range = 32;
+        // Prove that the amount encrypted under different public keys are
+        // the same
+        // TODO: the following can become a functions in elgamal lib
+        let blinding = Scalar::random(rng);
+        let sndr_x = blinding * sndr_enc_keys.0.clone().key().pub_key;
+        let rcvr_x = blinding * rcvr_pub_key.clone().key().pub_key;
+        let gens = PedersenGens::default();
+        let y = gens.commit(Scalar::from(amount), blinding);
+        let sndr_new_enc_amount = CipherText { x: sndr_x, y };
+        let rcvr_new_enc_amount = CipherText { x: rcvr_x, y };
+
+        let diff_pub_key_prover = EncryptingSameValueProverAwaitingChallenge {
+            pub_key1: sndr_enc_keys.0.clone().key(),
+            pub_key2: rcvr_pub_key.clone().key(),
+            w: Zeroizing::new(CommitmentWitness::try_from((amount, blinding))?),
+        };
+        let (amount_same_proof_init, amount_same_proof_response) =
+            single_property_prover(diff_pub_key_prover, rng)?;
+        let amount_equal_cipher_proof = CipherEqualDifferentPubKeyProof {
+            init: amount_same_proof_init,
+            response: amount_same_proof_response,
+        };
+
+        // Prove that committed amount is not negative
+        // Note that the second part of the proof should be the encrypted amount
+        // which is computed above
+        // TODO: since our usecase is to do rangeproof on encrypted values,
+        //       I think we can create a simler helper function in range proof lib
+        // TODO: does the blinding have to be the same as the one used in encryption?
+        let (non_neg_amount_proof, _) = prove_within_range(amount.into(), blinding, range)?;
+        let non_neg_amount_proof = InRangeProof {
+            proof: non_neg_amount_proof,
+            commitment: y.compress(),
+            range: range,
+        };
+
+        // Refresh the encrypted balance and prove that the refreshment was done
+        // correctly
+        let refreshed_enc_balance = sndr_account
+            .enc_balance
+            // TODO: I suggest renaming this method to "refresh"
+            .ciphertext_refreshment_method(&sndr_enc_keys.1.clone().key(), rng)?;
+        let ciphertext_refresh_prover = CipherTextRefreshmentProverAwaitingChallenge::new(
+            sndr_enc_keys.1.clone().key(),
+            sndr_account.enc_balance,
+            refreshed_enc_balance,
+        );
+        let (balance_same_proof_init, balance_same_proof_response) =
+            single_property_prover(ciphertext_refresh_prover, rng)?;
+        let balance_refreshed_same_proof = CipherEqualSamePubKeyProof {
+            init: balance_same_proof_init,
+            response: balance_same_proof_response,
+        };
+
+        // Prove that sender has enough funds
+        // NOTE: If this decryption ends up being too slow, we can pass in the balance
+        // as input.
+        let balance = sndr_enc_keys.1.key().decrypt(&sndr_account.enc_balance)?;
+        // TODO: does the blinding have to be the same as the one used in encryption?
+        let blinding = Scalar::random(rng);
+        let enough_fund_commitment = refreshed_enc_balance.y - y;
+        let (enough_fund_proof, _) =
+            prove_within_range((balance - amount).into(), blinding, range)?;
+        let enough_fund_proof = InRangeProof {
+            proof: enough_fund_proof,
+            commitment: enough_fund_commitment.compress(),
+            range: range,
+        };
+
+        // Prove that the encrytped asset id is the same
+        let enc_asset_id_using_receiver = rcvr_pub_key.clone().key().encrypt_value(asset_id)?;
+        // TODO: what is the blinding value here?
+        let blinding = Scalar::random(rng);
+        let diff_pub_key_prover = EncryptingSameValueProverAwaitingChallenge {
+            pub_key1: sndr_enc_keys.0.clone().key(),
+            pub_key2: rcvr_pub_key.clone().key(),
+            w: Zeroizing::new(CommitmentWitness::try_from((balance - amount, blinding))?),
+        };
+        let (asset_same_proof_init, asset_same_proof_response) =
+            single_property_prover(diff_pub_key_prover, rng)?;
+        let asset_id_equal_cipher_proof = CipherEqualDifferentPubKeyProof {
+            init: asset_same_proof_init,
+            response: asset_same_proof_response,
+        };
+
+        let memo = ConfidentialTxMemo {
+            sndr_account_id: sndr_account.id,
+            rcvr_account_id: rcvr_account.id,
+            enc_amount_using_sndr: sndr_new_enc_amount,
+            enc_amount_using_rcvr: rcvr_new_enc_amount,
+            sndr_pub_key: sndr_enc_keys.0,
+            rcvr_pub_key: rcvr_pub_key,
+            enc_refreshed_balance: refreshed_enc_balance,
+            enc_asset_id_using_rcvr: enc_asset_id_using_receiver,
+        };
+        // TODO: sign memo and all the five proofs
+        let sig = Signature {};
+
+        let init_data = PubInitConfidentialTxData {
+            amount_equal_cipher_proof: amount_equal_cipher_proof,
+            non_neg_amount_proof: non_neg_amount_proof,
+            enough_fund_proof: enough_fund_proof,
+            memo: memo,
+            asset_id_equal_cipher_proof: asset_id_equal_cipher_proof,
+            balance_refreshed_same_proof: balance_refreshed_same_proof,
+            sig: sig,
+        };
+        Ok((
+            init_data,
+            ConfidentialTxState::Initialization(TxSubstate::Started),
+        ))
+    }
+}
 // ------------------------------------------------------------------------------------------------
 // -                                          Receiver                                            -
 // ------------------------------------------------------------------------------------------------
@@ -97,11 +239,11 @@ impl CtxReceiver {
             enc_asset_id_from_sndr,
         );
 
-        single_property_prover(prover, rng).and_then(|(initial_message, final_response)| {
+        single_property_prover(prover, rng).and_then(|(init, response)| {
             Ok((
                 PubFinalConfidentialTxData {
                     init_data: conf_tx_init_data,
-                    asset_id_equal_cipher_proof: (initial_message, final_response),
+                    asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof { init, response },
                     sig: Signature {}, // TODO: sign memo + ALL the proofs of init and final
                 },
                 ConfidentialTxState::Finalization(TxSubstate::Started),
@@ -182,7 +324,7 @@ mod tests {
             enc_amount_using_rcvr: rcvr_pub_key.clone().key().encrypt_value(amount).unwrap(),
             sndr_pub_key: EncryptionPubKey::default(),
             rcvr_pub_key: rcvr_pub_key.clone(),
-            enc_refreshed_amount: CipherText::default(),
+            enc_refreshed_balance: CipherText::default(),
             enc_asset_id_using_rcvr: rcvr_pub_key.key().encrypt_value(asset_id).unwrap(),
         }
     }
@@ -196,6 +338,7 @@ mod tests {
 
     fn mock_gen_account(rcvr_pub_key: EncryptionPubKey, asset_id: u32) -> PubAccount {
         PubAccount {
+            id: 1,
             enc_asset_id: rcvr_pub_key.clone().key().encrypt_value(asset_id).unwrap(),
             enc_balance: CipherText::default(),
             asset_wellformedness_proof: WellformednessProof::default(),
@@ -217,6 +360,7 @@ mod tests {
             amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
             non_neg_amount_proof: InRangeProof::default(),
             enough_fund_proof: InRangeProof::default(),
+            balance_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
             sig: Signature::default(),
         }
     }

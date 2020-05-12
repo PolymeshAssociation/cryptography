@@ -82,9 +82,9 @@ pub struct MembershipProof {
 
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for range.
 pub struct InRangeProof {
-    proof: RangeProof,
-    commitment: CompressedRistretto,
-    range: usize,
+    pub proof: RangeProof,
+    pub commitment: CompressedRistretto,
+    pub range: usize,
 }
 
 impl Default for InRangeProof {
@@ -100,18 +100,21 @@ impl Default for InRangeProof {
     }
 }
 
+/// TODO: update the documentation and remove the type alias
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for cipher
 /// equality under different public key.
 #[derive(Default)]
 pub struct CipherEqualDifferentPubKeyProof {
-    init: EncryptingSameValueInitialMessage,
-    response: EncryptingSameValueFinalResponse,
+    pub init: EncryptingSameValueInitialMessage,
+    pub response: EncryptingSameValueFinalResponse,
 }
 
-pub type CipherEqualSamePubKeyProof = (
-    CipherTextRefreshmentInitialMessage,
-    CipherTextRefreshmentFinalResponse,
-);
+/// TODO
+#[derive(Default)]
+pub struct CipherEqualSamePubKeyProof {
+    pub init: CipherTextRefreshmentInitialMessage,
+    pub response: CipherTextRefreshmentFinalResponse,
+}
 
 /// Asset memo. TODO: more informative description!
 pub type AssetMemo = EncryptedAmount;
@@ -126,6 +129,7 @@ pub struct AccountMemo {
 
 /// Holds the public portion of an account which can be safely put on the chain.
 pub struct PubAccount {
+    pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
     pub enc_balance: EncryptedAmount,
     pub asset_wellformedness_proof: WellformednessProof,
@@ -247,7 +251,7 @@ pub struct ConfidentialTxMemo {
     pub enc_amount_using_rcvr: EncryptedAmount,
     pub sndr_pub_key: EncryptionPubKey,
     pub rcvr_pub_key: EncryptionPubKey,
-    pub enc_refreshed_amount: EncryptedAmount,
+    pub enc_refreshed_balance: EncryptedAmount,
     pub enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
@@ -265,6 +269,7 @@ pub struct PubInitConfidentialTxData {
     pub enough_fund_proof: InRangeProof,
     pub memo: ConfidentialTxMemo,
     pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
+    pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub sig: Signature,
 }
 
@@ -297,6 +302,7 @@ pub trait ConfidentialTransactionSender {
         rcvr_account: PubAccount,
         asset_id: u32,
         amount: u32,
+        rng: &mut StdRng,
     ) -> Result<(PubInitConfidentialTxData, ConfidentialTxState), Error>;
 }
 
