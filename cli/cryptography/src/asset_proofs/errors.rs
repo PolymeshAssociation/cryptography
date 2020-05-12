@@ -24,6 +24,27 @@ pub enum AssetProofError {
     )]
     CorrectnessFinalResponseVerificationError { check: u16 },
 
+    /// Failed to verify a R1 proof.
+    #[fail(
+        display = "Failed to verify the check number {} of the R1 proof",
+        check
+    )]
+    R1FinalResponseVerificationError { check: u16 },
+
+    /// The index is out of range.
+    #[fail(display = "The index is out of range {}", index)]
+    OOONProofIndexOutofRange { index: usize },
+
+    /// Input vector or matrix size does not match to the expected value
+    #[fail(display = "The provided matrix or vector size does not match to the expected")]
+    OOONProofWrongSize,
+
+    /// Failed to verify a one-out-of-many proof.
+    #[fail(
+        display = "Failed to verify the check number {} of the OOON proof",
+        check
+    )]
+    OOONFinalResponseVerificationError { check: u16 },
     /// Failed to verify a wellformedness proof.
     #[fail(
         display = "Failed to verify the check number {} of the wellformedness proof",
