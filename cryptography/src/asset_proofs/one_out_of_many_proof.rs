@@ -19,7 +19,7 @@ use crate::asset_proofs::{
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
 
-use merlin::Transcript;
+use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use sha3::Sha3_512;
 
@@ -348,10 +348,21 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
     type ZKFinalResponse = R1ProofFinalResponse;
     type ZKProver = R1Prover;
 
-    fn generate_initial_message<T: RngCore + CryptoRng>(
+    fn create_transcript_rng<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        transcript: &Transcript,
+    ) -> TranscriptRng {
+        transcript
+            .build_rng()
+            .rekey_with_witness_bytes(b"r_b", self.r_b.as_bytes())
+            .finalize(rng)
+    }
+
+    fn generate_initial_message(
         &self,
         _p_gens: &PedersenGens,
-        rng: &mut T,
+        rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rows = self.b_matrix.rows;
         let columns = self.b_matrix.columns;
@@ -559,14 +570,26 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
     type ZKFinalResponse = OOONProofFinalResponse;
     type ZKProver = OOONProver;
 
+    fn create_transcript_rng<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        transcript: &Transcript,
+    ) -> TranscriptRng {
+        transcript
+            .build_rng()
+            .rekey_with_witness_bytes(b"secret_index", &self.secret_index.to_le_bytes())
+            .rekey_with_witness_bytes(b"random", self.random.as_bytes())
+            .finalize(rng)
+    }
+
     /// We require the actual size of commitments list to be equal exactly to N = n^m
     /// If the commitment vector size is smaller than N, it should be padded with the last element to make the final commitment vector of size N.
     /// We assume the list is padded already before being passed to the OOON proof initialization process.
     /// This has critical security importance, as non-padded list will open doors for serious privacy issues.
-    fn generate_initial_message<T: RngCore + CryptoRng>(
+    fn generate_initial_message(
         &self,
         pc_gens: &PedersenGens,
-        rng: &mut T,
+        rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let columns = self.base;
         let rows = self.exp;
@@ -787,7 +810,9 @@ mod tests {
             let verifier = OOONProofVerifier {
                 commitments: commitments.as_slice(),
             };
-            let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
+            let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
+            let (prover, initial_message) =
+                prover.generate_initial_message(&pc_gens, &mut transcript_rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
             let challenge = transcript
@@ -822,7 +847,9 @@ mod tests {
             let verifier = OOONProofVerifier {
                 commitments: commitments.as_slice(),
             };
-            let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
+            let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
+            let (prover, initial_message) =
+                prover.generate_initial_message(&pc_gens, &mut transcript_rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
             let challenge = transcript
@@ -862,7 +889,9 @@ mod tests {
             let verifier = OOONProofVerifier {
                 commitments: commitments.as_slice(),
             };
-            let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
+            let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
+            let (prover, initial_message) =
+                prover.generate_initial_message(&pc_gens, &mut transcript_rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
             let challenge = transcript
@@ -920,7 +949,9 @@ mod tests {
             let prover = R1ProverAwaitingChallenge::new(b, r, EXPONENT, BASE);
 
             let verifier = R1ProofVerifier::new(b_comm);
-            let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
+            let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
+            let (prover, initial_message) =
+                prover.generate_initial_message(&pc_gens, &mut transcript_rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
 
@@ -941,7 +972,9 @@ mod tests {
         let prover = R1ProverAwaitingChallenge::new(b, r, EXPONENT, BASE);
 
         let verifier = R1ProofVerifier::new(b_comm);
-        let (prover, initial_message) = prover.generate_initial_message(&pc_gens, &mut rng);
+        let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
+        let (prover, initial_message) =
+            prover.generate_initial_message(&pc_gens, &mut transcript_rng);
 
         initial_message.update_transcript(&mut transcript).unwrap();
 
