@@ -22,7 +22,9 @@ macro_rules! assert_err {
 }
 
 mod elgamal_encryption;
-pub use elgamal_encryption::{CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey};
+pub use elgamal_encryption::{
+    encrypt_using_two_pub_keys, CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
+};
 
 pub mod ciphertext_refreshment_proof;
 pub mod correctness_proof;

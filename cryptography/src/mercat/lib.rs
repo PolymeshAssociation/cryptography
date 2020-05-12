@@ -22,12 +22,30 @@ use rand::rngs::StdRng;
 
 // Having separate types for encryption and signature will ensure that the keys used for encryption
 // and signing are different.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Copy)]
 pub struct EncryptionPubKey(pub ElgamalPublicKey);
 #[derive(Clone)]
 pub struct EncryptionSecKey(pub ElgamalSecretKey);
+pub struct EncryptionKeys {
+    pub pblc: EncryptionPubKey,
+    pub scrt: EncryptionSecKey,
+}
+// TODO experimenting with the API, remove once finalized
+//impl EncryptionKeys {
+//    pub fn pblc(&self) -> ElgamalPublicKey {
+//        self.pblc.key()
+//    }
+//    pub fn scrt(&self) -> ElgamalSecretKey {
+//        self.scrt.key()
+//    }
+//}
+
 pub struct SignaturePubKey(pub ElgamalPublicKey);
 pub struct SignatureSecKey(pub ElgamalSecretKey);
+pub struct SignatureKeys {
+    pub pblc: SignaturePubKey,
+    pub scrt: SignatureSecKey,
+}
 
 // TODO move after CRYP-40
 #[derive(Default)]
@@ -109,11 +127,39 @@ pub struct CipherEqualDifferentPubKeyProof {
     pub response: EncryptingSameValueFinalResponse,
 }
 
+impl CipherEqualDifferentPubKeyProof {
+    pub fn new(
+        pair: (
+            EncryptingSameValueInitialMessage,
+            EncryptingSameValueFinalResponse,
+        ),
+    ) -> Self {
+        Self {
+            init: pair.0,
+            response: pair.1,
+        }
+    }
+}
+
 /// TODO
 #[derive(Default)]
 pub struct CipherEqualSamePubKeyProof {
     pub init: CipherTextRefreshmentInitialMessage,
     pub response: CipherTextRefreshmentFinalResponse,
+}
+
+impl CipherEqualSamePubKeyProof {
+    pub fn new(
+        pair: (
+            CipherTextRefreshmentInitialMessage,
+            CipherTextRefreshmentFinalResponse,
+        ),
+    ) -> Self {
+        Self {
+            init: pair.0,
+            response: pair.1,
+        }
+    }
 }
 
 /// Asset memo. TODO: more informative description!
@@ -295,7 +341,7 @@ pub trait ConfidentialTransactionSender {
     /// MERCAT paper.
     fn create(
         &self,
-        sndr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
+        sndr_enc_keys: EncryptionKeys,
         sndr_sign_key: SignatureSecKey,
         sndr_account: PubAccount,
         rcvr_pub_key: EncryptionPubKey,

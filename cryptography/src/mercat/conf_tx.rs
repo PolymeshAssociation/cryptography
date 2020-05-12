@@ -2,6 +2,7 @@
 
 // TODO check rust guideline for what needs prefixing when importing and calling methods vs calling structs
 use crate::asset_proofs::ciphertext_refreshment_proof::CipherTextRefreshmentProverAwaitingChallenge;
+use crate::asset_proofs::encrypt_using_two_pub_keys;
 use crate::asset_proofs::encrypting_same_value_proof::EncryptingSameValueProverAwaitingChallenge;
 use crate::asset_proofs::encryption_proofs::single_property_prover;
 use crate::asset_proofs::range_proof::prove_within_range;
@@ -28,7 +29,7 @@ pub struct CtxSender {}
 impl ConfidentialTransactionSender for CtxSender {
     fn create(
         &self,
-        sndr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
+        sndr_enc_keys: EncryptionKeys,
         sndr_sign_key: SignatureSecKey,
         sndr_account: PubAccount,
         rcvr_pub_key: EncryptionPubKey,
@@ -38,39 +39,26 @@ impl ConfidentialTransactionSender for CtxSender {
         rng: &mut StdRng,
     ) -> Result<(PubInitConfidentialTxData, ConfidentialTxState), Error> {
         let range = 32;
-        // Prove that the amount encrypted under different public keys are
-        // the same
-        // TODO: the following can become a functions in elgamal lib
-        let blinding = Scalar::random(rng);
-        let sndr_x = blinding * sndr_enc_keys.0.clone().key().pub_key;
-        let rcvr_x = blinding * rcvr_pub_key.clone().key().pub_key;
-        let gens = PedersenGens::default();
-        let y = gens.commit(Scalar::from(amount), blinding);
-        let sndr_new_enc_amount = CipherText { x: sndr_x, y };
-        let rcvr_new_enc_amount = CipherText { x: rcvr_x, y };
+        // Prove that the amount encrypted under different public keys are the same
+        let witness = CommitmentWitness::try_from((amount, Scalar::random(rng)))?;
+        let (sndr_new_enc_amount, rcvr_new_enc_amount) =
+            encrypt_using_two_pub_keys(&witness, sndr_enc_keys.pblc.key(), rcvr_pub_key.key());
 
-        let diff_pub_key_prover = EncryptingSameValueProverAwaitingChallenge {
-            pub_key1: sndr_enc_keys.0.clone().key(),
-            pub_key2: rcvr_pub_key.clone().key(),
-            w: Zeroizing::new(CommitmentWitness::try_from((amount, blinding))?),
-        };
-        let (amount_same_proof_init, amount_same_proof_response) =
-            single_property_prover(diff_pub_key_prover, rng)?;
-        let amount_equal_cipher_proof = CipherEqualDifferentPubKeyProof {
-            init: amount_same_proof_init,
-            response: amount_same_proof_response,
-        };
+        let amount_equal_cipher_proof =
+            CipherEqualDifferentPubKeyProof::new(single_property_prover(
+                EncryptingSameValueProverAwaitingChallenge {
+                    pub_key1: sndr_enc_keys.pblc.key(),
+                    pub_key2: rcvr_pub_key.key(),
+                    w: Zeroizing::new(witness),
+                },
+                rng,
+            )?);
 
         // Prove that committed amount is not negative
-        // Note that the second part of the proof should be the encrypted amount
-        // which is computed above
-        // TODO: since our usecase is to do rangeproof on encrypted values,
-        //       I think we can create a simler helper function in range proof lib
-        // TODO: does the blinding have to be the same as the one used in encryption?
-        let (non_neg_amount_proof, _) = prove_within_range(amount.into(), blinding, range)?;
+        let blinding = Scalar::random(rng);
         let non_neg_amount_proof = InRangeProof {
-            proof: non_neg_amount_proof,
-            commitment: y.compress(),
+            proof: prove_within_range(amount.into(), blinding, range)?.0,
+            commitment: sndr_new_enc_amount.y.compress(),
             range: range,
         };
 
@@ -78,57 +66,53 @@ impl ConfidentialTransactionSender for CtxSender {
         // correctly
         let refreshed_enc_balance = sndr_account
             .enc_balance
-            // TODO: I suggest renaming this method to "refresh"
-            .ciphertext_refreshment_method(&sndr_enc_keys.1.clone().key(), rng)?;
-        let ciphertext_refresh_prover = CipherTextRefreshmentProverAwaitingChallenge::new(
-            sndr_enc_keys.1.clone().key(),
-            sndr_account.enc_balance,
-            refreshed_enc_balance,
-        );
-        let (balance_same_proof_init, balance_same_proof_response) =
-            single_property_prover(ciphertext_refresh_prover, rng)?;
-        let balance_refreshed_same_proof = CipherEqualSamePubKeyProof {
-            init: balance_same_proof_init,
-            response: balance_same_proof_response,
-        };
+            .refresh(&sndr_enc_keys.scrt.clone().key(), rng)?;
+        let balance_refreshed_same_proof = CipherEqualSamePubKeyProof::new(single_property_prover(
+            CipherTextRefreshmentProverAwaitingChallenge::new(
+                sndr_enc_keys.scrt.clone().key(),
+                sndr_account.enc_balance,
+                refreshed_enc_balance,
+            ),
+            rng,
+        )?);
 
         // Prove that sender has enough funds
         // NOTE: If this decryption ends up being too slow, we can pass in the balance
         // as input.
-        let balance = sndr_enc_keys.1.key().decrypt(&sndr_account.enc_balance)?;
+        let balance = sndr_enc_keys
+            .scrt
+            .clone()
+            .key()
+            .decrypt(&sndr_account.enc_balance)?;
         // TODO: does the blinding have to be the same as the one used in encryption?
         let blinding = Scalar::random(rng);
-        let enough_fund_commitment = refreshed_enc_balance.y - y;
-        let (enough_fund_proof, _) =
-            prove_within_range((balance - amount).into(), blinding, range)?;
+        let enough_fund_commitment = refreshed_enc_balance.y - sndr_new_enc_amount.y;
         let enough_fund_proof = InRangeProof {
-            proof: enough_fund_proof,
+            proof: prove_within_range((balance - amount).into(), blinding, range)?.0,
             commitment: enough_fund_commitment.compress(),
             range: range,
         };
 
         // Prove that the encrytped asset id is the same
-        let enc_asset_id_using_receiver = rcvr_pub_key.clone().key().encrypt_value(asset_id)?;
+        let enc_asset_id_using_receiver = rcvr_pub_key.key().encrypt_value(asset_id)?;
         // TODO: what is the blinding value here?
         let blinding = Scalar::random(rng);
-        let diff_pub_key_prover = EncryptingSameValueProverAwaitingChallenge {
-            pub_key1: sndr_enc_keys.0.clone().key(),
-            pub_key2: rcvr_pub_key.clone().key(),
-            w: Zeroizing::new(CommitmentWitness::try_from((balance - amount, blinding))?),
-        };
-        let (asset_same_proof_init, asset_same_proof_response) =
-            single_property_prover(diff_pub_key_prover, rng)?;
-        let asset_id_equal_cipher_proof = CipherEqualDifferentPubKeyProof {
-            init: asset_same_proof_init,
-            response: asset_same_proof_response,
-        };
+        let asset_id_equal_cipher_proof =
+            CipherEqualDifferentPubKeyProof::new(single_property_prover(
+                EncryptingSameValueProverAwaitingChallenge {
+                    pub_key1: sndr_enc_keys.pblc.key(),
+                    pub_key2: rcvr_pub_key.key(),
+                    w: Zeroizing::new(CommitmentWitness::try_from((balance - amount, blinding))?),
+                },
+                rng,
+            )?);
 
         let memo = ConfidentialTxMemo {
             sndr_account_id: sndr_account.id,
             rcvr_account_id: rcvr_account.id,
             enc_amount_using_sndr: sndr_new_enc_amount,
             enc_amount_using_rcvr: rcvr_new_enc_amount,
-            sndr_pub_key: sndr_enc_keys.0,
+            sndr_pub_key: sndr_enc_keys.pblc,
             rcvr_pub_key: rcvr_pub_key,
             enc_refreshed_balance: refreshed_enc_balance,
             enc_asset_id_using_rcvr: enc_asset_id_using_receiver,
@@ -223,7 +207,7 @@ impl CtxReceiver {
         );
 
         // Check rcvc public keys match
-        let acc_key = conf_tx_init_data.memo.rcvr_pub_key.clone().key();
+        let acc_key = conf_tx_init_data.memo.rcvr_pub_key.key();
         let memo_key = rcvr_account.memo.owner_pub_key.key();
         ensure!(
             acc_key == memo_key,
@@ -297,19 +281,25 @@ mod tests {
 
     // -------------------------- mock helper methods -----------------------
 
-    fn mock_gen_enc_key_pair(seed: u8) -> (EncryptionPubKey, EncryptionSecKey) {
+    fn mock_gen_enc_key_pair(seed: u8) -> EncryptionKeys {
         let mut rng = StdRng::from_seed([seed; 32]);
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        (EncryptionPubKey(elg_pub), EncryptionSecKey(elg_secret))
+        EncryptionKeys {
+            pblc: EncryptionPubKey(elg_pub),
+            scrt: EncryptionSecKey(elg_secret),
+        }
     }
 
-    fn mock_gen_sign_key_pair() -> (SignaturePubKey, SignatureSecKey) {
+    fn mock_gen_sign_key_pair() -> SignatureKeys {
         const SEED: [u8; 32] = [17u8; 32];
         let mut rng = StdRng::from_seed(SEED);
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        (SignaturePubKey(elg_pub), SignatureSecKey(elg_secret))
+        SignatureKeys {
+            pblc: SignaturePubKey(elg_pub),
+            scrt: SignatureSecKey(elg_secret),
+        }
     }
 
     fn mock_ctx_init_memo(
@@ -321,9 +311,9 @@ mod tests {
             sndr_account_id: 0,
             rcvr_account_id: 0,
             enc_amount_using_sndr: CipherText::default(),
-            enc_amount_using_rcvr: rcvr_pub_key.clone().key().encrypt_value(amount).unwrap(),
+            enc_amount_using_rcvr: rcvr_pub_key.key().encrypt_value(amount).unwrap(),
             sndr_pub_key: EncryptionPubKey::default(),
-            rcvr_pub_key: rcvr_pub_key.clone(),
+            rcvr_pub_key: rcvr_pub_key,
             enc_refreshed_balance: CipherText::default(),
             enc_asset_id_using_rcvr: rcvr_pub_key.key().encrypt_value(asset_id).unwrap(),
         }
@@ -339,7 +329,7 @@ mod tests {
     fn mock_gen_account(rcvr_pub_key: EncryptionPubKey, asset_id: u32) -> PubAccount {
         PubAccount {
             id: 1,
-            enc_asset_id: rcvr_pub_key.clone().key().encrypt_value(asset_id).unwrap(),
+            enc_asset_id: rcvr_pub_key.key().encrypt_value(asset_id).unwrap(),
             enc_balance: CipherText::default(),
             asset_wellformedness_proof: WellformednessProof::default(),
             asset_membership_proof: MembershipProof::default(),
@@ -377,14 +367,14 @@ mod tests {
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let rcvr_sign_keys = mock_gen_sign_key_pair();
 
-        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.0.clone(), expected_amount, asset_id); // should the ".0" be changed into named fields?
-        let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, expected_amount, asset_id);
+        let rcvr_account = mock_gen_account(rcvr_enc_keys.pblc, asset_id);
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
 
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
-            rcvr_enc_keys.1,
-            rcvr_sign_keys.1, // should the ".1" be changed into named fields?
+            rcvr_enc_keys.scrt,
+            rcvr_sign_keys.scrt,
             rcvr_account,
             valid_state,
             expected_amount,
@@ -408,14 +398,14 @@ mod tests {
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let rcvr_sign_keys = mock_gen_sign_key_pair();
 
-        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.0.clone(), expected_amount, asset_id); // should the ".0" be changed into named fields?
-        let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, expected_amount, asset_id);
+        let rcvr_account = mock_gen_account(rcvr_enc_keys.pblc, asset_id);
         let invalid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Started);
 
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
-            rcvr_enc_keys.1,
-            rcvr_sign_keys.1, // should the ".1" be changed into named fields?
+            rcvr_enc_keys.scrt,
+            rcvr_sign_keys.scrt,
             rcvr_account,
             invalid_state.clone(),
             expected_amount,
@@ -444,14 +434,14 @@ mod tests {
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let rcvr_sign_keys = mock_gen_sign_key_pair();
 
-        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.0.clone(), received_amount, asset_id); // should the ".0" be changed into named fields?
-        let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, received_amount, asset_id);
+        let rcvr_account = mock_gen_account(rcvr_enc_keys.pblc, asset_id);
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
 
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
-            rcvr_enc_keys.1,
-            rcvr_sign_keys.1, // should the ".1" be changed into named fields?
+            rcvr_enc_keys.scrt,
+            rcvr_sign_keys.scrt,
             rcvr_account,
             valid_state,
             expected_amount,
@@ -481,14 +471,14 @@ mod tests {
         let wrong_enc_keys = mock_gen_enc_key_pair(18u8);
         let rcvr_sign_keys = mock_gen_sign_key_pair();
 
-        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.0.clone(), expected_amount, asset_id); // should the ".0" be changed into named fields?
-        let rcvr_account = mock_gen_account(wrong_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, expected_amount, asset_id);
+        let rcvr_account = mock_gen_account(wrong_enc_keys.pblc, asset_id);
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
 
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
-            rcvr_enc_keys.1,
-            rcvr_sign_keys.1, // should the ".1" be changed into named fields?
+            rcvr_enc_keys.scrt,
+            rcvr_sign_keys.scrt,
             rcvr_account,
             valid_state,
             expected_amount,
