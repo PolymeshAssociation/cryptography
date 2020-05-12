@@ -9,9 +9,15 @@ use failure::Error;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
-pub struct ConfTx {}
+// ------------------------------------------------------------------------------------------------
+// -                                          Receiver                                            -
+// ------------------------------------------------------------------------------------------------
 
-impl ConfidentialTransactionReceiver for ConfTx {
+/// The receiver of a confidential transaction. Receiver finalizes and processes
+/// transaction.
+pub struct CtxReceiver {}
+
+impl ConfidentialTransactionReceiver for CtxReceiver {
     fn finalize_and_process(
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
@@ -41,7 +47,7 @@ impl ConfidentialTransactionReceiver for ConfTx {
     }
 }
 
-impl ConfTx {
+impl CtxReceiver {
     /// This function is called by the receiver of the transaction to finalize the
     /// transaction. It corresponds to `FinalizeCTX` function of the MERCAT paper.
     pub fn finalize_by_receiver(
@@ -101,6 +107,37 @@ impl ConfTx {
                 ConfidentialTxState::Finalization(TxSubstate::Started),
             ))
         })
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// -                                          Validator                                           -
+// ------------------------------------------------------------------------------------------------
+
+/// Verifies the the proofs that that are performed by both the Sender and the Receiver of a
+/// confidential transaction.
+pub struct CtxReceiverValidator {}
+
+//impl ConfidentialTransactionFinalizeAndProcessVerifier for CtxReceiverValidator {
+//    fn verify(
+//        &self,
+//        sndr_account: PubAccount,
+//        rcvr_account: PubAccount,
+//        rcvr_sign_pub_key: SignaturePubKey,
+//        conf_tx_final_data: PubFinalConfidentialTxData,
+//        state: ConfidentialTxState,
+//    ) -> Result<ConfidentialTxState, Error> {
+//    }
+//}
+
+impl CtxReceiverValidator {
+    pub fn verify_finalize_by_receiver(
+        &self,
+        sndr_account: PubAccount,
+        rcvr_account: PubAccount,
+        conf_tx_final_data: PubFinalConfidentialTxData,
+        state: ConfidentialTxState,
+    ) {
     }
 }
 
@@ -189,7 +226,7 @@ mod tests {
     #[test]
     #[wasm_bindgen_test]
     fn test_finalize_ctx_success() {
-        let ctx_rcvr = ConfTx {};
+        let ctx_rcvr = CtxReceiver {};
         let expected_amount = 10;
         let asset_id = 20;
 
@@ -220,7 +257,7 @@ mod tests {
     #[test]
     #[wasm_bindgen_test]
     fn test_finalize_ctx_prev_state_error() {
-        let ctx_rcvr = ConfTx {};
+        let ctx_rcvr = CtxReceiver {};
         let expected_amount = 10;
         let asset_id = 20;
 
@@ -255,7 +292,7 @@ mod tests {
     #[test]
     #[wasm_bindgen_test]
     fn test_finalize_ctx_amount_mismatch_error() {
-        let ctx_rcvr = ConfTx {};
+        let ctx_rcvr = CtxReceiver {};
         let expected_amount = 10;
         let received_amount = 20;
         let asset_id = 20;
@@ -292,7 +329,7 @@ mod tests {
     #[test]
     #[wasm_bindgen_test]
     fn test_finalize_ctx_pub_key_mismatch_error() {
-        let ctx_rcvr = ConfTx {};
+        let ctx_rcvr = CtxReceiver {};
         let expected_amount = 10;
         let asset_id = 20;
 
