@@ -13,7 +13,7 @@ use crate::asset_proofs::{
 use bulletproofs::PedersenGens;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use merlin::Transcript;
+use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -76,10 +76,18 @@ impl AssetProofProverAwaitingChallenge for WellformednessProverAwaitingChallenge
     type ZKFinalResponse = WellformednessFinalResponse;
     type ZKProver = WellformednessProver;
 
-    fn generate_initial_message<T: RngCore + CryptoRng>(
+    fn create_transcript_rng<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        transcript: &Transcript,
+    ) -> TranscriptRng {
+        transcript.create_transcript_rng_from_witness(rng, &self.w)
+    }
+
+    fn generate_initial_message(
         &self,
         pc_gens: &PedersenGens,
-        rng: &mut T,
+        rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_a = Scalar::random(rng);
         let rand_b = Scalar::random(rng);
@@ -173,7 +181,8 @@ mod tests {
         // ------------------------------- Interactive case
         // Positive tests
         // 1st round
-        let (prover, initial_message) = prover.generate_initial_message(&gens, &mut rng);
+        let mut transcript_rng = prover.create_transcript_rng(&mut rng, &dealer_transcript);
+        let (prover, initial_message) = prover.generate_initial_message(&gens, &mut transcript_rng);
 
         // 2nd round
         initial_message

@@ -52,7 +52,7 @@
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
-use merlin::Transcript;
+use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use std::convert::TryFrom;
 
@@ -101,18 +101,39 @@ pub trait AssetProofProverAwaitingChallenge {
     type ZKFinalResponse;
     type ZKProver: AssetProofProver<Self::ZKFinalResponse>;
 
-    /// First round of the Sigma protocol. Prover generates a initial message.
+    /// Create an RNG from current transcript's state and an RNG.
+    /// This new RNG will be used by the prover to generate randomness
+    /// in the first round of the Sigma protocol.
+    ///
+    /// Note: provers must not share a single instance of a transcript RNG.
+    /// Every prover must create a fresh RNG and seed it with its given secret.
+    /// For more details see Merlin's documentation:
+    /// https://doc.dalek.rs/merlin/struct.TranscriptRngBuilder.html
+    ///
+    /// # Inputs
+    /// `rng` An external RNG.
+    /// `transcript` A Merlin transcript.
+    ///
+    /// # Output
+    /// A transcript RNG.
+    fn create_transcript_rng<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        transcript: &Transcript,
+    ) -> TranscriptRng;
+
+    /// First round of the Sigma protocol. Prover generates an initial message.
     ///
     /// # Inputs
     /// `pc_gens` The Pedersen Generators used for the Elgamal encryption.
-    /// `rng`     An RNG.
+    /// `rng`     An RNG created by calling `create_transcript_rng()`.
     ///
     /// # Output
     /// A initial message.
-    fn generate_initial_message<T: RngCore + CryptoRng>(
+    fn generate_initial_message(
         &self,
         pc_gens: &PedersenGens,
-        rng: &mut T,
+        rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage);
 }
 
@@ -223,7 +244,10 @@ pub fn prove_multiple_encryption_properties<
 
     let (provers_vec, initial_messages_vec): (Vec<_>, Vec<_>) = provers
         .iter()
-        .map(|p| p.generate_initial_message(&gens, rng))
+        .map(|p| {
+            let mut transcript_rng = p.create_transcript_rng(rng, &transcript);
+            p.generate_initial_message(&gens, &mut transcript_rng)
+        })
         .unzip();
 
     // Combine all the initial messages to create a single challenge.
