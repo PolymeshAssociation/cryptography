@@ -9,7 +9,7 @@ use crate::{
         transcript::{TranscriptProtocol, UpdateTranscript},
         CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    errors::{ErrorKind as AssetProofError, Fallible},
+    errors::{ErrorKind, Fallible},
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
@@ -146,11 +146,11 @@ impl AssetProofVerifier for CorrectnessVerifier {
 
         ensure!(
             z * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
             z * pc_gens.B_blinding == initial_message.b + challenge.x() * y_prime,
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 2 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
     }
@@ -204,14 +204,14 @@ mod tests {
         let result = verifier.verify(&gens, &challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = Scalar::default();
         let result = verifier.verify(&gens, &challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }
 }

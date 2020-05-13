@@ -7,7 +7,7 @@ use crate::{
         encryption_proofs::single_property_prover, range_proof::prove_within_range,
         CommitmentWitness,
     },
-    errors::{ErrorKind as ConfidentialTxError, Fallible},
+    errors::{ErrorKind, Fallible},
     mercat::{
         CipherEqualDifferentPubKeyProof, CipherEqualSamePubKeyProof,
         ConfidentialTransactionReceiver, ConfidentialTransactionSender, ConfidentialTxMemo,
@@ -17,7 +17,7 @@ use crate::{
     },
 };
 use curve25519_dalek::scalar::Scalar;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::rngs::StdRng;
 use std::convert::TryFrom;
 use zeroize::Zeroizing;
 
@@ -33,7 +33,7 @@ impl ConfidentialTransactionSender for CtxSender {
     fn create(
         &self,
         sndr_enc_keys: EncryptionKeys,
-        sndr_sign_key: SignatureSecKey,
+        _sndr_sign_key: SignatureSecKey,
         sndr_account: PubAccount,
         rcvr_pub_key: EncryptionPubKey,
         rcvr_account: PubAccount,
@@ -167,8 +167,8 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
         )?;
 
         // TODO: will complete this in the ctx processing story
-        //ensure!(false, ConfidentialTxError::NotImplemented)
-        Err(ConfidentialTxError::NotImplemented.into())
+        //ensure!(false, ErrorKind::NotImplemented)
+        Err(ErrorKind::NotImplemented.into())
     }
 }
 
@@ -188,7 +188,7 @@ impl CtxReceiver {
         // ensure that the previous state is correct
         match state {
             ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified) => (),
-            _ => return Err(ConfidentialTxError::InvalidPreviousState { state }.into()),
+            _ => return Err(ErrorKind::InvalidPreviousState { state }.into()),
         }
 
         // Check that amount is correct
@@ -198,7 +198,7 @@ impl CtxReceiver {
 
         ensure!(
             received_amount == expected_amount,
-            ConfidentialTxError::TransactionAmountMismatch {
+            ErrorKind::TransactionAmountMismatch {
                 expected_amount,
                 received_amount
             }
@@ -207,10 +207,7 @@ impl CtxReceiver {
         // Check rcvc public keys match
         let acc_key = conf_tx_init_data.memo.rcvr_pub_key.key;
         let memo_key = rcvr_account.memo.owner_pub_key.key;
-        ensure!(
-            acc_key == memo_key,
-            ConfidentialTxError::InputPubKeyMismatch
-        );
+        ensure!(acc_key == memo_key, ErrorKind::InputPubKeyMismatch);
 
         // Generate proof of equality of asset ids
         let enc_asset_id_from_sndr = conf_tx_init_data.memo.enc_asset_id_using_rcvr;
@@ -281,6 +278,7 @@ mod tests {
         },
     };
     use curve25519_dalek::scalar::Scalar;
+    use rand::SeedableRng;
     use wasm_bindgen_test::*;
 
     // -------------------------- mock helper methods -----------------------
@@ -418,7 +416,7 @@ mod tests {
 
         assert_err!(
             result,
-            ConfidentialTxError::InvalidPreviousState {
+            ErrorKind::InvalidPreviousState {
                 state: invalid_state,
             }
         );
@@ -452,7 +450,7 @@ mod tests {
 
         assert_err!(
             result,
-            ConfidentialTxError::TransactionAmountMismatch {
+            ErrorKind::TransactionAmountMismatch {
                 expected_amount,
                 received_amount
             }
@@ -484,6 +482,6 @@ mod tests {
             &mut StdRng::from_seed([17u8; 32]),
         );
 
-        assert_err!(result, ConfidentialTxError::InputPubKeyMismatch);
+        assert_err!(result, ErrorKind::InputPubKeyMismatch);
     }
 }

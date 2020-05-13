@@ -58,7 +58,7 @@ use std::convert::TryFrom;
 
 use crate::{
     asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript},
-    errors::{Error, ErrorKind as AssetProofError, Fallible},
+    errors::{Error, ErrorKind, Fallible},
 };
 
 /// The domain label for the encryption proofs.
@@ -85,7 +85,7 @@ impl TryFrom<Scalar> for ZKPChallenge {
     type Error = Error;
 
     fn try_from(x: Scalar) -> Result<Self, Self::Error> {
-        ensure!(x != Scalar::zero(), AssetProofError::VerificationError);
+        ensure!(x != Scalar::zero(), ErrorKind::VerificationError);
         Ok(ZKPChallenge { x })
     }
 }
@@ -261,7 +261,7 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
 ) -> Fallible<()> {
     ensure!(
         initial_messages.len() == final_responses.len() && verifiers.len() == final_responses.len(),
-        AssetProofError::VerificationError
+        ErrorKind::VerificationError
     );
 
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
@@ -297,7 +297,7 @@ mod tests {
             },
             CommitmentWitness, ElgamalSecretKey,
         },
-        errors::ErrorKind as AssetProofError,
+        errors::ErrorKind,
     };
     use rand::{rngs::StdRng, SeedableRng};
     use rand_core::{CryptoRng, RngCore};
@@ -342,13 +342,13 @@ mod tests {
         let bad_initial_message = CorrectnessInitialMessage::default();
         assert_err!(
             single_property_verifier(&verifier, bad_initial_message, final_response),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = Scalar::one();
         assert_err!(
             single_property_verifier(&verifier, initial_message, bad_final_response),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }
 
@@ -383,7 +383,7 @@ mod tests {
                 &verifiers_vec,
                 (&bad_initial_messages, &final_responses)
             ),
-            AssetProofError::VerificationError
+            ErrorKind::VerificationError
         );
 
         // Corrupted initial message
@@ -393,7 +393,7 @@ mod tests {
                 &verifiers_vec,
                 (&bad_initial_messages, &final_responses)
             ),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
         // Corrupted final responses
@@ -405,7 +405,7 @@ mod tests {
                 &verifiers_vec,
                 (&initial_messages, &bad_final_responses)
             ),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }
 }

@@ -3,7 +3,7 @@
 //! Since Elgamal is a homomorphic encryption it also provides
 //! addition and subtraction API over the cipher texts.
 
-use crate::errors::{Error, ErrorKind as AssetProofError, Fallible};
+use crate::errors::{Error, ErrorKind, Fallible};
 use bulletproofs::PedersenGens;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
@@ -61,7 +61,7 @@ impl TryFrom<(u32, Scalar)> for CommitmentWitness {
     fn try_from(v: (u32, Scalar)) -> Result<Self, Self::Error> {
         // Since Elgamal decryption requires brute forcing over all possible values,
         // we limit the values to 32-bit integers.
-        ensure!(v.0 < u32::max_value(), AssetProofError::PlainTextRangeError);
+        ensure!(v.0 < u32::max_value(), ErrorKind::PlainTextRangeError);
         Ok(CommitmentWitness {
             value: v.0,
             blinding: v.1,
@@ -190,7 +190,7 @@ impl ElgamalSecretKey {
             }
         }
 
-        Err(AssetProofError::CipherTextDecryptionError.into())
+        Err(ErrorKind::CipherTextDecryptionError.into())
     }
 }
 

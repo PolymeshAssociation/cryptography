@@ -13,7 +13,7 @@ use crate::{
         transcript::{TranscriptProtocol, UpdateTranscript},
         CipherText, ElgamalPublicKey, ElgamalSecretKey,
     },
-    errors::{ErrorKind as AssetProofError, Fallible},
+    errors::{ErrorKind, Fallible},
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
@@ -165,11 +165,11 @@ impl AssetProofVerifier for CipherTextRefreshmentVerifier {
     ) -> Fallible<()> {
         ensure!(
             z * self.y == initial_message.a + challenge.x() * self.x,
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
         ensure!(
             z * pc_gens.B_blinding == initial_message.b + challenge.x() * self.pub_key.pub_key,
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 2 }
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 2 }
         );
         Ok(())
     }
@@ -224,13 +224,13 @@ mod tests {
         let result = verifier.verify(&gens, &challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = Scalar::default();
         assert_err!(
             verifier.verify(&gens, &challenge, &initial_message, &bad_final_response),
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
     }
 

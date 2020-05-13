@@ -10,7 +10,7 @@ use crate::{
         transcript::{TranscriptProtocol, UpdateTranscript},
         CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    errors::{ErrorKind as AssetProofError, Fallible},
+    errors::{ErrorKind, Fallible},
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
@@ -127,12 +127,12 @@ impl AssetProofVerifier for WellformednessVerifier {
     ) -> Fallible<()> {
         ensure!(
             response.z1 * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
             response.z1 * pc_gens.B_blinding + response.z2 * pc_gens.B
                 == initial_message.b + challenge.x() * self.cipher.y,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 2 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
     }
@@ -199,7 +199,7 @@ mod tests {
         let result = verifier.verify(&gens, &challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = WellformednessFinalResponse {
@@ -209,7 +209,7 @@ mod tests {
         let result = verifier.verify(&gens, &challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         // ------------------------------- Non-interactive case
@@ -237,13 +237,13 @@ mod tests {
         assert_err!(
             // 4th round
             single_property_verifier(&verifier, bad_initial_message, final_response),
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         assert_err!(
             // 4th round
             single_property_verifier(&verifier, initial_message, bad_final_response),
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
     }
 }

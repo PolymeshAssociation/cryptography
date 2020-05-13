@@ -6,7 +6,7 @@
 
 use crate::{
     asset_proofs::encryption_proofs::ZKPChallenge,
-    errors::{ErrorKind as AssetProofError, Fallible},
+    errors::{ErrorKind, Fallible},
 };
 
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
@@ -53,7 +53,7 @@ impl TranscriptProtocol for Transcript {
     ) -> Fallible<()> {
         use curve25519_dalek::traits::IsIdentity;
 
-        ensure!(!message.is_identity(), AssetProofError::VerificationError);
+        ensure!(!message.is_identity(), ErrorKind::VerificationError);
         Ok(self.append_message(label, message.as_bytes()))
     }
 
@@ -85,7 +85,7 @@ mod tests {
         let mut transcript = Transcript::new(b"unit test");
         assert_err!(
             transcript.append_validated_point(b"identity", &CompressedRistretto::default()),
-            AssetProofError::VerificationError
+            ErrorKind::VerificationError
         );
     }
 }

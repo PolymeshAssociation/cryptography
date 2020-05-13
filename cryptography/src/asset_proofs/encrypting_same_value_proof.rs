@@ -10,7 +10,7 @@ use crate::{
         transcript::{TranscriptProtocol, UpdateTranscript},
         CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    errors::{ErrorKind as AssetProofError, Fallible},
+    errors::{ErrorKind, Fallible},
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
@@ -156,23 +156,23 @@ impl AssetProofVerifier for EncryptingSameValueVerifier {
         // 2 ciphertexts that encrypt the same witness must have the same Y value.
         ensure!(
             self.cipher1.y == self.cipher2.y,
-            AssetProofError::VerificationError
+            ErrorKind::VerificationError
         );
 
         ensure!(
             final_response.z1 * self.pub_key1.pub_key
                 == initial_message.a1 + challenge.x() * self.cipher1.x,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 1 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
         );
         ensure!(
             final_response.z1 * self.pub_key2.pub_key
                 == initial_message.a2 + challenge.x() * self.cipher2.x,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 2 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 2 }
         );
         ensure!(
             final_response.z1 * pc_gens.B_blinding + final_response.z2 * pc_gens.B
                 == initial_message.b + challenge.x() * self.cipher1.y,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 3 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 3 }
         );
         Ok(())
     }
@@ -238,14 +238,14 @@ mod tests {
         let result = verifier.verify(&gens, &challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 1 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = EncryptingSameValueFinalResponse::default();
         let result = verifier.verify(&gens, &challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 1 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
         );
 
         // Non-Interactive ZKP test
