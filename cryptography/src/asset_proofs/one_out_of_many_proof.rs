@@ -367,13 +367,14 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rows = self.b_matrix.rows;
         let columns = self.b_matrix.columns;
-        let generators: &OooNProofGenerators;
-        let new_ooon_gens: OooNProofGenerators;
-        if let ProofGenerators::OooNGens(gens) = &ooon_gens {
-            generators = gens;
-        } else {
-            new_ooon_gens = OooNProofGenerators::new(rows, columns);
-            generators = &new_ooon_gens;
+        
+        let temp_ooon_gens: OooNProofGenerators;
+        let generators: &OooNProofGenerators = match ooon_gens {
+            ProofGenerators::OooNGens(gens) => gens,
+            _ => {
+                temp_ooon_gens = OooNProofGenerators::new(rows, columns);
+                &temp_ooon_gens
+            }
         };
 
         let random_a = Scalar::random(rng);
@@ -466,20 +467,19 @@ impl AssetProofVerifier for R1ProofVerifier {
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Result<()> {
-        let generators: &OooNProofGenerators;
-        let new_ooon_gens: OooNProofGenerators;
-
         let rows = final_response.m;
         let columns = final_response.n;
 
         let mut f_matrix = Matrix::new(rows, columns, *c.x());
         let x_matrix = Matrix::new(rows, columns, *c.x());
 
-        if let ProofGenerators::OooNGens(gens) = &ooon_gens {
-            generators = gens;
-        } else {
-            new_ooon_gens = OooNProofGenerators::new(rows, columns);
-            generators = &new_ooon_gens;
+        let temp_ooon_gens: OooNProofGenerators;
+        let generators: &OooNProofGenerators = match ooon_gens {
+            ProofGenerators::OooNGens(gens) => gens,
+            _ => {
+                temp_ooon_gens = OooNProofGenerators::new(rows, columns);
+                &temp_ooon_gens
+            }
         };
 
         // Here we set f[j][0] = x - (f[j][1]+ ... + f[j][columns - 1])
@@ -613,13 +613,13 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
         let exp = self.exp as u32;
         let n = self.base.pow(exp);
 
-        let generators: &OooNProofGenerators;
         let temp_ooon_gens: OooNProofGenerators;
-        if let ProofGenerators::OooNGens(gens) = &ooon_gens {
-            generators = gens;
-        } else {
-            temp_ooon_gens = OooNProofGenerators::new(rows, columns);
-            generators = &temp_ooon_gens;
+        let generators: &OooNProofGenerators = match ooon_gens {
+            ProofGenerators::OooNGens(gens) => gens,
+            _ => {
+                temp_ooon_gens = OooNProofGenerators::new(rows, columns);
+                &temp_ooon_gens
+            }
         };
 
         assert_eq!(n, self.commitments.len());
@@ -717,13 +717,13 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         let m = final_response.m;
         let n = final_response.n;
 
-        let generators: &OooNProofGenerators;
         let temp_ooon_gens: OooNProofGenerators;
-        if let ProofGenerators::OooNGens(gens) = &ooon_gens {
-            generators = gens;
-        } else {
-            temp_ooon_gens = OooNProofGenerators::new(m, n);
-            generators = &temp_ooon_gens;
+        let generators: &OooNProofGenerators = match ooon_gens {
+            ProofGenerators::OooNGens(gens) => gens,
+            _ => {
+                temp_ooon_gens = OooNProofGenerators::new(m, n);
+                &temp_ooon_gens
+            }
         };
 
         let b_comm = initial_message.r1_proof_initial_message.b;
@@ -967,6 +967,10 @@ mod tests {
         let gens = OooNProofGenerators::new(EXPONENT, BASE);
 
         let generators = ProofGenerators::OooNGens(OooNProofGenerators::new(EXPONENT, BASE));
+        // I have tested passing this `wrong_generators` object instead of `generators`
+        // for testing how the function behaves in case of mismatching input parameter.
+        // It simply works fine.
+        let _wrong_generators = ProofGenerators::PedersenGens(PedersenGens::default());
 
         let mut base_matrix: Vec<Scalar>;
         let mut b: Matrix;

@@ -97,11 +97,9 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_commitment = Scalar::random(rng);
 
-        let g: PedersenGens;
-        if let ProofGenerators::PedersenGens(gens) = &pc_gens {
-            g = *gens;
-        } else {
-            g = PedersenGens::default();
+        let g: PedersenGens = match pc_gens {
+            ProofGenerators::PedersenGens(gens) => *gens,
+            _ => PedersenGens::default(),
         };
 
         (
