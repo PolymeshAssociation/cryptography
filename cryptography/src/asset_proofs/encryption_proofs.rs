@@ -56,11 +56,11 @@ use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use std::convert::TryFrom;
 
+use crate::asset_proofs::one_out_of_many_proof::OooNProofGenerators;
 use crate::{
     asset_proofs::errors::{AssetProofError, Result},
     asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript},
 };
-use crate::asset_proofs::one_out_of_many_proof::OooNProofGenerators;
 
 /// The domain label for the encryption proofs.
 pub const ENCRYPTION_PROOFS_LABEL: &[u8] = b"PolymathEncryptionProofs";
@@ -71,8 +71,7 @@ pub const ENCRYPTION_PROOFS_CHALLENGE_LABEL: &[u8] = b"PolymathEncryptionProofsC
 // Sigma Protocol's Prover and Verifier Interfaces
 // ------------------------------------------------------------------------
 
-
-pub enum ProofGenerators{
+pub enum ProofGenerators {
     PedersenGens(PedersenGens),
     OooNGens(OooNProofGenerators),
 }

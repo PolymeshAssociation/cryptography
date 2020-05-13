@@ -13,7 +13,8 @@ use curve25519_dalek::{
 
 use crate::asset_proofs::{
     encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ProofGenerators, ZKPChallenge,
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ProofGenerators,
+        ZKPChallenge,
     },
     errors::{AssetProofError, Result},
     transcript::{TranscriptProtocol, UpdateTranscript},
@@ -366,8 +367,8 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rows = self.b_matrix.rows;
         let columns = self.b_matrix.columns;
-        let generators : &OooNProofGenerators;
-        let new_ooon_gens : OooNProofGenerators;
+        let generators: &OooNProofGenerators;
+        let new_ooon_gens: OooNProofGenerators;
         if let ProofGenerators::OooNGens(gens) = &ooon_gens {
             generators = gens;
         } else {
@@ -465,8 +466,8 @@ impl AssetProofVerifier for R1ProofVerifier {
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Result<()> {
-        let generators : &OooNProofGenerators;
-        let new_ooon_gens : OooNProofGenerators;
+        let generators: &OooNProofGenerators;
+        let new_ooon_gens: OooNProofGenerators;
 
         let rows = final_response.m;
         let columns = final_response.n;
@@ -611,9 +612,9 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
         let rows = self.exp;
         let exp = self.exp as u32;
         let n = self.base.pow(exp);
-        
-        let generators : &OooNProofGenerators;
-        let temp_ooon_gens : OooNProofGenerators;
+
+        let generators: &OooNProofGenerators;
+        let temp_ooon_gens: OooNProofGenerators;
         if let ProofGenerators::OooNGens(gens) = &ooon_gens {
             generators = gens;
         } else {
@@ -715,9 +716,9 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         let size = final_response.n.pow(final_response.m as u32);
         let m = final_response.m;
         let n = final_response.n;
-        
-        let generators : &OooNProofGenerators;
-        let temp_ooon_gens : OooNProofGenerators;
+
+        let generators: &OooNProofGenerators;
+        let temp_ooon_gens: OooNProofGenerators;
         if let ProofGenerators::OooNGens(gens) = &ooon_gens {
             generators = gens;
         } else {
@@ -961,8 +962,8 @@ mod tests {
         const BASE: usize = 4;
         const EXPONENT: usize = 3;
 
-        // We use the `gens` object created below only for committing to the the matrix B. 
-        // This object is not transferred as a parameter to the API functions. 
+        // We use the `gens` object created below only for committing to the the matrix B.
+        // This object is not transferred as a parameter to the API functions.
         let gens = OooNProofGenerators::new(EXPONENT, BASE);
 
         let generators = ProofGenerators::OooNGens(OooNProofGenerators::new(EXPONENT, BASE));
@@ -997,7 +998,8 @@ mod tests {
 
             let final_response = prover.apply_challenge(&challenge);
 
-            let result = verifier.verify(&generators, &challenge, &initial_message, &final_response);
+            let result =
+                verifier.verify(&generators, &challenge, &initial_message, &final_response);
 
             assert!(result.is_ok());
         }
