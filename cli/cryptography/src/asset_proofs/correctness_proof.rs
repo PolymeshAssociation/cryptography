@@ -3,7 +3,7 @@
 
 use crate::asset_proofs::{
     encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge, ProofGenerators,
     },
     errors::{AssetProofError, Result},
     transcript::{TranscriptProtocol, UpdateTranscript},
@@ -91,10 +91,17 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
 
     fn generate_initial_message(
         &self,
-        pc_gens: &PedersenGens,
+        pc_gens: &ProofGenerators,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_commitment = Scalar::random(rng);
+        
+        let g : PedersenGens;
+        if let ProofGenerators::PedersenGens(gens) = &pc_gens {
+            g = *gens;
+        } else {
+            g = PedersenGens::default();
+        };
 
         (
             CorrectnessProver {
@@ -103,7 +110,7 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
             },
             CorrectnessInitialMessage {
                 a: rand_commitment * self.pub_key.pub_key,
-                b: rand_commitment * pc_gens.B_blinding,
+                b: rand_commitment * g.B_blinding,
             },
         )
     }
@@ -142,19 +149,28 @@ impl AssetProofVerifier for CorrectnessVerifier {
 
     fn verify(
         &self,
-        pc_gens: &PedersenGens,
+        pc_gens: &ProofGenerators,
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         z: &Self::ZKFinalResponse,
     ) -> Result<()> {
-        let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
+        
+        let g : PedersenGens;
+        if let ProofGenerators::PedersenGens(gens) = &pc_gens {
+            g = *gens;
+        } else {
+            g = PedersenGens::default();
+        };
+
+        let y_prime = self.cipher.y - (Scalar::from(self.value) * g.B);
+       
 
         ensure!(
             z * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * pc_gens.B_blinding == initial_message.b + challenge.x() * y_prime,
+            z * g.B_blinding == initial_message.b + challenge.x() * y_prime,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
@@ -179,7 +195,8 @@ mod tests {
     #[test]
     #[wasm_bindgen_test]
     fn test_correctness_proof() {
-        let gens = PedersenGens::default();
+        //let gens = PedersenGens::default();
+        let gens = ProofGenerators::PedersenGens(PedersenGens::default());
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 13u32;
         let rand_blind = Scalar::random(&mut rng);

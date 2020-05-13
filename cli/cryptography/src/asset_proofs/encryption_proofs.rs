@@ -60,6 +60,7 @@ use crate::{
     asset_proofs::errors::{AssetProofError, Result},
     asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript},
 };
+use crate::asset_proofs::one_out_of_many_proof::OooNProofGenerators;
 
 /// The domain label for the encryption proofs.
 pub const ENCRYPTION_PROOFS_LABEL: &[u8] = b"PolymathEncryptionProofs";
@@ -70,6 +71,11 @@ pub const ENCRYPTION_PROOFS_CHALLENGE_LABEL: &[u8] = b"PolymathEncryptionProofsC
 // Sigma Protocol's Prover and Verifier Interfaces
 // ------------------------------------------------------------------------
 
+
+pub enum ProofGenerators{
+    PedersenGens(PedersenGens),
+    OooNGens(OooNProofGenerators),
+}
 /// A scalar challenge.
 pub struct ZKPChallenge {
     x: Scalar,
@@ -132,7 +138,8 @@ pub trait AssetProofProverAwaitingChallenge {
     /// A initial message.
     fn generate_initial_message(
         &self,
-        pc_gens: &PedersenGens,
+        //pc_gens: &PedersenGens,
+        gens: &ProofGenerators,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage);
 }
@@ -166,7 +173,7 @@ pub trait AssetProofVerifier {
     /// Ok on success, or an error on failure.
     fn verify(
         &self,
-        pc_gens: &PedersenGens,
+        pc_gens: &ProofGenerators,
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
@@ -240,7 +247,8 @@ pub fn prove_multiple_encryption_properties<
     Vec<ProverAwaitingChallenge::ZKFinalResponse>,
 )> where {
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
-    let gens = PedersenGens::default();
+    //let gens = PedersenGens::default();
+    let gens = ProofGenerators::PedersenGens(PedersenGens::default());
 
     let (provers_vec, initial_messages_vec): (Vec<_>, Vec<_>) = provers
         .iter()
@@ -289,7 +297,7 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
     );
 
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
-    let gens = PedersenGens::default();
+    let gens = ProofGenerators::PedersenGens(PedersenGens::default());
 
     // Combine all the initial messages to create a single challenge.
     initial_messages
