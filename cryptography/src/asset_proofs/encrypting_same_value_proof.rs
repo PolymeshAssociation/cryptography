@@ -66,13 +66,13 @@ impl UpdateTranscript for EncryptingSameValueInitialMessage {
 
 pub struct EncryptingSameValueProverAwaitingChallenge {
     /// The first public key used for the elgamal encryption.
-    pub_key1: ElgamalPublicKey,
+    pub pub_key1: ElgamalPublicKey,
 
     /// The second public key used for the elgamal encryption.
-    pub_key2: ElgamalPublicKey,
+    pub pub_key2: ElgamalPublicKey,
 
     /// The secret commitment witness.
-    w: Zeroizing<CommitmentWitness>,
+    pub w: Zeroizing<CommitmentWitness>,
 }
 
 #[derive(Zeroize)]
@@ -135,16 +135,16 @@ impl AssetProofProver<EncryptingSameValueFinalResponse> for EncryptingSameValueP
 
 pub struct EncryptingSameValueVerifier {
     /// The first public key to which the `value` is encrypted.
-    pub_key1: ElgamalPublicKey,
+    pub pub_key1: ElgamalPublicKey,
 
     /// The second public key to which the `value` is encrypted.
-    pub_key2: ElgamalPublicKey,
+    pub pub_key2: ElgamalPublicKey,
 
     /// The first encryption cipher text.
-    cipher1: CipherText,
+    pub cipher1: CipherText,
 
     /// The second encryption cipher text.
-    cipher2: CipherText,
+    pub cipher2: CipherText,
 }
 
 impl AssetProofVerifier for EncryptingSameValueVerifier {
