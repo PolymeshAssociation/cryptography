@@ -13,7 +13,7 @@ use curve25519_dalek::{
 
 use crate::asset_proofs::{
     encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ProofGenerators, ZKPChallenge,
     },
     errors::{AssetProofError, Result},
     transcript::{TranscriptProtocol, UpdateTranscript},
@@ -361,12 +361,19 @@ impl AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge {
 
     fn generate_initial_message(
         &self,
-        _p_gens: &PedersenGens,
+        ooon_gens: &ProofGenerators,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rows = self.b_matrix.rows;
         let columns = self.b_matrix.columns;
-        let generators = OooNProofGenerators::new(rows, columns);
+        let generators : &OooNProofGenerators;
+        let new_ooon_gens : OooNProofGenerators;
+        if let ProofGenerators::OooNGens(gens) = &ooon_gens {
+            generators = gens;
+        } else {
+            new_ooon_gens = OooNProofGenerators::new(rows, columns);
+            generators = &new_ooon_gens;
+        };
 
         let random_a = Scalar::random(rng);
         let random_c = Scalar::random(rng);
@@ -453,18 +460,27 @@ impl AssetProofVerifier for R1ProofVerifier {
 
     fn verify(
         &self,
-        _pc_gens: &PedersenGens,
+        ooon_gens: &ProofGenerators,
         c: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Result<()> {
+        let generators : &OooNProofGenerators;
+        let new_ooon_gens : OooNProofGenerators;
+
         let rows = final_response.m;
         let columns = final_response.n;
 
         let mut f_matrix = Matrix::new(rows, columns, *c.x());
         let x_matrix = Matrix::new(rows, columns, *c.x());
 
-        let generators = OooNProofGenerators::new(rows, columns);
+        if let ProofGenerators::OooNGens(gens) = &ooon_gens {
+            generators = gens;
+        } else {
+            new_ooon_gens = OooNProofGenerators::new(rows, columns);
+            generators = &new_ooon_gens;
+        };
+
         // Here we set f[j][0] = x - (f[j][1]+ ... + f[j][columns - 1])
         for i in 0..rows {
             for j in 1..columns {
@@ -588,14 +604,22 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
     /// This has critical security importance, as non-padded list will open doors for serious privacy issues.
     fn generate_initial_message(
         &self,
-        pc_gens: &PedersenGens,
+        ooon_gens: &ProofGenerators,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let columns = self.base;
         let rows = self.exp;
         let exp = self.exp as u32;
         let n = self.base.pow(exp);
-        let generators = OooNProofGenerators::new(rows, columns);
+        
+        let generators : &OooNProofGenerators;
+        let temp_ooon_gens : OooNProofGenerators;
+        if let ProofGenerators::OooNGens(gens) = &ooon_gens {
+            generators = gens;
+        } else {
+            temp_ooon_gens = OooNProofGenerators::new(rows, columns);
+            generators = &temp_ooon_gens;
+        };
 
         assert_eq!(n, self.commitments.len());
 
@@ -611,7 +635,7 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
 
         let r1_prover = R1ProverAwaitingChallenge::new(b_matrix_rep, self.random, rows, columns);
 
-        let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(pc_gens, rng);
+        let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(ooon_gens, rng);
 
         let one = Polynomial::new(self.exp);
         let mut polynomials: Vec<Polynomial> = Vec::with_capacity(n);
@@ -683,7 +707,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
 
     fn verify(
         &self,
-        pc_gens: &PedersenGens,
+        ooon_gens: &ProofGenerators,
         c: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
@@ -691,13 +715,21 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         let size = final_response.n.pow(final_response.m as u32);
         let m = final_response.m;
         let n = final_response.n;
-        let generators = OooNProofGenerators::new(final_response.m, final_response.n);
+        
+        let generators : &OooNProofGenerators;
+        let temp_ooon_gens : OooNProofGenerators;
+        if let ProofGenerators::OooNGens(gens) = &ooon_gens {
+            generators = gens;
+        } else {
+            temp_ooon_gens = OooNProofGenerators::new(m, n);
+            generators = &temp_ooon_gens;
+        };
 
         let b_comm = initial_message.r1_proof_initial_message.b;
         let r1_verifier = R1ProofVerifier::new(b_comm);
 
         let result_r1 = r1_verifier.verify(
-            pc_gens,
+            ooon_gens,
             c,
             &initial_message.r1_proof_initial_message,
             &final_response.r1_proof_final_response,
@@ -763,7 +795,6 @@ mod tests {
     /// without revealing the secret commitment index or its random factor.
 
     fn test_ooon_proof_api() {
-        let pc_gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
 
         let mut transcript = Transcript::new(OOON_PROOF_LABEL);
@@ -773,6 +804,8 @@ mod tests {
         const BASE: usize = 4; //n = 3 : COLUMNS
         const EXPONENT: usize = 3; //m = 2 : ROWS
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
+
+        let gens = ProofGenerators::OooNGens(OooNProofGenerators::new(EXPONENT, BASE));
 
         let n = 64;
         let size: usize = 11;
@@ -812,7 +845,7 @@ mod tests {
             };
             let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
             let (prover, initial_message) =
-                prover.generate_initial_message(&pc_gens, &mut transcript_rng);
+                prover.generate_initial_message(&gens, &mut transcript_rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
             let challenge = transcript
@@ -821,7 +854,7 @@ mod tests {
 
             let final_response = prover.apply_challenge(&challenge);
 
-            let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+            let result = verifier.verify(&gens, &challenge, &initial_message, &final_response);
             assert!(result.is_ok());
         }
 
@@ -849,7 +882,7 @@ mod tests {
             };
             let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
             let (prover, initial_message) =
-                prover.generate_initial_message(&pc_gens, &mut transcript_rng);
+                prover.generate_initial_message(&gens, &mut transcript_rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
             let challenge = transcript
@@ -858,7 +891,7 @@ mod tests {
 
             let final_response = prover.apply_challenge(&challenge);
 
-            let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+            let result = verifier.verify(&gens, &challenge, &initial_message, &final_response);
 
             assert_err!(
                 result,
@@ -891,7 +924,7 @@ mod tests {
             };
             let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
             let (prover, initial_message) =
-                prover.generate_initial_message(&pc_gens, &mut transcript_rng);
+                prover.generate_initial_message(&gens, &mut transcript_rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
             let challenge = transcript
@@ -900,7 +933,7 @@ mod tests {
 
             let final_response = prover.apply_challenge(&challenge);
 
-            let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+            let result = verifier.verify(&gens, &challenge, &initial_message, &final_response);
 
             assert_err!(
                 result,
@@ -922,14 +955,17 @@ mod tests {
     //     Checks if the verification step 2 fails.
 
     fn test_r1_proof_api() {
-        let pc_gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
-
         let mut transcript = Transcript::new(OOON_PROOF_LABEL);
 
         const BASE: usize = 4;
         const EXPONENT: usize = 3;
-        let generators = OooNProofGenerators::new(EXPONENT, BASE);
+
+        // We use the `gens` object created below only for committing to the the matrix B. 
+        // This object is not transferred as a parameter to the API functions. 
+        let gens = OooNProofGenerators::new(EXPONENT, BASE);
+
+        let generators = ProofGenerators::OooNGens(OooNProofGenerators::new(EXPONENT, BASE));
 
         let mut base_matrix: Vec<Scalar>;
         let mut b: Matrix;
@@ -945,13 +981,13 @@ mod tests {
                 elements: base_matrix.clone(),
             };
             let r = Scalar::from(45728u32);
-            let b_comm = generators.vector_commit(&base_matrix, r);
+            let b_comm = gens.vector_commit(&base_matrix, r);
             let prover = R1ProverAwaitingChallenge::new(b, r, EXPONENT, BASE);
 
             let verifier = R1ProofVerifier::new(b_comm);
             let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
             let (prover, initial_message) =
-                prover.generate_initial_message(&pc_gens, &mut transcript_rng);
+                prover.generate_initial_message(&generators, &mut transcript_rng);
 
             initial_message.update_transcript(&mut transcript).unwrap();
 
@@ -961,20 +997,20 @@ mod tests {
 
             let final_response = prover.apply_challenge(&challenge);
 
-            let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+            let result = verifier.verify(&generators, &challenge, &initial_message, &final_response);
 
             assert!(result.is_ok());
         }
         // Negative test: Commit to matrix where each row has more than one 1.
         let b = Matrix::new(EXPONENT, BASE, Scalar::one());
         let r = Scalar::from(45728u32);
-        let b_comm = generators.vector_commit(&b.elements, r);
+        let b_comm = gens.vector_commit(&b.elements, r);
         let prover = R1ProverAwaitingChallenge::new(b, r, EXPONENT, BASE);
 
         let verifier = R1ProofVerifier::new(b_comm);
         let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
         let (prover, initial_message) =
-            prover.generate_initial_message(&pc_gens, &mut transcript_rng);
+            prover.generate_initial_message(&generators, &mut transcript_rng);
 
         initial_message.update_transcript(&mut transcript).unwrap();
 
@@ -984,7 +1020,7 @@ mod tests {
 
         let final_response = prover.apply_challenge(&challenge);
 
-        let result = verifier.verify(&pc_gens, &challenge, &initial_message, &final_response);
+        let result = verifier.verify(&generators, &challenge, &initial_message, &final_response);
 
         assert_err!(
             result,
