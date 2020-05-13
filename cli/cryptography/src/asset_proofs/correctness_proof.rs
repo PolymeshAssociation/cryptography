@@ -3,7 +3,8 @@
 
 use crate::asset_proofs::{
     encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge, ProofGenerators,
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ProofGenerators,
+        ZKPChallenge,
     },
     errors::{AssetProofError, Result},
     transcript::{TranscriptProtocol, UpdateTranscript},
@@ -95,8 +96,8 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_commitment = Scalar::random(rng);
-        
-        let g : PedersenGens;
+
+        let g: PedersenGens;
         if let ProofGenerators::PedersenGens(gens) = &pc_gens {
             g = *gens;
         } else {
@@ -154,8 +155,7 @@ impl AssetProofVerifier for CorrectnessVerifier {
         initial_message: &Self::ZKInitialMessage,
         z: &Self::ZKFinalResponse,
     ) -> Result<()> {
-        
-        let g : PedersenGens;
+        let g: PedersenGens;
         if let ProofGenerators::PedersenGens(gens) = &pc_gens {
             g = *gens;
         } else {
@@ -163,7 +163,6 @@ impl AssetProofVerifier for CorrectnessVerifier {
         };
 
         let y_prime = self.cipher.y - (Scalar::from(self.value) * g.B);
-       
 
         ensure!(
             z * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
