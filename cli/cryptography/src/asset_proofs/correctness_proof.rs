@@ -3,8 +3,7 @@
 
 use crate::asset_proofs::{
     encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ProofGenerators,
-        ZKPChallenge,
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge, ProofGenerators,
     },
     errors::{AssetProofError, Result},
     transcript::{TranscriptProtocol, UpdateTranscript},
@@ -96,8 +95,8 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_commitment = Scalar::random(rng);
-
-        let g: PedersenGens;
+        
+        let g : PedersenGens;
         if let ProofGenerators::PedersenGens(gens) = &pc_gens {
             g = *gens;
         } else {
@@ -155,21 +154,25 @@ impl AssetProofVerifier for CorrectnessVerifier {
         initial_message: &Self::ZKInitialMessage,
         z: &Self::ZKFinalResponse,
     ) -> Result<()> {
-        let g: PedersenGens;
-        if let ProofGenerators::PedersenGens(gens) = &pc_gens {
-            g = *gens;
+        
+        let generators : &PedersenGens;
+        let new_gens : PedersenGens;
+        if let ProofGenerators::PedersenGens(g) = &pc_gens {
+            generators = g;
         } else {
-            g = PedersenGens::default();
+            new_gens = PedersenGens::default();
+            generators = &new_gens;
         };
 
-        let y_prime = self.cipher.y - (Scalar::from(self.value) * g.B);
+        let y_prime = self.cipher.y - (Scalar::from(self.value) * generators.B);
+       
 
         ensure!(
             z * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * g.B_blinding == initial_message.b + challenge.x() * y_prime,
+            z * generators.B_blinding == initial_message.b + challenge.x() * y_prime,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
