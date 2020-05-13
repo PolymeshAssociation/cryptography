@@ -296,14 +296,12 @@ mod tests {
         let cipher = pub_key.encrypt(&w);
         let mut transcript = Transcript::new(b"batch_proof_label");
 
-        let (prover0, verifier0) =
-            create_correctness_proof_objects_helper(&w, &pub_key, &cipher);
+        let (prover0, verifier0) = create_correctness_proof_objects_helper(&w, &pub_key, &cipher);
         let (prover1, verifier1) =
             create_wellformedness_proof_objects_helper(&w, &pub_key, &cipher);
 
         let mut transcript_rng1 = prover0.create_transcript_rng(&mut rng, &transcript);
-        let mut transcript_rng2 =
-            prover1.create_transcript_rng(&mut rng, &transcript);
+        let mut transcript_rng2 = prover1.create_transcript_rng(&mut rng, &transcript);
 
         // Provers generate the initial messages
         let (prover0, initial_message0) =
@@ -325,17 +323,19 @@ mod tests {
 
         // Positive tests
         // Verifiers verify the proofs
-        let result =
-            verifier0.verify(&gens, &challenge, &initial_message0, &final_response0);
+        let result = verifier0.verify(&gens, &challenge, &initial_message0, &final_response0);
         assert!(result.is_ok());
 
-        let result =
-            verifier1.verify(&gens, &challenge, &initial_message1, &final_response1);
+        let result = verifier1.verify(&gens, &challenge, &initial_message1, &final_response1);
         assert!(result.is_ok());
 
         // Negative tests
         let bad_challenge = ZKPChallenge::try_from(Scalar::random(&mut rng)).unwrap();
-        assert!(verifier0.verify(&gens, &bad_challenge, &initial_message0, &final_response0).is_err());
-        assert!(verifier1.verify(&gens, &bad_challenge, &initial_message1, &final_response1).is_err());
+        assert!(verifier0
+            .verify(&gens, &bad_challenge, &initial_message0, &final_response0)
+            .is_err());
+        assert!(verifier1
+            .verify(&gens, &bad_challenge, &initial_message1, &final_response1)
+            .is_err());
     }
 }
