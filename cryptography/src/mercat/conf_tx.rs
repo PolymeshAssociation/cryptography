@@ -1,11 +1,15 @@
-//! Contains the implementation of the `ConfidentialTXer` for a confidential transaction.
-
 // TODO check rust guideline for what needs prefixing when importing and calling methods vs calling structs
-use crate::asset_proofs::ciphertext_refreshment_proof::CipherTextRefreshmentProverAwaitingChallenge;
-use crate::asset_proofs::encryption_proofs::single_property_prover;
-use crate::mercat::errors::ConfidentialTxError;
-use crate::mercat::lib::*;
-use failure::Error;
+use crate::{
+    asset_proofs::{
+        ciphertext_refreshment_proof::CipherTextRefreshmentProverAwaitingChallenge,
+        encryption_proofs::single_property_prover,
+    },
+    errors::{ErrorKind as ConfidentialTxError, Fallible},
+    mercat::{
+        ConfidentialTxState, EncryptionSecKey, PubAccount, PubFinalConfidentialTxData,
+        PubInitConfidentialTxData, Signature, SignatureSecKey, TxSubstate,
+    },
+};
 use rand::{rngs::StdRng, SeedableRng};
 
 pub struct ConfTx {}
@@ -48,11 +52,11 @@ impl ConfTx {
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
         rcvr_enc_sec: EncryptionSecKey,
-        rcvr_sign_key: SignatureSecKey,
+        _: SignatureSecKey,
         rcvr_account: PubAccount,
         state: ConfidentialTxState,
         expected_amount: u32,
-    ) -> Result<(PubFinalConfidentialTxData, ConfidentialTxState), Error> {
+    ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)> {
         // ensure that the previous state is correct
         match state {
             ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified) => (),
@@ -61,8 +65,7 @@ impl ConfTx {
 
         // Check that amount is correct
         let received_amount = rcvr_enc_sec
-            .clone()
-            .key()
+            .key
             .decrypt(&conf_tx_init_data.memo.enc_amount_using_rcvr)?;
 
         ensure!(
@@ -74,8 +77,8 @@ impl ConfTx {
         );
 
         // Check rcvc public keys match
-        let acc_key = conf_tx_init_data.memo.rcvr_pub_key.clone().key();
-        let memo_key = rcvr_account.memo.owner_pub_key.key();
+        let acc_key = conf_tx_init_data.memo.rcvr_pub_key.key;
+        let memo_key = rcvr_account.memo.owner_pub_key.key;
         ensure!(
             acc_key == memo_key,
             ConfidentialTxError::InputPubKeyMismatch
@@ -85,7 +88,7 @@ impl ConfTx {
         let enc_asset_id_from_sndr = conf_tx_init_data.memo.enc_asset_id_using_rcvr;
         let enc_asset_id_from_rcvr_acc = rcvr_account.enc_asset_id;
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
-            rcvr_enc_sec.key(),
+            rcvr_enc_sec.key,
             enc_asset_id_from_rcvr_acc,
             enc_asset_id_from_sndr,
         );
@@ -115,7 +118,13 @@ impl ConfTx {
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::asset_proofs::{CipherText, ElgamalSecretKey};
+    use crate::{
+        asset_proofs::{CipherText, ElgamalSecretKey},
+        mercat::{
+            ConfidentialTxMemo, CorrectnessProof, EncryptionPubKey, MembershipProof,
+            SignaturePubKey, WellformednessProof,
+        },
+    };
     use curve25519_dalek::scalar::Scalar;
     use wasm_bindgen_test::*;
 
@@ -126,7 +135,7 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED);
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        (EncryptionPubKey(elg_pub), EncryptionSecKey(elg_secret))
+        (elg_pub.into(), elg_secret.into())
     }
 
     fn mock_gen_sign_key_pair() -> (SignaturePubKey, SignatureSecKey) {
@@ -146,31 +155,24 @@ mod tests {
             sndr_account_id: 0,
             rcvr_account_id: 0,
             enc_amount_using_sndr: CipherText::default(),
-            enc_amount_using_rcvr: rcvr_pub_key.clone().key().encrypt_value(amount).unwrap(),
+            enc_amount_using_rcvr: rcvr_pub_key.key.encrypt_value(amount).unwrap(),
             sndr_pub_key: EncryptionPubKey::default(),
             rcvr_pub_key: rcvr_pub_key.clone(),
             enc_refreshed_amount: CipherText::default(),
-            enc_asset_id_using_rcvr: rcvr_pub_key.key().encrypt_value(asset_id).unwrap(),
+            enc_asset_id_using_rcvr: rcvr_pub_key.key.encrypt_value(asset_id).unwrap(),
         }
     }
 
-    fn mock_account_memo(rcvr_pub_key: EncryptionPubKey) -> AccountMemo {
-        AccountMemo {
-            owner_pub_key: rcvr_pub_key,
-            timestamp: std::time::Instant::now(),
-        }
-    }
-
-    fn mock_gen_account(rcvr_pub_key: EncryptionPubKey, asset_id: u32) -> PubAccount {
-        PubAccount {
-            enc_asset_id: rcvr_pub_key.clone().key().encrypt_value(asset_id).unwrap(),
+    fn mock_gen_account(rcvr_pub_key: EncryptionPubKey, asset_id: u32) -> Fallible<PubAccount> {
+        Ok(PubAccount {
+            enc_asset_id: rcvr_pub_key.key.encrypt_value(asset_id)?,
+            memo: rcvr_pub_key.into(),
             enc_balance: CipherText::default(),
             asset_wellformedness_proof: WellformednessProof::default(),
             asset_membership_proof: MembershipProof::default(),
             balance_correctness_proof: CorrectnessProof::default(),
-            memo: mock_account_memo(rcvr_pub_key),
             sign: Signature::default(),
-        }
+        })
     }
 
     // -------------------------- tests -----------------------
@@ -187,13 +189,10 @@ mod tests {
 
         let conf_tx_init_data = PubInitConfidentialTxData {
             memo: mock_ctx_init_memo(rcvr_enc_keys.0.clone(), expected_amount, asset_id), // should the ".0" be changed into named fields?
-            asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-            amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-            non_neg_amount_proof: InRangeProof::default(),
-            enough_fund_proof: InRangeProof::default(),
-            sig: Signature::default(),
+            ..Default::default()
         };
-        let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
+        let rcvr_account =
+            mock_gen_account(rcvr_enc_keys.0.clone(), asset_id).expect("Mock Gen account"); // should the ".0" be changed into named fields?
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
 
         let result = ctx_rcvr.finalize_by_receiver(
@@ -223,13 +222,10 @@ mod tests {
 
         let conf_tx_init_data = PubInitConfidentialTxData {
             memo: mock_ctx_init_memo(rcvr_enc_keys.0.clone(), expected_amount, asset_id), // should the ".0" be changed into named fields?
-            asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-            amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-            non_neg_amount_proof: InRangeProof::default(),
-            enough_fund_proof: InRangeProof::default(),
-            sig: Signature::default(),
+            ..Default::default()
         };
-        let rcvr_account = mock_gen_account(rcvr_enc_keys.0.clone(), asset_id); // should the ".0" be changed into named fields?
+        let rcvr_account =
+            mock_gen_account(rcvr_enc_keys.0.clone(), asset_id).expect("Mock Gen account"); // should the ".0" be changed into named fields?
         let invalid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Started);
 
         // ------------ invalid prev state
@@ -238,14 +234,15 @@ mod tests {
             rcvr_enc_keys.1,
             rcvr_sign_keys.1, // should the ".1" be changed into named fields?
             rcvr_account,
-            invalid_state,
+            invalid_state.clone(),
             expected_amount,
         );
 
-        match result {
-            // TODO check if e is of correct type:  ConfidentialTxError::InvalidPreviousState { state: invalid_state }
-            Err(e) => assert!(false, "{:?}", e),
-            _ => (),
-        }
+        assert_err!(
+            result,
+            ConfidentialTxError::InvalidPreviousState {
+                state: invalid_state
+            }
+        );
     }
 }

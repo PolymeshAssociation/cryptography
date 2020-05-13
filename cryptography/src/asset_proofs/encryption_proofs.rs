@@ -57,8 +57,8 @@ use rand_core::{CryptoRng, RngCore};
 use std::convert::TryFrom;
 
 use crate::{
-    asset_proofs::errors::{AssetProofError, Result},
     asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript},
+    errors::{Error, ErrorKind as AssetProofError, Fallible},
 };
 
 /// The domain label for the encryption proofs.
@@ -82,9 +82,9 @@ impl ZKPChallenge {
 }
 
 impl TryFrom<Scalar> for ZKPChallenge {
-    type Error = failure::Error;
+    type Error = Error;
 
-    fn try_from(x: Scalar) -> Result<Self> {
+    fn try_from(x: Scalar) -> Result<Self, Self::Error> {
         ensure!(x != Scalar::zero(), AssetProofError::VerificationError);
         Ok(ZKPChallenge { x })
     }
@@ -149,7 +149,7 @@ pub trait AssetProofVerifier {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
-    ) -> Result<()>;
+    ) -> Fallible<()>;
 }
 
 // ------------------------------------------------------------------------
@@ -171,7 +171,7 @@ pub fn single_property_prover<
 >(
     prover_ac: ProverAwaitingChallenge,
     rng: &mut T,
-) -> Result<(
+) -> Fallible<(
     ProverAwaitingChallenge::ZKInitialMessage,
     ProverAwaitingChallenge::ZKFinalResponse,
 )> {
@@ -193,7 +193,7 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
     verifier: &Verifier,
     initial_message: Verifier::ZKInitialMessage,
     final_response: Verifier::ZKFinalResponse,
-) -> Result<()> {
+) -> Fallible<()> {
     verify_multiple_encryption_properties(&[verifier], (&[initial_message], &[final_response]))
 }
 
@@ -214,7 +214,7 @@ pub fn prove_multiple_encryption_properties<
 >(
     provers: &[Box<ProverAwaitingChallenge>],
     rng: &mut T,
-) -> Result<(
+) -> Fallible<(
     Vec<ProverAwaitingChallenge::ZKInitialMessage>,
     Vec<ProverAwaitingChallenge::ZKFinalResponse>,
 )> where {
@@ -230,7 +230,7 @@ pub fn prove_multiple_encryption_properties<
     initial_messages_vec
         .iter()
         .map(|initial_message| initial_message.update_transcript(&mut transcript))
-        .collect::<Result<()>>()?;
+        .collect::<Fallible<()>>()?;
 
     let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
 
@@ -258,7 +258,7 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
         &[Verifier::ZKInitialMessage],
         &[Verifier::ZKFinalResponse],
     ),
-) -> Result<()> {
+) -> Fallible<()> {
     ensure!(
         initial_messages.len() == final_responses.len() && verifiers.len() == final_responses.len(),
         AssetProofError::VerificationError
@@ -271,7 +271,7 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
     initial_messages
         .iter()
         .map(|initial_message| initial_message.update_transcript(&mut transcript))
-        .collect::<Result<(), _>>()?;
+        .collect::<Fallible<(), _>>()?;
 
     let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
 
@@ -290,12 +290,14 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::asset_proofs::{
-        correctness_proof::{
-            CorrectnessInitialMessage, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+    use crate::{
+        asset_proofs::{
+            correctness_proof::{
+                CorrectnessInitialMessage, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+            },
+            CommitmentWitness, ElgamalSecretKey,
         },
-        errors::AssetProofError,
-        CommitmentWitness, ElgamalSecretKey,
+        errors::ErrorKind as AssetProofError,
     };
     use rand::{rngs::StdRng, SeedableRng};
     use rand_core::{CryptoRng, RngCore};

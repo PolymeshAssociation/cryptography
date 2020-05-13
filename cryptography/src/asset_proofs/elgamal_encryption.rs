@@ -3,12 +3,10 @@
 //! Since Elgamal is a homomorphic encryption it also provides
 //! addition and subtraction API over the cipher texts.
 
-use crate::asset_proofs::errors::{AssetProofError, Result};
+use crate::errors::{Error, ErrorKind as AssetProofError, Fallible};
 use bulletproofs::PedersenGens;
-use core::ops::{Add, Sub};
-use core::ops::{AddAssign, SubAssign};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use failure::Error;
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -161,7 +159,7 @@ impl ElgamalPublicKey {
         CipherText { x, y }
     }
 
-    pub fn encrypt_value(&self, value: u32) -> Result<CipherText> {
+    pub fn encrypt_value(&self, value: u32) -> Fallible<CipherText> {
         let blinding = Scalar::random(&mut rand::thread_rng());
         Ok(self.encrypt(&CommitmentWitness::try_from((value, blinding))?))
     }
@@ -179,7 +177,7 @@ impl ElgamalSecretKey {
         }
     }
 
-    pub fn decrypt(&self, cipher_text: &CipherText) -> Result<u32> {
+    pub fn decrypt(&self, cipher_text: &CipherText) -> Fallible<u32> {
         let gens = PedersenGens::default();
         // value * h = Y - X / secret_key
         let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
@@ -205,7 +203,7 @@ impl CipherText {
         &self,
         secret_key: &ElgamalSecretKey,
         rng: &mut T,
-    ) -> Result<CipherText> {
+    ) -> Fallible<CipherText> {
         let message = secret_key.decrypt(self)?;
         let pub_key = secret_key.get_public_key();
         let blinding = Scalar::random(rng);

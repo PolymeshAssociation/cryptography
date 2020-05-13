@@ -1,3 +1,5 @@
+pub mod errors;
+
 /// That `ensure` does not transform into a string representation like `failure::ensure` is doing.
 #[allow(unused_macros)]
 macro_rules! ensure {
@@ -5,6 +7,14 @@ macro_rules! ensure {
         if !$predicate {
             return Err($context_selector.into());
         }
+    };
+}
+
+/// Helper macro to assert that `predicate` is an `Error::from( $err)`.
+#[allow(unused_macros)]
+macro_rules! assert_err {
+    ($predicate:expr, $err:expr) => {
+        assert_eq!($predicate.expect_err("Error expected").kind(), &$err);
     };
 }
 

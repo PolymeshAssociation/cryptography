@@ -2,17 +2,20 @@
 //! under different public keys.
 //! For more details see section 5.4 of the whitepaper.
 
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    errors::{AssetProofError, Result},
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, CommitmentWitness, ElgamalPublicKey,
+    errors::{ErrorKind as AssetProofError, Fallible},
 };
 use bulletproofs::PedersenGens;
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+};
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroize;
@@ -55,7 +58,7 @@ impl Default for EncryptingSameValueInitialMessage {
 }
 
 impl UpdateTranscript for EncryptingSameValueInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(ENCRYPTING_SAME_VALUE_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A1", &self.a1.compress())?;
         transcript.append_validated_point(b"A2", &self.a2.compress())?;
@@ -149,7 +152,7 @@ impl AssetProofVerifier for EncryptingSameValueVerifier {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         // 2 ciphertexts that encrypt the same witness must have the same Y value.
         ensure!(
             self.cipher1.y == self.cipher2.y,
