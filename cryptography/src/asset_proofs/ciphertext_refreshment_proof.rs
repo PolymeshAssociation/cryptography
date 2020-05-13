@@ -5,17 +5,20 @@
 //! For more details see sections 3.6 and 5.3 of the
 //! whitepaper.
 
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, ElgamalPublicKey, ElgamalSecretKey,
     },
-    errors::{AssetProofError, Result},
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, ElgamalPublicKey, ElgamalSecretKey,
+    errors::{ErrorKind, Fallible},
 };
 use bulletproofs::PedersenGens;
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+};
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroize;
@@ -51,7 +54,7 @@ impl Default for CipherTextRefreshmentInitialMessage {
 }
 
 impl UpdateTranscript for CipherTextRefreshmentInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(CIPHERTEXT_REFRESHMENT_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A", &self.a.compress())?;
         transcript.append_validated_point(b"B", &self.b.compress())?;
@@ -159,14 +162,14 @@ impl AssetProofVerifier for CipherTextRefreshmentVerifier {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         z: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         ensure!(
             z * self.y == initial_message.a + challenge.x() * self.x,
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
         ensure!(
             z * pc_gens.B_blinding == initial_message.b + challenge.x() * self.pub_key.pub_key,
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 2 }
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 2 }
         );
         Ok(())
     }
@@ -221,13 +224,13 @@ mod tests {
         let result = verifier.verify(&gens, &challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = Scalar::default();
         assert_err!(
             verifier.verify(&gens, &challenge, &initial_message, &bad_final_response),
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
     }
 

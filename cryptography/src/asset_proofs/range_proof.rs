@@ -3,7 +3,7 @@
 //! plain text. For example proving that the value that was encrypted
 //! is within a range.
 
-use crate::asset_proofs::errors::{AssetProofError, Result};
+use crate::errors::{ErrorKind, Fallible};
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use merlin::Transcript;
@@ -21,7 +21,7 @@ pub fn prove_within_range(
     secret_value: u64,
     rand_blind: Scalar,
     range: usize,
-) -> Result<(RangeProof, CompressedRistretto)> {
+) -> Fallible<(RangeProof, CompressedRistretto)> {
     // Generators for Pedersen commitments.
     let pc_gens = PedersenGens::default();
 
@@ -43,7 +43,7 @@ pub fn prove_within_range(
         &rand_blind,
         range,
     )
-    .map_err(|source| AssetProofError::ProvingError { source }.into())
+    .map_err(|source| ErrorKind::ProvingError(source).into())
 }
 
 /// Verify that a range proof is valid given a commitment to a secret value.
