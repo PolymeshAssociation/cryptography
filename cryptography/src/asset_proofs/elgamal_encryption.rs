@@ -194,12 +194,27 @@ impl ElgamalSecretKey {
     }
 }
 
+pub fn encrypt_using_two_pub_keys(
+    witness: &CommitmentWitness,
+    pub_key1: ElgamalPublicKey,
+    pub_key2: ElgamalPublicKey,
+) -> (CipherText, CipherText) {
+    let x1 = witness.blinding * pub_key1.pub_key;
+    let x2 = witness.blinding * pub_key2.pub_key;
+    let gens = PedersenGens::default();
+    let y = gens.commit(Scalar::from(witness.value()), witness.blinding);
+    let enc1 = CipherText { x: x1, y };
+    let enc2 = CipherText { x: x2, y };
+
+    (enc1, enc2)
+}
+
 // ------------------------------------------------------------------------
 // CipherText Refreshment Method
 // ------------------------------------------------------------------------
 
 impl CipherText {
-    pub fn ciphertext_refreshment_method<T: RngCore + CryptoRng>(
+    pub fn refresh<T: RngCore + CryptoRng>(
         &self,
         secret_key: &ElgamalSecretKey,
         rng: &mut T,

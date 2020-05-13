@@ -69,13 +69,13 @@ impl UpdateTranscript for EncryptingSameValueInitialMessage {
 
 pub struct EncryptingSameValueProverAwaitingChallenge {
     /// The first public key used for the elgamal encryption.
-    pub_key1: ElgamalPublicKey,
+    pub pub_key1: ElgamalPublicKey,
 
     /// The second public key used for the elgamal encryption.
-    pub_key2: ElgamalPublicKey,
+    pub pub_key2: ElgamalPublicKey,
 
     /// The secret commitment witness.
-    w: Zeroizing<CommitmentWitness>,
+    pub w: Zeroizing<CommitmentWitness>,
 }
 
 #[derive(Zeroize)]

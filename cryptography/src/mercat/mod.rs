@@ -3,21 +3,24 @@
 
 pub mod conf_tx;
 
-use crate::asset_proofs::ciphertext_refreshment_proof::{
-    CipherTextRefreshmentFinalResponse, CipherTextRefreshmentInitialMessage,
+use crate::{
+    asset_proofs::{
+        ciphertext_refreshment_proof::{
+            CipherTextRefreshmentFinalResponse, CipherTextRefreshmentInitialMessage,
+        },
+        correctness_proof::{CorrectnessFinalResponse, CorrectnessInitialMessage},
+        encrypting_same_value_proof::{
+            EncryptingSameValueFinalResponse, EncryptingSameValueInitialMessage,
+        },
+        range_proof,
+        wellformedness_proof::{WellformednessFinalResponse, WellformednessInitialMessage},
+        CipherText, ElgamalPublicKey, ElgamalSecretKey,
+    },
+    errors::Fallible,
 };
-use crate::asset_proofs::correctness_proof::{CorrectnessFinalResponse, CorrectnessInitialMessage};
-use crate::asset_proofs::encrypting_same_value_proof::{
-    EncryptingSameValueFinalResponse, EncryptingSameValueInitialMessage,
-};
-use crate::asset_proofs::range_proof;
-use crate::asset_proofs::wellformedness_proof::{
-    WellformednessFinalResponse, WellformednessInitialMessage,
-};
-use crate::asset_proofs::{CipherText, ElgamalPublicKey, ElgamalSecretKey};
 use bulletproofs::RangeProof;
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
-use failure::Error;
+use rand::rngs::StdRng;
 
 // ---------------------- START: temporary types, move them to the proper location
 
@@ -45,8 +48,27 @@ impl From<ElgamalSecretKey> for EncryptionSecKey {
     }
 }
 
-pub struct SignaturePubKey(pub ElgamalPublicKey);
-pub struct SignatureSecKey(pub ElgamalSecretKey);
+pub struct EncryptionKeys {
+    pub pblc: EncryptionPubKey,
+    pub scrt: EncryptionSecKey,
+}
+// TODO experimenting with the API, remove once finalized
+//impl EncryptionKeys {
+//    pub fn pblc(&self) -> ElgamalPublicKey {
+//        self.pblc.key()
+//    }
+//    pub fn scrt(&self) -> ElgamalSecretKey {
+//        self.scrt.key()
+//    }
+//}
+
+type SignaturePubKey = EncryptionPubKey;
+type SignatureSecKey = EncryptionSecKey;
+
+pub struct SignatureKeys {
+    pub pblc: SignaturePubKey,
+    pub scrt: SignatureSecKey,
+}
 
 // TODO move after CRYP-40
 #[derive(Default)]
@@ -92,9 +114,9 @@ pub struct MembershipProof {
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for range.
 #[derive(Debug)]
 pub struct InRangeProof {
-    proof: RangeProof,
-    commitment: CompressedRistretto,
-    range: usize,
+    pub proof: RangeProof,
+    pub commitment: CompressedRistretto,
+    pub range: usize,
 }
 
 impl Default for InRangeProof {
@@ -110,18 +132,49 @@ impl Default for InRangeProof {
     }
 }
 
+/// TODO: update the documentation and remove the type alias
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for cipher
 /// equality under different public key.
 #[derive(Default, Debug)]
 pub struct CipherEqualDifferentPubKeyProof {
-    init: EncryptingSameValueInitialMessage,
-    response: EncryptingSameValueFinalResponse,
+    pub init: EncryptingSameValueInitialMessage,
+    pub response: EncryptingSameValueFinalResponse,
 }
 
-pub type CipherEqualSamePubKeyProof = (
-    CipherTextRefreshmentInitialMessage,
-    CipherTextRefreshmentFinalResponse,
-);
+impl CipherEqualDifferentPubKeyProof {
+    pub fn new(
+        pair: (
+            EncryptingSameValueInitialMessage,
+            EncryptingSameValueFinalResponse,
+        ),
+    ) -> Self {
+        Self {
+            init: pair.0,
+            response: pair.1,
+        }
+    }
+}
+
+/// TODO
+#[derive(Default, Debug)]
+pub struct CipherEqualSamePubKeyProof {
+    pub init: CipherTextRefreshmentInitialMessage,
+    pub response: CipherTextRefreshmentFinalResponse,
+}
+
+impl CipherEqualSamePubKeyProof {
+    pub fn new(
+        pair: (
+            CipherTextRefreshmentInitialMessage,
+            CipherTextRefreshmentFinalResponse,
+        ),
+    ) -> Self {
+        Self {
+            init: pair.0,
+            response: pair.1,
+        }
+    }
+}
 
 /// Asset memo. TODO: more informative description!
 pub type AssetMemo = EncryptedAmount;
@@ -145,6 +198,7 @@ impl From<EncryptionPubKey> for AccountMemo {
 
 /// Holds the public portion of an account which can be safely put on the chain.
 pub struct PubAccount {
+    pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
     pub enc_balance: EncryptedAmount,
     pub asset_wellformedness_proof: WellformednessProof,
@@ -216,7 +270,7 @@ pub trait AssetTransactionIssuer {
         issr_account: PubAccount,
         mdtr_pub_key: EncryptionPubKey,
         asset_id: u32, // deviation from the paper
-    ) -> Result<(PubAssetTxData, AssetTxState), Error>;
+    ) -> Fallible<(PubAssetTxData, AssetTxState)>;
 }
 
 pub trait AssetTransactionInitializeVerifier {
@@ -227,7 +281,7 @@ pub trait AssetTransactionInitializeVerifier {
         asset_tx: PubAssetTxData,
         state: AssetTxState,
         issr_sign_pub_key: SignaturePubKey,
-    ) -> Result<AssetTxState, Error>;
+    ) -> Fallible<AssetTxState>;
 }
 
 pub trait AssetTransactionMediator {
@@ -243,7 +297,7 @@ pub trait AssetTransactionMediator {
         mdtr_sign_key: SignatureSecKey,
         issr_pub_key: EncryptionPubKey,
         issr_acount: PubAccount,
-    ) -> Result<(Signature, PubAccount, AssetTxState), Error>;
+    ) -> Fallible<(Signature, PubAccount, AssetTxState)>;
 }
 
 pub trait AssetTransactionFinalizeAndProcessVerifier {
@@ -253,7 +307,7 @@ pub trait AssetTransactionFinalizeAndProcessVerifier {
         sig: Signature,
         issr_account: PubAccount,
         mdtr_sign_pub_key: SignaturePubKey,
-    ) -> Result<AssetTxState, Error>;
+    ) -> Fallible<AssetTxState>;
 }
 
 // ----------------------------- Confidential Transaction
@@ -267,7 +321,7 @@ pub struct ConfidentialTxMemo {
     pub enc_amount_using_rcvr: EncryptedAmount,
     pub sndr_pub_key: EncryptionPubKey,
     pub rcvr_pub_key: EncryptionPubKey,
-    pub enc_refreshed_amount: EncryptedAmount,
+    pub enc_refreshed_balance: EncryptedAmount,
     pub enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
@@ -286,6 +340,7 @@ pub struct PubInitConfidentialTxData {
     pub enough_fund_proof: InRangeProof,
     pub memo: ConfidentialTxMemo,
     pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
+    pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub sig: Signature,
 }
 
@@ -312,14 +367,15 @@ pub trait ConfidentialTransactionSender {
     /// MERCAT paper.
     fn create(
         &self,
-        sndr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
+        sndr_enc_keys: EncryptionKeys,
         sndr_sign_key: SignatureSecKey,
         sndr_account: PubAccount,
         rcvr_pub_key: EncryptionPubKey,
         rcvr_account: PubAccount,
         asset_id: u32,
         amount: u32,
-    ) -> Result<(PubInitConfidentialTxData, ConfidentialTxState), Error>;
+        rng: &mut StdRng,
+    ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)>;
 }
 
 pub trait ConfidentialTransactionInitVerifier {
@@ -327,13 +383,13 @@ pub trait ConfidentialTransactionInitVerifier {
         &self,
         transaction: PubInitConfidentialTxData,
         sndr_sign_pub_key: SignaturePubKey,
-    ) -> Result<ConfidentialTxState, Error>;
+    ) -> Fallible<ConfidentialTxState>;
 }
 
 pub trait ConfidentialTransactionMediator {
     /// Justify the transaction by mediator.
     /// TODO: missing from the paper, will discuss and decide later.
-    fn justify_init() -> Result<ConfidentialTxState, Error>;
+    fn justify_init() -> Fallible<ConfidentialTxState>;
 }
 
 pub trait ConfidentialTransactionReceiver {
@@ -351,7 +407,8 @@ pub trait ConfidentialTransactionReceiver {
         enc_asset_id: EncryptedAssetId,
         amount: u32,
         state: ConfidentialTxState,
-    ) -> Result<(PubFinalConfidentialTxData, ConfidentialTxState), Error>;
+        rng: &mut StdRng,
+    ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)>;
 }
 
 pub trait ConfidentialTransactionFinalizeAndProcessVerifier {
@@ -363,7 +420,7 @@ pub trait ConfidentialTransactionFinalizeAndProcessVerifier {
         rcvr_sign_pub_key: SignaturePubKey,
         conf_tx_final_data: PubFinalConfidentialTxData,
         state: ConfidentialTxState,
-    ) -> Result<ConfidentialTxState, Error>;
+    ) -> Fallible<ConfidentialTxState>;
 }
 
 pub trait ConfidentialTransactionReverseAndProcessMediator {
@@ -375,7 +432,7 @@ pub trait ConfidentialTransactionReverseAndProcessMediator {
         mdtr_enc_keys: EncryptionSecKey,
         mdtr_sign_key: SignatureSecKey,
         state: ConfidentialTxState,
-    ) -> Result<(PubReverseConfidentialTxData, ConfidentialTxState), Error>;
+    ) -> Fallible<(PubReverseConfidentialTxData, ConfidentialTxState)>;
 }
 
 pub trait ConfidentialTransactionReverseAndProcessVerifier {
@@ -386,5 +443,5 @@ pub trait ConfidentialTransactionReverseAndProcessVerifier {
         reverse_conf_tx_data: PubReverseConfidentialTxData,
         mdtr_sign_pub_key: SignaturePubKey,
         state: ConfidentialTxState,
-    ) -> Result<ConfidentialTxState, Error>;
+    ) -> Fallible<ConfidentialTxState>;
 }
