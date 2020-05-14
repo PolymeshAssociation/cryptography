@@ -3,8 +3,7 @@
 
 use crate::asset_proofs::{
     encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ProofGenerators,
-        ZKPChallenge,
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
     },
     errors::{AssetProofError, Result},
     transcript::{TranscriptProtocol, UpdateTranscript},
@@ -53,17 +52,23 @@ impl UpdateTranscript for CorrectnessInitialMessage {
     }
 }
 
-pub struct CorrectnessProverAwaitingChallenge {
+pub struct CorrectnessProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
     pub_key: ElgamalPublicKey,
 
     /// The secret commitment witness.
     w: CommitmentWitness,
+    /// Pedersen Generators
+    pc_gens: &'a PedersenGens,
 }
 
-impl CorrectnessProverAwaitingChallenge {
-    pub fn new(pub_key: ElgamalPublicKey, w: CommitmentWitness) -> Self {
-        CorrectnessProverAwaitingChallenge { pub_key, w }
+impl<'a> CorrectnessProverAwaitingChallenge<'a> {
+    pub fn new(pub_key: ElgamalPublicKey, w: CommitmentWitness, pc_gens: &'a PedersenGens) -> Self {
+        CorrectnessProverAwaitingChallenge {
+            pub_key,
+            w,
+            pc_gens,
+        }
     }
 }
 
@@ -77,7 +82,7 @@ pub struct CorrectnessProver {
     u: Scalar,
 }
 
-impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
+impl<'a> AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge<'a> {
     type ZKInitialMessage = CorrectnessInitialMessage;
     type ZKFinalResponse = CorrectnessFinalResponse;
     type ZKProver = CorrectnessProver;
@@ -92,15 +97,9 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
 
     fn generate_initial_message(
         &self,
-        pc_gens: &ProofGenerators,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_commitment = Scalar::random(rng);
-
-        let g: PedersenGens = match pc_gens {
-            ProofGenerators::PedersenGens(gens) => *gens,
-            _ => PedersenGens::default(),
-        };
 
         (
             CorrectnessProver {
@@ -109,7 +108,7 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
             },
             CorrectnessInitialMessage {
                 a: rand_commitment * self.pub_key.pub_key,
-                b: rand_commitment * g.B_blinding,
+                b: rand_commitment * self.pc_gens.B_blinding,
             },
         )
     }
@@ -121,7 +120,7 @@ impl AssetProofProver<CorrectnessFinalResponse> for CorrectnessProver {
     }
 }
 
-pub struct CorrectnessVerifier {
+pub struct CorrectnessVerifier<'a> {
     /// The encrypted value (aka the plain text).
     value: u32,
 
@@ -130,37 +129,38 @@ pub struct CorrectnessVerifier {
 
     /// The encryption cipher text.
     cipher: CipherText,
+
+    /// The Generator Points
+    pc_gens: &'a PedersenGens,
 }
 
-impl CorrectnessVerifier {
-    pub fn new(value: u32, pub_key: ElgamalPublicKey, cipher: CipherText) -> Self {
+impl<'a> CorrectnessVerifier<'a> {
+    pub fn new(
+        value: u32,
+        pub_key: ElgamalPublicKey,
+        cipher: CipherText,
+        pc_gens: &'a PedersenGens,
+    ) -> Self {
         CorrectnessVerifier {
             value,
             pub_key,
             cipher,
+            pc_gens,
         }
     }
 }
 
-impl AssetProofVerifier for CorrectnessVerifier {
+impl<'a> AssetProofVerifier for CorrectnessVerifier<'a> {
     type ZKInitialMessage = CorrectnessInitialMessage;
     type ZKFinalResponse = CorrectnessFinalResponse;
 
     fn verify(
         &self,
-        pc_gens: &ProofGenerators,
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         z: &Self::ZKFinalResponse,
     ) -> Result<()> {
-        let generators: &PedersenGens;
-        let new_gens: PedersenGens;
-        if let ProofGenerators::PedersenGens(g) = &pc_gens {
-            generators = g;
-        } else {
-            new_gens = PedersenGens::default();
-            generators = &new_gens;
-        };
+        let generators = self.pc_gens;
 
         let y_prime = self.cipher.y - (Scalar::from(self.value) * generators.B);
 
@@ -194,8 +194,7 @@ mod tests {
     #[test]
     #[wasm_bindgen_test]
     fn test_correctness_proof() {
-        //let gens = PedersenGens::default();
-        let gens = ProofGenerators::PedersenGens(PedersenGens::default());
+        let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 13u32;
         let rand_blind = Scalar::random(&mut rng);
@@ -205,32 +204,32 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w);
-        let verifier = CorrectnessVerifier::new(secret_value, elg_pub, cipher);
+        let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w, &gens);
+        let verifier = CorrectnessVerifier::new(secret_value, elg_pub, cipher, &gens);
         let mut transcript = Transcript::new(CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL);
 
         // Positive tests
         let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
-        let (prover, initial_message) = prover.generate_initial_message(&gens, &mut transcript_rng);
+        let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
         initial_message.update_transcript(&mut transcript).unwrap();
         let challenge = transcript
             .scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL)
             .unwrap();
         let final_response = prover.apply_challenge(&challenge);
 
-        let result = verifier.verify(&gens, &challenge, &initial_message, &final_response);
+        let result = verifier.verify(&challenge, &initial_message, &final_response);
         assert!(result.is_ok());
 
         // Negative tests
         let bad_initial_message = CorrectnessInitialMessage::default();
-        let result = verifier.verify(&gens, &challenge, &bad_initial_message, &final_response);
+        let result = verifier.verify(&challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = Scalar::default();
-        let result = verifier.verify(&gens, &challenge, &initial_message, &bad_final_response);
+        let result = verifier.verify(&challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
