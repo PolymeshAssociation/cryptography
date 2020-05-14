@@ -71,10 +71,6 @@ pub const ENCRYPTION_PROOFS_CHALLENGE_LABEL: &[u8] = b"PolymathEncryptionProofsC
 // Sigma Protocol's Prover and Verifier Interfaces
 // ------------------------------------------------------------------------
 
-pub enum ProofGenerators {
-    PedersenGens(PedersenGens),
-    OooNGens(OooNProofGenerators),
-}
 /// A scalar challenge.
 pub struct ZKPChallenge {
     x: Scalar,
@@ -137,8 +133,6 @@ pub trait AssetProofProverAwaitingChallenge {
     /// A initial message.
     fn generate_initial_message(
         &self,
-        //pc_gens: &PedersenGens,
-        gens: &ProofGenerators,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage);
 }
@@ -172,7 +166,6 @@ pub trait AssetProofVerifier {
     /// Ok on success, or an error on failure.
     fn verify(
         &self,
-        pc_gens: &ProofGenerators,
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
@@ -246,14 +239,12 @@ pub fn prove_multiple_encryption_properties<
     Vec<ProverAwaitingChallenge::ZKFinalResponse>,
 )> where {
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
-    //let gens = PedersenGens::default();
-    let gens = ProofGenerators::PedersenGens(PedersenGens::default());
 
     let (provers_vec, initial_messages_vec): (Vec<_>, Vec<_>) = provers
         .iter()
         .map(|p| {
             let mut transcript_rng = p.create_transcript_rng(rng, &transcript);
-            p.generate_initial_message(&gens, &mut transcript_rng)
+            p.generate_initial_message(&mut transcript_rng)
         })
         .unzip();
 
@@ -296,7 +287,6 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
     );
 
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
-    let gens = ProofGenerators::PedersenGens(PedersenGens::default());
 
     // Combine all the initial messages to create a single challenge.
     initial_messages
@@ -307,7 +297,7 @@ pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
     let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
 
     for i in 0..verifiers.len() {
-        verifiers[i].verify(&gens, &challenge, &initial_messages[i], &final_responses[i])?;
+        verifiers[i].verify(&challenge, &initial_messages[i], &final_responses[i])?;
     }
 
     Ok(())
@@ -336,10 +326,14 @@ mod tests {
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [7u8; 32];
 
-    fn create_correctness_proof_objects_helper<T: RngCore + CryptoRng>(
+    fn create_correctness_proof_objects_helper<'a, T: RngCore + CryptoRng>(
         plain_text: u32,
         rng: &mut T,
-    ) -> (CorrectnessProverAwaitingChallenge, CorrectnessVerifier) {
+        pc_gens: &'a PedersenGens,
+    ) -> (
+        CorrectnessProverAwaitingChallenge<'a>,
+        CorrectnessVerifier<'a>,
+    ) {
         let rand_blind = Scalar::random(rng);
         let w = CommitmentWitness::try_from((plain_text, rand_blind)).unwrap();
 
@@ -347,8 +341,8 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w);
-        let verifier = CorrectnessVerifier::new(plain_text, elg_pub, cipher);
+        let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w, pc_gens);
+        let verifier = CorrectnessVerifier::new(plain_text, elg_pub, cipher, pc_gens);
 
         (prover, verifier)
     }
@@ -358,8 +352,9 @@ mod tests {
     fn test_single_proof() {
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 42u32;
-
-        let (prover, verifier) = create_correctness_proof_objects_helper(secret_value, &mut rng);
+        let pc_gens = PedersenGens::default();
+        let (prover, verifier) =
+            create_correctness_proof_objects_helper(secret_value, &mut rng, &pc_gens);
         let (initial_message, final_response) =
             single_property_prover::<StdRng, CorrectnessProverAwaitingChallenge>(prover, &mut rng)
                 .unwrap();
@@ -387,9 +382,12 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED_2);
         let secret_value1 = 6u32;
         let secret_value2 = 7u32;
+        let pc_gens = PedersenGens::default();
 
-        let (prover1, verifier1) = create_correctness_proof_objects_helper(secret_value1, &mut rng);
-        let (prover2, verifier2) = create_correctness_proof_objects_helper(secret_value2, &mut rng);
+        let (prover1, verifier1) =
+            create_correctness_proof_objects_helper(secret_value1, &mut rng, &pc_gens);
+        let (prover2, verifier2) =
+            create_correctness_proof_objects_helper(secret_value2, &mut rng, &pc_gens);
 
         let provers_vec = [Box::new(prover1), Box::new(prover2)];
 
