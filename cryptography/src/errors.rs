@@ -108,6 +108,7 @@ pub enum ErrorKind {
         expected_amount: u32,
         received_amount: u32,
     },
+
     #[fail(display = "Public keys in the memo and the account are different.")]
     InputPubKeyMismatch,
 
@@ -119,6 +120,9 @@ pub enum ErrorKind {
         balance: u32,
         transaction_amount: u32,
     },
+
+    #[fail(display = "The account does not match the account on the transaction")]
+    AccountIdMismatch,
 }
 
 pub type Fallible<T, E = Error> = std::result::Result<T, E>;

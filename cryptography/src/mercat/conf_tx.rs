@@ -1,4 +1,3 @@
-// TODO check rust guideline for what needs prefixing when importing and calling methods vs calling structs
 use crate::{
     asset_proofs::{
         ciphertext_refreshment_proof::CipherTextRefreshmentProverAwaitingChallenge,
@@ -11,9 +10,10 @@ use crate::{
     errors::{ErrorKind, Fallible},
     mercat::{
         CipherEqualDifferentPubKeyProof, CipherEqualSamePubKeyProof,
-        ConfidentialTransactionReceiver, ConfidentialTransactionSender, ConfidentialTxMemo,
-        ConfidentialTxState, EncryptedAssetId, EncryptionKeys, EncryptionPubKey, EncryptionSecKey,
-        InRangeProof, PubAccount, PubFinalConfidentialTxData, PubInitConfidentialTxData, Signature,
+        ConfidentialTransactionInitVerifier, ConfidentialTransactionReceiver,
+        ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAssetId,
+        EncryptionKeys, EncryptionPubKey, EncryptionSecKey, InRangeProof, PubAccount,
+        PubFinalConfidentialTxData, PubInitConfidentialTxData, Signature, SignaturePubKey,
         SignatureSecKey, TxSubstate,
     },
 };
@@ -188,7 +188,7 @@ impl CtxReceiver {
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
         rcvr_enc_sec: EncryptionSecKey,
-        _: SignatureSecKey,
+        rcvr_sign_key: SignatureSecKey,
         rcvr_account: PubAccount,
         state: ConfidentialTxState,
         expected_amount: u32,
@@ -244,7 +244,95 @@ impl CtxReceiver {
 // -                                          Validator                                           -
 // ------------------------------------------------------------------------------------------------
 
-/// Verifies the the proofs that that are performed by both the Sender and the Receiver of a
+fn verify_initital_transaction_proofs(
+    transaction: &PubInitConfidentialTxData,
+    sndr_account: PubAccount,
+) -> Fallible<()> {
+    let memo = &transaction.memo;
+    let init_data = &transaction;
+
+    ensure!(
+        sndr_account.id == memo.sndr_account_id,
+        ErrorKind::AccountIdMismatch
+    );
+
+    // Verify encrypted amounts are equal
+    single_property_verifier(
+        &EncryptingSameValueVerifier {
+            pub_key1: memo.sndr_pub_key.key,
+            pub_key2: memo.rcvr_pub_key.key,
+            cipher1: memo.enc_amount_using_sndr,
+            cipher2: memo.enc_amount_using_rcvr,
+        },
+        init_data.amount_equal_cipher_proof.init,
+        init_data.amount_equal_cipher_proof.response,
+    )?;
+
+    // Verify that amount is not negative
+    verify_within_range(
+        init_data.non_neg_amount_proof.proof.clone(),
+        init_data.non_neg_amount_proof.commitment,
+        init_data.non_neg_amount_proof.range,
+    )?;
+
+    // verify the balance refreshment was done correctly
+    single_property_verifier(
+        &CipherTextRefreshmentVerifier::new(
+            memo.sndr_pub_key.key,
+            sndr_account.enc_balance,
+            memo.enc_refreshed_balance,
+        ),
+        init_data.balance_refreshed_same_proof.init,
+        init_data.balance_refreshed_same_proof.response,
+    )?;
+
+    // Verify that balance has enough fund
+    verify_within_range(
+        init_data.enough_fund_proof.proof.clone(),
+        init_data.enough_fund_proof.commitment,
+        init_data.enough_fund_proof.range,
+    )?;
+
+    // TODO: this does not verify
+    // In the inital transaction, sender has encrypted the sset id
+    // using receiver pub key. We verify that this encrypted asset id
+    // is the same as the one in the sender account.
+    //single_property_verifier(
+    //    &EncryptingSameValueVerifier {
+    //        pub_key1: memo.sndr_pub_key.key,
+    //        pub_key2: memo.rcvr_pub_key.key,
+    //        cipher1: sndr_account.enc_asset_id,
+    //        cipher2: memo.enc_asset_id_using_rcvr,
+    //    },
+    //    init_data.asset_id_equal_cipher_proof.init,
+    //    init_data.asset_id_equal_cipher_proof.response,
+    //)?;
+    Ok(())
+}
+
+/// Verifies the initial transaction.
+pub struct CtxSenderValidator {}
+
+impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
+    fn verify(
+        &self,
+        transaction: &PubInitConfidentialTxData,
+        sndr_account: PubAccount,
+        sndr_sign_pub_key: SignaturePubKey,
+        state: ConfidentialTxState,
+    ) -> Fallible<ConfidentialTxState> {
+        // ensure that the previous state is correct
+        match state {
+            ConfidentialTxState::Initialization(TxSubstate::Started) => (),
+            _ => return Err(ErrorKind::InvalidPreviousState { state }.into()),
+        }
+        // TODO verify the signature
+        verify_initital_transaction_proofs(transaction, sndr_account)?;
+        Ok(ConfidentialTxState::Initialization(TxSubstate::Verified))
+    }
+}
+
+/// Verifies the proofs that are performed by both the Sender and the Receiver of a
 /// confidential transaction.
 pub struct CtxReceiverValidator {}
 
@@ -259,8 +347,6 @@ pub struct CtxReceiverValidator {}
 //    ) -> Result<ConfidentialTxState, Error> {
 //    }
 //}
-
-// TODO verify create transaction as well
 
 impl CtxReceiverValidator {
     pub fn verify_finalize_by_receiver(
@@ -279,62 +365,11 @@ impl CtxReceiverValidator {
         let memo = &conf_tx_final_data.init_data.memo;
         let init_data = &conf_tx_final_data.init_data;
 
-        // Verify encrypted amounts are equal
-        single_property_verifier(
-            &EncryptingSameValueVerifier {
-                pub_key1: memo.sndr_pub_key.key,
-                pub_key2: memo.rcvr_pub_key.key,
-                cipher1: memo.enc_amount_using_sndr,
-                cipher2: memo.enc_amount_using_rcvr,
-            },
-            init_data.amount_equal_cipher_proof.init,
-            init_data.amount_equal_cipher_proof.response,
-        )?;
+        verify_initital_transaction_proofs(init_data, sndr_account)?;
 
-        // Verify that amount is not negative
-        verify_within_range(
-            init_data.non_neg_amount_proof.proof.clone(),
-            init_data.non_neg_amount_proof.commitment,
-            init_data.non_neg_amount_proof.range,
-        )?;
-
-        // verify the balance refreshment was done correctly
-        single_property_verifier(
-            &CipherTextRefreshmentVerifier::new(
-                memo.sndr_pub_key.key,
-                sndr_account.enc_balance,
-                memo.enc_refreshed_balance,
-            ),
-            init_data.balance_refreshed_same_proof.init,
-            init_data.balance_refreshed_same_proof.response,
-        )?;
-
-        // Verify that balance has enough fund
-        verify_within_range(
-            init_data.enough_fund_proof.proof.clone(),
-            init_data.enough_fund_proof.commitment,
-            init_data.enough_fund_proof.range,
-        )?;
-
-        // In the inital transaction, sender has encrypted the sset id
-        // using receiver pub key.
-        // In the following two sections we verify that this encrypted asset id
-        // is the same as the one in the sender and receiver account
-
-        // TODO: this fails
-        // // prove that it is the same as the one in the sender's account
-        // single_property_verifier(
-        //     &EncryptingSameValueVerifier {
-        //         pub_key1: memo.sndr_pub_key.key,
-        //         pub_key2: memo.rcvr_pub_key.key,
-        //         cipher1: sndr_account.enc_asset_id,
-        //         cipher2: memo.enc_asset_id_using_rcvr,
-        //     },
-        //     init_data.asset_id_equal_cipher_proof.init,
-        //     init_data.asset_id_equal_cipher_proof.response,
-        // )?;
-
-        // prove that it is the same as the one in the reciever's account
+        // In the inital transaction, sender has encrypted the asset id
+        // using receiver pub key.We verify that this encrypted asset id
+        // is the same as the one in the receiver account
         single_property_verifier(
             &CipherTextRefreshmentVerifier::new(
                 memo.rcvr_pub_key.key,
@@ -603,7 +638,8 @@ mod tests {
     fn test_ctx_create_finalize_validate_success() {
         let sndr = CtxSender {};
         let rcvr = CtxReceiver {};
-        let vldr = CtxReceiverValidator {};
+        let sndr_vldtr = CtxSenderValidator {};
+        let rcvr_vldtr = CtxReceiverValidator {};
         let asset_id = 20;
         let sndr_balance = 40;
         let rcvr_balance = 0;
@@ -644,16 +680,22 @@ mod tests {
             amount,
             &mut rng,
         );
-        let (ctx_init_data, init_state) = result.unwrap();
+        let (ctx_init_data, state) = result.unwrap();
         assert_eq!(
-            init_state,
+            state,
             ConfidentialTxState::Initialization(TxSubstate::Started)
         );
 
-        // TODO: verify the initialization
-        // since it is not done yet, for now assuming that it passed
-        let init_verified_state =
-            ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
+        // Verify the initialization step
+        let result = sndr_vldtr.verify(&ctx_init_data, sndr_account, sndr_sign_keys.pblc, state);
+        let state = result.unwrap();
+        assert_eq!(
+            state,
+            ConfidentialTxState::Initialization(TxSubstate::Verified)
+        );
+
+        // TODO: skipping the mediator step. Therefore assuming that it has passed.
+        let state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
 
         // Finalize the transaction and check its state
         let result = rcvr.finalize_by_receiver(
@@ -661,11 +703,10 @@ mod tests {
             rcvr_enc_keys.scrt,
             rcvr_sign_keys.scrt,
             rcvr_account_for_finalize,
-            init_verified_state,
+            state,
             amount,
             &mut rng,
         );
-        assert!(result.is_ok());
         let (ctx_finalized_data, finalized_state) = result.unwrap();
         assert_eq!(
             finalized_state,
@@ -673,7 +714,7 @@ mod tests {
         );
 
         // verify the finalization step
-        let result = vldr.verify_finalize_by_receiver(
+        let result = rcvr_vldtr.verify_finalize_by_receiver(
             sndr_account_for_validation,
             rcvr_account_for_validation,
             ctx_finalized_data,

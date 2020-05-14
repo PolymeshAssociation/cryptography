@@ -384,8 +384,10 @@ pub trait ConfidentialTransactionInitVerifier {
     /// proofs of the initialized transaction.
     fn verify(
         &self,
-        transaction: PubInitConfidentialTxData,
+        transaction: &PubInitConfidentialTxData,
+        sndr_account: PubAccount,
         sndr_sign_pub_key: SignaturePubKey,
+        state: ConfidentialTxState,
     ) -> Fallible<ConfidentialTxState>;
 }
 
