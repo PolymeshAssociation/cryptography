@@ -127,15 +127,15 @@ impl AssetProofProver<CipherTextRefreshmentFinalResponse> for CipherTextRefreshm
 
 pub struct CipherTextRefreshmentVerifier {
     /// The public key to which the `value` is encrypted.
-    pub_key: ElgamalPublicKey,
+    pub pub_key: ElgamalPublicKey,
 
     /// The difference between the X part of the two ciphertexts:
     /// X = ciphertext1.x - ciphertext2.x
-    x: RistrettoPoint,
+    pub x: RistrettoPoint,
 
     /// The difference between the Y part of the two ciphertexts:
     /// Y = ciphertext1.y - ciphertext2.y
-    y: RistrettoPoint,
+    pub y: RistrettoPoint,
 }
 
 impl CipherTextRefreshmentVerifier {

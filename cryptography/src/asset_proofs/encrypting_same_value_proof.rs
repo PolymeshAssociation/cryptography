@@ -130,16 +130,16 @@ impl AssetProofProver<EncryptingSameValueFinalResponse> for EncryptingSameValueP
 
 pub struct EncryptingSameValueVerifier {
     /// The first public key to which the `value` is encrypted.
-    pub_key1: ElgamalPublicKey,
+    pub pub_key1: ElgamalPublicKey,
 
     /// The second public key to which the `value` is encrypted.
-    pub_key2: ElgamalPublicKey,
+    pub pub_key2: ElgamalPublicKey,
 
     /// The first encryption cipher text.
-    cipher1: CipherText,
+    pub cipher1: CipherText,
 
     /// The second encryption cipher text.
-    cipher2: CipherText,
+    pub cipher2: CipherText,
 }
 
 impl AssetProofVerifier for EncryptingSameValueVerifier {

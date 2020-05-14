@@ -2,10 +2,11 @@
 use crate::{
     asset_proofs::{
         ciphertext_refreshment_proof::CipherTextRefreshmentProverAwaitingChallenge,
-        encrypt_using_two_pub_keys,
+        ciphertext_refreshment_proof::CipherTextRefreshmentVerifier, encrypt_using_two_pub_keys,
         encrypting_same_value_proof::EncryptingSameValueProverAwaitingChallenge,
-        encryption_proofs::single_property_prover, range_proof::prove_within_range,
-        CommitmentWitness,
+        encrypting_same_value_proof::EncryptingSameValueVerifier,
+        encryption_proofs::single_property_prover, encryption_proofs::single_property_verifier,
+        range_proof::prove_within_range, range_proof::verify_within_range, CommitmentWitness,
     },
     errors::{ErrorKind, Fallible},
     mercat::{
@@ -22,7 +23,7 @@ use std::convert::TryFrom;
 use zeroize::Zeroizing;
 
 // ------------------------------------------------------------------------------------------------
-// -                                          Receiver                                            -
+// -                                          Sender                                            -
 // ------------------------------------------------------------------------------------------------
 
 /// The sender of a confidential transaction. Sender creates a transaction
@@ -33,7 +34,7 @@ impl ConfidentialTransactionSender for CtxSender {
     fn create(
         &self,
         sndr_enc_keys: EncryptionKeys,
-        _sndr_sign_key: SignatureSecKey,
+        sndr_sign_key: SignatureSecKey,
         sndr_account: PubAccount,
         rcvr_pub_key: EncryptionPubKey,
         rcvr_account: PubAccount,
@@ -93,7 +94,7 @@ impl ConfidentialTransactionSender for CtxSender {
         };
 
         // Prove that the encrytped asset id is the same
-        let enc_asset_id_using_receiver = rcvr_pub_key.key.encrypt_value(asset_id)?;
+        let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt_value(asset_id)?;
         // TODO: what is the blinding value here?
         let blinding = Scalar::random(rng);
         let asset_id_equal_cipher_proof =
@@ -114,7 +115,7 @@ impl ConfidentialTransactionSender for CtxSender {
             sndr_pub_key: sndr_enc_keys.pblc,
             rcvr_pub_key: rcvr_pub_key,
             enc_refreshed_balance: refreshed_enc_balance,
-            enc_asset_id_using_rcvr: enc_asset_id_using_receiver,
+            enc_asset_id_using_rcvr: enc_asset_id_using_rcvr,
         };
         // TODO: sign memo and all the five proofs
         let sig = Signature {};
@@ -134,6 +135,7 @@ impl ConfidentialTransactionSender for CtxSender {
         ))
     }
 }
+
 // ------------------------------------------------------------------------------------------------
 // -                                          Receiver                                            -
 // ------------------------------------------------------------------------------------------------
@@ -251,6 +253,8 @@ pub struct CtxReceiverValidator {}
 //    }
 //}
 
+// TODO verify create transaction as well
+
 impl CtxReceiverValidator {
     pub fn verify_finalize_by_receiver(
         &self,
@@ -258,7 +262,86 @@ impl CtxReceiverValidator {
         rcvr_account: PubAccount,
         conf_tx_final_data: PubFinalConfidentialTxData,
         state: ConfidentialTxState,
-    ) {
+    ) -> Fallible<()> {
+        // ensure that the previous state is correct
+        match state {
+            ConfidentialTxState::Finalization(TxSubstate::Started) => (),
+            _ => return Err(ErrorKind::InvalidPreviousState { state }.into()),
+        }
+
+        let memo = &conf_tx_final_data.init_data.memo;
+        let init_data = &conf_tx_final_data.init_data;
+
+        // Verify encrypted amounts are equal
+        single_property_verifier(
+            &EncryptingSameValueVerifier {
+                pub_key1: memo.sndr_pub_key.key,
+                pub_key2: memo.rcvr_pub_key.key,
+                cipher1: memo.enc_amount_using_sndr,
+                cipher2: memo.enc_amount_using_rcvr,
+            },
+            init_data.amount_equal_cipher_proof.init,
+            init_data.amount_equal_cipher_proof.response,
+        )?;
+
+        // Verify that amount is not negative
+        verify_within_range(
+            init_data.non_neg_amount_proof.proof.clone(),
+            init_data.non_neg_amount_proof.commitment,
+            init_data.non_neg_amount_proof.range,
+        )?;
+
+        // verify the balance refreshment was done correctly
+        // TODO: the code would have been nicer if I passed the two encrypted values
+        //       instead of the diff of their xs and the diff of their ys
+        single_property_verifier(
+            &CipherTextRefreshmentVerifier {
+                pub_key: memo.sndr_pub_key.key,
+                x: sndr_account.enc_balance.x - memo.enc_refreshed_balance.x,
+                y: sndr_account.enc_balance.y - memo.enc_refreshed_balance.y,
+            },
+            init_data.balance_refreshed_same_proof.init,
+            init_data.balance_refreshed_same_proof.response,
+        )?;
+
+        // Verify that balance has enough fund
+        verify_within_range(
+            init_data.enough_fund_proof.proof.clone(),
+            init_data.enough_fund_proof.commitment,
+            init_data.enough_fund_proof.range,
+        )?;
+
+        // In the inital transaction, sender has encrypted the sset id
+        // using receiver pub key.
+        // In the following two sections we verify that this encrypted asset id
+        // is the same as the one in the sender and receiver account
+
+        // prove that it is the same as the one in the sender's account
+        single_property_verifier(
+            &EncryptingSameValueVerifier {
+                pub_key1: memo.sndr_pub_key.key,
+                pub_key2: memo.rcvr_pub_key.key,
+                cipher1: sndr_account.enc_asset_id,
+                cipher2: memo.enc_asset_id_using_rcvr,
+            },
+            init_data.asset_id_equal_cipher_proof.init,
+            init_data.asset_id_equal_cipher_proof.response,
+        )?;
+
+        // prove that it is the same as the one in the reciever's account
+        single_property_verifier(
+            &CipherTextRefreshmentVerifier {
+                pub_key: memo.rcvr_pub_key.key,
+                x: rcvr_account.enc_asset_id.x - memo.enc_asset_id_using_rcvr.x,
+                y: rcvr_account.enc_asset_id.y - memo.enc_asset_id_using_rcvr.y,
+            },
+            conf_tx_final_data.asset_id_equal_cipher_proof.init,
+            conf_tx_final_data.asset_id_equal_cipher_proof.response,
+        )?;
+
+        // TODO verify signature of both init and finalize transactions
+
+        Err(ErrorKind::NotImplemented.into())
     }
 }
 
