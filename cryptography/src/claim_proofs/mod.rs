@@ -1,3 +1,7 @@
+//! The `claim_proofs` library contains API for generating
+//! claim proofs and verifying them as part of the
+//! Asset Granularity Unique Identity project.
+
 pub mod claim_proofs;
 pub use claim_proofs::{
     build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CDDClaimData, ProofKeyPair,
