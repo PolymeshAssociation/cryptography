@@ -214,31 +214,31 @@ mod tests {
     const SEED_2: [u8; 32] = [7u8; 32];
 
     fn create_correctness_proof_objects_helper(
-        witness: &CommitmentWitness,
-        pub_key: &ElgamalPublicKey,
-        cipher: &CipherText,
+        witness: CommitmentWitness,
+        pub_key: ElgamalPublicKey,
+        cipher: CipherText,
     ) -> (CorrectnessProverAwaitingChallenge, CorrectnessVerifier) {
-        let prover = CorrectnessProverAwaitingChallenge::new(pub_key.clone(), witness.clone());
-        let verifier = CorrectnessVerifier::new(witness.value(), pub_key.clone(), cipher.clone());
+        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, witness.clone());
+        let verifier = CorrectnessVerifier::new(witness.value(), pub_key, cipher);
 
         (prover, verifier)
     }
 
     fn create_wellformedness_proof_objects_helper(
-        witness: &CommitmentWitness,
-        pub_key: &ElgamalPublicKey,
-        cipher: &CipherText,
+        witness: CommitmentWitness,
+        pub_key: ElgamalPublicKey,
+        cipher: CipherText,
     ) -> (
         WellformednessProverAwaitingChallenge,
         WellformednessVerifier,
     ) {
         let prover = WellformednessProverAwaitingChallenge {
-            pub_key: pub_key.clone(),
-            w: Zeroizing::new(witness.clone()),
+            pub_key: pub_key,
+            w: Zeroizing::new(witness),
         };
         let verifier = WellformednessVerifier {
-            pub_key: pub_key.clone(),
-            cipher: cipher.clone(),
+            pub_key: pub_key,
+            cipher: cipher,
         };
 
         (prover, verifier)
@@ -255,13 +255,13 @@ mod tests {
         let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
         let cipher = pub_key.encrypt(&w);
 
-        let (prover0, verifier0) = create_correctness_proof_objects_helper(&w, &pub_key, &cipher);
+        let (prover0, verifier0) =
+            create_correctness_proof_objects_helper(w.clone(), pub_key.clone(), cipher.clone());
         let (initial_message0, final_response0) =
             single_property_prover::<StdRng, CorrectnessProverAwaitingChallenge>(prover0, &mut rng)
                 .unwrap();
 
-        let (prover1, verifier1) =
-            create_wellformedness_proof_objects_helper(&w, &pub_key, &cipher);
+        let (prover1, verifier1) = create_wellformedness_proof_objects_helper(w, pub_key, cipher);
         let (initial_message1, final_response1) = single_property_prover::<
             StdRng,
             WellformednessProverAwaitingChallenge,
@@ -296,9 +296,9 @@ mod tests {
         let cipher = pub_key.encrypt(&w);
         let mut transcript = Transcript::new(b"batch_proof_label");
 
-        let (prover0, verifier0) = create_correctness_proof_objects_helper(&w, &pub_key, &cipher);
-        let (prover1, verifier1) =
-            create_wellformedness_proof_objects_helper(&w, &pub_key, &cipher);
+        let (prover0, verifier0) =
+            create_correctness_proof_objects_helper(w.clone(), pub_key.clone(), cipher.clone());
+        let (prover1, verifier1) = create_wellformedness_proof_objects_helper(w, pub_key, cipher);
 
         let mut transcript_rng1 = prover0.create_transcript_rng(&mut rng, &transcript);
         let mut transcript_rng2 = prover1.create_transcript_rng(&mut rng, &transcript);
