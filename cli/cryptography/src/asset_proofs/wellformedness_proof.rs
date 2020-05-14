@@ -66,9 +66,9 @@ pub struct WellformednessProver {
 #[derive(Clone, Debug)]
 pub struct WellformednessProverAwaitingChallenge {
     /// The public key used for the elgamal encryption.
-    pub_key: ElgamalPublicKey,
+    pub pub_key: ElgamalPublicKey,
     /// The secret commitment witness.
-    w: Zeroizing<CommitmentWitness>,
+    pub w: Zeroizing<CommitmentWitness>,
 }
 
 impl AssetProofProverAwaitingChallenge for WellformednessProverAwaitingChallenge {
@@ -116,8 +116,8 @@ impl AssetProofProver<WellformednessFinalResponse> for WellformednessProver {
 
 #[derive(Copy, Clone, Debug)]
 pub struct WellformednessVerifier {
-    pub_key: ElgamalPublicKey,
-    cipher: CipherText,
+    pub pub_key: ElgamalPublicKey,
+    pub cipher: CipherText,
 }
 
 impl AssetProofVerifier for WellformednessVerifier {

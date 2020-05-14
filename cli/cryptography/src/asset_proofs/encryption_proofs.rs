@@ -1,54 +1,5 @@
-//! The `encryption_proofs` library contains API for generating
-//! and verifying proofs of various properties of an encrypted
-//! value proofs as part of the MERCAT
-//! (Mediated, Encrypted, Reversible, SeCure Asset Transfers)
-//! Project.
-//!
-//! For a full description of these proofs see section 5 of the
-//! whitepaper. [todo: Add a link to the whitepaper.]
-//!
-//! Sigma protocols are a 3 round interactive protocols where
-//! the prover convinces the verifier that a statement is true.
-//!
-//! There are three roles in this protocol: Prover, Dealer, and
-//! Verifier. The role of the dealer is to generate the
-//! challenge value. In the interactive protocol, Verifier and
-//! Dealer are played by the same party. in the non-interactive
-//! protocol, both the Prover and the Verifier act as dealer
-//! using Fiat-Shamir huristic.
-//!
-//! The following shows the interaction between these roles.
-//!
-//! Prover                         Dealer
-//! - selects some random values
-//!                       -->  [initial message]
-//!                            - records the initial message
-//!                            - deterministically calculates
-//!                              a random challenge
-//!           [challenge] <--
-//! - generates a final response from the
-//!   selected random values and
-//!   the challenge
-//!                       -->  [final response]
-//!
-//! Now given the `initial message` and the `final response` any
-//! verifier can verify the prover's statement. Verifier uses the
-//! transcript to generate the challenge:
-//!
-//! Verifier                       Dealer
-//! - receives the [initial message, final response]
-//!                       -->  [initial message]
-//!                            - records the initial message
-//!                            - deterministically calculates
-//!                              a random challenge
-//!           [challenge] <--
-//! - verifies the final response
-//!
-//! The role of the Dealer can be eliminated if the challenge
-//! could be generated deterministically but unpredictably from
-//! the `initial message`. This technique is known as the
-//! Fiat-Shamir huristic. We use Merlin transcripts as the
-//! Dealer throughout this implementation.
+//! Encryption proofs' interface definitions and
+//! Non-Interactive Zero Knowledge Proof API.
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
@@ -108,7 +59,7 @@ pub trait AssetProofProverAwaitingChallenge {
     /// Note: provers must not share a single instance of a transcript RNG.
     /// Every prover must create a fresh RNG and seed it with its given secret.
     /// For more details see Merlin's documentation:
-    /// https://doc.dalek.rs/merlin/struct.TranscriptRngBuilder.html
+    /// <https://doc.dalek.rs/merlin/struct.TranscriptRngBuilder.html>
     ///
     /// # Inputs
     /// `rng` An external RNG.
@@ -196,9 +147,19 @@ pub fn single_property_prover<
     ProverAwaitingChallenge::ZKInitialMessage,
     ProverAwaitingChallenge::ZKFinalResponse,
 )> {
-    let (mut initial_messages, mut final_responses) =
-        prove_multiple_encryption_properties(&[Box::new(prover_ac)], rng)?;
-    Ok((initial_messages.remove(0), final_responses.remove(0)))
+    let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
+    let gens = PedersenGens::default();
+
+    let mut transcript_rng = prover_ac.create_transcript_rng(rng, &transcript);
+    let (prover, initial_message) = prover_ac.generate_initial_message(&gens, &mut transcript_rng);
+
+    // Update the transcript with Prover's initial message
+    initial_message.update_transcript(&mut transcript)?;
+    let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
+
+    let final_response = prover.apply_challenge(&challenge);
+
+    Ok((initial_message, final_response))
 }
 
 /// The non-interactive implementation of the protocol for a single
@@ -206,7 +167,8 @@ pub fn single_property_prover<
 ///
 /// # Inputs
 /// `verifier` Any verifier that implements the `AssetProofVerifier` trait.
-/// `rng`      An RNG.
+/// `initial_message` Prover's initial message.
+/// `final_response` Prover's final response.
 ///
 /// # Outputs
 /// Ok on success, or failure on error.
@@ -215,93 +177,14 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
     initial_message: Verifier::ZKInitialMessage,
     final_response: Verifier::ZKFinalResponse,
 ) -> Result<()> {
-    verify_multiple_encryption_properties(&[verifier], (&[initial_message], &[final_response]))
-}
-
-/// The non-interactive implementation of the protocol for multiple provers
-/// which use the same challenge. In this scenario the transcript combines all
-/// the initial messages to generate a single challenge.
-///
-/// # Inputs
-/// `provers` An array of provers that implement the
-///           `AssetProofProverAwaitingChallenge` trait.
-/// `rng`     An RNG.
-///
-/// # Outputs
-/// An array of initial messages and proofs on success, or failure on error.
-pub fn prove_multiple_encryption_properties<
-    T: RngCore + CryptoRng,
-    ProverAwaitingChallenge: AssetProofProverAwaitingChallenge,
->(
-    provers: &[Box<ProverAwaitingChallenge>],
-    rng: &mut T,
-) -> Result<(
-    Vec<ProverAwaitingChallenge::ZKInitialMessage>,
-    Vec<ProverAwaitingChallenge::ZKFinalResponse>,
-)> where {
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
     let gens = PedersenGens::default();
 
-    let (provers_vec, initial_messages_vec): (Vec<_>, Vec<_>) = provers
-        .iter()
-        .map(|p| {
-            let mut transcript_rng = p.create_transcript_rng(rng, &transcript);
-            p.generate_initial_message(&gens, &mut transcript_rng)
-        })
-        .unzip();
-
-    // Combine all the initial messages to create a single challenge.
-    initial_messages_vec
-        .iter()
-        .map(|initial_message| initial_message.update_transcript(&mut transcript))
-        .collect::<Result<()>>()?;
-
+    // Update the transcript with Prover's initial message
+    initial_message.update_transcript(&mut transcript)?;
     let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
 
-    let final_responses: Vec<_> = provers_vec
-        .into_iter()
-        .map(|prover| prover.apply_challenge(&challenge))
-        .collect::<Vec<_>>();
-
-    Ok((initial_messages_vec, final_responses))
-}
-
-/// The non-interactive implementation of the protocol for multiple verifiers
-/// which use the same challenge. In this scenario the transcript combines all
-/// the initial messages to generate a single challenge.
-///
-/// # Inputs
-/// `verifiers` An array of verifiers that implement the `AssetProofVerifier` trait.
-/// `rng`       An RNG.
-///
-/// # Outputs
-/// Ok on success, or failure on error.
-pub fn verify_multiple_encryption_properties<Verifier: AssetProofVerifier>(
-    verifiers: &[&Verifier],
-    (initial_messages, final_responses): (
-        &[Verifier::ZKInitialMessage],
-        &[Verifier::ZKFinalResponse],
-    ),
-) -> Result<()> {
-    ensure!(
-        initial_messages.len() == final_responses.len() && verifiers.len() == final_responses.len(),
-        AssetProofError::VerificationError
-    );
-
-    let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
-    let gens = PedersenGens::default();
-
-    // Combine all the initial messages to create a single challenge.
-    initial_messages
-        .iter()
-        .map(|initial_message| initial_message.update_transcript(&mut transcript))
-        .collect::<Result<(), _>>()?;
-
-    let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
-
-    for i in 0..verifiers.len() {
-        verifiers[i].verify(&gens, &challenge, &initial_messages[i], &final_responses[i])?;
-    }
+    verifier.verify(&gens, &challenge, &initial_message, &final_response)?;
 
     Ok(())
 }
@@ -319,115 +202,140 @@ mod tests {
             CorrectnessInitialMessage, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
         },
         errors::AssetProofError,
-        CommitmentWitness, ElgamalSecretKey,
+        wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
+        CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     };
     use rand::{rngs::StdRng, SeedableRng};
-    use rand_core::{CryptoRng, RngCore};
     use std::convert::TryFrom;
     use wasm_bindgen_test::*;
+    use zeroize::Zeroizing;
 
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [7u8; 32];
 
-    fn create_correctness_proof_objects_helper<T: RngCore + CryptoRng>(
-        plain_text: u32,
-        rng: &mut T,
+    fn create_correctness_proof_objects_helper(
+        witness: CommitmentWitness,
+        pub_key: ElgamalPublicKey,
+        cipher: CipherText,
     ) -> (CorrectnessProverAwaitingChallenge, CorrectnessVerifier) {
-        let rand_blind = Scalar::random(rng);
-        let w = CommitmentWitness::try_from((plain_text, rand_blind)).unwrap();
+        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, witness.clone());
+        let verifier = CorrectnessVerifier::new(witness.value(), pub_key, cipher);
 
-        let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
-        let elg_pub = elg_secret.get_public_key();
-        let cipher = elg_pub.encrypt(&w);
+        (prover, verifier)
+    }
 
-        let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w);
-        let verifier = CorrectnessVerifier::new(plain_text, elg_pub, cipher);
+    fn create_wellformedness_proof_objects_helper(
+        witness: CommitmentWitness,
+        pub_key: ElgamalPublicKey,
+        cipher: CipherText,
+    ) -> (
+        WellformednessProverAwaitingChallenge,
+        WellformednessVerifier,
+    ) {
+        let prover = WellformednessProverAwaitingChallenge {
+            pub_key: pub_key,
+            w: Zeroizing::new(witness),
+        };
+        let verifier = WellformednessVerifier {
+            pub_key: pub_key,
+            cipher: cipher,
+        };
 
         (prover, verifier)
     }
 
     #[test]
     #[wasm_bindgen_test]
-    fn test_single_proof() {
+    fn nizkp_proofs() {
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 42u32;
+        let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let pub_key = secret_key.get_public_key();
+        let rand_blind = Scalar::random(&mut rng);
+        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+        let cipher = pub_key.encrypt(&w);
 
-        let (prover, verifier) = create_correctness_proof_objects_helper(secret_value, &mut rng);
-        let (initial_message, final_response) =
-            single_property_prover::<StdRng, CorrectnessProverAwaitingChallenge>(prover, &mut rng)
+        let (prover0, verifier0) =
+            create_correctness_proof_objects_helper(w.clone(), pub_key.clone(), cipher.clone());
+        let (initial_message0, final_response0) =
+            single_property_prover::<StdRng, CorrectnessProverAwaitingChallenge>(prover0, &mut rng)
                 .unwrap();
 
-        // Positive test
-        assert!(single_property_verifier(&verifier, initial_message, final_response).is_ok());
+        let (prover1, verifier1) = create_wellformedness_proof_objects_helper(w, pub_key, cipher);
+        let (initial_message1, final_response1) = single_property_prover::<
+            StdRng,
+            WellformednessProverAwaitingChallenge,
+        >(prover1, &mut rng)
+        .unwrap();
+
+        // Positive tests
+        assert!(single_property_verifier(&verifier0, initial_message0, final_response0).is_ok());
+        assert!(single_property_verifier(&verifier1, initial_message1, final_response1).is_ok());
 
         // Negative tests
         let bad_initial_message = CorrectnessInitialMessage::default();
         assert_err!(
-            single_property_verifier(&verifier, bad_initial_message, final_response),
+            single_property_verifier(&verifier0, bad_initial_message, final_response0),
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = Scalar::one();
         assert_err!(
-            single_property_verifier(&verifier, initial_message, bad_final_response),
+            single_property_verifier(&verifier0, initial_message0, bad_final_response),
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }
 
     #[test]
     #[wasm_bindgen_test]
-    fn multiple_proofs() {
+    fn batched_proofs() {
+        let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_2);
-        let secret_value1 = 6u32;
-        let secret_value2 = 7u32;
+        let w = CommitmentWitness::try_from((6u32, Scalar::random(&mut rng))).unwrap();
+        let pub_key = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
+        let cipher = pub_key.encrypt(&w);
+        let mut transcript = Transcript::new(b"batch_proof_label");
 
-        let (prover1, verifier1) = create_correctness_proof_objects_helper(secret_value1, &mut rng);
-        let (prover2, verifier2) = create_correctness_proof_objects_helper(secret_value2, &mut rng);
+        let (prover0, verifier0) =
+            create_correctness_proof_objects_helper(w.clone(), pub_key.clone(), cipher.clone());
+        let (prover1, verifier1) = create_wellformedness_proof_objects_helper(w, pub_key, cipher);
 
-        let provers_vec = [Box::new(prover1), Box::new(prover2)];
+        let mut transcript_rng1 = prover0.create_transcript_rng(&mut rng, &transcript);
+        let mut transcript_rng2 = prover1.create_transcript_rng(&mut rng, &transcript);
 
-        let (initial_messages, final_responses) =
-            prove_multiple_encryption_properties(&provers_vec, &mut rng).unwrap();
+        // Provers generate the initial messages
+        let (prover0, initial_message0) =
+            prover0.generate_initial_message(&gens, &mut transcript_rng1);
+        initial_message0.update_transcript(&mut transcript).unwrap();
 
-        let verifiers_vec = vec![&verifier1, &verifier2];
-        assert!(verify_multiple_encryption_properties(
-            &verifiers_vec,
-            (&initial_messages, &final_responses)
-        )
-        .is_ok());
+        let (prover1, initial_message1) =
+            prover1.generate_initial_message(&gens, &mut transcript_rng2);
+        initial_message1.update_transcript(&mut transcript).unwrap();
+
+        // Dealer calculates the challenge from the 2 initial messages
+        let challenge = transcript
+            .scalar_challenge(b"batch_proof_challenge_label")
+            .unwrap();
+
+        // Provers generate the final responses
+        let final_response0 = prover0.apply_challenge(&challenge);
+        let final_response1 = prover1.apply_challenge(&challenge);
+
+        // Positive tests
+        // Verifiers verify the proofs
+        let result = verifier0.verify(&gens, &challenge, &initial_message0, &final_response0);
+        assert!(result.is_ok());
+
+        let result = verifier1.verify(&gens, &challenge, &initial_message1, &final_response1);
+        assert!(result.is_ok());
 
         // Negative tests
-        let mut bad_initial_messages = initial_messages.clone();
-        bad_initial_messages.remove(1);
-        // Missmatched initial messages and final responses sizes
-        assert_err!(
-            verify_multiple_encryption_properties(
-                &verifiers_vec,
-                (&bad_initial_messages, &final_responses)
-            ),
-            AssetProofError::VerificationError
-        );
-
-        // Corrupted initial message
-        bad_initial_messages.push(CorrectnessInitialMessage::default());
-        assert_err!(
-            verify_multiple_encryption_properties(
-                &verifiers_vec,
-                (&bad_initial_messages, &final_responses)
-            ),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
-        );
-
-        // Corrupted final responses
-        let mut bad_final_responses = final_responses.clone();
-        bad_final_responses.remove(1);
-        bad_final_responses.push(Scalar::default());
-        assert_err!(
-            verify_multiple_encryption_properties(
-                &verifiers_vec,
-                (&initial_messages, &bad_final_responses)
-            ),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
-        );
+        let bad_challenge = ZKPChallenge::try_from(Scalar::random(&mut rng)).unwrap();
+        assert!(verifier0
+            .verify(&gens, &bad_challenge, &initial_message0, &final_response0)
+            .is_err());
+        assert!(verifier1
+            .verify(&gens, &bad_challenge, &initial_message1, &final_response1)
+            .is_err());
     }
 }
