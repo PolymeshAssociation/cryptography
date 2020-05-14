@@ -111,8 +111,14 @@ pub enum ErrorKind {
     #[fail(display = "Public keys in the memo and the account are different.")]
     InputPubKeyMismatch,
 
-    #[fail(display = "CHANGEME as needed")]
-    AssetTxChangeMe,
+    #[fail(
+        display = "Transaction amount {} must be equal or greater than {}",
+        transaction_amount, balance
+    )]
+    NotEnoughFund {
+        balance: u32,
+        transaction_amount: u32,
+    },
 }
 
 pub type Fallible<T, E = Error> = std::result::Result<T, E>;

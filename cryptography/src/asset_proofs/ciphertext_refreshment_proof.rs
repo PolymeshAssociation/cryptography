@@ -245,7 +245,8 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
-        let new_cipher = cipher.refresh(&elg_secret, &mut rng).unwrap();
+        let new_rand_blind = Scalar::random(&mut rng);
+        let new_cipher = cipher.refresh(&elg_secret, new_rand_blind).unwrap();
 
         let prover =
             CipherTextRefreshmentProverAwaitingChallenge::new(elg_secret, cipher, new_cipher);

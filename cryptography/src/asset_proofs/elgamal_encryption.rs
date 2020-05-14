@@ -214,11 +214,7 @@ pub fn encrypt_using_two_pub_keys(
 // ------------------------------------------------------------------------
 
 impl CipherText {
-    pub fn refresh(
-        &self,
-        secret_key: &ElgamalSecretKey,
-        blinding: Scalar, // = Scalar::random(rng);
-    ) -> Fallible<CipherText> {
+    pub fn refresh(&self, secret_key: &ElgamalSecretKey, blinding: Scalar) -> Fallible<CipherText> {
         let message = secret_key.decrypt(self)?;
         let pub_key = secret_key.get_public_key();
         let new_witness = CommitmentWitness::try_from((message, blinding))?;
@@ -301,5 +297,26 @@ mod tests {
         assert_eq!(cipher1 - cipher2, cipher12);
         cipher12 += cipher2;
         assert_eq!(cipher1, cipher12);
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn test_two_encryptions() {
+        let mut rng = StdRng::from_seed([17u8; 32]);
+        let v = 256u32;
+        let b = Scalar::random(&mut rng);
+        let w = CommitmentWitness::try_from((v, b)).unwrap();
+
+        let scrt1 = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let pblc1 = scrt1.get_public_key();
+
+        let scrt2 = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let pblc2 = scrt2.get_public_key();
+
+        let (cipher1, cipher2) = encrypt_using_two_pub_keys(&w, pblc1, pblc2);
+        let msg1 = scrt1.decrypt(&cipher1).unwrap();
+        let msg2 = scrt2.decrypt(&cipher2).unwrap();
+        assert_eq!(v, msg1);
+        assert_eq!(v, msg2);
     }
 }

@@ -48,6 +48,7 @@ impl From<ElgamalSecretKey> for EncryptionSecKey {
     }
 }
 
+#[derive(Clone)]
 pub struct EncryptionKeys {
     pub pblc: EncryptionPubKey,
     pub scrt: EncryptionSecKey,
@@ -379,6 +380,8 @@ pub trait ConfidentialTransactionSender {
 }
 
 pub trait ConfidentialTransactionInitVerifier {
+    /// This is called by the validators to verify the signature and some of the
+    /// proofs of the initialized transaction.
     fn verify(
         &self,
         transaction: PubInitConfidentialTxData,
