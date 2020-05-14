@@ -214,14 +214,13 @@ pub fn encrypt_using_two_pub_keys(
 // ------------------------------------------------------------------------
 
 impl CipherText {
-    pub fn refresh<T: RngCore + CryptoRng>(
+    pub fn refresh(
         &self,
         secret_key: &ElgamalSecretKey,
-        rng: &mut T,
+        blinding: Scalar, // = Scalar::random(rng);
     ) -> Fallible<CipherText> {
         let message = secret_key.decrypt(self)?;
         let pub_key = secret_key.get_public_key();
-        let blinding = Scalar::random(rng);
         let new_witness = CommitmentWitness::try_from((message, blinding))?;
         let new_ciphertext = pub_key.encrypt(&new_witness);
 

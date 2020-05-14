@@ -45,6 +45,7 @@ impl ConfidentialTransactionSender for CtxSender {
         let range = 32;
         // Prove that the amount encrypted under different public keys are the same
         let witness = CommitmentWitness::try_from((amount, Scalar::random(rng)))?;
+        let amount_enc_blinding = *witness.blinding();
         let (sndr_new_enc_amount, rcvr_new_enc_amount) =
             encrypt_using_two_pub_keys(&witness, sndr_enc_keys.pblc.key, rcvr_pub_key.key);
 
@@ -53,24 +54,24 @@ impl ConfidentialTransactionSender for CtxSender {
                 EncryptingSameValueProverAwaitingChallenge {
                     pub_key1: sndr_enc_keys.pblc.key,
                     pub_key2: rcvr_pub_key.key,
-                    w: Zeroizing::new(witness),
+                    w: Zeroizing::new(witness.clone()),
                 },
                 rng,
             )?);
 
         // Prove that committed amount is not negative
-        let blinding = Scalar::random(rng);
         let non_neg_amount_proof = InRangeProof {
-            proof: prove_within_range(amount.into(), blinding, range)?.0,
+            proof: prove_within_range(amount.into(), amount_enc_blinding, range)?.0,
             commitment: sndr_new_enc_amount.y.compress(),
             range: range,
         };
 
         // Refresh the encrypted balance and prove that the refreshment was done
         // correctly
+        let balance_refresh_enc_blinding = Scalar::random(rng);
         let refreshed_enc_balance = sndr_account
             .enc_balance
-            .refresh(&sndr_enc_keys.scrt.key, rng)?;
+            .refresh(&sndr_enc_keys.scrt.key, balance_refresh_enc_blinding)?;
         let balance_refreshed_same_proof = CipherEqualSamePubKeyProof::new(single_property_prover(
             CipherTextRefreshmentProverAwaitingChallenge::new(
                 sndr_enc_keys.scrt.key.clone(),
@@ -85,7 +86,8 @@ impl ConfidentialTransactionSender for CtxSender {
         // as input.
         let balance = sndr_enc_keys.scrt.key.decrypt(&sndr_account.enc_balance)?;
         // TODO: does the blinding have to be the same as the one used in encryption?
-        let blinding = Scalar::random(rng);
+        //let blinding = refreshed_enc_balance
+        let blinding = balance_refresh_enc_blinding - amount_enc_blinding;
         let enough_fund_commitment = refreshed_enc_balance.y - sndr_new_enc_amount.y;
         let enough_fund_proof = InRangeProof {
             proof: prove_within_range((balance - amount).into(), blinding, range)?.0,
