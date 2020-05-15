@@ -322,7 +322,8 @@ pub struct ConfidentialTxMemo {
     pub enc_amount_using_rcvr: EncryptedAmount,
     pub sndr_pub_key: EncryptionPubKey,
     pub rcvr_pub_key: EncryptionPubKey,
-    pub enc_refreshed_balance: EncryptedAmount,
+    pub refreshed_enc_balance: EncryptedAmount,
+    pub refreshed_enc_asset_id: EncryptedAmount,
     pub enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
@@ -342,6 +343,7 @@ pub struct PubInitConfidentialTxData {
     pub memo: ConfidentialTxMemo,
     pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
+    pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub sig: Signature,
 }
 

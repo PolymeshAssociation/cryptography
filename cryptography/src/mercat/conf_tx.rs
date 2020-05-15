@@ -100,9 +100,26 @@ impl ConfidentialTransactionSender for CtxSender {
             range: range,
         };
 
-        // TODO this proof fails
-        // Prove the new encrytped asset id is the same as the one in the sender's account
-        let asset_id_witness = CommitmentWitness::try_from((asset_id, Scalar::random(rng)))?;
+        // Refresh the encrypted asset id of the sender account and prove that the
+        // refreshment was done correctly
+        let asset_id_refresh_enc_blinding = Scalar::random(rng);
+        let refreshed_enc_asset_id = sndr_account
+            .enc_asset_id
+            .refresh(&sndr_enc_keys.scrt.key, asset_id_refresh_enc_blinding)?;
+        let asset_id_refreshed_same_proof =
+            CipherEqualSamePubKeyProof::new(single_property_prover(
+                CipherTextRefreshmentProverAwaitingChallenge::new(
+                    sndr_enc_keys.scrt.key.clone(),
+                    sndr_account.enc_asset_id,
+                    refreshed_enc_asset_id,
+                ),
+                rng,
+            )?);
+
+        // Prove the new refreshed encrytped asset id is the same as the one
+        // encrypted by the receiver's pub key
+        let asset_id_witness =
+            CommitmentWitness::try_from((asset_id, asset_id_refresh_enc_blinding))?;
         let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt(&asset_id_witness);
         let asset_id_equal_cipher_proof =
             CipherEqualDifferentPubKeyProof::new(single_property_prover(
@@ -121,8 +138,9 @@ impl ConfidentialTransactionSender for CtxSender {
             enc_amount_using_rcvr: rcvr_new_enc_amount,
             sndr_pub_key: sndr_enc_keys.pblc,
             rcvr_pub_key: rcvr_pub_key,
-            enc_refreshed_balance: refreshed_enc_balance,
-            enc_asset_id_using_rcvr: enc_asset_id_using_rcvr,
+            refreshed_enc_balance,
+            refreshed_enc_asset_id,
+            enc_asset_id_using_rcvr,
         };
         // TODO: sign memo and all the five proofs
         let sig = Signature {};
@@ -134,6 +152,7 @@ impl ConfidentialTransactionSender for CtxSender {
             memo,
             asset_id_equal_cipher_proof,
             balance_refreshed_same_proof,
+            asset_id_refreshed_same_proof,
             sig,
         };
         Ok((
@@ -280,7 +299,7 @@ fn verify_initital_transaction_proofs(
         &CipherTextRefreshmentVerifier::new(
             memo.sndr_pub_key.key,
             sndr_account.enc_balance,
-            memo.enc_refreshed_balance,
+            memo.refreshed_enc_balance,
         ),
         init_data.balance_refreshed_same_proof.init,
         init_data.balance_refreshed_same_proof.response,
@@ -293,20 +312,30 @@ fn verify_initital_transaction_proofs(
         init_data.enough_fund_proof.range,
     )?;
 
-    // TODO: this does not verify
+    // verify the asset id refreshment was done correctly
+    single_property_verifier(
+        &CipherTextRefreshmentVerifier::new(
+            memo.sndr_pub_key.key,
+            sndr_account.enc_asset_id,
+            memo.refreshed_enc_asset_id,
+        ),
+        init_data.asset_id_refreshed_same_proof.init,
+        init_data.asset_id_refreshed_same_proof.response,
+    )?;
+
     // In the inital transaction, sender has encrypted the sset id
     // using receiver pub key. We verify that this encrypted asset id
     // is the same as the one in the sender account.
-    //single_property_verifier(
-    //    &EncryptingSameValueVerifier {
-    //        pub_key1: memo.sndr_pub_key.key,
-    //        pub_key2: memo.rcvr_pub_key.key,
-    //        cipher1: sndr_account.enc_asset_id,
-    //        cipher2: memo.enc_asset_id_using_rcvr,
-    //    },
-    //    init_data.asset_id_equal_cipher_proof.init,
-    //    init_data.asset_id_equal_cipher_proof.response,
-    //)?;
+    single_property_verifier(
+        &EncryptingSameValueVerifier {
+            pub_key1: memo.sndr_pub_key.key,
+            pub_key2: memo.rcvr_pub_key.key,
+            cipher1: memo.refreshed_enc_asset_id,
+            cipher2: memo.enc_asset_id_using_rcvr,
+        },
+        init_data.asset_id_equal_cipher_proof.init,
+        init_data.asset_id_equal_cipher_proof.response,
+    )?;
     Ok(())
 }
 
@@ -443,7 +472,8 @@ mod tests {
             enc_amount_using_rcvr,
             sndr_pub_key: EncryptionPubKey::default(),
             rcvr_pub_key,
-            enc_refreshed_balance: CipherText::default(),
+            refreshed_enc_balance: CipherText::default(),
+            refreshed_enc_asset_id: CipherText::default(),
             enc_asset_id_using_rcvr,
         }
     }
@@ -493,6 +523,7 @@ mod tests {
             non_neg_amount_proof: InRangeProof::default(),
             enough_fund_proof: InRangeProof::default(),
             balance_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
+            asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
             sig: Signature::default(),
         }
     }
