@@ -5,12 +5,14 @@
 //! about the secrets while protecting against Chosen Message attacks.
 
 use crate::{
+    asset_proofs::elgamal_encryption::CommitmentWitness,
     asset_proofs::encryption_proofs::ZKPChallenge,
     errors::{ErrorKind, Fallible},
 };
 
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
-use merlin::Transcript;
+use merlin::{Transcript, TranscriptRng};
+use rand_core::{CryptoRng, RngCore};
 use std::convert::TryInto;
 
 pub trait TranscriptProtocol {
@@ -43,6 +45,21 @@ pub trait TranscriptProtocol {
     /// # Output
     /// A scalar challenge.
     fn scalar_challenge(&mut self, label: &'static [u8]) -> Fallible<ZKPChallenge>;
+
+    /// Create an RNG seeded from the transcript's cloned state and
+    /// randomness from an external `rng`.
+    ///
+    /// # Inputs
+    /// * `rng` an external RNG.
+    /// * `witness` a commitment witness which will be used to reseed the RNG.
+    ///
+    /// # Output
+    /// A new RNG.
+    fn create_transcript_rng_from_witness<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        witness: &CommitmentWitness,
+    ) -> TranscriptRng;
 }
 
 impl TranscriptProtocol for Transcript {
@@ -66,6 +83,17 @@ impl TranscriptProtocol for Transcript {
         self.challenge_bytes(label, &mut buf);
 
         Scalar::from_bytes_mod_order_wide(&buf).try_into()
+    }
+
+    fn create_transcript_rng_from_witness<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        witness: &CommitmentWitness,
+    ) -> TranscriptRng {
+        self.build_rng()
+            .rekey_with_witness_bytes(b"w_value", &witness.value().to_le_bytes())
+            .rekey_with_witness_bytes(b"w_blinding", witness.blinding().as_bytes())
+            .finalize(rng)
     }
 }
 

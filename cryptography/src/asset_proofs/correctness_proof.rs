@@ -15,7 +15,7 @@ use bulletproofs::PedersenGens;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
-use merlin::Transcript;
+use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
@@ -84,10 +84,18 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
     type ZKFinalResponse = CorrectnessFinalResponse;
     type ZKProver = CorrectnessProver;
 
-    fn generate_initial_message<T: RngCore + CryptoRng>(
+    fn create_transcript_rng<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        transcript: &Transcript,
+    ) -> TranscriptRng {
+        transcript.create_transcript_rng_from_witness(rng, &self.w)
+    }
+
+    fn generate_initial_message(
         &self,
         pc_gens: &PedersenGens,
-        rng: &mut T,
+        rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_commitment = Scalar::random(rng);
 
@@ -189,7 +197,8 @@ mod tests {
         let mut transcript = Transcript::new(CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL);
 
         // Positive tests
-        let (prover, initial_message) = prover.generate_initial_message(&gens, &mut rng);
+        let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
+        let (prover, initial_message) = prover.generate_initial_message(&gens, &mut transcript_rng);
         initial_message.update_transcript(&mut transcript).unwrap();
         let challenge = transcript
             .scalar_challenge(CORRECTNESS_PROOF_CHALLENGE_LABEL)

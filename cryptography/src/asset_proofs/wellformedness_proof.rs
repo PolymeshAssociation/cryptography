@@ -15,7 +15,7 @@ use crate::{
 use bulletproofs::PedersenGens;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use merlin::Transcript;
+use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -68,9 +68,9 @@ pub struct WellformednessProver {
 #[derive(Clone, Debug)]
 pub struct WellformednessProverAwaitingChallenge {
     /// The public key used for the elgamal encryption.
-    pub_key: ElgamalPublicKey,
+    pub pub_key: ElgamalPublicKey,
     /// The secret commitment witness.
-    w: Zeroizing<CommitmentWitness>,
+    pub w: Zeroizing<CommitmentWitness>,
 }
 
 impl AssetProofProverAwaitingChallenge for WellformednessProverAwaitingChallenge {
@@ -78,10 +78,18 @@ impl AssetProofProverAwaitingChallenge for WellformednessProverAwaitingChallenge
     type ZKFinalResponse = WellformednessFinalResponse;
     type ZKProver = WellformednessProver;
 
-    fn generate_initial_message<T: RngCore + CryptoRng>(
+    fn create_transcript_rng<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        transcript: &Transcript,
+    ) -> TranscriptRng {
+        transcript.create_transcript_rng_from_witness(rng, &self.w)
+    }
+
+    fn generate_initial_message(
         &self,
         pc_gens: &PedersenGens,
-        rng: &mut T,
+        rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_a = Scalar::random(rng);
         let rand_b = Scalar::random(rng);
@@ -110,8 +118,8 @@ impl AssetProofProver<WellformednessFinalResponse> for WellformednessProver {
 
 #[derive(Copy, Clone, Debug)]
 pub struct WellformednessVerifier {
-    pub_key: ElgamalPublicKey,
-    cipher: CipherText,
+    pub pub_key: ElgamalPublicKey,
+    pub cipher: CipherText,
 }
 
 impl AssetProofVerifier for WellformednessVerifier {
@@ -175,7 +183,8 @@ mod tests {
         // ------------------------------- Interactive case
         // Positive tests
         // 1st round
-        let (prover, initial_message) = prover.generate_initial_message(&gens, &mut rng);
+        let mut transcript_rng = prover.create_transcript_rng(&mut rng, &dealer_transcript);
+        let (prover, initial_message) = prover.generate_initial_message(&gens, &mut transcript_rng);
 
         // 2nd round
         initial_message
