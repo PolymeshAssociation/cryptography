@@ -24,8 +24,26 @@ use rand::rngs::StdRng;
 
 // ---------------------- START: temporary types, move them to the proper location
 
+// TODO move after CRYP-40
+#[derive(Default, Clone)]
+pub struct MembershipProofInitialMessage {}
+#[derive(Default, Clone)]
+pub struct MembershipProofFinalResponse {}
+
+// TODO move after CRYP-71
+#[derive(Default, Debug, Clone)]
+pub struct Signature {}
+
+// ---------------------- END: temporary types, move them to other files
+
+// -------------------------------------------------------------------------------------
+// -                                 New Type Def                                      -
+// -------------------------------------------------------------------------------------
+
 // Having separate types for encryption and signature will ensure that the keys used for encryption
 // and signing are different.
+
+/// Holds ElGamal encryption public key
 #[derive(Default, Debug, Clone, Copy)]
 pub struct EncryptionPubKey {
     pub key: ElgamalPublicKey,
@@ -37,6 +55,7 @@ impl From<ElgamalPublicKey> for EncryptionPubKey {
     }
 }
 
+/// Holds ElGamal encryption secret key
 #[derive(Clone)]
 pub struct EncryptionSecKey {
     pub key: ElgamalSecretKey,
@@ -48,6 +67,7 @@ impl From<ElgamalSecretKey> for EncryptionSecKey {
     }
 }
 
+/// Holds ElGamal encryption keys
 #[derive(Clone)]
 pub struct EncryptionKeys {
     pub pblc: EncryptionPubKey,
@@ -61,49 +81,34 @@ pub struct SignatureKeys {
     pub pblc: SignaturePubKey,
     pub scrt: SignatureSecKey,
 }
-
-// TODO move after CRYP-40
-#[derive(Default, Clone)]
-pub struct MembershipProofInitialMessage {}
-#[derive(Default, Clone)]
-pub struct MembershipProofFinalResponse {}
-
-// TODO move after CRYP-71
-#[derive(Default, Debug, Clone)]
-pub struct Signature {}
-
-// ---------------------- END: temporary types, move them to other files
-
-// ---------------- type aliases for better code readability
-
-/// Type alias for Twisted Elgamal ciphertext of asset ids.
+/// Type alias for Twisted ElGamal ciphertext of asset ids.
 pub type EncryptedAssetId = CipherText;
 
-/// Type alias for Twisted Elgamal ciphertext of account amounts/balances.
+/// Type alias for Twisted ElGamal ciphertext of account amounts/balances.
 pub type EncryptedAmount = CipherText;
 
-/// Type alias for the tuple of initial message and final response of a non-interactive ZKP for wellformedness.
+/// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
 #[derive(Default, Clone)]
 pub struct WellformednessProof {
     init: WellformednessInitialMessage,
     response: WellformednessFinalResponse,
 }
 
-/// Type alias for the tuple of initial message and final response of a non-interactive ZKP for correctness.
+/// Holds the non-interactive proofs of correctness, equivalent of L_correct of MERCAT paper.
 #[derive(Default, Clone)]
 pub struct CorrectnessProof {
     init: CorrectnessInitialMessage,
     response: CorrectnessFinalResponse,
 }
 
-/// Type alias for the tuple of initial message and final response of a non-interactive ZKP for membership.
+/// Holds the non-interactive proofs of membership, equivalent of L_member of MERCAT paper.
 #[derive(Default, Clone)]
 pub struct MembershipProof {
     init: MembershipProofInitialMessage,
     response: MembershipProofFinalResponse,
 }
 
-/// Type alias for the tuple of initial message and final response of a non-interactive ZKP for range.
+/// Holds the non-interactive range proofs, equivalent of L_range of MERCAT paper.
 #[derive(Debug, Clone)]
 pub struct InRangeProof {
     pub proof: RangeProof,
@@ -124,9 +129,8 @@ impl Default for InRangeProof {
     }
 }
 
-/// TODO: update the documentation and remove the type alias
-/// Type alias for the tuple of initial message and final response of a non-interactive ZKP for cipher
-/// equality under different public key.
+/// Holds the non-interactive proofs of equality using different public keys, equivalent
+/// of L_cipher of MERCAT paper.
 #[derive(Default, Debug, Clone)]
 pub struct CipherEqualDifferentPubKeyProof {
     pub init: EncryptingSameValueInitialMessage,
@@ -147,7 +151,8 @@ impl CipherEqualDifferentPubKeyProof {
     }
 }
 
-/// TODO
+/// Holds the non-interactive proofs of equality using different public keys, equivalent
+/// of L_equal of MERCAT paper.
 #[derive(Default, Debug, Clone)]
 pub struct CipherEqualSamePubKeyProof {
     pub init: CipherTextRefreshmentInitialMessage,
@@ -168,10 +173,12 @@ impl CipherEqualSamePubKeyProof {
     }
 }
 
-/// Asset memo. TODO: more informative description!
+/// Asset memo holds the contents of an asset issuance transaction.
 pub type AssetMemo = EncryptedAmount;
 
-// ------------------ account
+// -------------------------------------------------------------------------------------
+// -                                    Account                                        -
+// -------------------------------------------------------------------------------------
 
 /// Holds the account memo. TODO: more informative description!
 #[derive(Clone)]
@@ -204,7 +211,9 @@ pub struct PubAccount {
 
 // TODO Account creation is part of CRYP-61
 
-// ----------------- States
+// -------------------------------------------------------------------------------------
+// -                               Transaction State                                   -
+// -------------------------------------------------------------------------------------
 
 /// Represents the three substates (started, verified, rejected) of a
 /// confidential transaction state.
@@ -215,6 +224,7 @@ pub enum TxSubstate {
     /// The action on transaction has been verified by validators.
     Verified,
     /// The action on transaction has failed the verification by validators.
+    /// TODO: this ended up not being used. We need to disucss, how to handle it.
     Rejected,
 }
 
@@ -236,7 +246,9 @@ pub enum ConfidentialTxState {
     Reversal(TxSubstate),
 }
 
-// ----------------------------- Asset Issuance
+// -------------------------------------------------------------------------------------
+// -                                 Asset Issuance                                    -
+// -------------------------------------------------------------------------------------
 
 /// Holds the public portion of an asset issuance transaction. This can be placed
 /// on the chain.
@@ -304,7 +316,9 @@ pub trait AssetTransactionFinalizeAndProcessVerifier {
     ) -> Fallible<AssetTxState>;
 }
 
-// ----------------------------- Confidential Transaction
+// -------------------------------------------------------------------------------------
+// -                            Confidential Transaction                               -
+// -------------------------------------------------------------------------------------
 
 /// Holds the memo for confidential transaction sent by the sender.
 #[derive(Default, Debug, Clone)]
@@ -318,13 +332,6 @@ pub struct ConfidentialTxMemo {
     pub refreshed_enc_balance: EncryptedAmount,
     pub refreshed_enc_asset_id: EncryptedAmount,
     pub enc_asset_id_using_rcvr: EncryptedAssetId,
-}
-
-/// Holds the memo for reversal of the confidential transaction sent by the mediator.
-pub struct ReverseConfidentialTxMemo {
-    enc_amount_using_rcvr: EncryptedAmount,
-    enc_refreshed_amount: EncryptedAmount,
-    enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
 /// Holds the public portion of the confidential transaction sent by the sender.
@@ -347,13 +354,6 @@ pub struct PubFinalConfidentialTxData {
     pub init_data: PubInitConfidentialTxData,
     pub asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof,
     pub sig: Signature,
-}
-
-/// Holds the public portion of the reversal transaction.
-pub struct PubReverseConfidentialTxData {
-    final_data: PubInitConfidentialTxData,
-    memo: ReverseConfidentialTxMemo,
-    sig: Signature,
 }
 
 /// The interface for confidential transaction.
@@ -421,6 +421,24 @@ pub trait ConfidentialTransactionFinalizeAndProcessVerifier {
         conf_tx_final_data: PubFinalConfidentialTxData,
         state: ConfidentialTxState,
     ) -> Fallible<ConfidentialTxState>;
+}
+
+// -------------------------------------------------------------------------------------
+// -                         Reversal Confidential Transaction                         -
+// -------------------------------------------------------------------------------------
+
+/// Holds the public portion of the reversal transaction.
+pub struct PubReverseConfidentialTxData {
+    final_data: PubInitConfidentialTxData,
+    memo: ReverseConfidentialTxMemo,
+    sig: Signature,
+}
+
+/// Holds the memo for reversal of the confidential transaction sent by the mediator.
+pub struct ReverseConfidentialTxMemo {
+    enc_amount_using_rcvr: EncryptedAmount,
+    enc_refreshed_amount: EncryptedAmount,
+    enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
 pub trait ConfidentialTransactionReverseAndProcessMediator {
