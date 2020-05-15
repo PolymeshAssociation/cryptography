@@ -365,18 +365,6 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
 /// confidential transaction.
 pub struct CtxReceiverValidator {}
 
-//impl ConfidentialTransactionFinalizeAndProcessVerifier for CtxReceiverValidator {
-//    fn verify(
-//        &self,
-//        sndr_account: PubAccount,
-//        rcvr_account: PubAccount,
-//        rcvr_sign_pub_key: SignaturePubKey,
-//        conf_tx_final_data: PubFinalConfidentialTxData,
-//        state: ConfidentialTxState,
-//    ) -> Result<ConfidentialTxState, Error> {
-//    }
-//}
-
 impl CtxReceiverValidator {
     pub fn verify_finalize_by_receiver(
         &self,
@@ -427,7 +415,7 @@ mod tests {
         asset_proofs::{CipherText, ElgamalSecretKey},
         mercat::{
             ConfidentialTxMemo, CorrectnessProof, EncryptionKeys, EncryptionPubKey,
-            EncryptionSecKey, MembershipProof, SignatureKeys, SignaturePubKey, WellformednessProof,
+            MembershipProof, SignatureKeys, WellformednessProof,
         },
     };
     use curve25519_dalek::scalar::Scalar;
@@ -436,7 +424,6 @@ mod tests {
 
     // -------------------------- mock helper methods -----------------------
 
-    // TODO: change them to receive rng
     fn mock_gen_enc_key_pair(seed: u8) -> EncryptionKeys {
         let mut rng = StdRng::from_seed([seed; 32]);
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
