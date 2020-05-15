@@ -26,7 +26,7 @@ use rand::rngs::StdRng;
 
 // Having separate types for encryption and signature will ensure that the keys used for encryption
 // and signing are different.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct EncryptionPubKey {
     pub key: ElgamalPublicKey,
 }
@@ -53,15 +53,6 @@ pub struct EncryptionKeys {
     pub pblc: EncryptionPubKey,
     pub scrt: EncryptionSecKey,
 }
-// TODO experimenting with the API, remove once finalized
-//impl EncryptionKeys {
-//    pub fn pblc(&self) -> ElgamalPublicKey {
-//        self.pblc.key()
-//    }
-//    pub fn scrt(&self) -> ElgamalSecretKey {
-//        self.scrt.key()
-//    }
-//}
 
 type SignaturePubKey = EncryptionPubKey;
 type SignatureSecKey = EncryptionSecKey;
@@ -72,13 +63,13 @@ pub struct SignatureKeys {
 }
 
 // TODO move after CRYP-40
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MembershipProofInitialMessage {}
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MembershipProofFinalResponse {}
 
 // TODO move after CRYP-71
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Signature {}
 
 // ---------------------- END: temporary types, move them to other files
@@ -92,28 +83,28 @@ pub type EncryptedAssetId = CipherText;
 pub type EncryptedAmount = CipherText;
 
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for wellformedness.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct WellformednessProof {
     init: WellformednessInitialMessage,
     response: WellformednessFinalResponse,
 }
 
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for correctness.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct CorrectnessProof {
     init: CorrectnessInitialMessage,
     response: CorrectnessFinalResponse,
 }
 
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for membership.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MembershipProof {
     init: MembershipProofInitialMessage,
     response: MembershipProofFinalResponse,
 }
 
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for range.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InRangeProof {
     pub proof: RangeProof,
     pub commitment: CompressedRistretto,
@@ -136,7 +127,7 @@ impl Default for InRangeProof {
 /// TODO: update the documentation and remove the type alias
 /// Type alias for the tuple of initial message and final response of a non-interactive ZKP for cipher
 /// equality under different public key.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct CipherEqualDifferentPubKeyProof {
     pub init: EncryptingSameValueInitialMessage,
     pub response: EncryptingSameValueFinalResponse,
@@ -157,7 +148,7 @@ impl CipherEqualDifferentPubKeyProof {
 }
 
 /// TODO
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct CipherEqualSamePubKeyProof {
     pub init: CipherTextRefreshmentInitialMessage,
     pub response: CipherTextRefreshmentFinalResponse,
@@ -183,6 +174,7 @@ pub type AssetMemo = EncryptedAmount;
 // ------------------ account
 
 /// Holds the account memo. TODO: more informative description!
+#[derive(Clone)]
 pub struct AccountMemo {
     pub owner_pub_key: EncryptionPubKey,
     pub timestamp: std::time::Instant,
@@ -198,6 +190,7 @@ impl From<EncryptionPubKey> for AccountMemo {
 }
 
 /// Holds the public portion of an account which can be safely put on the chain.
+#[derive(Clone)]
 pub struct PubAccount {
     pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
@@ -235,7 +228,7 @@ pub enum AssetTxState {
 
 /// Represents the four states (initialized, justified, finalized, reversed) of a
 /// confidentional transaction.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfidentialTxState {
     Initialization(TxSubstate),
     InitilaziationJustification(TxSubstate),
@@ -314,7 +307,7 @@ pub trait AssetTransactionFinalizeAndProcessVerifier {
 // ----------------------------- Confidential Transaction
 
 /// Holds the memo for confidential transaction sent by the sender.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct ConfidentialTxMemo {
     pub sndr_account_id: u32,
     pub rcvr_account_id: u32,
@@ -335,7 +328,7 @@ pub struct ReverseConfidentialTxMemo {
 }
 
 /// Holds the public portion of the confidential transaction sent by the sender.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct PubInitConfidentialTxData {
     pub amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub non_neg_amount_proof: InRangeProof,
@@ -386,7 +379,7 @@ pub trait ConfidentialTransactionInitVerifier {
     /// proofs of the initialized transaction.
     fn verify(
         &self,
-        transaction: &PubInitConfidentialTxData,
+        transaction: PubInitConfidentialTxData,
         sndr_account: PubAccount,
         sndr_sign_pub_key: SignaturePubKey,
         state: ConfidentialTxState,

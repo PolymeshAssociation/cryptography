@@ -264,7 +264,7 @@ impl CtxReceiver {
 // ------------------------------------------------------------------------------------------------
 
 fn verify_initital_transaction_proofs(
-    transaction: &PubInitConfidentialTxData,
+    transaction: PubInitConfidentialTxData,
     sndr_account: PubAccount,
 ) -> Fallible<()> {
     let memo = &transaction.memo;
@@ -345,7 +345,7 @@ pub struct CtxSenderValidator {}
 impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
     fn verify(
         &self,
-        transaction: &PubInitConfidentialTxData,
+        transaction: PubInitConfidentialTxData,
         sndr_account: PubAccount,
         sndr_sign_pub_key: SignaturePubKey,
         state: ConfidentialTxState,
@@ -392,7 +392,7 @@ impl CtxReceiverValidator {
         }
 
         let memo = &conf_tx_final_data.init_data.memo;
-        let init_data = &conf_tx_final_data.init_data;
+        let init_data = conf_tx_final_data.init_data.clone();
 
         verify_initital_transaction_proofs(init_data, sndr_account)?;
 
@@ -541,9 +541,8 @@ mod tests {
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
 
-        let ctx_init_data =
-            mock_ctx_init_data(rcvr_enc_keys.pblc.clone(), expected_amount, asset_id);
-        let rcvr_account = mock_gen_account(rcvr_enc_keys.pblc.clone(), asset_id, balance).unwrap();
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, expected_amount, asset_id);
+        let rcvr_account = mock_gen_account(rcvr_enc_keys.pblc, asset_id, balance).unwrap();
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
 
         let result = ctx_rcvr.finalize_by_receiver(
@@ -574,9 +573,8 @@ mod tests {
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
 
-        let ctx_init_data =
-            mock_ctx_init_data(rcvr_enc_keys.pblc.clone(), expected_amount, asset_id);
-        let rcvr_account = mock_gen_account(rcvr_enc_keys.pblc.clone(), asset_id, balance).unwrap();
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, expected_amount, asset_id);
+        let rcvr_account = mock_gen_account(rcvr_enc_keys.pblc, asset_id, balance).unwrap();
         let invalid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Started);
 
         let result = ctx_rcvr.finalize_by_receiver(
@@ -584,7 +582,7 @@ mod tests {
             rcvr_enc_keys.scrt,
             rcvr_sign_keys.scrt,
             rcvr_account,
-            invalid_state.clone(),
+            invalid_state,
             expected_amount,
             &mut StdRng::from_seed([17u8; 32]),
         );
@@ -609,9 +607,8 @@ mod tests {
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
 
-        let ctx_init_data =
-            mock_ctx_init_data(rcvr_enc_keys.pblc.clone(), received_amount, asset_id);
-        let rcvr_account = mock_gen_account(rcvr_enc_keys.pblc.clone(), asset_id, balance).unwrap();
+        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, received_amount, asset_id);
+        let rcvr_account = mock_gen_account(rcvr_enc_keys.pblc, asset_id, balance).unwrap();
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
 
         let result = ctx_rcvr.finalize_by_receiver(
@@ -684,28 +681,21 @@ mod tests {
         let rcvr_enc_keys = mock_gen_enc_key_pair(12u8);
         let rcvr_sign_keys = mock_gen_sign_key_pair(13u8);
 
-        let rcvr_account =
-            mock_gen_account(rcvr_enc_keys.pblc.clone(), asset_id, rcvr_balance).unwrap();
-        let rcvr_account_for_initialize =
-            copy_mock_account(&rcvr_account, rcvr_enc_keys.pblc.clone());
-        let rcvr_account_for_finalize =
-            copy_mock_account(&rcvr_account, rcvr_enc_keys.pblc.clone());
-        let rcvr_account_for_validation =
-            copy_mock_account(&rcvr_account, rcvr_enc_keys.pblc.clone());
+        let rcvr_account = mock_gen_account(rcvr_enc_keys.pblc, asset_id, rcvr_balance).unwrap();
+        let rcvr_account_for_initialize = copy_mock_account(&rcvr_account, rcvr_enc_keys.pblc);
+        let rcvr_account_for_finalize = copy_mock_account(&rcvr_account, rcvr_enc_keys.pblc);
+        let rcvr_account_for_validation = copy_mock_account(&rcvr_account, rcvr_enc_keys.pblc);
 
-        let sndr_account =
-            mock_gen_account(sndr_enc_keys.pblc.clone(), asset_id, sndr_balance).unwrap();
-        let sndr_account_for_initialize =
-            copy_mock_account(&sndr_account, sndr_enc_keys.pblc.clone());
-        let sndr_account_for_validation =
-            copy_mock_account(&sndr_account, sndr_enc_keys.pblc.clone());
+        let sndr_account = mock_gen_account(sndr_enc_keys.pblc, asset_id, sndr_balance).unwrap();
+        let sndr_account_for_initialize = copy_mock_account(&sndr_account, sndr_enc_keys.pblc);
+        let sndr_account_for_validation = copy_mock_account(&sndr_account, sndr_enc_keys.pblc);
 
         // Create the trasaction and check its result and state
         let result = sndr.create(
-            sndr_enc_keys.clone(),
+            sndr_enc_keys,
             sndr_sign_keys.scrt,
             sndr_account_for_initialize,
-            rcvr_enc_keys.pblc.clone(),
+            rcvr_enc_keys.pblc,
             rcvr_account_for_initialize,
             asset_id,
             amount,
@@ -718,7 +708,12 @@ mod tests {
         );
 
         // Verify the initialization step
-        let result = sndr_vldtr.verify(&ctx_init_data, sndr_account, sndr_sign_keys.pblc, state);
+        let result = sndr_vldtr.verify(
+            ctx_init_data.clone(),
+            sndr_account,
+            sndr_sign_keys.pblc,
+            state,
+        );
         let state = result.unwrap();
         assert_eq!(
             state,
