@@ -137,8 +137,13 @@ pub struct CipherEqualDifferentPubKeyProof {
     pub response: EncryptingSameValueFinalResponse,
 }
 
-impl CipherEqualDifferentPubKeyProof {
-    pub fn new(
+impl
+    From<(
+        EncryptingSameValueInitialMessage,
+        EncryptingSameValueFinalResponse,
+    )> for CipherEqualDifferentPubKeyProof
+{
+    fn from(
         pair: (
             EncryptingSameValueInitialMessage,
             EncryptingSameValueFinalResponse,
@@ -158,9 +163,13 @@ pub struct CipherEqualSamePubKeyProof {
     pub init: CipherTextRefreshmentInitialMessage,
     pub response: CipherTextRefreshmentFinalResponse,
 }
-
-impl CipherEqualSamePubKeyProof {
-    pub fn new(
+impl
+    From<(
+        CipherTextRefreshmentInitialMessage,
+        CipherTextRefreshmentFinalResponse,
+    )> for CipherEqualSamePubKeyProof
+{
+    fn from(
         pair: (
             CipherTextRefreshmentInitialMessage,
             CipherTextRefreshmentFinalResponse,

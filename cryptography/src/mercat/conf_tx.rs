@@ -50,7 +50,7 @@ impl ConfidentialTransactionSender for CtxSender {
             encrypt_using_two_pub_keys(&witness, sndr_enc_keys.pblc.key, rcvr_pub_key.key);
 
         let amount_equal_cipher_proof =
-            CipherEqualDifferentPubKeyProof::new(single_property_prover(
+            CipherEqualDifferentPubKeyProof::from(single_property_prover(
                 EncryptingSameValueProverAwaitingChallenge {
                     pub_key1: sndr_enc_keys.pblc.key,
                     pub_key2: rcvr_pub_key.key,
@@ -72,14 +72,15 @@ impl ConfidentialTransactionSender for CtxSender {
         let refreshed_enc_balance = sndr_account
             .enc_balance
             .refresh(&sndr_enc_keys.scrt.key, balance_refresh_enc_blinding)?;
-        let balance_refreshed_same_proof = CipherEqualSamePubKeyProof::new(single_property_prover(
-            CipherTextRefreshmentProverAwaitingChallenge::new(
-                sndr_enc_keys.scrt.key.clone(),
-                sndr_account.enc_balance,
-                refreshed_enc_balance,
-            ),
-            rng,
-        )?);
+        let balance_refreshed_same_proof =
+            CipherEqualSamePubKeyProof::from(single_property_prover(
+                CipherTextRefreshmentProverAwaitingChallenge::new(
+                    sndr_enc_keys.scrt.key.clone(),
+                    sndr_account.enc_balance,
+                    refreshed_enc_balance,
+                ),
+                rng,
+            )?);
 
         // Prove that sender has enough funds
         // NOTE: If this decryption ends up being too slow, we can pass in the balance
@@ -107,7 +108,7 @@ impl ConfidentialTransactionSender for CtxSender {
             .enc_asset_id
             .refresh(&sndr_enc_keys.scrt.key, asset_id_refresh_enc_blinding)?;
         let asset_id_refreshed_same_proof =
-            CipherEqualSamePubKeyProof::new(single_property_prover(
+            CipherEqualSamePubKeyProof::from(single_property_prover(
                 CipherTextRefreshmentProverAwaitingChallenge::new(
                     sndr_enc_keys.scrt.key.clone(),
                     sndr_account.enc_asset_id,
@@ -122,7 +123,7 @@ impl ConfidentialTransactionSender for CtxSender {
             CommitmentWitness::try_from((asset_id, asset_id_refresh_enc_blinding))?;
         let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt(&asset_id_witness);
         let asset_id_equal_cipher_proof =
-            CipherEqualDifferentPubKeyProof::new(single_property_prover(
+            CipherEqualDifferentPubKeyProof::from(single_property_prover(
                 EncryptingSameValueProverAwaitingChallenge {
                     pub_key1: sndr_enc_keys.pblc.key,
                     pub_key2: rcvr_pub_key.key,
@@ -213,11 +214,10 @@ impl CtxReceiver {
         expected_amount: u32,
         rng: &mut StdRng,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)> {
-        // ensure that the previous state is correct
-        match state {
-            ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified) => (),
-            _ => return Err(ErrorKind::InvalidPreviousState { state }.into()),
-        }
+        ensure!(
+            state == ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified),
+            ErrorKind::InvalidPreviousState { state }
+        );
 
         // Check that amount is correct
         let received_amount = rcvr_enc_sec
@@ -350,11 +350,10 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
         sndr_sign_pub_key: SignaturePubKey,
         state: ConfidentialTxState,
     ) -> Fallible<ConfidentialTxState> {
-        // ensure that the previous state is correct
-        match state {
-            ConfidentialTxState::Initialization(TxSubstate::Started) => (),
-            _ => return Err(ErrorKind::InvalidPreviousState { state }.into()),
-        }
+        ensure!(
+            state == ConfidentialTxState::Initialization(TxSubstate::Started),
+            ErrorKind::InvalidPreviousState { state }
+        );
         // TODO verify the signature
         verify_initital_transaction_proofs(transaction, sndr_account)?;
         Ok(ConfidentialTxState::Initialization(TxSubstate::Verified))
@@ -373,11 +372,10 @@ impl CtxReceiverValidator {
         conf_tx_final_data: PubFinalConfidentialTxData,
         state: ConfidentialTxState,
     ) -> Fallible<()> {
-        // ensure that the previous state is correct
-        match state {
-            ConfidentialTxState::Finalization(TxSubstate::Started) => (),
-            _ => return Err(ErrorKind::InvalidPreviousState { state }.into()),
-        }
+        ensure!(
+            state == ConfidentialTxState::Finalization(TxSubstate::Started),
+            ErrorKind::InvalidPreviousState { state }
+        );
 
         let memo = &conf_tx_final_data.init_data.memo;
         let init_data = conf_tx_final_data.init_data.clone();
