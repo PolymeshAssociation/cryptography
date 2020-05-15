@@ -15,8 +15,8 @@ use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use zeroize::Zeroize;
 use std::convert::From;
+use zeroize::Zeroize;
 
 /// The domain label for the correctness proof.
 pub const CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathCorrectnessFinalResponse";

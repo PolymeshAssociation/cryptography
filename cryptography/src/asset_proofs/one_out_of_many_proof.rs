@@ -23,9 +23,9 @@ use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use sha3::Sha3_512;
 
+use serde::{Deserialize, Serialize};
 use std::ops::{Add, Neg, Sub};
 use zeroize::{Zeroize, Zeroizing};
-use serde::{Serialize, Deserialize};
 
 const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathOOONProofChallengeLabel";

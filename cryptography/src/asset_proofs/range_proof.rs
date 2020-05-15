@@ -7,7 +7,7 @@ use crate::asset_proofs::errors::{AssetProofError, Result};
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use merlin::Transcript;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 
@@ -52,7 +52,10 @@ pub fn prove_within_range(
     )
     .map_err(|source| AssetProofError::ProvingError { source })?;
 
-    Ok((RangeProofInitialMessage(commitment), RangeProofFinalResponse(proof)))
+    Ok((
+        RangeProofInitialMessage(commitment),
+        RangeProofFinalResponse(proof),
+    ))
 }
 
 /// Verify that a range proof is valid given a commitment to a secret value.
@@ -72,7 +75,8 @@ pub fn verify_within_range(
     // the Fiat-Shamir huristic.
     let mut verifier_transcript = Transcript::new(RANGE_PROOF_LABEL);
 
-    proof.0
+    proof
+        .0
         .verify_single(
             &bp_gens,
             &pc_gens,
@@ -106,8 +110,9 @@ mod tests {
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let (initial_message, final_response) = prove_within_range(secret_value as u64, rand_blind, 32)
-            .expect("This shouldn't happen.");
+        let (initial_message, final_response) =
+            prove_within_range(secret_value as u64, rand_blind, 32)
+                .expect("This shouldn't happen.");
         assert!(verify_within_range(initial_message, final_response, 32));
 
         // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.

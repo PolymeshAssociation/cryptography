@@ -15,8 +15,8 @@ use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
-use serde::{Serialize, Deserialize};
 
 /// The domain label for the encrypting the same value proof.
 pub const ENCRYPTING_SAME_VALUE_PROOF_FINAL_RESPONSE_LABEL: &[u8] =
