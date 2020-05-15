@@ -19,6 +19,7 @@ use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroize;
+use serde::{Serialize, Deserialize};
 
 /// The domain label for the ciphertext refreshment proof.
 pub const CIPHERTEXT_REFRESHMENT_FINAL_RESPONSE_LABEL: &[u8] =
@@ -32,9 +33,10 @@ pub const CIPHERTEXT_REFRESHMENT_PROOF_CHALLENGE_LABEL: &[u8] =
 // public key
 // ------------------------------------------------------------------------
 
-pub type CipherTextRefreshmentFinalResponse = Scalar;
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub struct CipherTextRefreshmentFinalResponse(Scalar);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub struct CipherTextRefreshmentInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -129,7 +131,7 @@ impl AssetProofProverAwaitingChallenge for CipherTextRefreshmentProverAwaitingCh
 
 impl AssetProofProver<CipherTextRefreshmentFinalResponse> for CipherTextRefreshmentProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> CipherTextRefreshmentFinalResponse {
-        self.u + c.x() * self.secret_key.secret
+        CipherTextRefreshmentFinalResponse(self.u + c.x() * self.secret_key.secret)
     }
 }
 
@@ -172,11 +174,11 @@ impl AssetProofVerifier for CipherTextRefreshmentVerifier {
         z: &Self::ZKFinalResponse,
     ) -> Result<()> {
         ensure!(
-            z * self.y == initial_message.a + challenge.x() * self.x,
+            z.0 * self.y == initial_message.a + challenge.x() * self.x,
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * pc_gens.B_blinding == initial_message.b + challenge.x() * self.pub_key.pub_key,
+            z.0 * pc_gens.B_blinding == initial_message.b + challenge.x() * self.pub_key.pub_key,
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 2 }
         );
         Ok(())
@@ -236,7 +238,7 @@ mod tests {
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_final_response = Scalar::default();
+        let bad_final_response = CipherTextRefreshmentFinalResponse(Scalar::default());
         assert_err!(
             verifier.verify(&gens, &challenge, &initial_message, &bad_final_response),
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }

@@ -14,7 +14,9 @@ use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
+use std::convert::From;
 
 /// The domain label for the correctness proof.
 pub const CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathCorrectnessFinalResponse";
@@ -25,9 +27,16 @@ pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessChalle
 // Proof of Correct Encryption of the Given Value
 // ------------------------------------------------------------------------
 
-pub type CorrectnessFinalResponse = Scalar;
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+pub struct CorrectnessFinalResponse(Scalar);
 
-#[derive(Copy, Clone, Debug)]
+impl From<Scalar> for CorrectnessFinalResponse {
+    fn from(response: Scalar) -> Self {
+        CorrectnessFinalResponse(response)
+    }
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub struct CorrectnessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -111,7 +120,7 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
 
 impl AssetProofProver<CorrectnessFinalResponse> for CorrectnessProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> CorrectnessFinalResponse {
-        self.u + c.x() * self.w.blinding()
+        CorrectnessFinalResponse(self.u + c.x() * self.w.blinding())
     }
 }
 
@@ -150,11 +159,11 @@ impl AssetProofVerifier for CorrectnessVerifier {
         let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
 
         ensure!(
-            z * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
+            z.0 * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * pc_gens.B_blinding == initial_message.b + challenge.x() * y_prime,
+            z.0 * pc_gens.B_blinding == initial_message.b + challenge.x() * y_prime,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
@@ -213,7 +222,7 @@ mod tests {
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_final_response = Scalar::default();
+        let bad_final_response = CorrectnessFinalResponse(Scalar::default());
         let result = verifier.verify(&gens, &challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
