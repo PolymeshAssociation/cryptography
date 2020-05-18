@@ -45,6 +45,14 @@ pub enum AssetProofError {
         check
     )]
     OOONFinalResponseVerificationError { check: u16 },
+
+    /// Failed to verify a one-out-of-many proof.
+    #[fail(
+        display = "Failed to verify the check number {} of the Membership proof",
+        check
+    )]
+    MembershipProofVerificationError { check: u16 },
+
     /// Failed to verify a wellformedness proof.
     #[fail(
         display = "Failed to verify the check number {} of the wellformedness proof",
