@@ -188,6 +188,9 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
             .map(|m| self.secret_element_com - self.elements_set[m] * self.generators.com_gens.B)
             .collect();
 
+        // If the elements set size does not match to the system parameter N = n^m, we have to
+        // pad the resulted commitment list with its last commitment to make the list size equal to N.
+        // Padding has a critical security importance. 
         if n != initial_size {
             commitments_list.resize(n, commitments_list[initial_size]);
         }
