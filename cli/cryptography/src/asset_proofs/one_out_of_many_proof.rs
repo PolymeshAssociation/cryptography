@@ -2,7 +2,7 @@
 //! of a secret commitment among the public list of N commitments, which is opening to 0.
 //! It is important to note that the provided list size should be exactly N=n^m.
 //! If the commitment list size is smaller than N, it should be padded with the last commitment.
-//! For more details see the original paper https://eprint.iacr.org/2015/643.pdf
+//! For more details see the original paper <https://eprint.iacr.org/2015/643.pdf>.
 
 #![allow(non_snake_case)]
 use bulletproofs::PedersenGens;
@@ -216,8 +216,8 @@ impl<'a, 'b> Sub<&'b Matrix> for &'a Matrix {
 
 /// Implements a basic polynomial functionality over scalars
 /// The Polynomial struct explicitly stores its degree and the coefficients vector.
-/// The first element of the coefficients vector coeffs[0] is the polynomial's free term
-/// The coeffs[degree] is the leading coefficient of the polynomial.
+/// The first element of the coefficients vector `coeffs[0]` is the polynomial's free term
+/// The `coeffs[degree]` is the leading coefficient of the polynomial.
 pub struct Polynomial {
     degree: usize,
     coeffs: Vec<Scalar>,

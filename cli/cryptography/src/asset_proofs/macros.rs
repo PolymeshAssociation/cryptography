@@ -1,5 +1,5 @@
 /// These macros are coppied from:
-/// https://github.com/dalek-cryptography/curve25519-dalek/blob/master/src/macros.rs
+/// <https://github.com/dalek-cryptography/curve25519-dalek/blob/master/src/macros.rs>
 
 /// Define borrow and non-borrow variants of `Add`.
 macro_rules! define_add_variants {

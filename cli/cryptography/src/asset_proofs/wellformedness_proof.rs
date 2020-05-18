@@ -63,15 +63,16 @@ pub struct WellformednessProver {
     rand_b: Scalar,
 }
 
-#[derive(Clone, Debug)]
-pub struct WellformednessProverAwaitingChallenge {
+#[derive(Clone)]
+pub struct WellformednessProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
-    pub_key: ElgamalPublicKey,
+    pub pub_key: ElgamalPublicKey,
     /// The secret commitment witness.
-    w: Zeroizing<CommitmentWitness>,
+    pub w: Zeroizing<CommitmentWitness>,
+    pub pc_gens: &'a PedersenGens,
 }
 
-impl AssetProofProverAwaitingChallenge for WellformednessProverAwaitingChallenge {
+impl<'a> AssetProofProverAwaitingChallenge for WellformednessProverAwaitingChallenge<'a> {
     type ZKInitialMessage = WellformednessInitialMessage;
     type ZKFinalResponse = WellformednessFinalResponse;
     type ZKProver = WellformednessProver;
@@ -86,7 +87,6 @@ impl AssetProofProverAwaitingChallenge for WellformednessProverAwaitingChallenge
 
     fn generate_initial_message(
         &self,
-        pc_gens: &PedersenGens,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_a = Scalar::random(rng);
@@ -99,7 +99,7 @@ impl AssetProofProverAwaitingChallenge for WellformednessProverAwaitingChallenge
             },
             WellformednessInitialMessage {
                 a: rand_a * self.pub_key.pub_key,
-                b: rand_a * pc_gens.B_blinding + rand_b * pc_gens.B,
+                b: rand_a * self.pc_gens.B_blinding + rand_b * self.pc_gens.B,
             },
         )
     }
@@ -114,19 +114,19 @@ impl AssetProofProver<WellformednessFinalResponse> for WellformednessProver {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct WellformednessVerifier {
-    pub_key: ElgamalPublicKey,
-    cipher: CipherText,
+#[derive(Copy, Clone)]
+pub struct WellformednessVerifier<'a> {
+    pub pub_key: ElgamalPublicKey,
+    pub cipher: CipherText,
+    pub pc_gens: &'a PedersenGens,
 }
 
-impl AssetProofVerifier for WellformednessVerifier {
+impl<'a> AssetProofVerifier for WellformednessVerifier<'a> {
     type ZKInitialMessage = WellformednessInitialMessage;
     type ZKFinalResponse = WellformednessFinalResponse;
 
     fn verify(
         &self,
-        pc_gens: &PedersenGens,
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         response: &Self::ZKFinalResponse,
@@ -136,7 +136,7 @@ impl AssetProofVerifier for WellformednessVerifier {
             AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            response.z1 * pc_gens.B_blinding + response.z2 * pc_gens.B
+            response.z1 * self.pc_gens.B_blinding + response.z2 * self.pc_gens.B
                 == initial_message.b + challenge.x() * self.cipher.y,
             AssetProofError::WellformednessFinalResponseVerificationError { check: 2 }
         );
@@ -174,15 +174,20 @@ mod tests {
         let prover = WellformednessProverAwaitingChallenge {
             pub_key,
             w: Zeroizing::new(w.clone()),
+            pc_gens: &gens,
         };
-        let verifier = WellformednessVerifier { pub_key, cipher };
+        let verifier = WellformednessVerifier {
+            pub_key,
+            cipher,
+            pc_gens: &gens,
+        };
         let mut dealer_transcript = Transcript::new(WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL);
 
         // ------------------------------- Interactive case
         // Positive tests
         // 1st round
         let mut transcript_rng = prover.create_transcript_rng(&mut rng, &dealer_transcript);
-        let (prover, initial_message) = prover.generate_initial_message(&gens, &mut transcript_rng);
+        let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
 
         // 2nd round
         initial_message
@@ -198,12 +203,12 @@ mod tests {
         // 4th round
         // in the interactive case, verifier is the dealer and therefore, the challenge is saved
         // on the verifier side and passed to this function.
-        let result = verifier.verify(&gens, &challenge, &initial_message, &final_response);
+        let result = verifier.verify(&challenge, &initial_message, &final_response);
         assert!(result.is_ok());
 
         // Negative tests
         let bad_initial_message = WellformednessInitialMessage::default();
-        let result = verifier.verify(&gens, &challenge, &bad_initial_message, &final_response);
+        let result = verifier.verify(&challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
             AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
@@ -213,7 +218,7 @@ mod tests {
             z1: Scalar::default(),
             z2: Scalar::default(),
         };
-        let result = verifier.verify(&gens, &challenge, &initial_message, &bad_final_response);
+        let result = verifier.verify(&challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
             AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
@@ -223,8 +228,13 @@ mod tests {
         let prover = WellformednessProverAwaitingChallenge {
             pub_key,
             w: Zeroizing::new(w),
+            pc_gens: &gens,
         };
-        let verifier = WellformednessVerifier { pub_key, cipher };
+        let verifier = WellformednessVerifier {
+            pub_key,
+            cipher,
+            pc_gens: &gens,
+        };
 
         // 1st to 3rd rounds
         let (initial_message, final_response) = single_property_prover::<
