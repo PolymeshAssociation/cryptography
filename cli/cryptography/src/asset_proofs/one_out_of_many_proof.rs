@@ -86,9 +86,9 @@ fn convert_to_matrix_rep(
 #[derive(Clone)]
 pub struct OooNProofGenerators {
     /// Generates for computing Pedersen commitments
-    com_gens: PedersenGens,
+    pub com_gens: PedersenGens,
     /// Generators for computing vector commitments.
-    h_vec: Vec<RistrettoPoint>,
+    pub h_vec: Vec<RistrettoPoint>,
 }
 
 impl OooNProofGenerators {
@@ -515,8 +515,8 @@ impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
 pub struct OOONProofInitialMessage {
     r1_proof_initial_message: R1ProofInitialMessage,
     g_vec: Vec<RistrettoPoint>,
-    n: usize,
-    m: usize,
+    pub n: usize,
+    pub m: usize,
 }
 
 impl OOONProofInitialMessage {

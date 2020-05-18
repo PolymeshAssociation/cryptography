@@ -30,5 +30,6 @@ pub mod correctness_proof;
 pub mod encryption_proofs;
 pub mod one_out_of_many_proof;
 //pub mod range_proof;
+pub mod membership_proof;
 pub mod transcript;
 //pub mod wellformedness_proof;
