@@ -13,8 +13,8 @@ use crate::{
         ConfidentialTransactionInitVerifier, ConfidentialTransactionReceiver,
         ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAssetId,
         EncryptionKeys, EncryptionPubKey, EncryptionSecKey, InRangeProof, PubAccount,
-        PubFinalConfidentialTxData, PubInitConfidentialTxData, Signature, SignatureKeys,
-        SignaturePubKey, TxSubstate,
+        PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent, PubInitConfidentialTxData,
+        PubInitConfidentialTxDataContent, SignatureKeys, SignaturePubKey, TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -134,32 +134,31 @@ impl ConfidentialTransactionSender for CtxSender {
                 rng,
             )?);
 
-        let memo = ConfidentialTxMemo {
-            sndr_account_id: sndr_account.id,
-            rcvr_account_id: rcvr_account.id,
-            enc_amount_using_sndr: sndr_new_enc_amount,
-            enc_amount_using_rcvr: rcvr_new_enc_amount,
-            sndr_pub_key: sndr_enc_keys.pblc,
-            rcvr_pub_key: rcvr_pub_key,
-            refreshed_enc_balance,
-            refreshed_enc_asset_id,
-            enc_asset_id_using_rcvr,
-        };
-        // TODO: sign memo and all the five proofs
-        let sig = sr25519::Signature([0u8; 64]);
-
-        let init_data = PubInitConfidentialTxData {
+        // ------- gather the content and sign it
+        let content = PubInitConfidentialTxDataContent {
             amount_equal_cipher_proof,
             non_neg_amount_proof,
             enough_fund_proof,
-            memo,
             asset_id_equal_cipher_proof,
             balance_refreshed_same_proof,
             asset_id_refreshed_same_proof,
-            sig,
+            memo: ConfidentialTxMemo {
+                sndr_account_id: sndr_account.id,
+                rcvr_account_id: rcvr_account.id,
+                enc_amount_using_sndr: sndr_new_enc_amount,
+                enc_amount_using_rcvr: rcvr_new_enc_amount,
+                sndr_pub_key: sndr_enc_keys.pblc,
+                rcvr_pub_key: rcvr_pub_key,
+                refreshed_enc_balance,
+                refreshed_enc_asset_id,
+                enc_asset_id_using_rcvr,
+            },
         };
+
+        let sig = sndr_sign_keys.pair.sign(&content.to_bytes()?);
+
         Ok((
-            init_data,
+            PubInitConfidentialTxData { content, sig },
             ConfidentialTxState::Initialization(TxSubstate::Started),
         ))
     }
@@ -224,7 +223,7 @@ impl CtxReceiver {
         // Check that amount is correct
         let received_amount = rcvr_enc_sec
             .key
-            .decrypt(&conf_tx_init_data.memo.enc_amount_using_rcvr)?;
+            .decrypt(&conf_tx_init_data.content.memo.enc_amount_using_rcvr)?;
 
         ensure!(
             received_amount == expected_amount,
@@ -235,12 +234,12 @@ impl CtxReceiver {
         );
 
         // Check rcvc public keys match
-        let acc_key = conf_tx_init_data.memo.rcvr_pub_key.key;
+        let acc_key = conf_tx_init_data.content.memo.rcvr_pub_key.key;
         let memo_key = rcvr_account.memo.owner_pub_key.key;
         ensure!(acc_key == memo_key, ErrorKind::InputPubKeyMismatch);
 
         // Generate proof of equality of asset ids
-        let enc_asset_id_from_sndr = conf_tx_init_data.memo.enc_asset_id_using_rcvr;
+        let enc_asset_id_from_sndr = conf_tx_init_data.content.memo.enc_asset_id_using_rcvr;
         let enc_asset_id_from_rcvr_acc = rcvr_account.enc_asset_id;
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             rcvr_enc_sec.key,
@@ -248,16 +247,19 @@ impl CtxReceiver {
             enc_asset_id_from_sndr,
         );
 
-        single_property_prover(prover, rng).and_then(|(init, response)| {
-            Ok((
-                PubFinalConfidentialTxData {
-                    init_data: conf_tx_init_data,
-                    asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof { init, response },
-                    sig: sr25519::Signature([0u8; 64]), // TODO: sign memo + ALL the proofs of init and final
-                },
-                ConfidentialTxState::Finalization(TxSubstate::Started),
-            ))
-        })
+        let (init, response) = single_property_prover(prover, rng)?;
+
+        // gather the content and sign it
+        let content = PubFinalConfidentialTxDataContent {
+            init_data: conf_tx_init_data,
+            asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof { init, response },
+        };
+
+        let sig = rcvr_sign_keys.pair.sign(&content.to_bytes()?);
+        Ok((
+            PubFinalConfidentialTxData { content, sig },
+            ConfidentialTxState::Finalization(TxSubstate::Started),
+        ))
     }
 }
 
@@ -269,8 +271,8 @@ fn verify_initital_transaction_proofs(
     transaction: PubInitConfidentialTxData,
     sndr_account: PubAccount,
 ) -> Fallible<()> {
-    let memo = &transaction.memo;
-    let init_data = &transaction;
+    let memo = &transaction.content.memo;
+    let init_data = &transaction.content;
 
     ensure!(
         sndr_account.id == memo.sndr_account_id,
@@ -356,7 +358,14 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
             state == ConfidentialTxState::Initialization(TxSubstate::Started),
             ErrorKind::InvalidPreviousState { state }
         );
-        // TODO verify the signature
+        ensure!(
+            sr25519::Pair::verify(
+                &transaction.sig,
+                &transaction.content.to_bytes()?,
+                &sndr_sign_pub_key.key
+            ),
+            ErrorKind::SignatureValidationFailure,
+        );
         verify_initital_transaction_proofs(transaction, sndr_account)?;
         Ok(ConfidentialTxState::Initialization(TxSubstate::Verified))
     }
@@ -379,8 +388,9 @@ impl CtxReceiverValidator {
             ErrorKind::InvalidPreviousState { state }
         );
 
-        let memo = &conf_tx_final_data.init_data.memo;
-        let init_data = conf_tx_final_data.init_data.clone();
+        let memo = &conf_tx_final_data.content.init_data.content.memo;
+        let init_data = conf_tx_final_data.content.init_data.clone();
+        let final_content = conf_tx_final_data.content;
 
         verify_initital_transaction_proofs(init_data, sndr_account)?;
 
@@ -393,11 +403,18 @@ impl CtxReceiverValidator {
                 rcvr_account.enc_asset_id,
                 memo.enc_asset_id_using_rcvr,
             ),
-            conf_tx_final_data.asset_id_equal_cipher_proof.init,
-            conf_tx_final_data.asset_id_equal_cipher_proof.response,
+            final_content.asset_id_equal_cipher_proof.init,
+            final_content.asset_id_equal_cipher_proof.response,
         )?;
 
-        //// TODO verify signature of both init and finalize transactions
+        ensure!(
+            sr25519::Pair::verify(
+                &transaction.sig,
+                &transaction.content.to_bytes()?,
+                &sndr_sign_pub_key.key
+            ),
+            ErrorKind::SignatureValidationFailure,
+        );
 
         Ok(())
     }
@@ -415,7 +432,7 @@ mod tests {
         asset_proofs::{CipherText, ElgamalSecretKey},
         mercat::{
             ConfidentialTxMemo, CorrectnessProof, EncryptionKeys, EncryptionPubKey,
-            MembershipProof, SignatureKeys, WellformednessProof,
+            MembershipProof, Signature, SignatureKeys, WellformednessProof,
         },
     };
     use curve25519_dalek::scalar::Scalar;
@@ -500,13 +517,15 @@ mod tests {
         asset_id: u32,
     ) -> PubInitConfidentialTxData {
         PubInitConfidentialTxData {
-            memo: mock_ctx_init_memo(rcvr_pub_key, expected_amount, asset_id),
-            asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-            amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-            non_neg_amount_proof: InRangeProof::default(),
-            enough_fund_proof: InRangeProof::default(),
-            balance_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
-            asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
+            content: PubInitConfidentialTxDataContent {
+                memo: mock_ctx_init_memo(rcvr_pub_key, expected_amount, asset_id),
+                asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
+                amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
+                non_neg_amount_proof: InRangeProof::default(),
+                enough_fund_proof: InRangeProof::default(),
+                balance_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
+                asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
+            },
             sig: Signature::default(),
         }
     }

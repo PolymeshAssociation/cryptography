@@ -34,6 +34,7 @@ bulletproofs = { version = "2.0.0", features = ["std"], default-features = false
 merlin = { version = "2.0.0", default-features = false }
 sp-application-crypto = { version = "2.0.0-alpha.8" }
 sp-core = { version = "2.0.0-alpha.8" }
+bincode = { version = "1.2.1" }
 
 [build-dependencies]
 # WASM builder is using `WasmBuilderSource::Crates("1.0.8")`, please see `build.rs`.

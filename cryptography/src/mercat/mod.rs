@@ -16,11 +16,12 @@ use crate::{
         wellformedness_proof::{WellformednessFinalResponse, WellformednessInitialMessage},
         CipherText, ElgamalPublicKey, ElgamalSecretKey,
     },
-    errors::Fallible,
+    errors::{ErrorKind, Fallible},
 };
 use bulletproofs::RangeProof;
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use rand::rngs::StdRng;
+use serde::{Deserialize, Serialize};
 use sp_application_crypto::sr25519;
 
 // ---------------------- START: temporary types, move them to the proper location
@@ -41,7 +42,7 @@ pub struct MembershipProofFinalResponse {}
 // and signing are different.
 
 /// Holds ElGamal encryption public key.
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct EncryptionPubKey {
     pub key: ElgamalPublicKey,
 }
@@ -113,7 +114,7 @@ pub struct MembershipProof {
 }
 
 /// Holds the non-interactive range proofs, equivalent of L_range of MERCAT paper.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InRangeProof {
     pub proof: RangeProof,
     pub commitment: CompressedRistretto,
@@ -135,7 +136,7 @@ impl Default for InRangeProof {
 
 /// Holds the non-interactive proofs of equality using different public keys, equivalent
 /// of L_cipher of MERCAT paper.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct CipherEqualDifferentPubKeyProof {
     pub init: EncryptingSameValueInitialMessage,
     pub response: EncryptingSameValueFinalResponse,
@@ -162,7 +163,7 @@ impl
 
 /// Holds the non-interactive proofs of equality using different public keys, equivalent
 /// of L_equal of MERCAT paper.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct CipherEqualSamePubKeyProof {
     pub init: CipherTextRefreshmentInitialMessage,
     pub response: CipherTextRefreshmentFinalResponse,
@@ -334,7 +335,7 @@ pub trait AssetTransactionFinalizeAndProcessVerifier {
 // -------------------------------------------------------------------------------------
 
 /// Holds the memo for confidential transaction sent by the sender.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct ConfidentialTxMemo {
     pub sndr_account_id: u32,
     pub rcvr_account_id: u32,
@@ -347,9 +348,9 @@ pub struct ConfidentialTxMemo {
     pub enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
-/// Holds the public portion of the confidential transaction sent by the sender.
-#[derive(Default, Debug, Clone)]
-pub struct PubInitConfidentialTxData {
+/// Holds the proofs and memo of the confidential transaction sent by the sender.
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct PubInitConfidentialTxDataContent {
     pub amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub non_neg_amount_proof: InRangeProof,
     pub enough_fund_proof: InRangeProof,
@@ -357,15 +358,73 @@ pub struct PubInitConfidentialTxData {
     pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
+}
+
+impl PubInitConfidentialTxDataContent {
+    pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
+        let mut encoded = vec![];
+        encoded.extend(bincode::serialize(&self.memo).map_err(|_| ErrorKind::SerializationError)?);
+        //encoded.extend(
+        //    bincode::serialize(&self.amount_equal_cipher_proof)
+        //        .map_err(|_| ErrorKind::SerializationError)?,
+        //);
+        //encoded.extend(
+        //    bincode::serialize(&self.non_neg_amount_proof)
+        //        .map_err(|_| ErrorKind::SerializationError)?,
+        //);
+        //encoded.extend(
+        //    bincode::serialize(&self.enough_fund_proof)
+        //        .map_err(|_| ErrorKind::SerializationError)?,
+        //);
+        //encoded.extend(
+        //    bincode::serialize(&self.asset_id_equal_cipher_proof)
+        //        .map_err(|_| ErrorKind::SerializationError)?,
+        //);
+        //encoded.extend(
+        //    bincode::serialize(&self.balance_refreshed_same_proof)
+        //        .map_err(|_| ErrorKind::SerializationError)?,
+        //);
+        //encoded.extend(
+        //    bincode::serialize(&self.asset_id_refreshed_same_proof)
+        //        .map_err(|_| ErrorKind::SerializationError)?,
+        //);
+        Ok(encoded)
+    }
+}
+
+/// Wrapper for the initial transaction data and its signature.
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct PubInitConfidentialTxData {
+    pub content: PubInitConfidentialTxDataContent,
     pub sig: Signature,
 }
 
-/// Holds the public portion of the confidential transaction that is finalized by
-/// receiver.
+/// Holds the initial transaction data and the proof of equality of asset ids
+/// prepared by the receiver.
 #[derive(Debug)]
-pub struct PubFinalConfidentialTxData {
+pub struct PubFinalConfidentialTxDataContent {
     pub init_data: PubInitConfidentialTxData,
     pub asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof,
+}
+
+impl PubFinalConfidentialTxDataContent {
+    pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
+        let mut encoded = vec![];
+        encoded.extend(
+            bincode::serialize(&self.init_data).map_err(|_| ErrorKind::SerializationError)?,
+        );
+        //encoded.extend(
+        //    bincode::serialize(&self.asset_id_equal_cipher_proof)
+        //        .map_err(|_| ErrorKind::SerializationError)?,
+        //);
+        Ok(encoded)
+    }
+}
+/// Wrapper for the contents and the signature of the content sent by the
+/// receiver of the transaction.
+#[derive(Debug)]
+pub struct PubFinalConfidentialTxData {
+    pub content: PubFinalConfidentialTxDataContent,
     pub sig: Signature,
 }
 

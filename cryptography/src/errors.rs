@@ -145,6 +145,12 @@ pub enum ErrorKind {
 
     #[fail(display = "The account does not match the account on the transaction")]
     AccountIdMismatch,
+
+    #[fail(display = "Error during the serialization to byte array.")]
+    SerializationError,
+
+    #[fail(display = "The signature failed to verify.")]
+    SignatureValidationFailure,
 }
 
 pub type Fallible<T, E = Error> = std::result::Result<T, E>;
