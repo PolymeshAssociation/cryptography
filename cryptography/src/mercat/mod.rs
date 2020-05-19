@@ -21,6 +21,7 @@ use crate::{
 use bulletproofs::RangeProof;
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use rand::rngs::StdRng;
+use sp_application_crypto::sr25519;
 
 // ---------------------- START: temporary types, move them to the proper location
 
@@ -29,10 +30,6 @@ use rand::rngs::StdRng;
 pub struct MembershipProofInitialMessage {}
 #[derive(Default, Clone)]
 pub struct MembershipProofFinalResponse {}
-
-// TODO move after CRYP-71
-#[derive(Default, Debug, Clone)]
-pub struct Signature {}
 
 // ---------------------- END: temporary types, move them to other files
 
@@ -43,7 +40,7 @@ pub struct Signature {}
 // Having separate types for encryption and signature will ensure that the keys used for encryption
 // and signing are different.
 
-/// Holds ElGamal encryption public key
+/// Holds ElGamal encryption public key.
 #[derive(Default, Debug, Clone, Copy)]
 pub struct EncryptionPubKey {
     pub key: ElgamalPublicKey,
@@ -55,7 +52,7 @@ impl From<ElgamalPublicKey> for EncryptionPubKey {
     }
 }
 
-/// Holds ElGamal encryption secret key
+/// Holds ElGamal encryption secret key.
 #[derive(Clone)]
 pub struct EncryptionSecKey {
     pub key: ElgamalSecretKey,
@@ -67,20 +64,27 @@ impl From<ElgamalSecretKey> for EncryptionSecKey {
     }
 }
 
-/// Holds ElGamal encryption keys
+/// Holds ElGamal encryption keys.
 #[derive(Clone)]
 pub struct EncryptionKeys {
     pub pblc: EncryptionPubKey,
     pub scrt: EncryptionSecKey,
 }
 
-type SignaturePubKey = EncryptionPubKey;
-type SignatureSecKey = EncryptionSecKey;
-
-pub struct SignatureKeys {
-    pub pblc: SignaturePubKey,
-    pub scrt: SignatureSecKey,
+/// Holds the SR25519 signature scheme public key.
+pub struct SignaturePubKey {
+    pub key: sr25519::Public,
 }
+
+/// Holds the SR25519 signature scheme public and private key pair.
+#[derive(Clone)]
+pub struct SignatureKeys {
+    pub pair: sr25519::Pair,
+}
+
+/// Type alias for SR25519 signature.
+pub type Signature = sr25519::Signature;
+
 /// Type alias for Twisted ElGamal ciphertext of asset ids.
 pub type EncryptedAssetId = CipherText;
 
@@ -280,7 +284,7 @@ pub trait AssetTransactionIssuer {
     fn initialize(
         &self,
         issr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-        issr_sign_key: SignatureSecKey,
+        issr_sign_keys: SignatureKeys,
         amount: u32,
         issr_account: PubAccount,
         mdtr_pub_key: EncryptionPubKey,
@@ -309,7 +313,7 @@ pub trait AssetTransactionMediator {
         issr_account: PubAccount,
         state: AssetTxState,
         mdtr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-        mdtr_sign_key: SignatureSecKey,
+        mdtr_sign_keys: SignatureKeys,
         issr_pub_key: EncryptionPubKey,
         issr_acount: PubAccount,
     ) -> Fallible<(Signature, PubAccount, AssetTxState)>;
@@ -373,7 +377,7 @@ pub trait ConfidentialTransactionSender {
     fn create(
         &self,
         sndr_enc_keys: EncryptionKeys,
-        sndr_sign_key: SignatureSecKey,
+        sndr_sign_keys: SignatureKeys,
         sndr_account: PubAccount,
         rcvr_pub_key: EncryptionPubKey,
         rcvr_account: PubAccount,
@@ -409,7 +413,7 @@ pub trait ConfidentialTransactionReceiver {
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
         rcvr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-        rcvr_sign_key: SignatureSecKey,
+        rcvr_sign_keys: SignatureKeys,
         sndr_pub_key: EncryptionPubKey,
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
@@ -457,7 +461,7 @@ pub trait ConfidentialTransactionReverseAndProcessMediator {
         &self,
         conf_tx_final_data: PubFinalConfidentialTxData,
         mdtr_enc_keys: EncryptionSecKey,
-        mdtr_sign_key: SignatureSecKey,
+        mdtr_sign_keys: SignatureKeys,
         state: ConfidentialTxState,
     ) -> Fallible<(PubReverseConfidentialTxData, ConfidentialTxState)>;
 }

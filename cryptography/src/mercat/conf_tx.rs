@@ -13,12 +13,14 @@ use crate::{
         ConfidentialTransactionInitVerifier, ConfidentialTransactionReceiver,
         ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAssetId,
         EncryptionKeys, EncryptionPubKey, EncryptionSecKey, InRangeProof, PubAccount,
-        PubFinalConfidentialTxData, PubInitConfidentialTxData, Signature, SignaturePubKey,
-        SignatureSecKey, TxSubstate,
+        PubFinalConfidentialTxData, PubInitConfidentialTxData, Signature, SignatureKeys,
+        SignaturePubKey, TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
 use rand::rngs::StdRng;
+use sp_application_crypto::sr25519;
+use sp_core::crypto::Pair;
 use std::convert::TryFrom;
 use zeroize::Zeroizing;
 
@@ -34,7 +36,7 @@ impl ConfidentialTransactionSender for CtxSender {
     fn create(
         &self,
         sndr_enc_keys: EncryptionKeys,
-        sndr_sign_key: SignatureSecKey,
+        sndr_sign_keys: SignatureKeys,
         sndr_account: PubAccount,
         rcvr_pub_key: EncryptionPubKey,
         rcvr_account: PubAccount,
@@ -144,7 +146,7 @@ impl ConfidentialTransactionSender for CtxSender {
             enc_asset_id_using_rcvr,
         };
         // TODO: sign memo and all the five proofs
-        let sig = Signature {};
+        let sig = sr25519::Signature([0u8; 64]);
 
         let init_data = PubInitConfidentialTxData {
             amount_equal_cipher_proof,
@@ -176,7 +178,7 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
         rcvr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-        rcvr_sign_key: SignatureSecKey,
+        rcvr_sign_keys: SignatureKeys,
         sndr_pub_key: EncryptionPubKey,
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
@@ -188,7 +190,7 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
         self.finalize_by_receiver(
             conf_tx_init_data,
             rcvr_enc_keys.1,
-            rcvr_sign_key,
+            rcvr_sign_keys,
             rcvr_account,
             state,
             amount,
@@ -208,7 +210,7 @@ impl CtxReceiver {
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
         rcvr_enc_sec: EncryptionSecKey,
-        rcvr_sign_key: SignatureSecKey,
+        rcvr_sign_keys: SignatureKeys,
         rcvr_account: PubAccount,
         state: ConfidentialTxState,
         expected_amount: u32,
@@ -251,7 +253,7 @@ impl CtxReceiver {
                 PubFinalConfidentialTxData {
                     init_data: conf_tx_init_data,
                     asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof { init, response },
-                    sig: Signature {}, // TODO: sign memo + ALL the proofs of init and final
+                    sig: sr25519::Signature([0u8; 64]), // TODO: sign memo + ALL the proofs of init and final
                 },
                 ConfidentialTxState::Finalization(TxSubstate::Started),
             ))
@@ -434,12 +436,8 @@ mod tests {
 
     fn mock_gen_sign_key_pair(seed: u8) -> SignatureKeys {
         let mut rng = StdRng::from_seed([seed; 32]);
-        let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
-        let elg_pub = elg_secret.get_public_key();
-        SignatureKeys {
-            pblc: elg_pub.into(),
-            scrt: elg_secret.into(),
-        }
+        let pair = sr25519::Pair::from_seed(&[seed; 32]);
+        SignatureKeys { pair }
     }
 
     fn mock_ctx_init_memo(
@@ -533,7 +531,7 @@ mod tests {
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
             rcvr_enc_keys.scrt,
-            rcvr_sign_keys.scrt,
+            rcvr_sign_keys,
             rcvr_account,
             valid_state,
             expected_amount,
@@ -565,7 +563,7 @@ mod tests {
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
             rcvr_enc_keys.scrt,
-            rcvr_sign_keys.scrt,
+            rcvr_sign_keys,
             rcvr_account,
             invalid_state,
             expected_amount,
@@ -599,7 +597,7 @@ mod tests {
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
             rcvr_enc_keys.scrt,
-            rcvr_sign_keys.scrt,
+            rcvr_sign_keys,
             rcvr_account,
             valid_state,
             expected_amount,
@@ -634,7 +632,7 @@ mod tests {
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
             rcvr_enc_keys.scrt,
-            rcvr_sign_keys.scrt,
+            rcvr_sign_keys,
             rcvr_account,
             valid_state,
             expected_amount,
@@ -678,7 +676,7 @@ mod tests {
         // Create the trasaction and check its result and state
         let result = sndr.create(
             sndr_enc_keys,
-            sndr_sign_keys.scrt,
+            sndr_sign_keys.clone(),
             sndr_account_for_initialize,
             rcvr_enc_keys.pblc,
             rcvr_account_for_initialize,
@@ -696,7 +694,9 @@ mod tests {
         let result = sndr_vldtr.verify(
             ctx_init_data.clone(),
             sndr_account,
-            sndr_sign_keys.pblc,
+            SignaturePubKey {
+                key: sndr_sign_keys.pair.public(),
+            },
             state,
         );
         let state = result.unwrap();
@@ -712,7 +712,7 @@ mod tests {
         let result = rcvr.finalize_by_receiver(
             ctx_init_data,
             rcvr_enc_keys.scrt,
-            rcvr_sign_keys.scrt,
+            rcvr_sign_keys,
             rcvr_account_for_finalize,
             state,
             amount,
