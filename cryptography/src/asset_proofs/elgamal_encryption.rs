@@ -17,7 +17,7 @@ use zeroize::Zeroize;
 use sp_std::prelude::*;
 
 /// Prover's representation of the commitment secret.
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Zeroize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Zeroize)]
 #[zeroize(drop)]
 pub struct CommitmentWitness {
     /// The value to encrypt.
@@ -141,7 +141,7 @@ define_sub_assign_variants!(LHS = CipherText, RHS = CipherText);
 /// where g and h are 2 orthogonal generators.
 
 /// An Elgamal Secret Key is a random scalar.
-#[derive(Debug, Clone, Serialize, Deserialize, Zeroize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Zeroize)]
 #[zeroize(drop)]
 pub struct ElgamalSecretKey {
     pub secret: Scalar,

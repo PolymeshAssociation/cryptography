@@ -33,10 +33,10 @@ pub const CIPHERTEXT_REFRESHMENT_PROOF_CHALLENGE_LABEL: &[u8] =
 // public key
 // ------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct CipherTextRefreshmentFinalResponse(Scalar);
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct CipherTextRefreshmentInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -194,6 +194,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use std::convert::TryFrom;
     use wasm_bindgen_test::*;
@@ -273,5 +274,34 @@ mod tests {
             final_response
         )
         .is_ok());
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = 13u32;
+
+        let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let elg_pub = elg_secret.get_public_key();
+        let ciphertext1 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
+        let ciphertext2 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
+
+        let prover =
+            CipherTextRefreshmentProverAwaitingChallenge::new(elg_secret, ciphertext1, ciphertext2);
+        let (initial_message0, final_response0) = encryption_proofs::single_property_prover::<
+            StdRng,
+            CipherTextRefreshmentProverAwaitingChallenge,
+        >(prover, &mut rng)
+        .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message0).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response0).unwrap();
+        let recovered_initial_message: CipherTextRefreshmentInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: CipherTextRefreshmentFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message0);
+        assert_eq!(recovered_final_response, final_response0);
     }
 }

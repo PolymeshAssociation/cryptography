@@ -27,7 +27,7 @@ pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessChalle
 // Proof of Correct Encryption of the Given Value
 // ------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct CorrectnessFinalResponse(Scalar);
 
 impl From<Scalar> for CorrectnessFinalResponse {
@@ -36,7 +36,7 @@ impl From<Scalar> for CorrectnessFinalResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct CorrectnessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -179,6 +179,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use std::convert::TryFrom;
     use wasm_bindgen_test::*;
@@ -228,5 +229,32 @@ mod tests {
             result,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = 42u32;
+        let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let pub_key = secret_key.get_public_key();
+        let rand_blind = Scalar::random(&mut rng);
+        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+
+        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, w);
+        let (initial_message, final_response) = encryption_proofs::single_property_prover::<
+            StdRng,
+            CorrectnessProverAwaitingChallenge,
+        >(prover, &mut rng)
+        .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
+        let recovered_initial_message: CorrectnessInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: CorrectnessFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message);
+        assert_eq!(recovered_final_response, final_response);
     }
 }

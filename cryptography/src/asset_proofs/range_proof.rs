@@ -15,7 +15,7 @@ const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 // Range Proof
 // ------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct RangeProofInitialMessage(CompressedRistretto);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -96,6 +96,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use std::convert::TryFrom;
     use wasm_bindgen_test::*;
@@ -127,5 +128,29 @@ mod tests {
         let (bad_proof, bad_commitment) =
             prove_within_range(large_secret_value, rand_blind, 32).expect("This shouldn't happen.");
         assert!(!verify_within_range(bad_proof, bad_commitment, 32));
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_range_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = 42u32;
+        let rand_blind = Scalar::random(&mut rng);
+
+        let (initial_message, final_response) =
+            prove_within_range(secret_value as u64, rand_blind, 32)
+                .expect("This shouldn't happen.");
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
+        let recovered_initial_message: RangeProofInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: RangeProofFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message);
+        assert_eq!(
+            final_response_bytes,
+            serialize(&recovered_final_response).unwrap()
+        );
     }
 }

@@ -273,7 +273,7 @@ impl Polynomial {
 /// The R1 Proof is a zero-knowledge proof for a (bit-matrix) commitment B having an opening
 /// to a bit-matrix, where in each row there is exactly one 1.
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct R1ProofInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -303,7 +303,7 @@ impl UpdateTranscript for R1ProofInitialMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct R1ProofFinalResponse {
     f_elements: Vec<Scalar>,
     z_a: Scalar,
@@ -499,7 +499,7 @@ impl AssetProofVerifier for R1ProofVerifier {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OOONProofInitialMessage {
     r1_proof_initial_message: R1ProofInitialMessage,
     g_vec: Vec<RistrettoPoint>,
@@ -537,7 +537,7 @@ impl UpdateTranscript for OOONProofInitialMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OOONProofFinalResponse {
     r1_proof_final_response: R1ProofFinalResponse,
     z: Scalar,
