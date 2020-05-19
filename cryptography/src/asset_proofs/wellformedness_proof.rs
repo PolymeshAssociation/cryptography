@@ -17,6 +17,7 @@ use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
 
 /// The domain label for the wellformedness proof.
@@ -24,13 +25,13 @@ pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathWellforme
 /// The domain label for the challenge.
 pub const WELLFORMEDNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathWellformednessProofChallenge";
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
 pub struct WellformednessFinalResponse {
     z1: Scalar,
     z2: Scalar,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct WellformednessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -116,7 +117,7 @@ impl AssetProofProver<WellformednessFinalResponse> for WellformednessProver {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct WellformednessVerifier {
     pub pub_key: ElgamalPublicKey,
     pub cipher: CipherText,
@@ -154,6 +155,7 @@ mod tests {
         single_property_prover, single_property_verifier,
     };
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use std::convert::TryFrom;
     use wasm_bindgen_test::*;
@@ -254,5 +256,36 @@ mod tests {
             single_property_verifier(&verifier, initial_message, bad_final_response),
             ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = 42u32;
+        let rand_blind = Scalar::random(&mut rng);
+
+        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+        let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let pub_key = elg_secret.get_public_key();
+
+        let prover = WellformednessProverAwaitingChallenge {
+            pub_key,
+            w: Zeroizing::new(w.clone()),
+        };
+        let (initial_message, final_response) = encryption_proofs::single_property_prover::<
+            StdRng,
+            WellformednessProverAwaitingChallenge,
+        >(prover, &mut rng)
+        .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
+        let recovered_initial_message: WellformednessInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: WellformednessFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message);
+        assert_eq!(recovered_final_response, final_response);
     }
 }

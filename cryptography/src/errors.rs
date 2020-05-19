@@ -60,7 +60,7 @@ pub enum ErrorKind {
     #[fail(display = "Encrypted value was not found within the valid range")]
     CipherTextDecryptionError,
 
-    /// A proof verification error occured.
+    /// A proof verification error occurred.
     #[fail(display = "A proof verification error occured")]
     VerificationError,
 
@@ -114,14 +114,15 @@ pub enum ErrorKind {
     )]
     EncryptingSameValueFinalResponseVerificationError { check: u16 },
 
-    /// A range proof error occured.
-    #[fail(display = "A range proof error occured: {}", _0)]
-    ProvingError(#[cause] ProofError),
-
+    /// TODO: remove this once all the mercat methods are implemented.
     #[fail(display = "This method is not implemented yet")]
     NotImplemented,
+
+    /// The incoming transaction state does not match the expectation.
     #[fail(display = "Received an invalid previous state: {:?}", state)]
     InvalidPreviousState { state: ConfidentialTxState },
+
+    /// The amount in the initial transaction does not match the amount that receiver expacted.
     #[fail(
         display = "Expected to receive {:?} form the sender, got {:?}",
         expected_amount, received_amount
@@ -131,9 +132,12 @@ pub enum ErrorKind {
         received_amount: u32,
     },
 
+    /// The public key in the memo of the initial transaction does not match the public key
+    /// in the memo.
     #[fail(display = "Public keys in the memo and the account are different.")]
     InputPubKeyMismatch,
 
+    /// The sender has attempted to send more that their balance.
     #[fail(
         display = "Transaction amount {} must be equal or greater than {}",
         transaction_amount, balance
@@ -143,14 +147,21 @@ pub enum ErrorKind {
         transaction_amount: u32,
     },
 
+    /// The account Id in the transaction does not match the input account info.
     #[fail(display = "The account does not match the account on the transaction")]
     AccountIdMismatch,
 
+    /// Error while converting a transaction content to binary format.
     #[fail(display = "Error during the serialization to byte array.")]
     SerializationError,
 
+    /// Signature verification failure.
     #[fail(display = "The signature failed to verify.")]
     SignatureValidationFailure,
+
+    /// A range proof error occurred.
+    #[fail(display = "A range proof error occured: {}", source)]
+    ProvingError { source: ProofError },
 }
 
 pub type Fallible<T, E = Error> = std::result::Result<T, E>;

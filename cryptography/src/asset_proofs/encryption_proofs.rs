@@ -200,7 +200,8 @@ mod tests {
     use crate::{
         asset_proofs::{
             correctness_proof::{
-                CorrectnessInitialMessage, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+                CorrectnessFinalResponse, CorrectnessInitialMessage,
+                CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
             },
             wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
             CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
@@ -281,7 +282,7 @@ mod tests {
             ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_final_response = Scalar::one();
+        let bad_final_response = CorrectnessFinalResponse::from(Scalar::one());
         assert_err!(
             single_property_verifier(&verifier0, initial_message0, bad_final_response),
             ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }

@@ -13,12 +13,12 @@ use crate::{
             EncryptingSameValueFinalResponse, EncryptingSameValueInitialMessage,
         },
         range_proof,
+        range_proof::{RangeProofFinalResponse, RangeProofInitialMessage},
         wellformedness_proof::{WellformednessFinalResponse, WellformednessInitialMessage},
         CipherText, ElgamalPublicKey, ElgamalSecretKey,
     },
     errors::{ErrorKind, Fallible},
 };
-use bulletproofs::RangeProof;
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
@@ -73,8 +73,15 @@ pub struct EncryptionKeys {
 }
 
 /// Holds the SR25519 signature scheme public key.
+#[derive(Clone)]
 pub struct SignaturePubKey {
     pub key: sr25519::Public,
+}
+
+impl From<sr25519::Public> for SignaturePubKey {
+    fn from(key: sr25519::Public) -> Self {
+        Self { key }
+    }
 }
 
 /// Holds the SR25519 signature scheme public and private key pair.
@@ -116,19 +123,19 @@ pub struct MembershipProof {
 /// Holds the non-interactive range proofs, equivalent of L_range of MERCAT paper.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InRangeProof {
-    pub proof: RangeProof,
-    pub commitment: CompressedRistretto,
+    pub init: RangeProofInitialMessage,
+    pub response: RangeProofFinalResponse,
     pub range: usize,
 }
 
 impl Default for InRangeProof {
     fn default() -> Self {
         let range = 32;
-        let (proof, commitment) = range_proof::prove_within_range(0, Scalar::one(), range)
+        let (init, response) = range_proof::prove_within_range(0, Scalar::one(), range)
             .expect("This shouldn't happen.");
         InRangeProof {
-            proof: proof,
-            commitment: commitment,
+            init,
+            response,
             range: range,
         }
     }
@@ -197,14 +204,16 @@ pub type AssetMemo = EncryptedAmount;
 /// Holds the account memo. TODO: more informative description!
 #[derive(Clone)]
 pub struct AccountMemo {
-    pub owner_pub_key: EncryptionPubKey,
+    pub owner_enc_pub_key: EncryptionPubKey,
+    pub owner_sign_pub_key: SignaturePubKey,
     pub timestamp: std::time::Instant,
 }
 
-impl From<EncryptionPubKey> for AccountMemo {
-    fn from(owner_pub_key: EncryptionPubKey) -> Self {
+impl From<(EncryptionPubKey, SignaturePubKey)> for AccountMemo {
+    fn from(pub_keys: (EncryptionPubKey, SignaturePubKey)) -> Self {
         AccountMemo {
-            owner_pub_key,
+            owner_enc_pub_key: pub_keys.0,
+            owner_sign_pub_key: pub_keys.1,
             timestamp: std::time::Instant::now(),
         }
     }

@@ -17,6 +17,8 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
+use std::convert::From;
 use zeroize::Zeroize;
 
 /// The domain label for the correctness proof.
@@ -28,9 +30,16 @@ pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessChalle
 // Proof of Correct Encryption of the Given Value
 // ------------------------------------------------------------------------
 
-pub type CorrectnessFinalResponse = Scalar;
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
+pub struct CorrectnessFinalResponse(Scalar);
 
-#[derive(Copy, Clone, Debug)]
+impl From<Scalar> for CorrectnessFinalResponse {
+    fn from(response: Scalar) -> Self {
+        CorrectnessFinalResponse(response)
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct CorrectnessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -114,7 +123,7 @@ impl AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChallenge {
 
 impl AssetProofProver<CorrectnessFinalResponse> for CorrectnessProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> CorrectnessFinalResponse {
-        self.u + c.x() * self.w.blinding()
+        CorrectnessFinalResponse(self.u + c.x() * self.w.blinding())
     }
 }
 
@@ -153,11 +162,11 @@ impl AssetProofVerifier for CorrectnessVerifier {
         let y_prime = self.cipher.y - (Scalar::from(self.value) * pc_gens.B);
 
         ensure!(
-            z * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
+            z.0 * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
             ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * pc_gens.B_blinding == initial_message.b + challenge.x() * y_prime,
+            z.0 * pc_gens.B_blinding == initial_message.b + challenge.x() * y_prime,
             ErrorKind::CorrectnessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
@@ -173,6 +182,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use std::convert::TryFrom;
     use wasm_bindgen_test::*;
@@ -216,11 +226,38 @@ mod tests {
             ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_final_response = Scalar::default();
+        let bad_final_response = CorrectnessFinalResponse(Scalar::default());
         let result = verifier.verify(&gens, &challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
             ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = 42u32;
+        let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let pub_key = secret_key.get_public_key();
+        let rand_blind = Scalar::random(&mut rng);
+        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+
+        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, w);
+        let (initial_message, final_response) = encryption_proofs::single_property_prover::<
+            StdRng,
+            CorrectnessProverAwaitingChallenge,
+        >(prover, &mut rng)
+        .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
+        let recovered_initial_message: CorrectnessInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: CorrectnessFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message);
+        assert_eq!(recovered_final_response, final_response);
     }
 }
