@@ -18,6 +18,7 @@ use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 /// The domain label for the ciphertext refreshment proof.
@@ -32,9 +33,10 @@ pub const CIPHERTEXT_REFRESHMENT_PROOF_CHALLENGE_LABEL: &[u8] =
 // public key
 // ------------------------------------------------------------------------
 
-pub type CipherTextRefreshmentFinalResponse = Scalar;
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
+pub struct CipherTextRefreshmentFinalResponse(Scalar);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct CipherTextRefreshmentInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -129,7 +131,7 @@ impl AssetProofProverAwaitingChallenge for CipherTextRefreshmentProverAwaitingCh
 
 impl AssetProofProver<CipherTextRefreshmentFinalResponse> for CipherTextRefreshmentProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> CipherTextRefreshmentFinalResponse {
-        self.u + c.x() * self.secret_key.secret
+        CipherTextRefreshmentFinalResponse(self.u + c.x() * self.secret_key.secret)
     }
 }
 
@@ -172,11 +174,11 @@ impl AssetProofVerifier for CipherTextRefreshmentVerifier {
         z: &Self::ZKFinalResponse,
     ) -> Result<()> {
         ensure!(
-            z * self.y == initial_message.a + challenge.x() * self.x,
+            z.0 * self.y == initial_message.a + challenge.x() * self.x,
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * pc_gens.B_blinding == initial_message.b + challenge.x() * self.pub_key.pub_key,
+            z.0 * pc_gens.B_blinding == initial_message.b + challenge.x() * self.pub_key.pub_key,
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 2 }
         );
         Ok(())
@@ -192,6 +194,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use std::convert::TryFrom;
     use wasm_bindgen_test::*;
@@ -236,7 +239,7 @@ mod tests {
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_final_response = Scalar::default();
+        let bad_final_response = CipherTextRefreshmentFinalResponse(Scalar::default());
         assert_err!(
             verifier.verify(&gens, &challenge, &initial_message, &bad_final_response),
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
@@ -271,5 +274,34 @@ mod tests {
             final_response
         )
         .is_ok());
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = 13u32;
+
+        let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let elg_pub = elg_secret.get_public_key();
+        let ciphertext1 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
+        let ciphertext2 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
+
+        let prover =
+            CipherTextRefreshmentProverAwaitingChallenge::new(elg_secret, ciphertext1, ciphertext2);
+        let (initial_message0, final_response0) = encryption_proofs::single_property_prover::<
+            StdRng,
+            CipherTextRefreshmentProverAwaitingChallenge,
+        >(prover, &mut rng)
+        .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message0).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response0).unwrap();
+        let recovered_initial_message: CipherTextRefreshmentInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: CipherTextRefreshmentFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message0);
+        assert_eq!(recovered_final_response, final_response0);
     }
 }
