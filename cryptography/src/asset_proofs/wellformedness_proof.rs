@@ -115,7 +115,7 @@ impl AssetProofProver<WellformednessFinalResponse> for WellformednessProver {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct WellformednessVerifier {
     pub pub_key: ElgamalPublicKey,
     pub cipher: CipherText,
