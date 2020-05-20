@@ -227,5 +227,5 @@ pub mod encrypting_same_value_proof;
 pub mod one_out_of_many_proof;
 pub mod range_proof;
 pub mod wellformedness_proof;
-
+pub mod membership_proof;
 pub mod transcript;
