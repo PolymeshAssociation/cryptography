@@ -75,7 +75,7 @@ impl ConfidentialTransactionSender for CtxSender {
                 rng,
             )?);
 
-        // Prove that committed amount is not negative
+        // Prove that the committed amount is not negative
         let non_neg_amount_proof = InRangeProof {
             init: RangeProofInitialMessage(sndr_new_enc_amount.y.compress()),
             response: prove_within_range(amount.into(), amount_enc_blinding, range)?.1,
@@ -98,7 +98,7 @@ impl ConfidentialTransactionSender for CtxSender {
                 rng,
             )?);
 
-        // Prove that sender has enough funds
+        // Prove that the sender has enough funds
         let blinding = balance_refresh_enc_blinding - amount_enc_blinding;
         let enough_fund_proof = InRangeProof::from(prove_within_range(
             (balance - amount).into(),
@@ -137,7 +137,7 @@ impl ConfidentialTransactionSender for CtxSender {
                 rng,
             )?);
 
-        // ------- gather the content and sign it
+        // Gather the content and sign it
         let content = PubInitConfidentialTxDataContent {
             amount_equal_cipher_proof,
             non_neg_amount_proof,
@@ -223,7 +223,7 @@ impl CtxReceiver {
             ErrorKind::InvalidPreviousState { state }
         );
 
-        // Check that amount is correct
+        // Check that the amount is correct
         let received_amount = rcvr_enc_sec
             .key
             .decrypt(&conf_tx_init_data.content.memo.enc_amount_using_rcvr)?;
@@ -236,7 +236,7 @@ impl CtxReceiver {
             }
         );
 
-        // Check rcvc public keys match
+        // Check that the received public keys match
         let acc_key = conf_tx_init_data.content.memo.rcvr_pub_key.key;
         let memo_key = rcvr_account.memo.owner_enc_pub_key.key;
         ensure!(acc_key == memo_key, ErrorKind::InputPubKeyMismatch);
@@ -282,7 +282,7 @@ fn verify_initital_transaction_proofs(
         ErrorKind::AccountIdMismatch
     );
 
-    // Verify encrypted amounts are equal
+    // Verify that the encrypted amounts are equal
     single_property_verifier(
         &EncryptingSameValueVerifier {
             pub_key1: memo.sndr_pub_key.key,
@@ -294,14 +294,14 @@ fn verify_initital_transaction_proofs(
         init_data.amount_equal_cipher_proof.response,
     )?;
 
-    // Verify that amount is not negative
+    // Verify that the amount is not negative
     verify_within_range(
         init_data.non_neg_amount_proof.clone().init,
         init_data.non_neg_amount_proof.clone().response,
         init_data.non_neg_amount_proof.range,
     )?;
 
-    // verify the balance refreshment was done correctly
+    // verify that the balance refreshment was done correctly
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
             memo.sndr_pub_key.key,
@@ -312,14 +312,14 @@ fn verify_initital_transaction_proofs(
         init_data.balance_refreshed_same_proof.response,
     )?;
 
-    // Verify that balance has enough fund
+    // Verify that the balance has enough fund
     verify_within_range(
         init_data.enough_fund_proof.clone().init,
         init_data.enough_fund_proof.clone().response,
         init_data.enough_fund_proof.range,
     )?;
 
-    // verify the asset id refreshment was done correctly
+    // Verify that the asset id refreshment was done correctly
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
             memo.sndr_pub_key.key,
@@ -330,8 +330,8 @@ fn verify_initital_transaction_proofs(
         init_data.asset_id_refreshed_same_proof.response,
     )?;
 
-    // In the inital transaction, sender has encrypted the sset id
-    // using receiver pub key. We verify that this encrypted asset id
+    // In the inital transaction, the sender has encrypted the asset id
+    // using the receiver pub key. We verify that this encrypted asset id
     // is the same as the one in the sender account.
     single_property_verifier(
         &EncryptingSameValueVerifier {
@@ -354,22 +354,24 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
         &self,
         transaction: PubInitConfidentialTxData,
         sndr_account: PubAccount,
-        sndr_sign_pub_key: SignaturePubKey,
         state: ConfidentialTxState,
     ) -> Fallible<ConfidentialTxState> {
         ensure!(
             state == ConfidentialTxState::Initialization(TxSubstate::Started),
             ErrorKind::InvalidPreviousState { state }
         );
+
         ensure!(
             sr25519::Pair::verify(
                 &transaction.sig,
                 &transaction.content.to_bytes()?,
-                &sndr_sign_pub_key.key
+                &sndr_account.memo.owner_sign_pub_key.key,
             ),
             ErrorKind::SignatureValidationFailure
         );
+
         verify_initital_transaction_proofs(transaction, sndr_account)?;
+
         Ok(ConfidentialTxState::Initialization(TxSubstate::Verified))
     }
 }
@@ -391,14 +393,23 @@ impl CtxReceiverValidator {
             ErrorKind::InvalidPreviousState { state }
         );
 
+        ensure!(
+            sr25519::Pair::verify(
+                &conf_tx_final_data.sig,
+                &conf_tx_final_data.content.to_bytes()?,
+                &rcvr_account.memo.owner_sign_pub_key.key,
+            ),
+            ErrorKind::SignatureValidationFailure
+        );
+
         let memo = &conf_tx_final_data.content.init_data.content.memo;
         let init_data = conf_tx_final_data.content.init_data.clone();
         let final_content = &conf_tx_final_data.content;
 
         verify_initital_transaction_proofs(init_data, sndr_account)?;
 
-        // In the inital transaction, sender has encrypted the asset id
-        // using receiver pub key.We verify that this encrypted asset id
+        // In the inital transaction, the sender has encrypted the asset id
+        // using the receiver pub key. We verify that this encrypted asset id
         // is the same as the one in the receiver account
         single_property_verifier(
             &CipherTextRefreshmentVerifier::new(
@@ -409,15 +420,6 @@ impl CtxReceiverValidator {
             final_content.asset_id_equal_cipher_proof.init,
             final_content.asset_id_equal_cipher_proof.response,
         )?;
-
-        ensure!(
-            sr25519::Pair::verify(
-                &conf_tx_final_data.sig,
-                &conf_tx_final_data.content.to_bytes()?,
-                &rcvr_account.memo.owner_sign_pub_key.key,
-            ),
-            ErrorKind::SignatureValidationFailure
-        );
 
         Ok(())
     }
@@ -741,14 +743,7 @@ mod tests {
         );
 
         // Verify the initialization step
-        let result = sndr_vldtr.verify(
-            ctx_init_data.clone(),
-            sndr_account,
-            SignaturePubKey {
-                key: sndr_sign_keys.pair.public(),
-            },
-            state,
-        );
+        let result = sndr_vldtr.verify(ctx_init_data.clone(), sndr_account, state);
         let state = result.unwrap();
         assert_eq!(
             state,

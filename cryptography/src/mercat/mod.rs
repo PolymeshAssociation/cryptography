@@ -469,7 +469,6 @@ pub trait ConfidentialTransactionInitVerifier {
         &self,
         transaction: PubInitConfidentialTxData,
         sndr_account: PubAccount,
-        sndr_sign_pub_key: SignaturePubKey,
         state: ConfidentialTxState,
     ) -> Fallible<ConfidentialTxState>;
 }
