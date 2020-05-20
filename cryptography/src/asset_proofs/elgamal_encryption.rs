@@ -17,7 +17,7 @@ use zeroize::Zeroize;
 use sp_std::prelude::*;
 
 /// Prover's representation of the commitment secret.
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Zeroize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Zeroize)]
 #[zeroize(drop)]
 pub struct CommitmentWitness {
     /// The value to encrypt.

@@ -13,7 +13,7 @@ pub enum AssetProofError {
     #[fail(display = "Encrypted value was not found within the valid range")]
     CipherTextDecryptionError,
 
-    /// A proof verification error occured.
+    /// A proof verification error occurred.
     #[fail(display = "A proof verification error occured")]
     VerificationError,
 
@@ -66,7 +66,7 @@ pub enum AssetProofError {
     )]
     EncryptingSameValueFinalResponseVerificationError { check: u16 },
 
-    /// A range proof error occured.
+    /// A range proof error occurred.
     #[fail(display = "A range proof error occured: {}", source)]
     ProvingError { source: ProofError },
 }
