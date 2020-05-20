@@ -271,7 +271,7 @@ impl Polynomial {
 }
 
 /// The R1 Proof is a zero-knowledge proof for a (bit-matrix) commitment B having an opening
-/// to a bit-matrix, where in each row there is exactly one 1.
+/// to a bit-matrix of size m x n, where in each row there is exactly one 1.
 
 #[derive(Copy, Clone, Debug)]
 pub struct R1ProofInitialMessage {
@@ -327,29 +327,18 @@ pub struct R1Prover {
 pub struct R1ProverAwaitingChallenge<'a> {
     /// The bit-value matrix, where each row contains only one 1
     b_matrix: Matrix,
-    /// The randomness used for committing to the bit matrix
-    r_b: Scalar,
-    generators: &'a OooNProofGenerators,
-    m: usize,
-    n: usize,
-}
 
-impl<'a> R1ProverAwaitingChallenge<'a> {
-    pub fn new(
-        bit_matrix: Matrix,
-        random: Scalar,
-        ooon_gens: &'a OooNProofGenerators,
-        rows: usize,
-        columns: usize,
-    ) -> Self {
-        R1ProverAwaitingChallenge {
-            b_matrix: bit_matrix,
-            r_b: random,
-            generators: ooon_gens,
-            m: rows,
-            n: columns,
-        }
-    }
+    /// The randomness used for committing to the bit matrix
+    r_b: Zeroizing<Scalar>,
+
+    /// The generator elemements.
+    generators: &'a OooNProofGenerators,
+
+    /// Specifies the matrix rows.
+    m: usize,
+
+    /// Specifies the matrix columns.
+    n: usize,
 }
 
 impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
@@ -407,7 +396,7 @@ impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
             R1Prover {
                 a_values: a_matrix.elements.clone(),
                 b_matrix: Zeroizing::new(self.b_matrix.clone()),
-                r_b: self.r_b.clone(),
+                r_b: *self.r_b.clone(),
                 r_a: random_a,
                 r_c: random_c,
                 r_d: random_d,
@@ -416,7 +405,7 @@ impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
             },
             R1ProofInitialMessage {
                 a: generators.vector_commit(&a_matrix.elements, random_a),
-                b: generators.vector_commit(&self.b_matrix.elements, self.r_b),
+                b: generators.vector_commit(&self.b_matrix.elements, *self.r_b),
                 c: generators.vector_commit(&c_matrix.elements, random_c),
                 d: generators.vector_commit(&d_matrix.elements, random_d),
             },
@@ -449,15 +438,6 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover {
 pub struct R1ProofVerifier<'a> {
     b: RistrettoPoint,
     generators: &'a OooNProofGenerators,
-}
-
-impl<'a> R1ProofVerifier<'a> {
-    pub fn new(bit_commitment: RistrettoPoint, ooon_gens: &'a OooNProofGenerators) -> Self {
-        R1ProofVerifier {
-            b: bit_commitment,
-            generators: ooon_gens,
-        }
-    }
 }
 
 impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
@@ -622,13 +602,13 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
             elements: l_bit_matrix.clone(),
         };
 
-        let r1_prover = R1ProverAwaitingChallenge::new(
-            b_matrix_rep,
-            self.random,
-            self.generators,
-            rows,
-            columns,
-        );
+        let r1_prover = R1ProverAwaitingChallenge {
+            b_matrix: b_matrix_rep,
+            r_b: Zeroizing::new(self.random),
+            generators: self.generators,
+            m: rows,
+            n: columns,
+        };
 
         let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(rng);
 
@@ -712,7 +692,10 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         let n = final_response.n;
 
         let b_comm = initial_message.r1_proof_initial_message.b;
-        let r1_verifier = R1ProofVerifier::new(b_comm, self.generators);
+        let r1_verifier = R1ProofVerifier {
+            b: b_comm,
+            generators: self.generators,
+        };
 
         let result_r1 = r1_verifier.verify(
             c,
@@ -760,8 +743,6 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         Ok(())
     }
 }
-
-// End of new OOON code
 
 #[cfg(test)]
 mod tests {
@@ -951,12 +932,6 @@ mod tests {
         // This object is not transferred as a parameter to the API functions.
         let gens = OooNProofGenerators::new(EXPONENT, BASE);
 
-        //let generators = ProofGenerators::OooNGens(OooNProofGenerators::new(EXPONENT, BASE));
-        // I have tested passing this `wrong_generators` object instead of `generators`
-        // for testing how the function behaves in case of mismatching input parameter.
-        // It simply works fine.
-        //let _wrong_generators = ProofGenerators::PedersenGens(PedersenGens::default());
-
         let mut base_matrix: Vec<Scalar>;
         let mut b: Matrix;
         // Positive Tests:
@@ -972,9 +947,18 @@ mod tests {
             };
             let r = Scalar::from(45728u32);
             let b_comm = gens.vector_commit(&base_matrix, r);
-            let prover = R1ProverAwaitingChallenge::new(b, r, &gens, EXPONENT, BASE);
+            let prover = R1ProverAwaitingChallenge {
+                b_matrix: b,
+                r_b: Zeroizing::new(r),
+                generators: &gens,
+                m: EXPONENT,
+                n: BASE,
+            };
 
-            let verifier = R1ProofVerifier::new(b_comm, &gens);
+            let verifier = R1ProofVerifier {
+                b: b_comm,
+                generators: &gens,
+            };
             let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
             let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
 
@@ -994,9 +978,18 @@ mod tests {
         let b = Matrix::new(EXPONENT, BASE, Scalar::one());
         let r = Scalar::from(45728u32);
         let b_comm = gens.vector_commit(&b.elements, r);
-        let prover = R1ProverAwaitingChallenge::new(b, r, &gens, EXPONENT, BASE);
+        let prover = R1ProverAwaitingChallenge {
+            b_matrix: b,
+            r_b: Zeroizing::new(r),
+            generators: &gens,
+            m: EXPONENT,
+            n: BASE,
+        };
 
-        let verifier = R1ProofVerifier::new(b_comm, &gens);
+        let verifier = R1ProofVerifier {
+            b: b_comm,
+            generators: &gens,
+        };
         let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
         let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
 
