@@ -145,6 +145,8 @@ pub struct EncryptingSameValueVerifier<'a> {
 
     /// The second encryption cipher text.
     pub cipher2: CipherText,
+
+    /// The ciphertext generators.
     pub pc_gens: &'a PedersenGens,
 }
 

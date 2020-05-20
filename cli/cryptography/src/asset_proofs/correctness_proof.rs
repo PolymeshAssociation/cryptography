@@ -58,6 +58,7 @@ pub struct CorrectnessProverAwaitingChallenge<'a> {
 
     /// The secret commitment witness.
     w: CommitmentWitness,
+
     /// Pedersen Generators
     pc_gens: &'a PedersenGens,
 }
