@@ -28,7 +28,7 @@ pub fn prove_within_range(
     secret_value: u64,
     rand_blind: Scalar,
     range: usize,
-) -> Fallible<(RangeProofInitialMessage, RangeProofFinalResponse)> {
+) -> Fallible<(RangeProofInitialMessage, RangeProofFinalResponse, usize)> {
     // Generators for Pedersen commitments.
     let pc_gens = PedersenGens::default();
 
@@ -55,6 +55,7 @@ pub fn prove_within_range(
     Ok((
         RangeProofInitialMessage(commitment),
         RangeProofFinalResponse(proof),
+        range,
     ))
 }
 
@@ -105,9 +106,10 @@ mod tests {
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let (initial_message, final_response) =
+        let (initial_message, final_response, range) =
             prove_within_range(secret_value as u64, rand_blind, 32)
                 .expect("This shouldn't happen.");
+        assert_eq!(range, 32);
         assert!(verify_within_range(initial_message, final_response, 32).is_ok());
 
         // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.
@@ -119,7 +121,7 @@ mod tests {
 
         // Negative test: secret value outside the allowed range
         let large_secret_value: u64 = u64::from(u32::max_value()) + 3;
-        let (bad_proof, bad_commitment) =
+        let (bad_proof, bad_commitment, _) =
             prove_within_range(large_secret_value, rand_blind, 32).expect("This shouldn't happen.");
         assert!(!verify_within_range(bad_proof, bad_commitment, 32).is_ok());
     }
@@ -131,9 +133,10 @@ mod tests {
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let (initial_message, final_response) =
+        let (initial_message, final_response, range) =
             prove_within_range(secret_value as u64, rand_blind, 32)
                 .expect("This shouldn't happen.");
+        assert_eq!(range, 32);
 
         let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
         let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();

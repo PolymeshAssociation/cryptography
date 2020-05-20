@@ -79,7 +79,7 @@ impl ConfidentialTransactionSender for CtxSender {
         let non_neg_amount_proof = InRangeProof {
             init: RangeProofInitialMessage(sndr_new_enc_amount.y.compress()),
             response: prove_within_range(amount.into(), amount_enc_blinding, range)?.1,
-            range: range,
+            range,
         };
 
         // Refresh the encrypted balance and prove that the refreshment was done
@@ -100,13 +100,11 @@ impl ConfidentialTransactionSender for CtxSender {
 
         // Prove that sender has enough funds
         let blinding = balance_refresh_enc_blinding - amount_enc_blinding;
-        let enough_fund_commitment =
-            RangeProofInitialMessage((refreshed_enc_balance.y - sndr_new_enc_amount.y).compress());
-        let enough_fund_proof = InRangeProof {
-            init: enough_fund_commitment,
-            response: prove_within_range((balance - amount).into(), blinding, range)?.1,
-            range: range,
-        };
+        let enough_fund_proof = InRangeProof::from(prove_within_range(
+            (balance - amount).into(),
+            blinding,
+            range,
+        )?);
 
         // Refresh the encrypted asset id of the sender account and prove that the
         // refreshment was done correctly

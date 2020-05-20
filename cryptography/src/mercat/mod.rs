@@ -19,7 +19,7 @@ use crate::{
     },
     errors::{ErrorKind, Fallible},
 };
-use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
+use curve25519_dalek::scalar::Scalar;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use sp_application_crypto::sr25519;
@@ -131,12 +131,19 @@ pub struct InRangeProof {
 impl Default for InRangeProof {
     fn default() -> Self {
         let range = 32;
-        let (init, response) = range_proof::prove_within_range(0, Scalar::one(), range)
-            .expect("This shouldn't happen.");
-        InRangeProof {
-            init,
-            response,
-            range: range,
+        InRangeProof::from(
+            range_proof::prove_within_range(0, Scalar::one(), range)
+                .expect("This shouldn't happen."),
+        )
+    }
+}
+
+impl From<(RangeProofInitialMessage, RangeProofFinalResponse, usize)> for InRangeProof {
+    fn from(proof: (RangeProofInitialMessage, RangeProofFinalResponse, usize)) -> Self {
+        Self {
+            init: proof.0,
+            response: proof.1,
+            range: proof.2,
         }
     }
 }
