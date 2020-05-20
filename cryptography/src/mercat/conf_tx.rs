@@ -47,6 +47,17 @@ impl ConfidentialTransactionSender for CtxSender {
         amount: u32,
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)> {
+        // NOTE: If this decryption ends up being too slow, we can pass in the balance
+        // as input.
+        let balance = sndr_enc_keys.scrt.key.decrypt(&sndr_account.enc_balance)?;
+        ensure!(
+            balance >= amount,
+            ErrorKind::NotEnoughFund {
+                balance,
+                transaction_amount: amount
+            }
+        );
+
         let range = 32;
         // Prove that the amount encrypted under different public keys are the same
         let witness = CommitmentWitness::try_from((amount, Scalar::random(rng)))?;
@@ -88,19 +99,9 @@ impl ConfidentialTransactionSender for CtxSender {
             )?);
 
         // Prove that sender has enough funds
-        // NOTE: If this decryption ends up being too slow, we can pass in the balance
-        // as input.
-        let balance = sndr_enc_keys.scrt.key.decrypt(&sndr_account.enc_balance)?;
         let blinding = balance_refresh_enc_blinding - amount_enc_blinding;
         let enough_fund_commitment =
             RangeProofInitialMessage((refreshed_enc_balance.y - sndr_new_enc_amount.y).compress());
-        ensure!(
-            balance >= amount,
-            ErrorKind::NotEnoughFund {
-                balance,
-                transaction_amount: amount
-            }
-        );
         let enough_fund_proof = InRangeProof {
             init: enough_fund_commitment,
             response: prove_within_range((balance - amount).into(), blinding, range)?.1,
