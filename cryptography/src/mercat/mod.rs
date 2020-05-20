@@ -380,30 +380,30 @@ impl PubInitConfidentialTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
         let mut encoded = vec![];
         encoded.extend(bincode::serialize(&self.memo).map_err(|_| ErrorKind::SerializationError)?);
-        //encoded.extend(
-        //    bincode::serialize(&self.amount_equal_cipher_proof)
-        //        .map_err(|_| ErrorKind::SerializationError)?,
-        //);
-        //encoded.extend(
-        //    bincode::serialize(&self.non_neg_amount_proof)
-        //        .map_err(|_| ErrorKind::SerializationError)?,
-        //);
-        //encoded.extend(
-        //    bincode::serialize(&self.enough_fund_proof)
-        //        .map_err(|_| ErrorKind::SerializationError)?,
-        //);
-        //encoded.extend(
-        //    bincode::serialize(&self.asset_id_equal_cipher_proof)
-        //        .map_err(|_| ErrorKind::SerializationError)?,
-        //);
-        //encoded.extend(
-        //    bincode::serialize(&self.balance_refreshed_same_proof)
-        //        .map_err(|_| ErrorKind::SerializationError)?,
-        //);
-        //encoded.extend(
-        //    bincode::serialize(&self.asset_id_refreshed_same_proof)
-        //        .map_err(|_| ErrorKind::SerializationError)?,
-        //);
+        encoded.extend(
+            bincode::serialize(&self.amount_equal_cipher_proof)
+                .map_err(|_| ErrorKind::SerializationError)?,
+        );
+        encoded.extend(
+            bincode::serialize(&self.non_neg_amount_proof)
+                .map_err(|_| ErrorKind::SerializationError)?,
+        );
+        encoded.extend(
+            bincode::serialize(&self.enough_fund_proof)
+                .map_err(|_| ErrorKind::SerializationError)?,
+        );
+        encoded.extend(
+            bincode::serialize(&self.asset_id_equal_cipher_proof)
+                .map_err(|_| ErrorKind::SerializationError)?,
+        );
+        encoded.extend(
+            bincode::serialize(&self.balance_refreshed_same_proof)
+                .map_err(|_| ErrorKind::SerializationError)?,
+        );
+        encoded.extend(
+            bincode::serialize(&self.asset_id_refreshed_same_proof)
+                .map_err(|_| ErrorKind::SerializationError)?,
+        );
         Ok(encoded)
     }
 }
@@ -429,10 +429,10 @@ impl PubFinalConfidentialTxDataContent {
         encoded.extend(
             bincode::serialize(&self.init_data).map_err(|_| ErrorKind::SerializationError)?,
         );
-        //encoded.extend(
-        //    bincode::serialize(&self.asset_id_equal_cipher_proof)
-        //        .map_err(|_| ErrorKind::SerializationError)?,
-        //);
+        encoded.extend(
+            bincode::serialize(&self.asset_id_equal_cipher_proof)
+                .map_err(|_| ErrorKind::SerializationError)?,
+        );
         Ok(encoded)
     }
 }
