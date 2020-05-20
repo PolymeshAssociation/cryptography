@@ -272,7 +272,7 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
-
+        let gens = PedersenGens::default();
         let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = elg_secret.get_public_key();
@@ -280,6 +280,7 @@ mod tests {
         let prover = WellformednessProverAwaitingChallenge {
             pub_key,
             w: Zeroizing::new(w.clone()),
+            pc_gens: &gens,
         };
         let (initial_message, final_response) = encryption_proofs::single_property_prover::<
             StdRng,

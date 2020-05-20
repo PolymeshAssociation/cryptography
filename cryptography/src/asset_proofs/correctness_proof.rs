@@ -179,7 +179,7 @@ impl<'a> AssetProofVerifier for CorrectnessVerifier<'a> {
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * generators.B_blinding == initial_message.b + challenge.x() * y_prime,
+            z.0 * generators.B_blinding == initial_message.b + challenge.x() * y_prime,
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
@@ -239,7 +239,7 @@ mod tests {
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_final_response = Scalar::default();
+        let bad_final_response = CorrectnessFinalResponse(Scalar::default());
         let result = verifier.verify(&challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
@@ -256,8 +256,8 @@ mod tests {
         let pub_key = secret_key.get_public_key();
         let rand_blind = Scalar::random(&mut rng);
         let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
-
-        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, w);
+        let gens = PedersenGens::default();
+        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, w, &gens);
         let (initial_message, final_response) = encryption_proofs::single_property_prover::<
             StdRng,
             CorrectnessProverAwaitingChallenge,

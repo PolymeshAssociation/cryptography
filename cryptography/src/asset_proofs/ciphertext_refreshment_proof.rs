@@ -182,7 +182,8 @@ impl<'a> AssetProofVerifier for CipherTextRefreshmentVerifier<'a> {
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * self.pc_gens.B_blinding == initial_message.b + challenge.x() * self.pub_key.pub_key,
+            z.0 * self.pc_gens.B_blinding
+                == initial_message.b + challenge.x() * self.pub_key.pub_key,
             AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 2 }
         );
         Ok(())
@@ -290,14 +291,18 @@ mod tests {
     fn serialize_deserialize_proof() {
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 13u32;
-
+        let gens = PedersenGens::default();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let ciphertext1 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
         let ciphertext2 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
 
-        let prover =
-            CipherTextRefreshmentProverAwaitingChallenge::new(elg_secret, ciphertext1, ciphertext2);
+        let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
+            elg_secret,
+            ciphertext1,
+            ciphertext2,
+            &gens,
+        );
         let (initial_message0, final_response0) = encryption_proofs::single_property_prover::<
             StdRng,
             CipherTextRefreshmentProverAwaitingChallenge,

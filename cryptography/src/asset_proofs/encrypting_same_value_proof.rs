@@ -276,7 +276,7 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 49u32;
         let rand_blind = Scalar::random(&mut rng);
-
+        let gens = PedersenGens::default();
         let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
 
         let elg_pub1 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
@@ -286,6 +286,7 @@ mod tests {
             pub_key1: elg_pub1,
             pub_key2: elg_pub2,
             w: Zeroizing::new(w),
+            pc_gens: &gens,
         };
 
         let (initial_message, final_response) = encryption_proofs::single_property_prover::<
