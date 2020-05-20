@@ -4,9 +4,7 @@
 //! This implementation is based on one-out-of-many proof construction desribed in the following paper
 //! <https://eprint.iacr.org/2015/643.pdf>
 
-use curve25519_dalek::{
-    ristretto::RistrettoPoint, scalar::Scalar,
-};
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 
 use crate::asset_proofs::{
     encryption_proofs::{
@@ -22,8 +20,8 @@ use crate::asset_proofs::{
 
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
-use serde::{Serialize, Deserialize};
 
 const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
@@ -132,13 +130,10 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             base: self.base,
         };
 
-        let (ooon_prover, ooon_proof_initial_message) =
-            ooon_prover.generate_initial_message(rng);
+        let (ooon_prover, ooon_proof_initial_message) = ooon_prover.generate_initial_message(rng);
 
         (
-            MembershipProver {
-                ooon_prover,
-            },
+            MembershipProver { ooon_prover },
             MembershipProofInitialMessage {
                 ooon_proof_initial_message,
                 secret_element_comm: secret_commitment,
@@ -185,7 +180,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
 
         // If the elements set size does not match to the system parameter N = n^m, we have to
         // pad the resulted commitment list with its last commitment to make the list size equal to N.
-        // Padding has a critical security importance. 
+        // Padding has a critical security importance.
         if n != initial_size {
             commitments_list.resize(n, commitments_list[initial_size]);
         }
@@ -230,8 +225,8 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED_1);
         let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
 
-        const BASE: usize = 4; 
-        const EXPONENT: usize = 3; 
+        const BASE: usize = 4;
+        const EXPONENT: usize = 3;
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
@@ -240,9 +235,9 @@ mod tests {
 
         let blinding = Scalar::random(&mut rng);
 
-        let even_member = generators.com_gens.commit(Scalar::from(8u32),blinding);
-           
-        let odd_member =generators.com_gens.commit(Scalar::from(75u32),blinding);
+        let even_member = generators.com_gens.commit(Scalar::from(8u32), blinding);
+
+        let odd_member = generators.com_gens.commit(Scalar::from(75u32), blinding);
 
         let prover = MembershipProverAwaitingChallenge {
             secret_element: Zeroizing::new(Scalar::from(8u32)),
@@ -280,7 +275,8 @@ mod tests {
             generators: &generators,
         };
         let result = verifier.verify(&challenge, &initial_message, &final_response);
-        assert_err!(result, 
+        assert_err!(
+            result,
             AssetProofError::MembershipProofVerificationError { check: 1 }
         );
 
@@ -299,18 +295,20 @@ mod tests {
             generators: &generators,
         };
 
-
         // 1st to 3rd rounds
-        let (initial_message_1, final_response_1) = single_property_prover::<
-            StdRng,
-            MembershipProverAwaitingChallenge,
-        >(prover, &mut rng)
-        .unwrap();
+        let (initial_message_1, final_response_1) =
+            single_property_prover::<StdRng, MembershipProverAwaitingChallenge>(prover, &mut rng)
+                .unwrap();
 
         // Positive test
         assert!(
             // 4th round
-            single_property_verifier(&verifier, initial_message_1.clone(), final_response_1.clone()).is_ok()
+            single_property_verifier(
+                &verifier,
+                initial_message_1.clone(),
+                final_response_1.clone()
+            )
+            .is_ok()
         );
 
         // Negative tests
@@ -324,6 +322,6 @@ mod tests {
         assert_err!(
             single_property_verifier(&verifier, initial_message_1, bad_final_response),
             AssetProofError::MembershipProofVerificationError { check: 1 }
-        );        
+        );
     }
 }
