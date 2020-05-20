@@ -7,7 +7,7 @@ use crate::{
         encrypting_same_value_proof::EncryptingSameValueVerifier,
         encryption_proofs::single_property_prover,
         encryption_proofs::single_property_verifier,
-        range_proof::{prove_within_range, verify_within_range, RangeProofInitialMessage},
+        range_proof::{prove_within_range, verify_within_range},
         CommitmentWitness,
     },
     errors::{ErrorKind, Fallible},
@@ -17,7 +17,7 @@ use crate::{
         ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAssetId,
         EncryptionKeys, EncryptionPubKey, EncryptionSecKey, InRangeProof, PubAccount,
         PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent, PubInitConfidentialTxData,
-        PubInitConfidentialTxDataContent, SignatureKeys, SignaturePubKey, TxSubstate,
+        PubInitConfidentialTxDataContent, SignatureKeys, TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -58,10 +58,18 @@ impl ConfidentialTransactionSender for CtxSender {
             }
         );
 
+        // Prove that the amount is not negative
         let range = 32;
-        // Prove that the amount encrypted under different public keys are the same
         let witness = CommitmentWitness::try_from((amount, Scalar::random(rng)))?;
         let amount_enc_blinding = *witness.blinding();
+
+        let non_neg_amount_proof = InRangeProof::from(prove_within_range(
+            amount.into(),
+            amount_enc_blinding,
+            range,
+        )?);
+
+        // Prove that the amount encrypted under different public keys are the same
         let (sndr_new_enc_amount, rcvr_new_enc_amount) =
             encrypt_using_two_pub_keys(&witness, sndr_enc_keys.pblc.key, rcvr_pub_key.key);
 
@@ -74,13 +82,6 @@ impl ConfidentialTransactionSender for CtxSender {
                 },
                 rng,
             )?);
-
-        // Prove that the committed amount is not negative
-        let non_neg_amount_proof = InRangeProof {
-            init: RangeProofInitialMessage(sndr_new_enc_amount.y.compress()),
-            response: prove_within_range(amount.into(), amount_enc_blinding, range)?.1,
-            range,
-        };
 
         // Refresh the encrypted balance and prove that the refreshment was done
         // correctly
@@ -437,7 +438,7 @@ mod tests {
         asset_proofs::{CipherText, ElgamalSecretKey},
         mercat::{
             AccountMemo, ConfidentialTxMemo, CorrectnessProof, EncryptionKeys, EncryptionPubKey,
-            MembershipProof, Signature, SignatureKeys, WellformednessProof,
+            MembershipProof, Signature, SignatureKeys, SignaturePubKey, WellformednessProof,
         },
     };
     use curve25519_dalek::scalar::Scalar;
