@@ -59,16 +59,17 @@ pub struct MembershipProver {
 /// committed secret and the blinding factor, and will keep a reference to the public set of elements,
 /// to which the committed secret provably belongs to.
 pub struct MembershipProverAwaitingChallenge<'a> {
-    /// The secret element which is committed
+    /// The committed secret element.
     pub secret_element: Zeroizing<Scalar>,
-    /// The blinding factor used to commit to the secret_message
+    /// The blinding factor used to commit to the secret_message.
     pub random: Zeroizing<Scalar>,
-    /// Generator points used to construct one-out-of-many proofs
+    /// Generator points used to construct one-out-of-many proofs.
     pub generators: &'a OooNProofGenerators,
     /// The set of elements which the committed secret element belongs to.
     pub elements_set: &'a [Scalar],
-    /// The element set size is represented as a power of the given base
+    /// The element set size is represented as a power of the given base.
     pub base: usize,
+    /// Used to specify the commitment list size for the underlying one-out-of-many proofs.
     pub exp: usize,
 }
 
@@ -104,8 +105,8 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
 
         let pc_gens = self.generators.com_gens;
 
-        let secret_commitment =
-            (*self.secret_element) * pc_gens.B + (*self.random) * pc_gens.B_blinding;
+        let secret_commitment = pc_gens.commit(*self.secret_element, *self.random);
+
         let initial_size = self.elements_set.len();
 
         let mut commitments_list: Vec<RistrettoPoint> = (0..initial_size)
@@ -131,10 +132,8 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             base: self.base,
         };
 
-        let transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
-        let mut transcript_rng = self.create_transcript_rng(rng, &transcript);
         let (ooon_prover, ooon_proof_initial_message) =
-            ooon_prover.generate_initial_message(&mut transcript_rng);
+            ooon_prover.generate_initial_message(rng);
 
         (
             MembershipProver {
@@ -241,10 +240,9 @@ mod tests {
 
         let blinding = Scalar::random(&mut rng);
 
-        let even_member =
-            Scalar::from(8u32) * generators.com_gens.B + blinding * generators.com_gens.B_blinding;
-        let odd_member =
-            Scalar::from(75u32) * generators.com_gens.B + blinding * generators.com_gens.B_blinding;
+        let even_member = generators.com_gens.commit(Scalar::from(8u32),blinding);
+           
+        let odd_member =generators.com_gens.commit(Scalar::from(75u32),blinding);
 
         let prover = MembershipProverAwaitingChallenge {
             secret_element: Zeroizing::new(Scalar::from(8u32)),
@@ -282,7 +280,9 @@ mod tests {
             generators: &generators,
         };
         let result = verifier.verify(&challenge, &initial_message, &final_response);
-        assert!(result.is_err());
+        assert_err!(result, 
+            AssetProofError::MembershipProofVerificationError { check: 1 }
+        );
 
         // Testing the non-interactive API
         let prover = MembershipProverAwaitingChallenge {
@@ -317,13 +317,11 @@ mod tests {
         let bad_initial_message = initial_message;
         let bad_final_response = final_response;
         assert_err!(
-            // 4th round
             single_property_verifier(&verifier, bad_initial_message, final_response_1),
             AssetProofError::MembershipProofVerificationError { check: 1 }
         );
 
         assert_err!(
-            // 4th round
             single_property_verifier(&verifier, initial_message_1, bad_final_response),
             AssetProofError::MembershipProofVerificationError { check: 1 }
         );        
