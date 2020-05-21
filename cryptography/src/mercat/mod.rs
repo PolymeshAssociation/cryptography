@@ -471,9 +471,8 @@ pub trait ConfidentialTransactionSender {
         &self,
         sndr_enc_keys: EncryptionKeys,
         sndr_sign_keys: SignatureKeys,
-        sndr_account: PubAccount,
-        rcvr_pub_key: EncryptionPubKey,
-        rcvr_account: PubAccount,
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
         asset_id: u32,
         amount: u32,
         rng: &mut StdRng,
@@ -485,8 +484,8 @@ pub trait ConfidentialTransactionInitVerifier {
     /// proofs of the initialized transaction.
     fn verify(
         &self,
-        transaction: PubInitConfidentialTxData,
-        sndr_account: PubAccount,
+        transaction: &PubInitConfidentialTxData,
+        sndr_account: &PubAccount,
         state: ConfidentialTxState,
     ) -> Fallible<ConfidentialTxState>;
 }
@@ -504,11 +503,11 @@ pub trait ConfidentialTransactionReceiver {
     fn finalize_and_process(
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
-        rcvr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
+        rcvr_enc_keys: EncryptionKeys,
         rcvr_sign_keys: SignatureKeys,
         sndr_pub_key: EncryptionPubKey,
-        sndr_account: PubAccount,
-        rcvr_account: PubAccount,
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
         enc_asset_id: EncryptedAssetId,
         amount: u32,
         state: ConfidentialTxState,
@@ -520,10 +519,10 @@ pub trait ConfidentialTransactionFinalizeAndProcessVerifier {
     /// This is called by the validators to verify the finalized transaction.
     fn verify(
         &self,
-        sndr_account: PubAccount,
-        rcvr_account: PubAccount,
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
         rcvr_sign_pub_key: SignaturePubKey,
-        conf_tx_final_data: PubFinalConfidentialTxData,
+        conf_tx_final_data: &PubFinalConfidentialTxData,
         state: ConfidentialTxState,
     ) -> Fallible<ConfidentialTxState>;
 }

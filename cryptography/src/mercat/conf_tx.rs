@@ -40,13 +40,13 @@ impl ConfidentialTransactionSender for CtxSender {
         &self,
         sndr_enc_keys: EncryptionKeys,
         sndr_sign_keys: SignatureKeys,
-        sndr_account: PubAccount,
-        rcvr_pub_key: EncryptionPubKey,
-        rcvr_account: PubAccount,
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
         asset_id: u32,
         amount: u32,
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)> {
+        let rcvr_pub_key = rcvr_account.memo.owner_enc_pub_key;
         // NOTE: If this decryption ends up being too slow, we can pass in the balance
         // as input.
         let balance = sndr_enc_keys
@@ -185,11 +185,11 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
     fn finalize_and_process(
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
-        rcvr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
+        rcvr_enc_keys: EncryptionKeys,
         rcvr_sign_keys: SignatureKeys,
         sndr_pub_key: EncryptionPubKey,
-        sndr_account: PubAccount,
-        rcvr_account: PubAccount,
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
         enc_asset_id: EncryptedAssetId,
         amount: u32,
         state: ConfidentialTxState,
@@ -197,7 +197,7 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)> {
         self.finalize_by_receiver(
             conf_tx_init_data,
-            rcvr_enc_keys.1,
+            rcvr_enc_keys.scrt,
             rcvr_sign_keys,
             rcvr_account,
             state,
@@ -219,7 +219,7 @@ impl CtxReceiver {
         conf_tx_init_data: PubInitConfidentialTxData,
         rcvr_enc_sec: EncryptionSecKey,
         rcvr_sign_keys: SignatureKeys,
-        rcvr_account: PubAccount,
+        rcvr_account: &PubAccount,
         state: ConfidentialTxState,
         expected_amount: u32,
         rng: &mut StdRng,
@@ -277,8 +277,8 @@ impl CtxReceiver {
 // ------------------------------------------------------------------------------------------------
 
 fn verify_initital_transaction_proofs(
-    transaction: PubInitConfidentialTxData,
-    sndr_account: PubAccount,
+    transaction: &PubInitConfidentialTxData,
+    sndr_account: &PubAccount,
 ) -> Fallible<()> {
     let memo = &transaction.content.memo;
     let init_data = &transaction.content;
@@ -358,8 +358,8 @@ pub struct CtxSenderValidator {}
 impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
     fn verify(
         &self,
-        transaction: PubInitConfidentialTxData,
-        sndr_account: PubAccount,
+        transaction: &PubInitConfidentialTxData,
+        sndr_account: &PubAccount,
         state: ConfidentialTxState,
     ) -> Fallible<ConfidentialTxState> {
         ensure!(
@@ -389,9 +389,9 @@ pub struct CtxReceiverValidator {}
 impl CtxReceiverValidator {
     pub fn verify_finalize_by_receiver(
         &self,
-        sndr_account: PubAccount,
-        rcvr_account: PubAccount,
-        conf_tx_final_data: PubFinalConfidentialTxData,
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
+        conf_tx_final_data: &PubFinalConfidentialTxData,
         state: ConfidentialTxState,
     ) -> Fallible<()> {
         ensure!(
@@ -409,10 +409,10 @@ impl CtxReceiverValidator {
         );
 
         let memo = &conf_tx_final_data.content.init_data.content.memo;
-        let init_data = conf_tx_final_data.content.init_data.clone();
+        let init_data = &conf_tx_final_data.content.init_data;
         let final_content = &conf_tx_final_data.content;
 
-        verify_initital_transaction_proofs(init_data, sndr_account)?;
+        verify_initital_transaction_proofs(init_data, &sndr_account)?;
 
         // In the inital transaction, the sender has encrypted the asset id
         // using the receiver pub key. We verify that this encrypted asset id
@@ -512,23 +512,6 @@ mod tests {
         })
     }
 
-    fn copy_mock_account(
-        acc: &PubAccount,
-        rcvr_enc_pub_key: EncryptionPubKey,
-        rcvr_sign_pub_key: SignaturePubKey,
-    ) -> PubAccount {
-        PubAccount {
-            id: acc.id,
-            enc_asset_id: acc.enc_asset_id,
-            enc_balance: acc.enc_balance,
-            asset_wellformedness_proof: WellformednessProof::default(),
-            asset_membership_proof: MembershipProof::default(),
-            balance_correctness_proof: CorrectnessProof::default(),
-            memo: AccountMemo::from((rcvr_enc_pub_key, rcvr_sign_pub_key)),
-            sign: Signature::default(),
-        }
-    }
-
     fn mock_ctx_init_data(
         rcvr_pub_key: EncryptionPubKey,
         expected_amount: u32,
@@ -570,7 +553,7 @@ mod tests {
             ctx_init_data,
             rcvr_enc_keys.scrt,
             rcvr_sign_keys,
-            rcvr_account,
+            &rcvr_account,
             valid_state,
             expected_amount,
             &mut StdRng::from_seed([17u8; 32]),
@@ -603,7 +586,7 @@ mod tests {
             ctx_init_data,
             rcvr_enc_keys.scrt,
             rcvr_sign_keys,
-            rcvr_account,
+            &rcvr_account,
             invalid_state,
             expected_amount,
             &mut StdRng::from_seed([17u8; 32]),
@@ -638,7 +621,7 @@ mod tests {
             ctx_init_data,
             rcvr_enc_keys.scrt,
             rcvr_sign_keys,
-            rcvr_account,
+            &rcvr_account,
             valid_state,
             expected_amount,
             &mut StdRng::from_seed([17u8; 32]),
@@ -674,7 +657,7 @@ mod tests {
             ctx_init_data,
             rcvr_enc_keys.scrt,
             rcvr_sign_keys,
-            rcvr_account,
+            &rcvr_account,
             valid_state,
             expected_amount,
             &mut StdRng::from_seed([17u8; 32]),
@@ -712,12 +695,6 @@ mod tests {
             rcvr_balance,
         )
         .unwrap();
-        let rcvr_account_for_initialize =
-            copy_mock_account(&rcvr_account, rcvr_enc_keys.pblc, rcvr_sign_pub_key.clone());
-        let rcvr_account_for_finalize =
-            copy_mock_account(&rcvr_account, rcvr_enc_keys.pblc, rcvr_sign_pub_key.clone());
-        let rcvr_account_for_validation =
-            copy_mock_account(&rcvr_account, rcvr_enc_keys.pblc, rcvr_sign_pub_key);
 
         let sndr_account = mock_gen_account(
             sndr_enc_keys.pblc,
@@ -726,18 +703,13 @@ mod tests {
             sndr_balance,
         )
         .unwrap();
-        let sndr_account_for_initialize =
-            copy_mock_account(&sndr_account, sndr_enc_keys.pblc, sndr_sign_pub_key.clone());
-        let sndr_account_for_validation =
-            copy_mock_account(&sndr_account, sndr_enc_keys.pblc, sndr_sign_pub_key);
 
         // Create the trasaction and check its result and state
         let result = sndr.create(
             sndr_enc_keys,
             sndr_sign_keys.clone(),
-            sndr_account_for_initialize,
-            rcvr_enc_keys.pblc,
-            rcvr_account_for_initialize,
+            &sndr_account,
+            &rcvr_account,
             asset_id,
             amount,
             &mut rng,
@@ -749,7 +721,7 @@ mod tests {
         );
 
         // Verify the initialization step
-        let result = sndr_vldtr.verify(ctx_init_data.clone(), sndr_account, state);
+        let result = sndr_vldtr.verify(&ctx_init_data, &sndr_account, state);
         let state = result.unwrap();
         assert_eq!(
             state,
@@ -764,7 +736,7 @@ mod tests {
             ctx_init_data,
             rcvr_enc_keys.scrt,
             rcvr_sign_keys,
-            rcvr_account_for_finalize,
+            &rcvr_account,
             state,
             amount,
             &mut rng,
@@ -777,9 +749,9 @@ mod tests {
 
         // verify the finalization step
         let result = rcvr_vldtr.verify_finalize_by_receiver(
-            sndr_account_for_validation,
-            rcvr_account_for_validation,
-            ctx_finalized_data,
+            &sndr_account,
+            &rcvr_account,
+            &ctx_finalized_data,
             finalized_state,
         );
         result.unwrap();
