@@ -302,8 +302,8 @@ fn verify_initital_transaction_proofs(
 
     // Verify that the amount is not negative
     verify_within_range(
-        init_data.non_neg_amount_proof.clone().init,
-        init_data.non_neg_amount_proof.clone().response,
+        init_data.non_neg_amount_proof.init.clone(),
+        init_data.non_neg_amount_proof.response.clone(),
         init_data.non_neg_amount_proof.range,
     )?;
 
@@ -320,8 +320,8 @@ fn verify_initital_transaction_proofs(
 
     // Verify that the balance has enough fund
     verify_within_range(
-        init_data.enough_fund_proof.clone().init,
-        init_data.enough_fund_proof.clone().response,
+        init_data.enough_fund_proof.init.clone(),
+        init_data.enough_fund_proof.response.clone(),
         init_data.enough_fund_proof.range,
     )?;
 
