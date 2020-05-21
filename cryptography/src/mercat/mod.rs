@@ -93,11 +93,29 @@ pub struct SignatureKeys {
 /// Type alias for SR25519 signature.
 pub type Signature = sr25519::Signature;
 
-/// Type alias for Twisted ElGamal ciphertext of asset ids.
-pub type EncryptedAssetId = CipherText;
+/// New type for Twisted ElGamal ciphertext of asset ids.
+#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
+pub struct EncryptedAssetId {
+    pub cipher: CipherText,
+}
 
-/// Type alias for Twisted ElGamal ciphertext of account amounts/balances.
-pub type EncryptedAmount = CipherText;
+impl From<CipherText> for EncryptedAssetId {
+    fn from(cipher: CipherText) -> Self {
+        Self { cipher }
+    }
+}
+
+/// New type for Twisted ElGamal ciphertext of account amounts/balances.
+#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
+pub struct EncryptedAmount {
+    pub cipher: CipherText,
+}
+
+impl From<CipherText> for EncryptedAmount {
+    fn from(cipher: CipherText) -> Self {
+        Self { cipher }
+    }
+}
 
 /// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
 #[derive(Default, Clone)]
@@ -360,7 +378,7 @@ pub struct ConfidentialTxMemo {
     pub sndr_pub_key: EncryptionPubKey,
     pub rcvr_pub_key: EncryptionPubKey,
     pub refreshed_enc_balance: EncryptedAmount,
-    pub refreshed_enc_asset_id: EncryptedAmount,
+    pub refreshed_enc_asset_id: EncryptedAssetId,
     pub enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 

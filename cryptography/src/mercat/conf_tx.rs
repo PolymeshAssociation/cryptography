@@ -14,10 +14,10 @@ use crate::{
     mercat::{
         CipherEqualDifferentPubKeyProof, CipherEqualSamePubKeyProof,
         ConfidentialTransactionInitVerifier, ConfidentialTransactionReceiver,
-        ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAssetId,
-        EncryptionKeys, EncryptionPubKey, EncryptionSecKey, InRangeProof, PubAccount,
-        PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent, PubInitConfidentialTxData,
-        PubInitConfidentialTxDataContent, SignatureKeys, TxSubstate,
+        ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAmount,
+        EncryptedAssetId, EncryptionKeys, EncryptionPubKey, EncryptionSecKey, InRangeProof,
+        PubAccount, PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent,
+        PubInitConfidentialTxData, PubInitConfidentialTxDataContent, SignatureKeys, TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -49,7 +49,10 @@ impl ConfidentialTransactionSender for CtxSender {
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)> {
         // NOTE: If this decryption ends up being too slow, we can pass in the balance
         // as input.
-        let balance = sndr_enc_keys.scrt.key.decrypt(&sndr_account.enc_balance)?;
+        let balance = sndr_enc_keys
+            .scrt
+            .key
+            .decrypt(&sndr_account.enc_balance.cipher)?;
         ensure!(
             balance >= amount,
             ErrorKind::NotEnoughFund {
@@ -88,12 +91,13 @@ impl ConfidentialTransactionSender for CtxSender {
         let balance_refresh_enc_blinding = Scalar::random(rng);
         let refreshed_enc_balance = sndr_account
             .enc_balance
+            .cipher
             .refresh(&sndr_enc_keys.scrt.key, balance_refresh_enc_blinding)?;
         let balance_refreshed_same_proof =
             CipherEqualSamePubKeyProof::from(single_property_prover(
                 CipherTextRefreshmentProverAwaitingChallenge::new(
                     sndr_enc_keys.scrt.key.clone(),
-                    sndr_account.enc_balance,
+                    sndr_account.enc_balance.cipher,
                     refreshed_enc_balance,
                 ),
                 rng,
@@ -112,12 +116,13 @@ impl ConfidentialTransactionSender for CtxSender {
         let asset_id_refresh_enc_blinding = Scalar::random(rng);
         let refreshed_enc_asset_id = sndr_account
             .enc_asset_id
+            .cipher
             .refresh(&sndr_enc_keys.scrt.key, asset_id_refresh_enc_blinding)?;
         let asset_id_refreshed_same_proof =
             CipherEqualSamePubKeyProof::from(single_property_prover(
                 CipherTextRefreshmentProverAwaitingChallenge::new(
                     sndr_enc_keys.scrt.key.clone(),
-                    sndr_account.enc_asset_id,
+                    sndr_account.enc_asset_id.cipher,
                     refreshed_enc_asset_id,
                 ),
                 rng,
@@ -149,13 +154,13 @@ impl ConfidentialTransactionSender for CtxSender {
             memo: ConfidentialTxMemo {
                 sndr_account_id: sndr_account.id,
                 rcvr_account_id: rcvr_account.id,
-                enc_amount_using_sndr: sndr_new_enc_amount,
-                enc_amount_using_rcvr: rcvr_new_enc_amount,
+                enc_amount_using_sndr: EncryptedAmount::from(sndr_new_enc_amount),
+                enc_amount_using_rcvr: EncryptedAmount::from(rcvr_new_enc_amount),
                 sndr_pub_key: sndr_enc_keys.pblc,
                 rcvr_pub_key: rcvr_pub_key,
-                refreshed_enc_balance,
-                refreshed_enc_asset_id,
-                enc_asset_id_using_rcvr,
+                refreshed_enc_balance: EncryptedAmount::from(refreshed_enc_balance),
+                refreshed_enc_asset_id: EncryptedAssetId::from(refreshed_enc_asset_id),
+                enc_asset_id_using_rcvr: EncryptedAssetId::from(enc_asset_id_using_rcvr),
             },
         };
 
@@ -227,7 +232,7 @@ impl CtxReceiver {
         // Check that the amount is correct
         let received_amount = rcvr_enc_sec
             .key
-            .decrypt(&conf_tx_init_data.content.memo.enc_amount_using_rcvr)?;
+            .decrypt(&conf_tx_init_data.content.memo.enc_amount_using_rcvr.cipher)?;
 
         ensure!(
             received_amount == expected_amount,
@@ -247,8 +252,8 @@ impl CtxReceiver {
         let enc_asset_id_from_rcvr_acc = rcvr_account.enc_asset_id;
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             rcvr_enc_sec.key,
-            enc_asset_id_from_rcvr_acc,
-            enc_asset_id_from_sndr,
+            enc_asset_id_from_rcvr_acc.cipher,
+            enc_asset_id_from_sndr.cipher,
         );
 
         let (init, response) = single_property_prover(prover, rng)?;
@@ -288,8 +293,8 @@ fn verify_initital_transaction_proofs(
         &EncryptingSameValueVerifier {
             pub_key1: memo.sndr_pub_key.key,
             pub_key2: memo.rcvr_pub_key.key,
-            cipher1: memo.enc_amount_using_sndr,
-            cipher2: memo.enc_amount_using_rcvr,
+            cipher1: memo.enc_amount_using_sndr.cipher,
+            cipher2: memo.enc_amount_using_rcvr.cipher,
         },
         init_data.amount_equal_cipher_proof.init,
         init_data.amount_equal_cipher_proof.response,
@@ -306,8 +311,8 @@ fn verify_initital_transaction_proofs(
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
             memo.sndr_pub_key.key,
-            sndr_account.enc_balance,
-            memo.refreshed_enc_balance,
+            sndr_account.enc_balance.cipher,
+            memo.refreshed_enc_balance.cipher,
         ),
         init_data.balance_refreshed_same_proof.init,
         init_data.balance_refreshed_same_proof.response,
@@ -324,8 +329,8 @@ fn verify_initital_transaction_proofs(
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
             memo.sndr_pub_key.key,
-            sndr_account.enc_asset_id,
-            memo.refreshed_enc_asset_id,
+            sndr_account.enc_asset_id.cipher,
+            memo.refreshed_enc_asset_id.cipher,
         ),
         init_data.asset_id_refreshed_same_proof.init,
         init_data.asset_id_refreshed_same_proof.response,
@@ -338,8 +343,8 @@ fn verify_initital_transaction_proofs(
         &EncryptingSameValueVerifier {
             pub_key1: memo.sndr_pub_key.key,
             pub_key2: memo.rcvr_pub_key.key,
-            cipher1: memo.refreshed_enc_asset_id,
-            cipher2: memo.enc_asset_id_using_rcvr,
+            cipher1: memo.refreshed_enc_asset_id.cipher,
+            cipher2: memo.enc_asset_id_using_rcvr.cipher,
         },
         init_data.asset_id_equal_cipher_proof.init,
         init_data.asset_id_equal_cipher_proof.response,
@@ -415,8 +420,8 @@ impl CtxReceiverValidator {
         single_property_verifier(
             &CipherTextRefreshmentVerifier::new(
                 memo.rcvr_pub_key.key,
-                rcvr_account.enc_asset_id,
-                memo.enc_asset_id_using_rcvr,
+                rcvr_account.enc_asset_id.cipher,
+                memo.enc_asset_id_using_rcvr.cipher,
             ),
             final_content.asset_id_equal_cipher_proof.init,
             final_content.asset_id_equal_cipher_proof.response,
@@ -435,7 +440,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::{
-        asset_proofs::{CipherText, ElgamalSecretKey},
+        asset_proofs::ElgamalSecretKey,
         mercat::{
             AccountMemo, ConfidentialTxMemo, CorrectnessProof, EncryptionKeys, EncryptionPubKey,
             MembershipProof, Signature, SignatureKeys, SignaturePubKey, WellformednessProof,
@@ -476,13 +481,13 @@ mod tests {
         ConfidentialTxMemo {
             sndr_account_id: 0,
             rcvr_account_id: 0,
-            enc_amount_using_sndr: CipherText::default(),
-            enc_amount_using_rcvr,
+            enc_amount_using_sndr: EncryptedAmount::default(),
+            enc_amount_using_rcvr: EncryptedAmount::from(enc_amount_using_rcvr),
             sndr_pub_key: EncryptionPubKey::default(),
             rcvr_pub_key,
-            refreshed_enc_balance: CipherText::default(),
-            refreshed_enc_asset_id: CipherText::default(),
-            enc_asset_id_using_rcvr,
+            refreshed_enc_balance: EncryptedAmount::default(),
+            refreshed_enc_asset_id: EncryptedAssetId::default(),
+            enc_asset_id_using_rcvr: EncryptedAssetId::from(enc_asset_id_using_rcvr),
         }
     }
 
@@ -497,8 +502,8 @@ mod tests {
 
         Ok(PubAccount {
             id: 1,
-            enc_asset_id,
-            enc_balance: enc_balance,
+            enc_asset_id: EncryptedAssetId::from(enc_asset_id),
+            enc_balance: EncryptedAmount::from(enc_balance),
             asset_wellformedness_proof: WellformednessProof::default(),
             asset_membership_proof: MembershipProof::default(),
             balance_correctness_proof: CorrectnessProof::default(),
