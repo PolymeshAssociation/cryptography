@@ -119,7 +119,7 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             .elements_set
             .iter()
             .position(|&r| r == *self.secret_element)
-            .unwrap();
+            .unwrap_or_default();
 
         let ooon_prover = OOONProverAwaitingChallenge {
             secret_index: secret_position,
