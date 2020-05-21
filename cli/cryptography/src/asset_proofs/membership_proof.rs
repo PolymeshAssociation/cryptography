@@ -280,6 +280,42 @@ mod tests {
             AssetProofError::MembershipProofVerificationError { check: 1 }
         );
 
+        // Testing adversarial proof generation where the Prover tries to generate
+        // a proof for non-existing set member.
+
+        let prover = MembershipProverAwaitingChallenge {
+            secret_element: Zeroizing::new(Scalar::from(2778u32)),
+            random: Zeroizing::new(blinding),
+            generators: &generators,
+            elements_set: odd_elements.as_slice(),
+            base: BASE,
+            exp: EXPONENT,
+        };
+        let non_existing_member = generators.com_gens.commit(Scalar::from(2778u32), blinding);
+
+        let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
+        let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
+
+        initial_message.update_transcript(&mut transcript).unwrap();
+        let challenge = transcript
+            .scalar_challenge(MEMBERSHIP_PROOF_CHALLENGE_LABEL)
+            .unwrap();
+
+        let final_response = prover.apply_challenge(&challenge);
+
+        let verifier = MembershipProofVerifier {
+            secret_element_com: non_existing_member,
+            elements_set: odd_elements.as_slice(),
+            generators: &generators,
+        };
+
+        let result = verifier.verify(&challenge, &initial_message.clone(), &final_response);
+        assert_err!(
+            result,
+            AssetProofError::MembershipProofVerificationError { check: 1 }
+        );
+        /////////////////////////////////////
+
         // Testing the non-interactive API
         let prover = MembershipProverAwaitingChallenge {
             secret_element: Zeroizing::new(Scalar::from(75u32)),
