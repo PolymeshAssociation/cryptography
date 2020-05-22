@@ -573,10 +573,7 @@ mod tests {
             &mut StdRng::from_seed([17u8; 32]),
         );
 
-        match result {
-            Err(e) => assert!(false, "{:?}", e),
-            _ => (),
-        }
+        result.unwrap();
         // Correctness of the proof will be verified in the verify function
     }
 
