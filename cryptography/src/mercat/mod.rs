@@ -74,11 +74,11 @@ pub struct EncryptionKeys {
 
 /// Holds the SR25519 signature scheme public key.
 #[derive(Clone)]
-pub struct SignaturePubKey {
+pub struct SigningPubKey {
     pub key: sr25519::Public,
 }
 
-impl From<sr25519::Public> for SignaturePubKey {
+impl From<sr25519::Public> for SigningPubKey {
     fn from(key: sr25519::Public) -> Self {
         Self { key }
     }
@@ -86,7 +86,7 @@ impl From<sr25519::Public> for SignaturePubKey {
 
 /// Holds the SR25519 signature scheme public and private key pair.
 #[derive(Clone)]
-pub struct SignatureKeys {
+pub struct SigningKeys {
     pub pair: sr25519::Pair,
 }
 
@@ -230,12 +230,12 @@ pub type AssetMemo = EncryptedAmount;
 #[derive(Clone)]
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
-    pub owner_sign_pub_key: SignaturePubKey,
+    pub owner_sign_pub_key: SigningPubKey,
     pub timestamp: std::time::Instant,
 }
 
-impl From<(EncryptionPubKey, SignaturePubKey)> for AccountMemo {
-    fn from(pub_keys: (EncryptionPubKey, SignaturePubKey)) -> Self {
+impl From<(EncryptionPubKey, SigningPubKey)> for AccountMemo {
+    fn from(pub_keys: (EncryptionPubKey, SigningPubKey)) -> Self {
         AccountMemo {
             owner_enc_pub_key: pub_keys.0,
             owner_sign_pub_key: pub_keys.1,
@@ -319,7 +319,7 @@ pub trait AssetTransactionIssuer {
     fn initialize(
         &self,
         issr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-        issr_sign_keys: SignatureKeys,
+        issr_sign_keys: SigningKeys,
         amount: u32,
         issr_account: PubAccount,
         mdtr_pub_key: EncryptionPubKey,
@@ -334,7 +334,7 @@ pub trait AssetTransactionInitializeVerifier {
         &self,
         asset_tx: PubAssetTxData,
         state: AssetTxState,
-        issr_sign_pub_key: SignaturePubKey,
+        issr_sign_pub_key: SigningPubKey,
     ) -> Fallible<AssetTxState>;
 }
 
@@ -348,7 +348,7 @@ pub trait AssetTransactionMediator {
         issr_account: PubAccount,
         state: AssetTxState,
         mdtr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-        mdtr_sign_keys: SignatureKeys,
+        mdtr_sign_keys: SigningKeys,
         issr_pub_key: EncryptionPubKey,
         issr_acount: PubAccount,
     ) -> Fallible<(Signature, PubAccount, AssetTxState)>;
@@ -360,7 +360,7 @@ pub trait AssetTransactionFinalizeAndProcessVerifier {
         &self,
         sig: Signature,
         issr_account: PubAccount,
-        mdtr_sign_pub_key: SignaturePubKey,
+        mdtr_sign_pub_key: SigningPubKey,
     ) -> Fallible<AssetTxState>;
 }
 
@@ -436,7 +436,7 @@ pub trait ConfidentialTransactionSender {
     fn create(
         &self,
         sndr_enc_keys: EncryptionKeys,
-        sndr_sign_keys: SignatureKeys,
+        sndr_sign_keys: SigningKeys,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
         asset_id: u32,
@@ -470,7 +470,7 @@ pub trait ConfidentialTransactionReceiver {
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
         rcvr_enc_keys: EncryptionKeys,
-        rcvr_sign_keys: SignatureKeys,
+        rcvr_sign_keys: SigningKeys,
         sndr_pub_key: EncryptionPubKey,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
@@ -487,7 +487,7 @@ pub trait ConfidentialTransactionFinalizeAndProcessVerifier {
         &self,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
-        rcvr_sign_pub_key: SignaturePubKey,
+        rcvr_sign_pub_key: SigningPubKey,
         conf_tx_final_data: &PubFinalConfidentialTxData,
         state: ConfidentialTxState,
     ) -> Fallible<ConfidentialTxState>;
@@ -518,7 +518,7 @@ pub trait ConfidentialTransactionReverseAndProcessMediator {
         &self,
         conf_tx_final_data: PubFinalConfidentialTxData,
         mdtr_enc_keys: EncryptionSecKey,
-        mdtr_sign_keys: SignatureKeys,
+        mdtr_sign_keys: SigningKeys,
         state: ConfidentialTxState,
     ) -> Fallible<(PubReverseConfidentialTxData, ConfidentialTxState)>;
 }
@@ -529,7 +529,7 @@ pub trait ConfidentialTransactionReverseAndProcessVerifier {
     fn verify(
         &self,
         reverse_conf_tx_data: PubReverseConfidentialTxData,
-        mdtr_sign_pub_key: SignaturePubKey,
+        mdtr_sign_pub_key: SigningPubKey,
         state: ConfidentialTxState,
     ) -> Fallible<ConfidentialTxState>;
 }

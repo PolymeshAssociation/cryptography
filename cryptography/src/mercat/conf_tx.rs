@@ -17,7 +17,7 @@ use crate::{
         ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAmount,
         EncryptedAssetId, EncryptionKeys, EncryptionPubKey, EncryptionSecKey, InRangeProof,
         PubAccount, PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent,
-        PubInitConfidentialTxData, PubInitConfidentialTxDataContent, SignatureKeys, TxSubstate,
+        PubInitConfidentialTxData, PubInitConfidentialTxDataContent, SigningKeys, TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -39,7 +39,7 @@ impl ConfidentialTransactionSender for CtxSender {
     fn create(
         &self,
         sndr_enc_keys: EncryptionKeys,
-        sndr_sign_keys: SignatureKeys,
+        sndr_sign_keys: SigningKeys,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
         asset_id: u32,
@@ -186,7 +186,7 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
         rcvr_enc_keys: EncryptionKeys,
-        rcvr_sign_keys: SignatureKeys,
+        rcvr_sign_keys: SigningKeys,
         sndr_pub_key: EncryptionPubKey,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
@@ -218,7 +218,7 @@ impl CtxReceiver {
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
         rcvr_enc_sec: EncryptionSecKey,
-        rcvr_sign_keys: SignatureKeys,
+        rcvr_sign_keys: SigningKeys,
         rcvr_account: &PubAccount,
         state: ConfidentialTxState,
         expected_amount: u32,
@@ -443,7 +443,7 @@ mod tests {
         asset_proofs::ElgamalSecretKey,
         mercat::{
             AccountMemo, ConfidentialTxMemo, CorrectnessProof, EncryptionKeys, EncryptionPubKey,
-            MembershipProof, Signature, SignatureKeys, SignaturePubKey, WellformednessProof,
+            MembershipProof, Signature, SigningKeys, SigningPubKey, WellformednessProof,
         },
     };
     use curve25519_dalek::scalar::Scalar;
@@ -462,11 +462,11 @@ mod tests {
         }
     }
 
-    fn mock_gen_sign_key_pair(seed: u8) -> (SignatureKeys, SignaturePubKey) {
+    fn mock_gen_sign_key_pair(seed: u8) -> (SigningKeys, SigningPubKey) {
         let pair = sr25519::Pair::from_seed(&[seed; 32]);
         (
-            SignatureKeys { pair: pair.clone() },
-            SignaturePubKey::from(pair.public()),
+            SigningKeys { pair: pair.clone() },
+            SigningPubKey::from(pair.public()),
         )
     }
 
@@ -493,7 +493,7 @@ mod tests {
 
     fn mock_gen_account(
         rcvr_enc_pub_key: EncryptionPubKey,
-        rcvr_sign_pub_key: SignaturePubKey,
+        rcvr_sign_pub_key: SigningPubKey,
         asset_id: u32,
         balance: u32,
     ) -> Fallible<PubAccount> {
