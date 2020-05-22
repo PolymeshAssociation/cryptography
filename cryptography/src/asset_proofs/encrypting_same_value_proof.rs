@@ -67,7 +67,7 @@ impl UpdateTranscript for EncryptingSameValueInitialMessage {
     }
 }
 
-pub struct EncryptingSameValueProverAwaitingChallenge {
+pub struct EncryptingSameValueProverAwaitingChallenge<'a> {
     /// The first public key used for the elgamal encryption.
     pub pub_key1: ElgamalPublicKey,
 
@@ -76,6 +76,7 @@ pub struct EncryptingSameValueProverAwaitingChallenge {
 
     /// The secret commitment witness.
     pub w: Zeroizing<CommitmentWitness>,
+    pub pc_gens: &'a PedersenGens,
 }
 
 #[derive(Zeroize)]
@@ -91,7 +92,7 @@ pub struct EncryptingSameValueProver {
     u2: Scalar,
 }
 
-impl AssetProofProverAwaitingChallenge for EncryptingSameValueProverAwaitingChallenge {
+impl<'a> AssetProofProverAwaitingChallenge for EncryptingSameValueProverAwaitingChallenge<'a> {
     type ZKInitialMessage = EncryptingSameValueInitialMessage;
     type ZKFinalResponse = EncryptingSameValueFinalResponse;
     type ZKProver = EncryptingSameValueProver;
@@ -106,7 +107,6 @@ impl AssetProofProverAwaitingChallenge for EncryptingSameValueProverAwaitingChal
 
     fn generate_initial_message(
         &self,
-        pc_gens: &PedersenGens,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let rand_commitment1 = Scalar::random(rng);
@@ -121,7 +121,7 @@ impl AssetProofProverAwaitingChallenge for EncryptingSameValueProverAwaitingChal
             EncryptingSameValueInitialMessage {
                 a1: rand_commitment1 * self.pub_key1.pub_key,
                 a2: rand_commitment1 * self.pub_key2.pub_key,
-                b: rand_commitment1 * pc_gens.B_blinding + rand_commitment2 * pc_gens.B,
+                b: rand_commitment1 * self.pc_gens.B_blinding + rand_commitment2 * self.pc_gens.B,
             },
         )
     }
@@ -136,7 +136,7 @@ impl AssetProofProver<EncryptingSameValueFinalResponse> for EncryptingSameValueP
     }
 }
 
-pub struct EncryptingSameValueVerifier {
+pub struct EncryptingSameValueVerifier<'a> {
     /// The first public key to which the `value` is encrypted.
     pub pub_key1: ElgamalPublicKey,
 
@@ -148,15 +148,17 @@ pub struct EncryptingSameValueVerifier {
 
     /// The second encryption cipher text.
     pub cipher2: CipherText,
+
+    /// The ciphertext generators.
+    pub pc_gens: &'a PedersenGens,
 }
 
-impl AssetProofVerifier for EncryptingSameValueVerifier {
+impl<'a> AssetProofVerifier for EncryptingSameValueVerifier<'a> {
     type ZKInitialMessage = EncryptingSameValueInitialMessage;
     type ZKFinalResponse = EncryptingSameValueFinalResponse;
 
     fn verify(
         &self,
-        pc_gens: &PedersenGens,
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
@@ -178,7 +180,7 @@ impl AssetProofVerifier for EncryptingSameValueVerifier {
             ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 2 }
         );
         ensure!(
-            final_response.z1 * pc_gens.B_blinding + final_response.z2 * pc_gens.B
+            final_response.z1 * self.pc_gens.B_blinding + final_response.z2 * self.pc_gens.B
                 == initial_message.b + challenge.x() * self.cipher1.y,
             ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 3 }
         );
@@ -222,38 +224,39 @@ mod tests {
             pub_key1: elg_pub1,
             pub_key2: elg_pub2,
             w: Zeroizing::new(w),
+            pc_gens: &gens,
         };
         let verifier = EncryptingSameValueVerifier {
             pub_key1: elg_pub1,
             pub_key2: elg_pub2,
             cipher1: cipher1,
             cipher2: cipher2,
+            pc_gens: &gens,
         };
         let mut transcript = Transcript::new(ENCRYPTING_SAME_VALUE_PROOF_FINAL_RESPONSE_LABEL);
 
         // Positive tests
         let mut transcript_rng = prover_ac.create_transcript_rng(&mut rng, &transcript);
-        let (prover, initial_message) =
-            prover_ac.generate_initial_message(&gens, &mut transcript_rng);
+        let (prover, initial_message) = prover_ac.generate_initial_message(&mut transcript_rng);
         initial_message.update_transcript(&mut transcript).unwrap();
         let challenge = transcript
             .scalar_challenge(ENCRYPTING_SAME_VALUE_PROOF_CHALLENGE_LABEL)
             .unwrap();
         let final_response = prover.apply_challenge(&challenge);
 
-        let result = verifier.verify(&gens, &challenge, &initial_message, &final_response);
+        let result = verifier.verify(&challenge, &initial_message, &final_response);
         assert!(result.is_ok());
 
         // Negative tests
         let bad_initial_message = EncryptingSameValueInitialMessage::default();
-        let result = verifier.verify(&gens, &challenge, &bad_initial_message, &final_response);
+        let result = verifier.verify(&challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
             ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = EncryptingSameValueFinalResponse::default();
-        let result = verifier.verify(&gens, &challenge, &initial_message, &bad_final_response);
+        let result = verifier.verify(&challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
             ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
@@ -276,7 +279,7 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 49u32;
         let rand_blind = Scalar::random(&mut rng);
-
+        let gens = PedersenGens::default();
         let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
 
         let elg_pub1 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
@@ -286,6 +289,7 @@ mod tests {
             pub_key1: elg_pub1,
             pub_key2: elg_pub2,
             w: Zeroizing::new(w),
+            pc_gens: &gens,
         };
 
         let (initial_message, final_response) = encryption_proofs::single_property_prover::<

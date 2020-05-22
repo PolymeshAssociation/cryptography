@@ -20,6 +20,7 @@ use crate::{
         PubInitConfidentialTxData, PubInitConfidentialTxDataContent, SigningKeys, TxSubstate,
     },
 };
+use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use rand::rngs::StdRng;
 use sp_application_crypto::sr25519;
@@ -47,6 +48,7 @@ impl ConfidentialTransactionSender for CtxSender {
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)> {
         let rcvr_pub_key = rcvr_account.memo.owner_enc_pub_key;
+        let gens = PedersenGens::default();
         // NOTE: If this decryption ends up being too slow, we can pass in the balance
         // as input.
         let balance = sndr_enc_keys
@@ -82,6 +84,7 @@ impl ConfidentialTransactionSender for CtxSender {
                     pub_key1: sndr_enc_keys.pblc.key,
                     pub_key2: rcvr_pub_key.key,
                     w: Zeroizing::new(witness.clone()),
+                    pc_gens: &gens,
                 },
                 rng,
             )?);
@@ -99,6 +102,7 @@ impl ConfidentialTransactionSender for CtxSender {
                     sndr_enc_keys.scrt.key.clone(),
                     sndr_account.enc_balance.cipher,
                     refreshed_enc_balance,
+                    &gens,
                 ),
                 rng,
             )?);
@@ -124,6 +128,7 @@ impl ConfidentialTransactionSender for CtxSender {
                     sndr_enc_keys.scrt.key.clone(),
                     sndr_account.enc_asset_id.cipher,
                     refreshed_enc_asset_id,
+                    &gens,
                 ),
                 rng,
             )?);
@@ -139,6 +144,7 @@ impl ConfidentialTransactionSender for CtxSender {
                     pub_key1: sndr_enc_keys.pblc.key,
                     pub_key2: rcvr_pub_key.key,
                     w: Zeroizing::new(asset_id_witness),
+                    pc_gens: &gens,
                 },
                 rng,
             )?);
@@ -250,10 +256,12 @@ impl CtxReceiver {
         // Generate proof of equality of asset ids
         let enc_asset_id_from_sndr = conf_tx_init_data.content.memo.enc_asset_id_using_rcvr;
         let enc_asset_id_from_rcvr_acc = rcvr_account.enc_asset_id;
+        let gens = PedersenGens::default();
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             rcvr_enc_sec.key,
             enc_asset_id_from_rcvr_acc.cipher,
             enc_asset_id_from_sndr.cipher,
+            &gens,
         );
 
         let (init, response) = single_property_prover(prover, rng)?;
@@ -282,6 +290,7 @@ fn verify_initital_transaction_proofs(
 ) -> Fallible<()> {
     let memo = &transaction.content.memo;
     let init_data = &transaction.content;
+    let gens = &PedersenGens::default();
 
     ensure!(
         sndr_account.id == memo.sndr_account_id,
@@ -295,6 +304,7 @@ fn verify_initital_transaction_proofs(
             pub_key2: memo.rcvr_pub_key.key,
             cipher1: memo.enc_amount_using_sndr.cipher,
             cipher2: memo.enc_amount_using_rcvr.cipher,
+            pc_gens: &gens,
         },
         init_data.amount_equal_cipher_proof.init,
         init_data.amount_equal_cipher_proof.response,
@@ -313,6 +323,7 @@ fn verify_initital_transaction_proofs(
             memo.sndr_pub_key.key,
             sndr_account.enc_balance.cipher,
             memo.refreshed_enc_balance.cipher,
+            &gens,
         ),
         init_data.balance_refreshed_same_proof.init,
         init_data.balance_refreshed_same_proof.response,
@@ -331,6 +342,7 @@ fn verify_initital_transaction_proofs(
             memo.sndr_pub_key.key,
             sndr_account.enc_asset_id.cipher,
             memo.refreshed_enc_asset_id.cipher,
+            &gens,
         ),
         init_data.asset_id_refreshed_same_proof.init,
         init_data.asset_id_refreshed_same_proof.response,
@@ -345,6 +357,7 @@ fn verify_initital_transaction_proofs(
             pub_key2: memo.rcvr_pub_key.key,
             cipher1: memo.refreshed_enc_asset_id.cipher,
             cipher2: memo.enc_asset_id_using_rcvr.cipher,
+            pc_gens: &gens,
         },
         init_data.asset_id_equal_cipher_proof.init,
         init_data.asset_id_equal_cipher_proof.response,
@@ -422,6 +435,7 @@ impl CtxReceiverValidator {
                 memo.rcvr_pub_key.key,
                 rcvr_account.enc_asset_id.cipher,
                 memo.enc_asset_id_using_rcvr.cipher,
+                &PedersenGens::default(),
             ),
             final_content.asset_id_equal_cipher_proof.init,
             final_content.asset_id_equal_cipher_proof.response,

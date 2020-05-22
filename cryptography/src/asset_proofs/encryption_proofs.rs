@@ -1,7 +1,6 @@
 //! Encryption proofs' interface definitions and
 //! Non-Interactive Zero Knowledge Proof API.
 
-use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
@@ -83,7 +82,6 @@ pub trait AssetProofProverAwaitingChallenge {
     /// A initial message.
     fn generate_initial_message(
         &self,
-        pc_gens: &PedersenGens,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage);
 }
@@ -117,7 +115,6 @@ pub trait AssetProofVerifier {
     /// Ok on success, or an error on failure.
     fn verify(
         &self,
-        pc_gens: &PedersenGens,
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
@@ -148,10 +145,9 @@ pub fn single_property_prover<
     ProverAwaitingChallenge::ZKFinalResponse,
 )> {
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
-    let gens = PedersenGens::default();
 
     let mut transcript_rng = prover_ac.create_transcript_rng(rng, &transcript);
-    let (prover, initial_message) = prover_ac.generate_initial_message(&gens, &mut transcript_rng);
+    let (prover, initial_message) = prover_ac.generate_initial_message(&mut transcript_rng);
 
     // Update the transcript with Prover's initial message
     initial_message.update_transcript(&mut transcript)?;
@@ -178,13 +174,12 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
     final_response: Verifier::ZKFinalResponse,
 ) -> Fallible<()> {
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
-    let gens = PedersenGens::default();
 
     // Update the transcript with Prover's initial message
     initial_message.update_transcript(&mut transcript)?;
     let challenge = transcript.scalar_challenge(ENCRYPTION_PROOFS_CHALLENGE_LABEL)?;
 
-    verifier.verify(&gens, &challenge, &initial_message, &final_response)?;
+    verifier.verify(&challenge, &initial_message, &final_response)?;
 
     Ok(())
 }
@@ -208,6 +203,7 @@ mod tests {
         },
         errors::ErrorKind,
     };
+    use bulletproofs::PedersenGens;
     use rand::{rngs::StdRng, SeedableRng};
     use std::convert::TryFrom;
     use wasm_bindgen_test::*;
@@ -216,21 +212,26 @@ mod tests {
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [7u8; 32];
 
-    fn create_correctness_proof_objects_helper(
+    fn create_correctness_proof_objects_helper<'a>(
         witness: CommitmentWitness,
         pub_key: ElgamalPublicKey,
         cipher: CipherText,
-    ) -> (CorrectnessProverAwaitingChallenge, CorrectnessVerifier) {
-        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, witness.clone());
-        let verifier = CorrectnessVerifier::new(witness.value(), pub_key, cipher);
+        pc_gens: &'a PedersenGens,
+    ) -> (
+        CorrectnessProverAwaitingChallenge<'a>,
+        CorrectnessVerifier<'a>,
+    ) {
+        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, witness.clone(), pc_gens);
+        let verifier = CorrectnessVerifier::new(witness.value(), pub_key, cipher, pc_gens);
 
         (prover, verifier)
     }
 
-    fn create_wellformedness_proof_objects_helper(
+    fn create_wellformedness_proof_objects_helper<'a>(
         witness: CommitmentWitness,
         pub_key: ElgamalPublicKey,
         cipher: CipherText,
+        pc_gens: &'a PedersenGens,
     ) -> (
         WellformednessProverAwaitingChallenge,
         WellformednessVerifier,
@@ -238,10 +239,12 @@ mod tests {
         let prover = WellformednessProverAwaitingChallenge {
             pub_key: pub_key,
             w: Zeroizing::new(witness),
+            pc_gens: pc_gens,
         };
         let verifier = WellformednessVerifier {
             pub_key: pub_key,
             cipher: cipher,
+            pc_gens: pc_gens,
         };
 
         (prover, verifier)
@@ -251,6 +254,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn nizkp_proofs() {
         let mut rng = StdRng::from_seed(SEED_1);
+        let gens = PedersenGens::default();
         let secret_value = 42u32;
         let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = secret_key.get_public_key();
@@ -258,13 +262,18 @@ mod tests {
         let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
         let cipher = pub_key.encrypt(&w);
 
-        let (prover0, verifier0) =
-            create_correctness_proof_objects_helper(w.clone(), pub_key.clone(), cipher.clone());
+        let (prover0, verifier0) = create_correctness_proof_objects_helper(
+            w.clone(),
+            pub_key.clone(),
+            cipher.clone(),
+            &gens,
+        );
         let (initial_message0, final_response0) =
             single_property_prover::<StdRng, CorrectnessProverAwaitingChallenge>(prover0, &mut rng)
                 .unwrap();
 
-        let (prover1, verifier1) = create_wellformedness_proof_objects_helper(w, pub_key, cipher);
+        let (prover1, verifier1) =
+            create_wellformedness_proof_objects_helper(w, pub_key, cipher, &gens);
         let (initial_message1, final_response1) = single_property_prover::<
             StdRng,
             WellformednessProverAwaitingChallenge,
@@ -299,20 +308,23 @@ mod tests {
         let cipher = pub_key.encrypt(&w);
         let mut transcript = Transcript::new(b"batch_proof_label");
 
-        let (prover0, verifier0) =
-            create_correctness_proof_objects_helper(w.clone(), pub_key.clone(), cipher.clone());
-        let (prover1, verifier1) = create_wellformedness_proof_objects_helper(w, pub_key, cipher);
+        let (prover0, verifier0) = create_correctness_proof_objects_helper(
+            w.clone(),
+            pub_key.clone(),
+            cipher.clone(),
+            &gens,
+        );
+        let (prover1, verifier1) =
+            create_wellformedness_proof_objects_helper(w, pub_key, cipher, &gens);
 
         let mut transcript_rng1 = prover0.create_transcript_rng(&mut rng, &transcript);
         let mut transcript_rng2 = prover1.create_transcript_rng(&mut rng, &transcript);
 
         // Provers generate the initial messages
-        let (prover0, initial_message0) =
-            prover0.generate_initial_message(&gens, &mut transcript_rng1);
+        let (prover0, initial_message0) = prover0.generate_initial_message(&mut transcript_rng1);
         initial_message0.update_transcript(&mut transcript).unwrap();
 
-        let (prover1, initial_message1) =
-            prover1.generate_initial_message(&gens, &mut transcript_rng2);
+        let (prover1, initial_message1) = prover1.generate_initial_message(&mut transcript_rng2);
         initial_message1.update_transcript(&mut transcript).unwrap();
 
         // Dealer calculates the challenge from the 2 initial messages
@@ -326,19 +338,19 @@ mod tests {
 
         // Positive tests
         // Verifiers verify the proofs
-        let result = verifier0.verify(&gens, &challenge, &initial_message0, &final_response0);
+        let result = verifier0.verify(&challenge, &initial_message0, &final_response0);
         assert!(result.is_ok());
 
-        let result = verifier1.verify(&gens, &challenge, &initial_message1, &final_response1);
+        let result = verifier1.verify(&challenge, &initial_message1, &final_response1);
         assert!(result.is_ok());
 
         // Negative tests
         let bad_challenge = ZKPChallenge::try_from(Scalar::random(&mut rng)).unwrap();
         assert!(verifier0
-            .verify(&gens, &bad_challenge, &initial_message0, &final_response0)
+            .verify(&bad_challenge, &initial_message0, &final_response0)
             .is_err());
         assert!(verifier1
-            .verify(&gens, &bad_challenge, &initial_message1, &final_response1)
+            .verify(&bad_challenge, &initial_message1, &final_response1)
             .is_err());
     }
 }
