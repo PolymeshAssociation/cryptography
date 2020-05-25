@@ -2,13 +2,15 @@
 //! This proofs the knoweledge about the encrypted value.
 //! For more details see section 5.1 of the whitepaper.
 
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    errors::{AssetProofError, Result},
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, CommitmentWitness, ElgamalPublicKey,
+    errors::{ErrorKind, Fallible},
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
@@ -23,7 +25,7 @@ pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathWellforme
 /// The domain label for the challenge.
 pub const WELLFORMEDNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathWellformednessProofChallenge";
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
 pub struct WellformednessFinalResponse {
     z1: Scalar,
     z2: Scalar,
@@ -46,7 +48,7 @@ impl Default for WellformednessInitialMessage {
 }
 
 impl UpdateTranscript for WellformednessInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(WELLFORMEDNESS_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A", &self.a.compress())?;
         transcript.append_validated_point(b"B", &self.b.compress())?;
@@ -131,15 +133,15 @@ impl<'a> AssetProofVerifier for WellformednessVerifier<'a> {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         response: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         ensure!(
             response.z1 * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
             response.z1 * self.pc_gens.B_blinding + response.z2 * self.pc_gens.B
                 == initial_message.b + challenge.x() * self.cipher.y,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 2 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
     }
@@ -213,7 +215,7 @@ mod tests {
         let result = verifier.verify(&challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = WellformednessFinalResponse {
@@ -223,7 +225,7 @@ mod tests {
         let result = verifier.verify(&challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         // ------------------------------- Non-interactive case
@@ -256,13 +258,13 @@ mod tests {
         assert_err!(
             // 4th round
             single_property_verifier(&verifier, bad_initial_message, final_response),
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         assert_err!(
             // 4th round
             single_property_verifier(&verifier, initial_message, bad_final_response),
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
     }
 
