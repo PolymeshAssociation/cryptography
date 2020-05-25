@@ -53,6 +53,10 @@ pub enum AssetProofError {
     )]
     MembershipProofVerificationError { check: u16 },
 
+    /// Failed to identify the element in the set.
+    #[fail(display = "Failed to find an element in the asset identifier list")]
+    MembershipProofInvalidAssetError,
+
     /// Failed to verify a wellformedness proof.
     #[fail(
         display = "Failed to verify the check number {} of the wellformedness proof",
