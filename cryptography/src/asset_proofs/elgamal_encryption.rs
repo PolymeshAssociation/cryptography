@@ -3,12 +3,10 @@
 //! Since Elgamal is a homomorphic encryption it also provides
 //! addition and subtraction API over the cipher texts.
 
-use crate::asset_proofs::errors::{AssetProofError, Result};
+use crate::errors::{Error, ErrorKind, Fallible};
 use bulletproofs::PedersenGens;
-use core::ops::{Add, Sub};
-use core::ops::{AddAssign, SubAssign};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use failure::Error;
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -63,7 +61,7 @@ impl TryFrom<(u32, Scalar)> for CommitmentWitness {
     fn try_from(v: (u32, Scalar)) -> Result<Self, Self::Error> {
         // Since Elgamal decryption requires brute forcing over all possible values,
         // we limit the values to 32-bit integers.
-        ensure!(v.0 < u32::max_value(), AssetProofError::PlainTextRangeError);
+        ensure!(v.0 < u32::max_value(), ErrorKind::PlainTextRangeError);
         Ok(CommitmentWitness {
             value: v.0,
             blinding: v.1,
@@ -72,7 +70,7 @@ impl TryFrom<(u32, Scalar)> for CommitmentWitness {
 }
 
 /// Prover's representation of the encrypted secret.
-#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize, Default)]
 pub struct CipherText {
     pub x: RistrettoPoint,
     pub y: RistrettoPoint,
@@ -148,7 +146,7 @@ pub struct ElgamalSecretKey {
 }
 
 /// The Elgamal Public Key is the secret key multiplied by the blinding generator (g).
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct ElgamalPublicKey {
     pub pub_key: RistrettoPoint,
 }
@@ -161,7 +159,7 @@ impl ElgamalPublicKey {
         CipherText { x, y }
     }
 
-    pub fn encrypt_value(&self, value: u32) -> Result<CipherText> {
+    pub fn encrypt_value(&self, value: u32) -> Fallible<CipherText> {
         let blinding = Scalar::random(&mut rand::thread_rng());
         Ok(self.encrypt(&CommitmentWitness::try_from((value, blinding))?))
     }
@@ -179,7 +177,7 @@ impl ElgamalSecretKey {
         }
     }
 
-    pub fn decrypt(&self, cipher_text: &CipherText) -> Result<u32> {
+    pub fn decrypt(&self, cipher_text: &CipherText) -> Fallible<u32> {
         let gens = PedersenGens::default();
         // value * h = Y - X / secret_key
         let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
@@ -192,8 +190,23 @@ impl ElgamalSecretKey {
             }
         }
 
-        Err(AssetProofError::CipherTextDecryptionError.into())
+        Err(ErrorKind::CipherTextDecryptionError.into())
     }
+}
+
+pub fn encrypt_using_two_pub_keys(
+    witness: &CommitmentWitness,
+    pub_key1: ElgamalPublicKey,
+    pub_key2: ElgamalPublicKey,
+) -> (CipherText, CipherText) {
+    let x1 = witness.blinding * pub_key1.pub_key;
+    let x2 = witness.blinding * pub_key2.pub_key;
+    let gens = PedersenGens::default();
+    let y = gens.commit(Scalar::from(witness.value()), witness.blinding);
+    let enc1 = CipherText { x: x1, y };
+    let enc2 = CipherText { x: x2, y };
+
+    (enc1, enc2)
 }
 
 // ------------------------------------------------------------------------
@@ -201,14 +214,9 @@ impl ElgamalSecretKey {
 // ------------------------------------------------------------------------
 
 impl CipherText {
-    pub fn ciphertext_refreshment_method<T: RngCore + CryptoRng>(
-        &self,
-        secret_key: &ElgamalSecretKey,
-        rng: &mut T,
-    ) -> Result<CipherText> {
+    pub fn refresh(&self, secret_key: &ElgamalSecretKey, blinding: Scalar) -> Fallible<CipherText> {
         let message = secret_key.decrypt(self)?;
         let pub_key = secret_key.get_public_key();
-        let blinding = Scalar::random(rng);
         let new_witness = CommitmentWitness::try_from((message, blinding))?;
         let new_ciphertext = pub_key.encrypt(&new_witness);
 
@@ -289,5 +297,26 @@ mod tests {
         assert_eq!(cipher1 - cipher2, cipher12);
         cipher12 += cipher2;
         assert_eq!(cipher1, cipher12);
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn test_two_encryptions() {
+        let mut rng = StdRng::from_seed([17u8; 32]);
+        let v = 256u32;
+        let b = Scalar::random(&mut rng);
+        let w = CommitmentWitness::try_from((v, b)).unwrap();
+
+        let scrt1 = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let pblc1 = scrt1.get_public_key();
+
+        let scrt2 = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let pblc2 = scrt2.get_public_key();
+
+        let (cipher1, cipher2) = encrypt_using_two_pub_keys(&w, pblc1, pblc2);
+        let msg1 = scrt1.decrypt(&cipher1).unwrap();
+        let msg2 = scrt2.decrypt(&cipher2).unwrap();
+        assert_eq!(v, msg1);
+        assert_eq!(v, msg2);
     }
 }

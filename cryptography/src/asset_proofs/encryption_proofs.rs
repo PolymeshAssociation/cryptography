@@ -1,15 +1,14 @@
 //! Encryption proofs' interface definitions and
 //! Non-Interactive Zero Knowledge Proof API.
 
-use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use std::convert::TryFrom;
 
 use crate::{
-    asset_proofs::errors::{AssetProofError, Result},
     asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript},
+    errors::{Error, ErrorKind, Fallible},
 };
 
 /// The domain label for the encryption proofs.
@@ -33,10 +32,10 @@ impl ZKPChallenge {
 }
 
 impl TryFrom<Scalar> for ZKPChallenge {
-    type Error = failure::Error;
+    type Error = Error;
 
-    fn try_from(x: Scalar) -> Result<Self> {
-        ensure!(x != Scalar::zero(), AssetProofError::VerificationError);
+    fn try_from(x: Scalar) -> Result<Self, Self::Error> {
+        ensure!(x != Scalar::zero(), ErrorKind::VerificationError);
         Ok(ZKPChallenge { x })
     }
 }
@@ -119,7 +118,7 @@ pub trait AssetProofVerifier {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
-    ) -> Result<()>;
+    ) -> Fallible<()>;
 }
 
 // ------------------------------------------------------------------------
@@ -141,7 +140,7 @@ pub fn single_property_prover<
 >(
     prover_ac: ProverAwaitingChallenge,
     rng: &mut T,
-) -> Result<(
+) -> Fallible<(
     ProverAwaitingChallenge::ZKInitialMessage,
     ProverAwaitingChallenge::ZKFinalResponse,
 )> {
@@ -173,7 +172,7 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
     verifier: &Verifier,
     initial_message: Verifier::ZKInitialMessage,
     final_response: Verifier::ZKFinalResponse,
-) -> Result<()> {
+) -> Fallible<()> {
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
 
     // Update the transcript with Prover's initial message
@@ -193,15 +192,18 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::asset_proofs::{
-        correctness_proof::{
-            CorrectnessFinalResponse, CorrectnessInitialMessage,
-            CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+    use crate::{
+        asset_proofs::{
+            correctness_proof::{
+                CorrectnessFinalResponse, CorrectnessInitialMessage,
+                CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+            },
+            wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
+            CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
         },
-        errors::AssetProofError,
-        wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
-        CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
+        errors::ErrorKind,
     };
+    use bulletproofs::PedersenGens;
     use rand::{rngs::StdRng, SeedableRng};
     use std::convert::TryFrom;
     use wasm_bindgen_test::*;
@@ -286,13 +288,13 @@ mod tests {
         let bad_initial_message = CorrectnessInitialMessage::default();
         assert_err!(
             single_property_verifier(&verifier0, bad_initial_message, final_response0),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = CorrectnessFinalResponse::from(Scalar::one());
         assert_err!(
             single_property_verifier(&verifier0, initial_message0, bad_final_response),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }
 

@@ -3,7 +3,7 @@
 //! plain text. For example proving that the value that was encrypted
 //! is within a range.
 
-use crate::asset_proofs::errors::{AssetProofError, Result};
+use crate::errors::{ErrorKind, Fallible};
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use merlin::Transcript;
@@ -16,7 +16,7 @@ const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 // ------------------------------------------------------------------------
 
 #[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
-pub struct RangeProofInitialMessage(CompressedRistretto);
+pub struct RangeProofInitialMessage(pub CompressedRistretto);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct RangeProofFinalResponse(RangeProof);
@@ -28,7 +28,7 @@ pub fn prove_within_range(
     secret_value: u64,
     rand_blind: Scalar,
     range: usize,
-) -> Result<(RangeProofInitialMessage, RangeProofFinalResponse)> {
+) -> Fallible<(RangeProofInitialMessage, RangeProofFinalResponse, usize)> {
     // Generators for Pedersen commitments.
     let pc_gens = PedersenGens::default();
 
@@ -50,20 +50,21 @@ pub fn prove_within_range(
         &rand_blind,
         range,
     )
-    .map_err(|source| AssetProofError::ProvingError { source })?;
+    .map_err(|source| ErrorKind::ProvingError { source })?;
 
     Ok((
         RangeProofInitialMessage(commitment),
         RangeProofFinalResponse(proof),
+        range,
     ))
 }
 
 /// Verify that a range proof is valid given a commitment to a secret value.
 pub fn verify_within_range(
-    commitment: RangeProofInitialMessage,
-    proof: RangeProofFinalResponse,
+    init: RangeProofInitialMessage,
+    response: RangeProofFinalResponse,
     range: usize,
-) -> bool {
+) -> Fallible<()> {
     // Generators for Pedersen commitments.
     let pc_gens = PedersenGens::default();
 
@@ -75,16 +76,10 @@ pub fn verify_within_range(
     // the Fiat-Shamir huristic.
     let mut verifier_transcript = Transcript::new(RANGE_PROOF_LABEL);
 
-    proof
+    response
         .0
-        .verify_single(
-            &bp_gens,
-            &pc_gens,
-            &mut verifier_transcript,
-            &commitment.0,
-            range,
-        )
-        .is_ok()
+        .verify_single(&bp_gens, &pc_gens, &mut verifier_transcript, &init.0, range)
+        .map_err(|_| ErrorKind::VerificationError.into())
 }
 
 // ------------------------------------------------------------------------
@@ -111,10 +106,11 @@ mod tests {
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let (initial_message, final_response) =
+        let (initial_message, final_response, range) =
             prove_within_range(secret_value as u64, rand_blind, 32)
                 .expect("This shouldn't happen.");
-        assert!(verify_within_range(initial_message, final_response, 32));
+        assert_eq!(range, 32);
+        assert!(verify_within_range(initial_message, final_response, 32).is_ok());
 
         // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.
         let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
@@ -125,9 +121,9 @@ mod tests {
 
         // Negative test: secret value outside the allowed range
         let large_secret_value: u64 = u64::from(u32::max_value()) + 3;
-        let (bad_proof, bad_commitment) =
+        let (bad_proof, bad_commitment, _) =
             prove_within_range(large_secret_value, rand_blind, 32).expect("This shouldn't happen.");
-        assert!(!verify_within_range(bad_proof, bad_commitment, 32));
+        assert!(!verify_within_range(bad_proof, bad_commitment, 32).is_ok());
     }
 
     #[test]
@@ -137,9 +133,10 @@ mod tests {
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let (initial_message, final_response) =
+        let (initial_message, final_response, range) =
             prove_within_range(secret_value as u64, rand_blind, 32)
                 .expect("This shouldn't happen.");
+        assert_eq!(range, 32);
 
         let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
         let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
