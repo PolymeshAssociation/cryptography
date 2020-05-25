@@ -215,12 +215,12 @@ mod tests {
     fn test_ciphertext_refreshment_proof() {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
-        let secret_value = 13u32;
+        let secret_value = Scalar::from(13u32);
 
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let ciphertext1 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
-        let ciphertext2 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
+        let ciphertext1 = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+        let ciphertext2 = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
 
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             elg_secret,
@@ -292,12 +292,12 @@ mod tests {
     #[wasm_bindgen_test]
     fn serialize_deserialize_proof() {
         let mut rng = StdRng::from_seed(SEED_1);
-        let secret_value = 13u32;
+        let secret_value = Scalar::from(13u32);
         let gens = PedersenGens::default();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let ciphertext1 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
-        let ciphertext2 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
+        let ciphertext1 = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+        let ciphertext2 = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
 
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             elg_secret,

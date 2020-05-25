@@ -18,6 +18,29 @@ macro_rules! assert_err {
     };
 }
 
+pub type Balance = u32;
+pub const BALANCE_RANGE: usize = 32;
+
+/// Asset ID type.
+/// Note that MERCAT's asset id corresponds to PolyMesh's asset ticker.
+const ASSET_ID_LEN: usize = 12;
+use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Zeroize)]
+#[zeroize(drop)]
+pub struct AssetId {
+    pub id: [u8; ASSET_ID_LEN],
+}
+
+impl From<u32> for AssetId {
+    fn from(id: u32) -> AssetId {
+        let mut array = [0u8; 12];
+        array[0..4].copy_from_slice(&id.to_le_bytes());
+        AssetId { id: array }
+    }
+}
+
 pub mod asset_proofs;
 pub mod claim_proofs;
 pub mod mercat;

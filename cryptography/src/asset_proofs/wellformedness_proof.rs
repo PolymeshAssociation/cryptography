@@ -112,7 +112,7 @@ impl AssetProofProver<WellformednessFinalResponse> for WellformednessProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> WellformednessFinalResponse {
         WellformednessFinalResponse {
             z1: self.rand_a + c.x() * self.w.blinding(),
-            z2: self.rand_b + c.x() * Scalar::from(self.w.value()),
+            z2: self.rand_b + c.x() * self.w.scalar_value(),
         }
     }
 }

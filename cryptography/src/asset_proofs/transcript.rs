@@ -91,7 +91,7 @@ impl TranscriptProtocol for Transcript {
         witness: &CommitmentWitness,
     ) -> TranscriptRng {
         self.build_rng()
-            .rekey_with_witness_bytes(b"w_value", &witness.value().to_le_bytes())
+            .rekey_with_witness_bytes(b"w_value", &witness.scalar_value().to_bytes())
             .rekey_with_witness_bytes(b"w_blinding", witness.blinding().as_bytes())
             .finalize(rng)
     }

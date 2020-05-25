@@ -131,7 +131,7 @@ impl AssetProofProver<EncryptingSameValueFinalResponse> for EncryptingSameValueP
     fn apply_challenge(&self, c: &ZKPChallenge) -> EncryptingSameValueFinalResponse {
         EncryptingSameValueFinalResponse {
             z1: self.u1 + c.x() * self.w.blinding(),
-            z2: self.u2 + c.x() * Scalar::from(self.w.value()),
+            z2: self.u2 + c.x() * self.w.scalar_value(),
         }
     }
 }
