@@ -83,9 +83,9 @@ fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Fallible<Vec<S
 #[derive(Clone)]
 pub struct OooNProofGenerators {
     /// Generates for computing Pedersen commitments
-    com_gens: PedersenGens,
+    pub com_gens: PedersenGens,
     /// Generators for computing vector commitments.
-    h_vec: Vec<RistrettoPoint>,
+    pub h_vec: Vec<RistrettoPoint>,
 }
 
 impl OooNProofGenerators {
@@ -320,7 +320,7 @@ pub struct R1Prover {
 #[derive(Clone)]
 pub struct R1ProverAwaitingChallenge<'a> {
     /// The bit-value matrix, where each row contains only one 1
-    b_matrix: Matrix,
+    b_matrix: Zeroizing<Matrix>,
 
     /// The randomness used for committing to the bit matrix
     r_b: Zeroizing<Scalar>,
@@ -389,7 +389,7 @@ impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
         (
             R1Prover {
                 a_values: a_matrix.elements.clone(),
-                b_matrix: Zeroizing::new(self.b_matrix.clone()),
+                b_matrix: self.b_matrix.clone(),
                 r_b: *self.r_b.clone(),
                 r_a: random_a,
                 r_c: random_c,
@@ -502,6 +502,13 @@ impl OOONProofInitialMessage {
             m: exp,
         }
     }
+
+    pub fn get_n(&self) -> usize {
+        return self.n;
+    }
+    pub fn get_m(&self) -> usize {
+        return self.m;
+    }
 }
 /// A `default` implementation used for testing.
 impl Default for OOONProofInitialMessage {
@@ -597,7 +604,7 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
         };
 
         let r1_prover = R1ProverAwaitingChallenge {
-            b_matrix: b_matrix_rep,
+            b_matrix: Zeroizing::new(b_matrix_rep),
             r_b: Zeroizing::new(self.random),
             generators: self.generators,
             m: rows,
@@ -942,7 +949,7 @@ mod tests {
             let r = Scalar::from(45728u32);
             let b_comm = gens.vector_commit(&base_matrix, r);
             let prover = R1ProverAwaitingChallenge {
-                b_matrix: b,
+                b_matrix: Zeroizing::new(b),
                 r_b: Zeroizing::new(r),
                 generators: &gens,
                 m: EXPONENT,
@@ -973,7 +980,7 @@ mod tests {
         let r = Scalar::from(45728u32);
         let b_comm = gens.vector_commit(&b.elements, r);
         let prover = R1ProverAwaitingChallenge {
-            b_matrix: b,
+            b_matrix: Zeroizing::new(b),
             r_b: Zeroizing::new(r),
             generators: &gens,
             m: EXPONENT,
