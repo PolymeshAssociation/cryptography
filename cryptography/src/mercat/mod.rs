@@ -459,7 +459,7 @@ pub struct PubInitConfidentialTxDataContent {
     pub non_neg_amount_proof: InRangeProof,
     pub enough_fund_proof: InRangeProof,
     pub memo: ConfidentialTxMemo,
-    pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
+    pub asset_id_equal_cipher_with_sndr_rcvr_keys_proof: CipherEqualDifferentPubKeyProof,
     pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
 }
@@ -482,7 +482,7 @@ pub struct PubInitConfidentialTxData {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PubFinalConfidentialTxDataContent {
     pub init_data: PubInitConfidentialTxData,
-    pub asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof,
+    pub asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof,
 }
 
 impl PubFinalConfidentialTxDataContent {

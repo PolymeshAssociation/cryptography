@@ -142,7 +142,7 @@ impl ConfidentialTransactionSender for CtxSender {
         let asset_id_witness =
             CommitmentWitness::try_from((asset_id, asset_id_refresh_enc_blinding))?;
         let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt(&asset_id_witness);
-        let asset_id_equal_cipher_proof =
+        let asset_id_equal_cipher_with_sndr_rcvr_keys_proof =
             CipherEqualDifferentPubKeyProof::from(single_property_prover(
                 EncryptingSameValueProverAwaitingChallenge {
                     pub_key1: sndr_enc_keys.pblc.key,
@@ -158,7 +158,7 @@ impl ConfidentialTransactionSender for CtxSender {
             amount_equal_cipher_proof,
             non_neg_amount_proof,
             enough_fund_proof,
-            asset_id_equal_cipher_proof,
+            asset_id_equal_cipher_with_sndr_rcvr_keys_proof,
             balance_refreshed_same_proof,
             asset_id_refreshed_same_proof,
             memo: ConfidentialTxMemo {
@@ -263,7 +263,7 @@ impl CtxReceiver {
         // gather the content and sign it
         let content = PubFinalConfidentialTxDataContent {
             init_data: conf_tx_init_data,
-            asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof { init, response },
+            asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof { init, response },
         };
 
         let sig = rcvr_sign_keys.pair.sign(&content.to_bytes()?);
@@ -354,8 +354,12 @@ fn verify_initital_transaction_proofs(
             cipher2: memo.enc_asset_id_using_rcvr.cipher,
             pc_gens: &gens,
         },
-        init_data.asset_id_equal_cipher_proof.init,
-        init_data.asset_id_equal_cipher_proof.response,
+        init_data
+            .asset_id_equal_cipher_with_sndr_rcvr_keys_proof
+            .init,
+        init_data
+            .asset_id_equal_cipher_with_sndr_rcvr_keys_proof
+            .response,
     )?;
     Ok(())
 }
@@ -432,8 +436,10 @@ impl CtxReceiverValidator {
                 memo.enc_asset_id_using_rcvr.cipher,
                 &PedersenGens::default(),
             ),
-            final_content.asset_id_equal_cipher_proof.init,
-            final_content.asset_id_equal_cipher_proof.response,
+            final_content.asset_id_from_sndr_equal_to_rcvr_proof.init,
+            final_content
+                .asset_id_from_sndr_equal_to_rcvr_proof
+                .response,
         )?;
 
         Ok(())
@@ -532,7 +538,8 @@ mod tests {
         PubInitConfidentialTxData {
             content: PubInitConfidentialTxDataContent {
                 memo: mock_ctx_init_memo(rcvr_pub_key, expected_amount, asset_id),
-                asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
+                asset_id_equal_cipher_with_sndr_rcvr_keys_proof:
+                    CipherEqualDifferentPubKeyProof::default(),
                 amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
                 non_neg_amount_proof: InRangeProof::default(),
                 enough_fund_proof: InRangeProof::default(),
