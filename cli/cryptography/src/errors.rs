@@ -114,6 +114,17 @@ pub enum ErrorKind {
     )]
     EncryptingSameValueFinalResponseVerificationError { check: u16 },
 
+    /// Failed to verify the membership proof.
+    #[fail(
+        display = "Failed to verify the check number {} of the membership proof",
+        check
+    )]
+    MembershipProofVerificationError { check: u16 },
+
+    /// Invalid asset type is provided.
+    #[fail(display = "Invalid asset type ")]
+    MembershipProofInvalidAssetError,
+
     /// TODO: remove this once all the mercat methods are implemented.
     #[fail(display = "This method is not implemented yet")]
     NotImplemented,
