@@ -206,8 +206,8 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
     ) -> Result<()> {
         let n = initial_message
             .ooon_proof_initial_message
-            .n
-            .pow(initial_message.ooon_proof_initial_message.m as u32);
+            .get_n()
+            .pow(initial_message.ooon_proof_initial_message.get_m() as u32);
         let initial_size = self.elements_set.len();
 
         let mut commitments_list: Vec<RistrettoPoint> = (0..self.elements_set.len())

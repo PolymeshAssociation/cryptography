@@ -496,8 +496,8 @@ impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
 pub struct OOONProofInitialMessage {
     r1_proof_initial_message: R1ProofInitialMessage,
     g_vec: Vec<RistrettoPoint>,
-    pub n: usize,
-    pub m: usize,
+    n: usize,
+    m: usize,
 }
 
 impl OOONProofInitialMessage {
@@ -508,6 +508,13 @@ impl OOONProofInitialMessage {
             n: base,
             m: exp,
         }
+    }
+
+    pub fn get_n(&self) -> usize {
+        return self.n;
+    }
+    pub fn get_m(&self) -> usize {
+        return self.m;
     }
 }
 /// A `default` implementation used for testing.
