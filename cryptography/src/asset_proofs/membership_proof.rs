@@ -26,7 +26,7 @@ use zeroize::Zeroizing;
 const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MembershipProofInitialMessage {
     ooon_proof_initial_message: OOONProofInitialMessage,
     secret_element_comm: RistrettoPoint,
@@ -44,7 +44,7 @@ impl UpdateTranscript for MembershipProofInitialMessage {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MembershipProofFinalResponse {
     ooon_proof_final_response: OOONProofFinalResponse,
 }
@@ -210,6 +210,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use rand::{rngs::StdRng, SeedableRng};
+    use bincode::{deserialize, serialize};
     use wasm_bindgen_test::*;
 
     use crate::asset_proofs::encryption_proofs::{
@@ -281,8 +282,7 @@ mod tests {
         );
 
         // Testing adversarial proof generation where the Prover tries to generate
-        // a proof for non-existing set member.
-
+        // a proof for non-existing set member. 
         let prover = MembershipProverAwaitingChallenge {
             secret_element: Zeroizing::new(Scalar::from(2778u32)),
             random: Zeroizing::new(blinding),
@@ -314,8 +314,7 @@ mod tests {
             result,
             AssetProofError::MembershipProofVerificationError { check: 1 }
         );
-        /////////////////////////////////////
-
+        
         // Testing the non-interactive API
         let prover = MembershipProverAwaitingChallenge {
             secret_element: Zeroizing::new(Scalar::from(75u32)),
@@ -359,5 +358,44 @@ mod tests {
             single_property_verifier(&verifier, initial_message_1, bad_final_response),
             AssetProofError::MembershipProofVerificationError { check: 1 }
         );
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        
+        let mut rng = StdRng::from_seed(SEED_1);
+        let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
+
+        const BASE: usize = 4;
+        const EXPONENT: usize = 3;
+        
+        let generators = OooNProofGenerators::new(EXPONENT, BASE);
+        let even_elements: Vec<Scalar> = (0..64 as u32).map(|m| Scalar::from(2 * m)).collect();
+        let blinding = Scalar::random(&mut rng);
+
+        let even_member = generators.com_gens.commit(Scalar::from(8u32), blinding);
+        
+        let prover = MembershipProverAwaitingChallenge {
+            secret_element: Zeroizing::new(Scalar::from(8u32)),
+            random: Zeroizing::new(blinding),
+            generators: &generators,
+            elements_set: even_elements.as_slice(),
+            base: BASE,
+            exp: EXPONENT,
+        };
+
+        let (initial_message0, final_response0) =
+            single_property_prover::<StdRng, MembershipProverAwaitingChallenge>(prover, &mut rng)
+                .unwrap();
+        
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message0).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response0).unwrap();
+        let recovered_initial_message: MembershipProofInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: MembershipProofFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message0);
+        assert_eq!(recovered_final_response, final_response0);
     }
 }
