@@ -23,13 +23,14 @@ use curve25519_dalek::scalar::Scalar;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use sp_application_crypto::sr25519;
+use sp_core::crypto::Pair;
 
 // ---------------------- START: temporary types, move them to the proper location
 
 // TODO move after CRYP-40
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct MembershipProofInitialMessage {}
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct MembershipProofFinalResponse {}
 
 // ---------------------- END: temporary types, move them to other files
@@ -73,7 +74,7 @@ pub struct EncryptionKeys {
 }
 
 /// Holds the SR25519 signature scheme public key.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SigningPubKey {
     pub key: sr25519::Public,
 }
@@ -88,6 +89,12 @@ impl From<sr25519::Public> for SigningPubKey {
 #[derive(Clone)]
 pub struct SigningKeys {
     pub pair: sr25519::Pair,
+}
+
+impl SigningKeys {
+    pub fn pblc(&self) -> SigningPubKey {
+        SigningPubKey::from(self.pair.public())
+    }
 }
 
 /// Type alias for SR25519 signature.
@@ -118,21 +125,39 @@ impl From<CipherText> for EncryptedAmount {
 }
 
 /// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct WellformednessProof {
     init: WellformednessInitialMessage,
     response: WellformednessFinalResponse,
 }
 
+impl From<(WellformednessInitialMessage, WellformednessFinalResponse)> for WellformednessProof {
+    fn from(pair: (WellformednessInitialMessage, WellformednessFinalResponse)) -> Self {
+        Self {
+            init: pair.0,
+            response: pair.1,
+        }
+    }
+}
+
 /// Holds the non-interactive proofs of correctness, equivalent of L_correct of MERCAT paper.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct CorrectnessProof {
     init: CorrectnessInitialMessage,
     response: CorrectnessFinalResponse,
 }
 
+impl From<(CorrectnessInitialMessage, CorrectnessFinalResponse)> for CorrectnessProof {
+    fn from(pair: (CorrectnessInitialMessage, CorrectnessFinalResponse)) -> Self {
+        Self {
+            init: pair.0,
+            response: pair.1,
+        }
+    }
+}
+
 /// Holds the non-interactive proofs of membership, equivalent of L_member of MERCAT paper.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct MembershipProof {
     init: MembershipProofInitialMessage,
     response: MembershipProofFinalResponse,
@@ -226,12 +251,12 @@ pub type AssetMemo = EncryptedAmount;
 // -                                    Account                                        -
 // -------------------------------------------------------------------------------------
 
-/// Holds the account memo. TODO: more informative description!
-#[derive(Clone)]
+/// Holds the owner public keys and the creation date of an account.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
     pub owner_sign_pub_key: SigningPubKey,
-    pub timestamp: std::time::Instant,
+    pub timestamp: std::time::SystemTime,
 }
 
 impl From<(EncryptionPubKey, SigningPubKey)> for AccountMemo {
@@ -239,14 +264,14 @@ impl From<(EncryptionPubKey, SigningPubKey)> for AccountMemo {
         AccountMemo {
             owner_enc_pub_key: pub_keys.0,
             owner_sign_pub_key: pub_keys.1,
-            timestamp: std::time::Instant::now(),
+            timestamp: std::time::SystemTime::now(),
         }
     }
 }
 
-/// Holds the public portion of an account which can be safely put on the chain.
-#[derive(Clone)]
-pub struct PubAccount {
+/// Holds contents of the public portion of an account which can be safely put on the chain.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PubAccountContent {
     pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
     pub enc_balance: EncryptedAmount,
@@ -254,10 +279,55 @@ pub struct PubAccount {
     pub asset_membership_proof: MembershipProof,
     pub balance_correctness_proof: CorrectnessProof,
     pub memo: AccountMemo,
-    pub sign: Signature,
 }
 
-// TODO Account creation is part of CRYP-61
+impl PubAccountContent {
+    pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
+        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+    }
+}
+
+/// Wrapper for the account content and signature.
+#[derive(Clone)]
+pub struct PubAccount {
+    pub content: PubAccountContent,
+    pub sig: Signature,
+}
+
+/// Holds the secret keys and asset id of an account. This cannot be put on the change.
+#[derive(Clone)]
+pub struct SecAccount {
+    pub enc_keys: EncryptionKeys,
+    pub sign_keys: SigningKeys,
+    pub asset_id: u32,
+}
+
+/// Wrapper for both the secret and public account info
+#[derive(Clone)]
+pub struct Account {
+    pub pblc: PubAccount,
+    pub scrt: SecAccount,
+}
+
+/// The interface for the account creation.
+pub trait AccountCreater {
+    /// Creates a public account for a user and initializes the balance to zero.
+    /// Corresponds to `CreateAccount` method of the MERCAT paper.
+    /// This function assumes that the given input `account_id` is unique.
+    fn create_account(
+        &self,
+        scrt_account: &SecAccount,
+        valid_asset_ids: Vec<u32>,
+        account_id: u32,
+        rng: &mut StdRng,
+    ) -> Fallible<PubAccount>;
+}
+
+/// The interface for the verifying the account creation.
+pub trait AccountCreaterVerifier {
+    /// Called by the validators to ensure that the account was created correctly.
+    fn verify(&self, account: PubAccount) -> Fallible<()>;
+}
 
 // -------------------------------------------------------------------------------------
 // -                               Transaction State                                   -
@@ -389,7 +459,7 @@ pub struct PubInitConfidentialTxDataContent {
     pub non_neg_amount_proof: InRangeProof,
     pub enough_fund_proof: InRangeProof,
     pub memo: ConfidentialTxMemo,
-    pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
+    pub asset_id_equal_cipher_with_sndr_rcvr_keys_proof: CipherEqualDifferentPubKeyProof,
     pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
 }
@@ -412,7 +482,7 @@ pub struct PubInitConfidentialTxData {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PubFinalConfidentialTxDataContent {
     pub init_data: PubInitConfidentialTxData,
-    pub asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof,
+    pub asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof,
 }
 
 impl PubFinalConfidentialTxDataContent {
@@ -435,11 +505,8 @@ pub trait ConfidentialTransactionSender {
     /// MERCAT paper.
     fn create(
         &self,
-        sndr_enc_keys: EncryptionKeys,
-        sndr_sign_keys: SigningKeys,
-        sndr_account: &PubAccount,
-        rcvr_account: &PubAccount,
-        asset_id: u32,
+        sndr_account: &Account,
+        rcvr_pub_account: &PubAccount,
         amount: u32,
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)>;
@@ -469,11 +536,8 @@ pub trait ConfidentialTransactionReceiver {
     fn finalize_and_process(
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
-        rcvr_enc_keys: EncryptionKeys,
-        rcvr_sign_keys: SigningKeys,
-        sndr_pub_key: EncryptionPubKey,
-        sndr_account: &PubAccount,
-        rcvr_account: &PubAccount,
+        sndr_pub_account: &PubAccount,
+        rcvr_account: Account,
         enc_asset_id: EncryptedAssetId,
         amount: u32,
         state: ConfidentialTxState,
