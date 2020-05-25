@@ -23,6 +23,7 @@ use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use sha3::Sha3_512;
 
+use serde::{Deserialize, Serialize};
 use std::ops::{Add, Neg, Sub};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -273,7 +274,7 @@ impl Polynomial {
 /// The R1 Proof is a zero-knowledge proof for a (bit-matrix) commitment B having an opening
 /// to a bit-matrix of size m x n, where in each row there is exactly one 1.
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct R1ProofInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -303,7 +304,7 @@ impl UpdateTranscript for R1ProofInitialMessage {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct R1ProofFinalResponse {
     f_elements: Vec<Scalar>,
     z_a: Scalar,
@@ -491,7 +492,7 @@ impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OOONProofInitialMessage {
     r1_proof_initial_message: R1ProofInitialMessage,
     g_vec: Vec<RistrettoPoint>,
@@ -529,7 +530,7 @@ impl UpdateTranscript for OOONProofInitialMessage {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OOONProofFinalResponse {
     r1_proof_final_response: R1ProofFinalResponse,
     z: Scalar,

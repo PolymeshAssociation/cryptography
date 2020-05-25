@@ -15,8 +15,8 @@ use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
-use zeroize::Zeroize;
-use zeroize::Zeroizing;
+use serde::{Deserialize, Serialize};
+use zeroize::{Zeroize, Zeroizing};
 
 /// The domain label for the encrypting the same value proof.
 pub const ENCRYPTING_SAME_VALUE_PROOF_FINAL_RESPONSE_LABEL: &[u8] =
@@ -30,13 +30,13 @@ pub const ENCRYPTING_SAME_VALUE_PROOF_CHALLENGE_LABEL: &[u8] =
 // Public Keys
 // ------------------------------------------------------------------------
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
 pub struct EncryptingSameValueFinalResponse {
     z1: Scalar,
     z2: Scalar,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct EncryptingSameValueInitialMessage {
     a1: RistrettoPoint,
     a2: RistrettoPoint,
@@ -194,6 +194,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use std::convert::TryFrom;
     use wasm_bindgen_test::*;
@@ -267,5 +268,40 @@ mod tests {
             final_response
         )
         .is_ok());
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = 49u32;
+        let rand_blind = Scalar::random(&mut rng);
+        let gens = PedersenGens::default();
+        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+
+        let elg_pub1 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
+        let elg_pub2 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
+
+        let prover = EncryptingSameValueProverAwaitingChallenge {
+            pub_key1: elg_pub1,
+            pub_key2: elg_pub2,
+            w: Zeroizing::new(w),
+            pc_gens: &gens,
+        };
+
+        let (initial_message, final_response) = encryption_proofs::single_property_prover::<
+            StdRng,
+            EncryptingSameValueProverAwaitingChallenge,
+        >(prover, &mut rng)
+        .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
+        let recovered_initial_message: EncryptingSameValueInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: EncryptingSameValueFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message);
+        assert_eq!(recovered_final_response, final_response);
     }
 }

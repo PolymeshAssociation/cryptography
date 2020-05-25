@@ -195,7 +195,8 @@ mod tests {
     use super::*;
     use crate::asset_proofs::{
         correctness_proof::{
-            CorrectnessInitialMessage, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+            CorrectnessFinalResponse, CorrectnessInitialMessage,
+            CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
         },
         errors::AssetProofError,
         wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
@@ -288,7 +289,7 @@ mod tests {
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_final_response = Scalar::one();
+        let bad_final_response = CorrectnessFinalResponse::from(Scalar::one());
         assert_err!(
             single_property_verifier(&verifier0, initial_message0, bad_final_response),
             AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
