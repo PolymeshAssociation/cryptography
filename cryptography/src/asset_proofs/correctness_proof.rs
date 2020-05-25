@@ -66,13 +66,13 @@ impl UpdateTranscript for CorrectnessInitialMessage {
 
 pub struct CorrectnessProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
-    pub_key: ElgamalPublicKey,
+    pub pub_key: ElgamalPublicKey,
 
     /// The secret commitment witness.
-    w: CommitmentWitness,
+    pub w: CommitmentWitness,
 
     /// Pedersen Generators
-    pc_gens: &'a PedersenGens,
+    pub pc_gens: &'a PedersenGens,
 }
 
 impl<'a> CorrectnessProverAwaitingChallenge<'a> {
@@ -135,16 +135,16 @@ impl AssetProofProver<CorrectnessFinalResponse> for CorrectnessProver {
 
 pub struct CorrectnessVerifier<'a> {
     /// The encrypted value (aka the plain text).
-    value: u32,
+    pub value: u32,
 
     /// The public key to which the `value` is encrypted.
-    pub_key: ElgamalPublicKey,
+    pub pub_key: ElgamalPublicKey,
 
     /// The encryption cipher text.
-    cipher: CipherText,
+    pub cipher: CipherText,
 
     /// The Generator Points
-    pc_gens: &'a PedersenGens,
+    pub pc_gens: &'a PedersenGens,
 }
 
 impl<'a> CorrectnessVerifier<'a> {
@@ -218,7 +218,12 @@ mod tests {
         let cipher = elg_pub.encrypt(&w);
 
         let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w, &gens);
-        let verifier = CorrectnessVerifier::new(secret_value, elg_pub, cipher, &gens);
+        let verifier = CorrectnessVerifier {
+            value: secret_value,
+            pub_key: elg_pub,
+            cipher,
+            pc_gens: &gens,
+        };
         let mut transcript = Transcript::new(CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL);
 
         // Positive tests

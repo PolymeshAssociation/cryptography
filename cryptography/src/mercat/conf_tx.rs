@@ -15,9 +15,9 @@ use crate::{
         Account, CipherEqualDifferentPubKeyProof, CipherEqualSamePubKeyProof,
         ConfidentialTransactionInitVerifier, ConfidentialTransactionReceiver,
         ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAmount,
-        EncryptedAssetId, EncryptionKeys, EncryptionPubKey, EncryptionSecKey, InRangeProof,
-        PubAccount, PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent,
-        PubInitConfidentialTxData, PubInitConfidentialTxDataContent, SigningKeys, TxSubstate,
+        EncryptedAssetId, InRangeProof, PubAccount, PubFinalConfidentialTxData,
+        PubFinalConfidentialTxDataContent, PubInitConfidentialTxData,
+        PubInitConfidentialTxDataContent, TxSubstate,
     },
 };
 use bulletproofs::PedersenGens;
@@ -44,7 +44,6 @@ impl ConfidentialTransactionSender for CtxSender {
         amount: u32,
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)> {
-        let rcvr_pub_key = rcvr_pub_account.content.memo.owner_enc_pub_key;
         let gens = PedersenGens::default();
         // NOTE: If this decryption ends up being too slow, we can pass in the balance
         // as input.
@@ -458,7 +457,7 @@ mod tests {
         asset_proofs::ElgamalSecretKey,
         mercat::{
             AccountMemo, ConfidentialTxMemo, CorrectnessProof, EncryptionKeys, EncryptionPubKey,
-            MembershipProof, PubAccountContent, SecAccount, Signature, SigningPubKey,
+            MembershipProof, PubAccountContent, SecAccount, Signature, SigningKeys, SigningPubKey,
             WellformednessProof,
         },
     };

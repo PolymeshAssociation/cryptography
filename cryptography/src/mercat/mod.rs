@@ -1,6 +1,7 @@
 //! mercat is the library that implements the confidential transactions
 //! of the MERCAT, as defined in the section 6 of the whitepaper.
 
+pub mod account;
 pub mod conf_tx;
 
 use crate::{

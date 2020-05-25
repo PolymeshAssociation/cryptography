@@ -222,7 +222,12 @@ mod tests {
         CorrectnessVerifier<'a>,
     ) {
         let prover = CorrectnessProverAwaitingChallenge::new(pub_key, witness.clone(), pc_gens);
-        let verifier = CorrectnessVerifier::new(witness.value(), pub_key, cipher, pc_gens);
+        let verifier = CorrectnessVerifier {
+            value: witness.value(),
+            pub_key,
+            cipher,
+            pc_gens: pc_gens,
+        };
 
         (prover, verifier)
     }
