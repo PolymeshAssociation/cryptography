@@ -10,14 +10,13 @@ use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
     },
-    errors::{AssetProofError, Result},
     one_out_of_many_proof::{
         OOONProofFinalResponse, OOONProofInitialMessage, OOONProofVerifier, OOONProver,
         OOONProverAwaitingChallenge, OooNProofGenerators,
     },
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
-
+use crate::errors::{ErrorKind, Fallible};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -33,7 +32,7 @@ pub struct MembershipProofInitialMessage {
 }
 
 impl UpdateTranscript for MembershipProofInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(MEMBERSHIP_PROOF_CHALLENGE_LABEL);
         self.ooon_proof_initial_message
             .update_transcript(transcript)?;
@@ -83,7 +82,7 @@ impl<'a>
         usize,
     )> for MembershipProverAwaitingChallenge<'a>
 {
-    type Error = AssetProofError;
+    type Error = ErrorKind;
 
     fn try_from(
         prover: (
@@ -94,12 +93,12 @@ impl<'a>
             usize,
             usize,
         ),
-    ) -> Result<Self, AssetProofError> {
+    ) -> Result<Self, ErrorKind> {
         let secret_position = prover.3.iter().position(|&r| r == prover.0);
 
         let secret_position = match secret_position {
             Some(index) => index,
-            None => return Err(AssetProofError::MembershipProofInvalidAssetError),
+            None => return Err(ErrorKind::MembershipProofInvalidAssetError),
         };
 
         Ok(MembershipProverAwaitingChallenge {
@@ -203,7 +202,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         c: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         let n = initial_message
             .ooon_proof_initial_message
             .get_n()
@@ -233,7 +232,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         );
         ensure!(
             result.is_ok(),
-            AssetProofError::MembershipProofVerificationError { check: 1 }
+            ErrorKind::MembershipProofVerificationError { check: 1 }
         );
 
         Ok(())
@@ -314,7 +313,7 @@ mod tests {
         let result = verifier.verify(&challenge, &initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::MembershipProofVerificationError { check: 1 }
+            ErrorKind::MembershipProofVerificationError { check: 1 }
         );
 
         // Testing the attempt of initializting the prover with ian nvalid asset or an asset list.
@@ -366,12 +365,12 @@ mod tests {
         let bad_final_response = final_response;
         assert_err!(
             single_property_verifier(&verifier, bad_initial_message, final_response_1),
-            AssetProofError::MembershipProofVerificationError { check: 1 }
+            ErrorKind::MembershipProofVerificationError { check: 1 }
         );
 
         assert_err!(
             single_property_verifier(&verifier, initial_message_1, bad_final_response),
-            AssetProofError::MembershipProofVerificationError { check: 1 }
+            ErrorKind::MembershipProofVerificationError { check: 1 }
         );
     }
 

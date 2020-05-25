@@ -137,7 +137,6 @@
 //!     },
 //!     CommitmentWitness, ElgamalSecretKey,
 //!     transcript::{TranscriptProtocol, UpdateTranscript},
-//!     errors::AssetProofError,
 //! };
 //! use rand::{rngs::StdRng, SeedableRng};
 //! use std::convert::TryFrom;
@@ -200,24 +199,10 @@
 #[macro_use]
 pub(crate) mod macros;
 
-pub mod errors;
-
-/// Helper macro to assert that `predicate` is an `Error::from( $err)`.
-#[allow(unused_macros)]
-macro_rules! assert_err {
-    ($predicate:expr, $err:expr) => {
-        assert_eq!(
-            $predicate
-                .expect_err("Error expected")
-                .downcast::<$crate::asset_proofs::errors::AssetProofError>()
-                .expect("It is not an AssetProofError"),
-            $err
-        );
-    };
-}
-
 mod elgamal_encryption;
-pub use elgamal_encryption::{CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey};
+pub use elgamal_encryption::{
+    encrypt_using_two_pub_keys, CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
+};
 
 pub mod encryption_proofs;
 

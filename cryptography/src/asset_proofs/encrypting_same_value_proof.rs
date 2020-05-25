@@ -2,17 +2,20 @@
 //! under different public keys.
 //! For more details see section 5.4 of the whitepaper.
 
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    errors::{AssetProofError, Result},
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, CommitmentWitness, ElgamalPublicKey,
+    errors::{ErrorKind, Fallible},
 };
 use bulletproofs::PedersenGens;
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -55,7 +58,7 @@ impl Default for EncryptingSameValueInitialMessage {
 }
 
 impl UpdateTranscript for EncryptingSameValueInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(ENCRYPTING_SAME_VALUE_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A1", &self.a1.compress())?;
         transcript.append_validated_point(b"A2", &self.a2.compress())?;
@@ -159,27 +162,27 @@ impl<'a> AssetProofVerifier for EncryptingSameValueVerifier<'a> {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         // 2 ciphertexts that encrypt the same witness must have the same Y value.
         ensure!(
             self.cipher1.y == self.cipher2.y,
-            AssetProofError::VerificationError
+            ErrorKind::VerificationError
         );
 
         ensure!(
             final_response.z1 * self.pub_key1.pub_key
                 == initial_message.a1 + challenge.x() * self.cipher1.x,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 1 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
         );
         ensure!(
             final_response.z1 * self.pub_key2.pub_key
                 == initial_message.a2 + challenge.x() * self.cipher2.x,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 2 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 2 }
         );
         ensure!(
             final_response.z1 * self.pc_gens.B_blinding + final_response.z2 * self.pc_gens.B
                 == initial_message.b + challenge.x() * self.cipher1.y,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 3 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 3 }
         );
         Ok(())
     }
@@ -249,14 +252,14 @@ mod tests {
         let result = verifier.verify(&challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 1 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = EncryptingSameValueFinalResponse::default();
         let result = verifier.verify(&challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 1 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
         );
 
         // Non-Interactive ZKP test
