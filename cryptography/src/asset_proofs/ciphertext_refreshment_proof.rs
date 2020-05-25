@@ -204,7 +204,6 @@ mod tests {
     use crate::asset_proofs::*;
     use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
-    use std::convert::TryFrom;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [17u8; 32];
@@ -263,7 +262,7 @@ mod tests {
     fn verify_ciphertext_refreshment_method() {
         let mut rng = StdRng::from_seed(SEED_2);
         let rand_blind = Scalar::random(&mut rng);
-        let w = CommitmentWitness::try_from((3u32, rand_blind)).unwrap();
+        let w = CommitmentWitness::new(3u32.into(), rand_blind);
         let gens = PedersenGens::default();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();

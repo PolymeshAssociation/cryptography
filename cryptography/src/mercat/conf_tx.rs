@@ -65,7 +65,7 @@ impl ConfidentialTransactionSender for CtxSender {
         );
 
         // Prove that the amount is not negative
-        let witness = CommitmentWitness::try_from((amount, Scalar::random(rng)))?;
+        let witness = CommitmentWitness::new(amount.into(), Scalar::random(rng));
         let amount_enc_blinding = *witness.blinding();
 
         let non_neg_amount_proof = InRangeProof::from(prove_within_range(
@@ -121,7 +121,7 @@ impl ConfidentialTransactionSender for CtxSender {
         let refreshed_enc_asset_id = sndr_account.enc_asset_id.cipher.refresh_with_hint(
             &sndr_enc_keys.scrt.key,
             asset_id_refresh_enc_blinding,
-            &asset_id,
+            &asset_id.clone().into(),
         )?;
         let asset_id_refreshed_same_proof =
             CipherEqualSamePubKeyProof::from(single_property_prover(
@@ -137,7 +137,7 @@ impl ConfidentialTransactionSender for CtxSender {
         // Prove the new refreshed encrytped asset id is the same as the one
         // encrypted by the receiver's pub key
         let asset_id_witness =
-            CommitmentWitness::try_from((asset_id, asset_id_refresh_enc_blinding))?;
+            CommitmentWitness::new(asset_id.into(), asset_id_refresh_enc_blinding);
         let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt(&asset_id_witness);
         let asset_id_equal_cipher_proof =
             CipherEqualDifferentPubKeyProof::from(single_property_prover(
@@ -494,9 +494,10 @@ mod tests {
         rng: &mut R,
     ) -> ConfidentialTxMemo {
         let enc_amount_using_rcvr = rcvr_pub_key.key.encrypt_value(Scalar::from(amount), rng);
-        let enc_asset_id_using_rcvr = rcvr_pub_key
-            .key
-            .encrypt(&CommitmentWitness::try_from((asset_id, Scalar::random(rng))).unwrap());
+        let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt(&CommitmentWitness::new(
+            asset_id.into(),
+            Scalar::random(rng),
+        ));
         ConfidentialTxMemo {
             sndr_account_id: 0,
             rcvr_account_id: 0,
@@ -517,10 +518,10 @@ mod tests {
         balance: u32,
         rng: &mut R,
     ) -> Fallible<PubAccount> {
-        let enc_asset_id = rcvr_enc_pub_key.key.encrypt(&CommitmentWitness::try_from((
-            asset_id,
+        let enc_asset_id = rcvr_enc_pub_key.key.encrypt(&CommitmentWitness::new(
+            asset_id.into(),
             Scalar::random(rng),
-        ))?);
+        ));
         let enc_balance = rcvr_enc_pub_key
             .key
             .encrypt_value(Scalar::from(balance), rng);
