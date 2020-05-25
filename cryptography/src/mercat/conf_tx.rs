@@ -231,7 +231,7 @@ impl CtxReceiver {
         rng: &mut StdRng,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)> {
         ensure!(
-            state == ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified),
+            state == ConfidentialTxState::InitilaziationJustification(TxSubstate::Validated),
             ErrorKind::InvalidPreviousState { state }
         );
 
@@ -391,7 +391,7 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
 
         verify_initital_transaction_proofs(transaction, sndr_account)?;
 
-        Ok(ConfidentialTxState::Initialization(TxSubstate::Verified))
+        Ok(ConfidentialTxState::Initialization(TxSubstate::Validated))
     }
 }
 
@@ -561,7 +561,7 @@ mod tests {
         let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, expected_amount, asset_id);
         let rcvr_account =
             mock_gen_account(rcvr_enc_keys.pblc, rcvr_sign_pub_key, asset_id, balance).unwrap();
-        let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
+        let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Validated);
 
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
@@ -626,7 +626,7 @@ mod tests {
         let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, received_amount, asset_id);
         let rcvr_account =
             mock_gen_account(rcvr_enc_keys.pblc, rcvr_sign_pub_key, asset_id, balance).unwrap();
-        let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
+        let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Validated);
 
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
@@ -662,7 +662,7 @@ mod tests {
         let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, expected_amount, asset_id);
         let rcvr_account =
             mock_gen_account(wrong_enc_keys.pblc, rcvr_sign_pub_key, asset_id, balance).unwrap();
-        let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
+        let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Validated);
 
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
@@ -736,11 +736,11 @@ mod tests {
         let state = result.unwrap();
         assert_eq!(
             state,
-            ConfidentialTxState::Initialization(TxSubstate::Verified)
+            ConfidentialTxState::Initialization(TxSubstate::Validated)
         );
 
         // TODO: skipping the mediator step. Therefore assuming that it has passed.
-        let state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Verified);
+        let state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Validated);
 
         // Finalize the transaction and check its state
         let result = rcvr.finalize_by_receiver(

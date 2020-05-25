@@ -270,7 +270,7 @@ pub enum TxSubstate {
     /// The action on transaction has been taken but is not verified yet.
     Started,
     /// The action on transaction has been verified by validators.
-    Verified,
+    Validated,
     /// The action on transaction has failed the verification by validators.
     /// TODO: this ended up not being used. We need to disucss, how to handle it.
     Rejected,
