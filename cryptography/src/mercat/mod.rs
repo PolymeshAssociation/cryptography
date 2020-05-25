@@ -18,6 +18,7 @@ use crate::{
         CipherText, ElgamalPublicKey, ElgamalSecretKey,
     },
     errors::{ErrorKind, Fallible},
+    AssetId, Balance,
 };
 use curve25519_dalek::scalar::Scalar;
 use rand::rngs::StdRng;
@@ -320,10 +321,10 @@ pub trait AssetTransactionIssuer {
         &self,
         issr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
         issr_sign_keys: SigningKeys,
-        amount: u32,
+        amount: Balance,
         issr_account: PubAccount,
         mdtr_pub_key: EncryptionPubKey,
-        asset_id: u32, // deviation from the paper
+        asset_id: AssetId, // deviation from the paper
     ) -> Fallible<(PubAssetTxData, AssetTxState)>;
 }
 
@@ -439,8 +440,8 @@ pub trait ConfidentialTransactionSender {
         sndr_sign_keys: SigningKeys,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
-        asset_id: u32,
-        amount: u32,
+        asset_id: AssetId,
+        amount: Balance,
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)>;
 }
@@ -475,7 +476,7 @@ pub trait ConfidentialTransactionReceiver {
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
         enc_asset_id: EncryptedAssetId,
-        amount: u32,
+        amount: Balance,
         state: ConfidentialTxState,
         rng: &mut StdRng,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)>;

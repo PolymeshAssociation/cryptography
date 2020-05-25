@@ -4,11 +4,13 @@
 //! addition and subtraction API over the cipher texts.
 
 use crate::errors::{Error, ErrorKind, Fallible};
+use crate::{AssetId, Balance};
 use bulletproofs::PedersenGens;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use sha3::Sha3_512;
 use std::convert::TryFrom;
 use zeroize::Zeroize;
 
@@ -18,7 +20,7 @@ use sp_std::prelude::*;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Zeroize)]
 #[zeroize(drop)]
 pub struct CommitmentWitness {
-    /// The value to encrypt.
+    /// The balance value to encrypt.
     ///
     /// Since Elgamal decryption involves searching the entire
     /// space of possible values, the decryption time doubles for
@@ -39,7 +41,20 @@ pub struct CommitmentWitness {
     ///    we won't need to decrypt the encrypted values very often.
     ///    We can recommend that applications use a different faster
     ///    encryption mechanism to store the confidentional values on disk.
-    value: u32,
+    value: Balance,
+
+    /// The AssetId to encrypt.
+    /// Note that since `id` is effectively an array of 12 bytes and
+    /// the SHA3_512 hash of it is encrypted, the runtime for decrypting
+    /// it can take indefinitely long. In our application at the time of
+    /// decrypting an encrypted asset id we have a guess as what the
+    /// asset id should be, use `ElgamalSecretKey`'s `verify()`
+    /// to verify that the encrypted value is the same as the hint.
+    id: AssetId,
+
+    /// Depending on how the witness was created this variable stores the
+    /// balance value or the asset id in Scalar format.
+    scalar_value: Scalar,
 
     // A random blinding factor.
     blinding: Scalar,
@@ -50,20 +65,47 @@ impl CommitmentWitness {
         &self.blinding
     }
 
-    pub fn value(&self) -> u32 {
+    pub fn value(&self) -> Balance {
         self.value
+    }
+
+    pub fn id(&self) -> &AssetId {
+        &self.id
+    }
+
+    pub fn scalar_value(&self) -> &Scalar {
+        &self.scalar_value
     }
 }
 
-impl TryFrom<(u32, Scalar)> for CommitmentWitness {
+impl TryFrom<(Balance, Scalar)> for CommitmentWitness {
     type Error = Error;
 
-    fn try_from(v: (u32, Scalar)) -> Result<Self, Self::Error> {
+    fn try_from(v: (Balance, Scalar)) -> Result<Self, Self::Error> {
         // Since Elgamal decryption requires brute forcing over all possible values,
         // we limit the values to 32-bit integers.
         ensure!(v.0 < u32::max_value(), ErrorKind::PlainTextRangeError);
         Ok(CommitmentWitness {
             value: v.0,
+            id: AssetId::default(),
+            scalar_value: Scalar::from(v.0),
+            blinding: v.1,
+        })
+    }
+}
+
+impl TryFrom<(AssetId, Scalar)> for CommitmentWitness {
+    type Error = Error;
+
+    fn try_from(v: (AssetId, Scalar)) -> Result<Self, Self::Error> {
+        // Since Elgamal decryption requires brute forcing over all possible values,
+        // we limit the values to 32-bit integers.
+        // todo: can we put a limit on asset_id's value?
+        let scalar_value = Scalar::hash_from_bytes::<Sha3_512>(&(v.0.id));
+        Ok(CommitmentWitness {
+            value: 0,
+            id: v.0,
+            scalar_value: scalar_value,
             blinding: v.1,
         })
     }
@@ -152,16 +194,21 @@ pub struct ElgamalPublicKey {
 }
 
 impl ElgamalPublicKey {
-    pub fn encrypt(&self, witness: &CommitmentWitness) -> CipherText {
-        let x = witness.blinding * self.pub_key;
+    fn encrypt_helper(&self, value: Scalar, blinding: Scalar) -> CipherText {
+        let x = blinding * self.pub_key;
         let gens = PedersenGens::default();
-        let y = gens.commit(Scalar::from(witness.value), witness.blinding);
+        let y = gens.commit(value, blinding);
         CipherText { x, y }
     }
 
-    pub fn encrypt_value(&self, value: u32) -> Fallible<CipherText> {
-        let blinding = Scalar::random(&mut rand::thread_rng());
-        Ok(self.encrypt(&CommitmentWitness::try_from((value, blinding))?))
+    pub fn encrypt(&self, witness: &CommitmentWitness) -> CipherText {
+        self.encrypt_helper(witness.scalar_value, witness.blinding)
+    }
+
+    /// Convenience encryption function for scenarios where we don't care to store the blinding factor.
+    pub fn encrypt_value<R: RngCore + CryptoRng>(&self, value: Scalar, rng: &mut R) -> CipherText {
+        let blinding = Scalar::random(rng);
+        self.encrypt_helper(value, blinding)
     }
 }
 
@@ -177,6 +224,7 @@ impl ElgamalSecretKey {
         }
     }
 
+    /// Decrypt a cipher text that is known to encrypt a u32.
     pub fn decrypt(&self, cipher_text: &CipherText) -> Fallible<u32> {
         let gens = PedersenGens::default();
         // value * h = Y - X / secret_key
@@ -192,6 +240,24 @@ impl ElgamalSecretKey {
 
         Err(ErrorKind::CipherTextDecryptionError.into())
     }
+
+    /// Verifies that a cipher text encrypts the given witness.
+    /// This follows the same logic as decrypt(), except that it uses the `asset_id` as
+    /// a hint as to what the message must be in order to avoid searching the entire
+    /// message space.
+    pub fn verify(&self, cipher_text: &CipherText, asset_id: &AssetId) -> Fallible<()> {
+        let gens = PedersenGens::default();
+        // value * h = Y - X / secret_key.
+        let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
+        // Try the hinted asset id value and see if it matches value * h.
+        let m_scalar = Scalar::hash_from_bytes::<Sha3_512>(&asset_id.id);
+        let result = m_scalar * gens.B;
+        if result == value_h {
+            return Ok(());
+        }
+
+        Err(ErrorKind::CipherTextDecryptionError.into())
+    }
 }
 
 pub fn encrypt_using_two_pub_keys(
@@ -202,7 +268,7 @@ pub fn encrypt_using_two_pub_keys(
     let x1 = witness.blinding * pub_key1.pub_key;
     let x2 = witness.blinding * pub_key2.pub_key;
     let gens = PedersenGens::default();
-    let y = gens.commit(Scalar::from(witness.value()), witness.blinding);
+    let y = gens.commit(witness.scalar_value, witness.blinding);
     let enc1 = CipherText { x: x1, y };
     let enc2 = CipherText { x: x2, y };
 
@@ -218,6 +284,20 @@ impl CipherText {
         let message = secret_key.decrypt(self)?;
         let pub_key = secret_key.get_public_key();
         let new_witness = CommitmentWitness::try_from((message, blinding))?;
+        let new_ciphertext = pub_key.encrypt(&new_witness);
+
+        Ok(new_ciphertext)
+    }
+
+    pub fn refresh_with_hint(
+        &self,
+        secret_key: &ElgamalSecretKey,
+        blinding: Scalar,
+        hint: &AssetId,
+    ) -> Fallible<CipherText> {
+        secret_key.verify(self, hint)?;
+        let pub_key = secret_key.get_public_key();
+        let new_witness = CommitmentWitness::try_from((hint.clone(), blinding))?;
         let new_ciphertext = pub_key.encrypt(&new_witness);
 
         Ok(new_ciphertext)
@@ -242,23 +322,34 @@ mod tests {
     #[wasm_bindgen_test]
     fn basic_enc_dec() {
         let mut rng = StdRng::from_seed(SEED_1);
-        let v = 256u32;
-        let b = Scalar::random(&mut rng);
-        let w = CommitmentWitness::try_from((v, b)).unwrap();
-
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
 
+        // Test encrypting balance.
+        let balance = 256u32;
+        let blinding = Scalar::random(&mut rng);
+        let balance_witness = CommitmentWitness::try_from((balance, blinding)).unwrap();
         // Test encrypt().
-        let mut cipher = elg_pub.encrypt(&w);
-
-        let mut message = elg_secret.decrypt(&cipher).unwrap();
-        assert_eq!(v, message);
+        let mut cipher = elg_pub.encrypt(&balance_witness);
+        let balance1 = elg_secret.decrypt(&cipher).unwrap();
+        assert_eq!(balance1, balance);
 
         // Test encrypt_value().
-        cipher = elg_pub.encrypt_value(v).unwrap();
-        message = elg_secret.decrypt(&cipher).unwrap();
-        assert_eq!(v, message);
+        cipher = elg_pub.encrypt_value(balance_witness.scalar_value, &mut rng);
+        let balance2 = elg_secret.decrypt(&cipher).unwrap();
+        assert_eq!(balance2, balance);
+
+        // Test encrypting asset id.
+        let asset_id = AssetId::try_from(20u32).unwrap();
+        let blinding = Scalar::random(&mut rng);
+        let asset_id_witness = CommitmentWitness::try_from((asset_id.clone(), blinding)).unwrap();
+        // Test encrypt().
+        cipher = elg_pub.encrypt(&asset_id_witness);
+        assert!(elg_secret.verify(&cipher, &asset_id).is_ok());
+
+        // Test encrypt_value().
+        cipher = elg_pub.encrypt_value(asset_id_witness.scalar_value, &mut rng);
+        assert!(elg_secret.verify(&cipher, &asset_id).is_ok());
     }
 
     #[test]
@@ -273,27 +364,15 @@ mod tests {
         let elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret_key.get_public_key();
 
-        let cipher1 = elg_pub.encrypt(&CommitmentWitness {
-            value: v1,
-            blinding: r1,
-        });
-        let cipher2 = elg_pub.encrypt(&CommitmentWitness {
-            value: v2,
-            blinding: r2,
-        });
-
-        let mut cipher12 = elg_pub.encrypt(&CommitmentWitness {
-            value: v1 + v2,
-            blinding: r1 + r2,
-        });
+        let cipher1 = elg_pub.encrypt(&CommitmentWitness::try_from((v1, r1)).unwrap());
+        let cipher2 = elg_pub.encrypt(&CommitmentWitness::try_from((v2, r2)).unwrap());
+        let mut cipher12 =
+            elg_pub.encrypt(&CommitmentWitness::try_from((v1 + v2, r1 + r2)).unwrap());
         assert_eq!(cipher1 + cipher2, cipher12);
         cipher12 -= cipher2;
         assert_eq!(cipher1, cipher12);
 
-        cipher12 = elg_pub.encrypt(&CommitmentWitness {
-            value: v1 - v2,
-            blinding: r1 - r2,
-        });
+        cipher12 = elg_pub.encrypt(&CommitmentWitness::try_from((v1 - v2, r1 - r2)).unwrap());
         assert_eq!(cipher1 - cipher2, cipher12);
         cipher12 += cipher2;
         assert_eq!(cipher1, cipher12);
