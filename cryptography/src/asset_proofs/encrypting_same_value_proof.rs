@@ -76,6 +76,8 @@ pub struct EncryptingSameValueProverAwaitingChallenge<'a> {
 
     /// The secret commitment witness.
     pub w: Zeroizing<CommitmentWitness>,
+
+    /// The Pedersen generators.
     pub pc_gens: &'a PedersenGens,
 }
 

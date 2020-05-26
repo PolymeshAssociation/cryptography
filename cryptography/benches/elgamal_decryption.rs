@@ -3,7 +3,7 @@ use cryptography::asset_proofs::{CipherText, CommitmentWitness, ElgamalSecretKey
 use curve25519_dalek::scalar::Scalar;
 
 use rand::{rngs::StdRng, SeedableRng};
-use std::{convert::TryFrom, time::Duration};
+use std::time::Duration;
 
 fn bench_elgamal_decrypt(
     c: &mut Criterion,

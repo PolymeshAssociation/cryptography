@@ -70,8 +70,11 @@ pub struct WellformednessProver {
 pub struct WellformednessProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
     pub pub_key: ElgamalPublicKey,
+
     /// The secret commitment witness.
     pub w: Zeroizing<CommitmentWitness>,
+
+    /// The Pedersen generators.
     pub pc_gens: &'a PedersenGens,
 }
 
