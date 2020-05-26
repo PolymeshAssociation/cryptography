@@ -18,6 +18,7 @@ use crate::{
         CipherText, ElgamalPublicKey, ElgamalSecretKey,
     },
     errors::{ErrorKind, Fallible},
+    AssetId, Balance,
 };
 use curve25519_dalek::scalar::Scalar;
 use rand::rngs::StdRng;
@@ -299,7 +300,7 @@ pub struct PubAccount {
 pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
     pub sign_keys: SigningKeys,
-    pub asset_id: u32,
+    pub asset_id: AssetId,
 }
 
 /// Wrapper for both the secret and public account info
@@ -317,7 +318,7 @@ pub trait AccountCreater {
     fn create_account(
         &self,
         scrt_account: &SecAccount,
-        valid_asset_ids: Vec<u32>,
+        valid_asset_ids: Vec<AssetId>,
         account_id: u32,
         rng: &mut StdRng,
     ) -> Fallible<PubAccount>;
@@ -390,10 +391,10 @@ pub trait AssetTransactionIssuer {
         &self,
         issr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
         issr_sign_keys: SigningKeys,
-        amount: u32,
+        amount: Balance,
         issr_account: PubAccount,
         mdtr_pub_key: EncryptionPubKey,
-        asset_id: u32, // deviation from the paper
+        asset_id: AssetId, // deviation from the paper
     ) -> Fallible<(PubAssetTxData, AssetTxState)>;
 }
 
@@ -507,7 +508,7 @@ pub trait ConfidentialTransactionSender {
         &self,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
-        amount: u32,
+        amount: Balance,
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)>;
 }
@@ -539,7 +540,7 @@ pub trait ConfidentialTransactionReceiver {
         sndr_pub_account: &PubAccount,
         rcvr_account: Account,
         enc_asset_id: EncryptedAssetId,
-        amount: u32,
+        amount: Balance,
         state: ConfidentialTxState,
         rng: &mut StdRng,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)>;
