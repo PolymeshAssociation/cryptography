@@ -1,28 +1,18 @@
-use crate::mercat::conf_tx::{CtxReceiver, CtxSender};
 use crate::{
     asset_proofs::{
-        ciphertext_refreshment_proof::CipherTextRefreshmentProverAwaitingChallenge,
-        ciphertext_refreshment_proof::CipherTextRefreshmentVerifier,
         correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
-        encrypt_using_two_pub_keys,
-        encrypting_same_value_proof::EncryptingSameValueProverAwaitingChallenge,
-        encrypting_same_value_proof::EncryptingSameValueVerifier,
         encryption_proofs::single_property_prover,
         encryption_proofs::single_property_verifier,
-        range_proof::{prove_within_range, verify_within_range, RangeProofInitialMessage},
+        membership_proof::{MembershipProofVerifier, MembershipProverAwaitingChallenge},
+        one_out_of_many_proof::OooNProofGenerators,
         wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
         CommitmentWitness,
     },
     errors::{ErrorKind, Fallible},
     mercat::{
-        AccountCreater, AccountCreaterVerifier, AccountMemo, CipherEqualDifferentPubKeyProof,
-        CipherEqualSamePubKeyProof, ConfidentialTransactionInitVerifier,
-        ConfidentialTransactionReceiver, ConfidentialTransactionSender, ConfidentialTxMemo,
-        ConfidentialTxState, CorrectnessProof, EncryptedAmount, EncryptedAssetId, EncryptionKeys,
-        EncryptionPubKey, EncryptionSecKey, InRangeProof, MembershipProof, PubAccount,
-        PubAccountContent, PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent,
-        PubInitConfidentialTxData, PubInitConfidentialTxDataContent, SecAccount, SigningKeys,
-        SigningPubKey, TxSubstate, WellformednessProof,
+        AccountCreaterVerifier, AccountMemo, CorrectnessProof, EncryptedAmount, EncryptedAssetId,
+        MembershipProof, PubAccount, PubAccountContent, SecAccount, WellformednessProof, BASE,
+        EXPONENT,
     },
 };
 use bulletproofs::PedersenGens;
@@ -37,20 +27,18 @@ use zeroize::Zeroizing;
 // -                                     Sender/Receiver                                          -
 // ------------------------------------------------------------------------------------------------
 
-// TODO create a separate struct for this
-
 pub fn create_account(
     scrt: &SecAccount,
     valid_asset_ids: Vec<u32>,
     account_id: u32,
     rng: &mut StdRng,
 ) -> Fallible<PubAccount> {
-    let blinding_1 = Scalar::random(rng);
-    let blinding_2 = Scalar::random(rng);
+    let asset_blinding = Scalar::random(rng);
+    let balance_blinding = Scalar::random(rng);
     let gens = &PedersenGens::default();
 
     // encrypt asset id and prove that the encrypted asset is wellformed
-    let asset_witness = CommitmentWitness::try_from((scrt.asset_id, blinding_1))?;
+    let asset_witness = CommitmentWitness::try_from((scrt.asset_id, asset_blinding))?;
     let enc_asset_id = EncryptedAssetId::from(scrt.enc_keys.pblc.key.encrypt(&asset_witness));
 
     let asset_wellformedness_proof = WellformednessProof::from(single_property_prover(
@@ -63,9 +51,8 @@ pub fn create_account(
     )?);
 
     // encrypt the balance and prove that the encrypted balance is correct
-
     let balance = 0;
-    let balance_witness = CommitmentWitness::try_from((balance, blinding_2))?;
+    let balance_witness = CommitmentWitness::try_from((balance, balance_blinding))?;
     let enc_balance = EncryptedAmount::from(scrt.enc_keys.pblc.key.encrypt(&balance_witness));
 
     let balance_correctness_proof = CorrectnessProof::from(single_property_prover(
@@ -77,8 +64,32 @@ pub fn create_account(
         rng,
     )?);
 
-    // TODO: membership proof
-    let asset_membership_proof = MembershipProof::default();
+    // Prove that the asset id is among the list of publicly known asset ids
+    let membership_blinding = Scalar::random(rng);
+    let generators = &OooNProofGenerators::new(EXPONENT, BASE);
+    let asset_id = Scalar::from(scrt.asset_id);
+    let secret_element_com = generators.com_gens.commit(asset_id, membership_blinding);
+    let elements_set: Vec<Scalar> = valid_asset_ids
+        .iter()
+        .map(|m| Scalar::from(m.clone()))
+        .collect();
+    let (init, response) = single_property_prover(
+        MembershipProverAwaitingChallenge::new(
+            asset_id,
+            membership_blinding,
+            generators,
+            elements_set.as_slice(),
+            BASE,
+            EXPONENT,
+        )?,
+        rng,
+    )?;
+
+    let asset_membership_proof = MembershipProof {
+        init,
+        response,
+        commitment: secret_element_com,
+    };
 
     // gather content and sign it
     let content = PubAccountContent {
@@ -102,10 +113,8 @@ pub fn create_account(
 
 pub struct AccountValidator {}
 
-// TODO: should these have states similar to transactions?
-
 impl AccountCreaterVerifier for AccountValidator {
-    fn verify(&self, account: PubAccount) -> Fallible<()> {
+    fn verify(&self, account: PubAccount, valid_asset_ids: Vec<u32>) -> Fallible<()> {
         let gens = &PedersenGens::default();
         ensure!(
             sr25519::Pair::verify(
@@ -139,7 +148,21 @@ impl AccountCreaterVerifier for AccountValidator {
             account.content.balance_correctness_proof.response,
         )?;
 
-        // TODO: verify that the asset is from the proper asset list
+        // Verify that the asset is from the proper asset list
+        let generators = &OooNProofGenerators::new(EXPONENT, BASE);
+        let elements_set: Vec<Scalar> = valid_asset_ids
+            .iter()
+            .map(|m| Scalar::from(m.clone()))
+            .collect();
+        single_property_verifier(
+            &MembershipProofVerifier {
+                secret_element_com: account.content.asset_membership_proof.commitment,
+                generators,
+                elements_set: elements_set.as_slice(),
+            },
+            account.content.asset_membership_proof.init,
+            account.content.asset_membership_proof.response,
+        )?;
 
         Ok(())
     }
@@ -154,12 +177,8 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::{
-        asset_proofs::{CipherText, ElgamalSecretKey},
-        mercat::{
-            AccountMemo, ConfidentialTxMemo, CorrectnessProof, EncryptionKeys, EncryptionPubKey,
-            MembershipProof, PubAccountContent, Signature, SigningKeys, SigningPubKey,
-            WellformednessProof,
-        },
+        asset_proofs::ElgamalSecretKey,
+        mercat::{EncryptionKeys, SigningKeys},
     };
     use curve25519_dalek::scalar::Scalar;
     use rand::SeedableRng;
@@ -179,7 +198,7 @@ mod tests {
         let pair = sr25519::Pair::from_seed(&[11u8; 32]);
         let sign_keys = SigningKeys { pair: pair.clone() };
         let asset_id = 1;
-        let valid_asset_ids = vec![]; // TODO: intentionally left empty
+        let valid_asset_ids = vec![1, 2, 3];
         let account_id = 2;
         let scrt_account = SecAccount {
             enc_keys,
@@ -190,10 +209,10 @@ mod tests {
         // ----------------------- test
 
         let sndr_account =
-            create_account(&scrt_account, valid_asset_ids, account_id, &mut rng).unwrap();
+            create_account(&scrt_account, valid_asset_ids.clone(), account_id, &mut rng).unwrap();
 
         let account_vldtr = AccountValidator {};
-        let result = account_vldtr.verify(sndr_account);
+        let result = account_vldtr.verify(sndr_account, valid_asset_ids);
         result.unwrap();
     }
 }

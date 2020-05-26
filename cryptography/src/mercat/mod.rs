@@ -13,6 +13,7 @@ use crate::{
         encrypting_same_value_proof::{
             EncryptingSameValueFinalResponse, EncryptingSameValueInitialMessage,
         },
+        membership_proof::{MembershipProofFinalResponse, MembershipProofInitialMessage},
         range_proof,
         range_proof::{RangeProofFinalResponse, RangeProofInitialMessage},
         wellformedness_proof::{WellformednessFinalResponse, WellformednessInitialMessage},
@@ -20,21 +21,18 @@ use crate::{
     },
     errors::{ErrorKind, Fallible},
 };
-use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use sp_application_crypto::sr25519;
 use sp_core::crypto::Pair;
 
-// ---------------------- START: temporary types, move them to the proper location
+// -------------------------------------------------------------------------------------
+// -                                  Constants                                        -
+// -------------------------------------------------------------------------------------
 
-// TODO move after CRYP-40
-#[derive(Default, Clone, Serialize, Deserialize)]
-pub struct MembershipProofInitialMessage {}
-#[derive(Default, Clone, Serialize, Deserialize)]
-pub struct MembershipProofFinalResponse {}
-
-// ---------------------- END: temporary types, move them to other files
+const EXPONENT: usize = 3; // TODO EXPONENT=8 is very slow: tests take 9 minutes.
+const BASE: usize = 4;
 
 // -------------------------------------------------------------------------------------
 // -                                 New Type Def                                      -
@@ -162,6 +160,7 @@ impl From<(CorrectnessInitialMessage, CorrectnessFinalResponse)> for Correctness
 pub struct MembershipProof {
     init: MembershipProofInitialMessage,
     response: MembershipProofFinalResponse,
+    commitment: RistrettoPoint,
 }
 
 /// Holds the non-interactive range proofs, equivalent of L_range of MERCAT paper.
@@ -327,7 +326,7 @@ pub trait AccountCreater {
 /// The interface for the verifying the account creation.
 pub trait AccountCreaterVerifier {
     /// Called by the validators to ensure that the account was created correctly.
-    fn verify(&self, account: PubAccount) -> Fallible<()>;
+    fn verify(&self, account: PubAccount, valid_asset_ids: Vec<u32>) -> Fallible<()>;
 }
 
 // -------------------------------------------------------------------------------------

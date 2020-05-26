@@ -297,7 +297,7 @@ impl UpdateTranscript for R1ProofInitialMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default)]
 pub struct R1ProofFinalResponse {
     f_elements: Vec<Scalar>,
     z_a: Scalar,
@@ -530,7 +530,7 @@ impl UpdateTranscript for OOONProofInitialMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default)]
 pub struct OOONProofFinalResponse {
     r1_proof_final_response: R1ProofFinalResponse,
     z: Scalar,
