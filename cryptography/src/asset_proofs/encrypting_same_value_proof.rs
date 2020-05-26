@@ -131,7 +131,7 @@ impl AssetProofProver<EncryptingSameValueFinalResponse> for EncryptingSameValueP
     fn apply_challenge(&self, c: &ZKPChallenge) -> EncryptingSameValueFinalResponse {
         EncryptingSameValueFinalResponse {
             z1: self.u1 + c.x() * self.w.blinding(),
-            z2: self.u2 + c.x() * Scalar::from(self.w.value()),
+            z2: self.u2 + c.x() * self.w.value(),
         }
     }
 }
@@ -199,7 +199,6 @@ mod tests {
     use crate::asset_proofs::*;
     use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
-    use std::convert::TryFrom;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [17u8; 32];
@@ -212,8 +211,7 @@ mod tests {
         let secret_value = 49u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
-
+        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
         let elg_pub1 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
         let cipher1 = elg_pub1.encrypt(&w);
 
@@ -280,7 +278,7 @@ mod tests {
         let secret_value = 49u32;
         let rand_blind = Scalar::random(&mut rng);
         let gens = PedersenGens::default();
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
 
         let elg_pub1 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
         let elg_pub2 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();

@@ -222,7 +222,7 @@ mod tests {
         CorrectnessVerifier<'a>,
     ) {
         let prover = CorrectnessProverAwaitingChallenge::new(pub_key, witness.clone(), pc_gens);
-        let verifier = CorrectnessVerifier::new(witness.value(), pub_key, cipher, pc_gens);
+        let verifier = CorrectnessVerifier::new(witness.value().clone(), pub_key, cipher, pc_gens);
 
         (prover, verifier)
     }
@@ -259,7 +259,7 @@ mod tests {
         let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = secret_key.get_public_key();
         let rand_blind = Scalar::random(&mut rng);
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
         let cipher = pub_key.encrypt(&w);
 
         let (prover0, verifier0) = create_correctness_proof_objects_helper(
@@ -303,7 +303,7 @@ mod tests {
     fn batched_proofs() {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_2);
-        let w = CommitmentWitness::try_from((6u32, Scalar::random(&mut rng))).unwrap();
+        let w = CommitmentWitness::new(6u32.into(), Scalar::random(&mut rng));
         let pub_key = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
         let cipher = pub_key.encrypt(&w);
         let mut transcript = Transcript::new(b"batch_proof_label");
