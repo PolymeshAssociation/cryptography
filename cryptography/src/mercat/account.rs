@@ -14,13 +14,13 @@ use crate::{
         MembershipProof, PubAccount, PubAccountContent, SecAccount, WellformednessProof, BASE,
         EXPONENT,
     },
+    AssetId, Balance,
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use rand::rngs::StdRng;
 use sp_application_crypto::sr25519;
 use sp_core::crypto::Pair;
-use std::convert::TryFrom;
 use zeroize::Zeroizing;
 
 // ------------------------------------------------------------------------------------------------
@@ -29,7 +29,7 @@ use zeroize::Zeroizing;
 
 pub fn create_account(
     scrt: &SecAccount,
-    valid_asset_ids: Vec<u32>,
+    valid_asset_ids: Vec<AssetId>,
     account_id: u32,
     rng: &mut StdRng,
 ) -> Fallible<PubAccount> {
@@ -38,7 +38,7 @@ pub fn create_account(
     let gens = &PedersenGens::default();
 
     // encrypt asset id and prove that the encrypted asset is wellformed
-    let asset_witness = CommitmentWitness::try_from((scrt.asset_id, asset_blinding))?;
+    let asset_witness = CommitmentWitness::new(scrt.asset_id.clone().into(), asset_blinding);
     let enc_asset_id = EncryptedAssetId::from(scrt.enc_keys.pblc.key.encrypt(&asset_witness));
 
     let asset_wellformedness_proof = WellformednessProof::from(single_property_prover(
@@ -51,8 +51,8 @@ pub fn create_account(
     )?);
 
     // encrypt the balance and prove that the encrypted balance is correct
-    let balance = 0;
-    let balance_witness = CommitmentWitness::try_from((balance, balance_blinding))?;
+    let balance: Balance = 0;
+    let balance_witness = CommitmentWitness::new(balance.into(), balance_blinding);
     let enc_balance = EncryptedAmount::from(scrt.enc_keys.pblc.key.encrypt(&balance_witness));
 
     let balance_correctness_proof = CorrectnessProof::from(single_property_prover(
@@ -67,7 +67,7 @@ pub fn create_account(
     // Prove that the asset id is among the list of publicly known asset ids
     let membership_blinding = Scalar::random(rng);
     let generators = &OooNProofGenerators::new(EXPONENT, BASE);
-    let asset_id = Scalar::from(scrt.asset_id);
+    let asset_id = Scalar::from(scrt.asset_id.clone());
     let secret_element_com = generators.com_gens.commit(asset_id, membership_blinding);
     let elements_set: Vec<Scalar> = valid_asset_ids
         .iter()
@@ -114,7 +114,7 @@ pub fn create_account(
 pub struct AccountValidator {}
 
 impl AccountCreaterVerifier for AccountValidator {
-    fn verify(&self, account: PubAccount, valid_asset_ids: Vec<u32>) -> Fallible<()> {
+    fn verify(&self, account: PubAccount, valid_asset_ids: Vec<AssetId>) -> Fallible<()> {
         let gens = &PedersenGens::default();
         ensure!(
             sr25519::Pair::verify(
@@ -137,13 +137,14 @@ impl AccountCreaterVerifier for AccountValidator {
         )?;
 
         // Verify that the encrypted balance is correct
+        let balance: Balance = 0;
         single_property_verifier(
-            &CorrectnessVerifier {
-                value: 0,
-                pub_key: account.content.memo.owner_enc_pub_key.key,
-                cipher: account.content.enc_balance.cipher,
-                pc_gens: &gens,
-            },
+            &CorrectnessVerifier::new(
+                balance.into(),
+                account.content.memo.owner_enc_pub_key.key,
+                account.content.enc_balance.cipher,
+                &gens,
+            ),
             account.content.balance_correctness_proof.init,
             account.content.balance_correctness_proof.response,
         )?;
@@ -197,8 +198,11 @@ mod tests {
         };
         let pair = sr25519::Pair::from_seed(&[11u8; 32]);
         let sign_keys = SigningKeys { pair: pair.clone() };
-        let asset_id = 1;
-        let valid_asset_ids = vec![1, 2, 3];
+        let asset_id = AssetId::from(1);
+        let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
+            .iter()
+            .map(|id| AssetId::from(id.clone()))
+            .collect();
         let account_id = 2;
         let scrt_account = SecAccount {
             enc_keys,

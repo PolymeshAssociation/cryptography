@@ -135,7 +135,7 @@ impl AssetProofProver<CorrectnessFinalResponse> for CorrectnessProver {
 
 pub struct CorrectnessVerifier<'a> {
     /// The encrypted value (aka the plain text).
-    pub value: u32,
+    value: Scalar,
 
     /// The public key to which the `value` is encrypted.
     pub pub_key: ElgamalPublicKey,
@@ -149,7 +149,7 @@ pub struct CorrectnessVerifier<'a> {
 
 impl<'a> CorrectnessVerifier<'a> {
     pub fn new(
-        value: u32,
+        value: Scalar,
         pub_key: ElgamalPublicKey,
         cipher: CipherText,
         pc_gens: &'a PedersenGens,
@@ -199,7 +199,6 @@ mod tests {
     use crate::asset_proofs::*;
     use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
-    use std::convert::TryFrom;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [17u8; 32];
@@ -212,18 +211,13 @@ mod tests {
         let secret_value = 13u32;
         let rand_blind = Scalar::random(&mut rng);
 
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let cipher = elg_pub.encrypt(&w);
 
         let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w, &gens);
-        let verifier = CorrectnessVerifier {
-            value: secret_value,
-            pub_key: elg_pub,
-            cipher,
-            pc_gens: &gens,
-        };
+        let verifier = CorrectnessVerifier::new(Scalar::from(secret_value), elg_pub, cipher, &gens);
         let mut transcript = Transcript::new(CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL);
 
         // Positive tests
@@ -262,7 +256,7 @@ mod tests {
         let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = secret_key.get_public_key();
         let rand_blind = Scalar::random(&mut rng);
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
         let gens = PedersenGens::default();
         let prover = CorrectnessProverAwaitingChallenge::new(pub_key, w, &gens);
         let (initial_message, final_response) = encryption_proofs::single_property_prover::<

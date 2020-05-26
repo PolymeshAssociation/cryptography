@@ -19,13 +19,13 @@ use crate::{
         PubFinalConfidentialTxDataContent, PubInitConfidentialTxData,
         PubInitConfidentialTxDataContent, TxSubstate,
     },
+    AssetId, Balance, BALANCE_RANGE,
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use rand::rngs::StdRng;
 use sp_application_crypto::sr25519;
 use sp_core::crypto::Pair;
-use std::convert::TryFrom;
 use zeroize::Zeroizing;
 
 // -------------------------------------------------------------------------------------
@@ -41,7 +41,7 @@ impl ConfidentialTransactionSender for CtxSender {
         &self,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
-        amount: u32,
+        amount: Balance,
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)> {
         let gens = PedersenGens::default();
@@ -49,7 +49,7 @@ impl ConfidentialTransactionSender for CtxSender {
         // as input.
         let sndr_enc_keys = &sndr_account.scrt.enc_keys;
         let sndr_sign_keys = &sndr_account.scrt.sign_keys;
-        let asset_id = sndr_account.scrt.asset_id;
+        let asset_id = sndr_account.scrt.asset_id.clone();
         let sndr_pub_account = &sndr_account.pblc.content;
         let rcvr_pub_account = &rcvr_pub_account.content;
         let rcvr_pub_key = rcvr_pub_account.memo.owner_enc_pub_key;
@@ -67,14 +67,13 @@ impl ConfidentialTransactionSender for CtxSender {
         );
 
         // Prove that the amount is not negative
-        let range = 32;
-        let witness = CommitmentWitness::try_from((amount, Scalar::random(rng)))?;
+        let witness = CommitmentWitness::new(amount.into(), Scalar::random(rng));
         let amount_enc_blinding = *witness.blinding();
 
         let non_neg_amount_proof = InRangeProof::from(prove_within_range(
             amount.into(),
             amount_enc_blinding,
-            range,
+            BALANCE_RANGE,
         )?);
 
         // Prove that the amount encrypted under different public keys are the same
@@ -115,16 +114,18 @@ impl ConfidentialTransactionSender for CtxSender {
         let enough_fund_proof = InRangeProof::from(prove_within_range(
             (balance - amount).into(),
             blinding,
-            range,
+            BALANCE_RANGE,
         )?);
 
         // Refresh the encrypted asset id of the sender account and prove that the
         // refreshment was done correctly
         let asset_id_refresh_enc_blinding = Scalar::random(rng);
-        let refreshed_enc_asset_id = sndr_pub_account
-            .enc_asset_id
-            .cipher
-            .refresh(&sndr_enc_keys.scrt.key, asset_id_refresh_enc_blinding)?;
+        let refreshed_enc_asset_id = sndr_pub_account.enc_asset_id.cipher.refresh_with_hint(
+            &sndr_enc_keys.scrt.key,
+            asset_id_refresh_enc_blinding,
+            &asset_id.clone().into(),
+        )?;
+
         let asset_id_refreshed_same_proof =
             CipherEqualSamePubKeyProof::from(single_property_prover(
                 CipherTextRefreshmentProverAwaitingChallenge::new(
@@ -139,7 +140,7 @@ impl ConfidentialTransactionSender for CtxSender {
         // Prove the new refreshed encrytped asset id is the same as the one
         // encrypted by the receiver's pub key
         let asset_id_witness =
-            CommitmentWitness::try_from((asset_id, asset_id_refresh_enc_blinding))?;
+            CommitmentWitness::new(asset_id.into(), asset_id_refresh_enc_blinding);
         let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt(&asset_id_witness);
         let asset_id_equal_cipher_with_sndr_rcvr_keys_proof =
             CipherEqualDifferentPubKeyProof::from(single_property_prover(
@@ -197,7 +198,7 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
         sndr_pub_account: &PubAccount,
         rcvr_account: Account,
         enc_asset_id: EncryptedAssetId,
-        amount: u32,
+        amount: Balance,
         state: ConfidentialTxState,
         rng: &mut StdRng,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)> {
@@ -217,7 +218,7 @@ impl CtxReceiver {
         conf_tx_init_data: PubInitConfidentialTxData,
         rcvr_account: Account,
         state: ConfidentialTxState,
-        expected_amount: u32,
+        expected_amount: Balance,
         rng: &mut StdRng,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)> {
         ensure!(
@@ -360,6 +361,7 @@ fn verify_initital_transaction_proofs(
             .asset_id_equal_cipher_with_sndr_rcvr_keys_proof
             .response,
     )?;
+
     Ok(())
 }
 
@@ -463,6 +465,7 @@ mod tests {
     };
     use curve25519_dalek::scalar::Scalar;
     use rand::SeedableRng;
+    use rand_core::{CryptoRng, RngCore};
     use wasm_bindgen_test::*;
 
     // -------------------------- mock helper methods -----------------------
@@ -485,14 +488,17 @@ mod tests {
         )
     }
 
-    fn mock_ctx_init_memo(
+    fn mock_ctx_init_memo<R: RngCore + CryptoRng>(
         rcvr_pub_key: EncryptionPubKey,
-        amount: u32,
-        asset_id: u32,
+        amount: Balance,
+        asset_id: AssetId,
+        rng: &mut R,
     ) -> ConfidentialTxMemo {
-        let enc_amount_using_rcvr = rcvr_pub_key.key.encrypt_value(amount).unwrap();
-        let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt_value(asset_id).unwrap();
-
+        let enc_amount_using_rcvr = rcvr_pub_key.key.encrypt_value(Scalar::from(amount), rng);
+        let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt(&CommitmentWitness::new(
+            asset_id.into(),
+            Scalar::random(rng),
+        ));
         ConfidentialTxMemo {
             sndr_account_id: 0,
             rcvr_account_id: 0,
@@ -506,14 +512,20 @@ mod tests {
         }
     }
 
-    fn mock_gen_account(
+    fn mock_gen_account<R: RngCore + CryptoRng>(
         rcvr_enc_pub_key: EncryptionPubKey,
         rcvr_sign_pub_key: SigningPubKey,
-        asset_id: u32,
-        balance: u32,
+        asset_id: AssetId,
+        balance: Balance,
+        rng: &mut R,
     ) -> Fallible<PubAccount> {
-        let enc_asset_id = rcvr_enc_pub_key.key.encrypt_value(asset_id)?;
-        let enc_balance = rcvr_enc_pub_key.key.encrypt_value(balance)?;
+        let enc_asset_id = rcvr_enc_pub_key.key.encrypt(&CommitmentWitness::new(
+            asset_id.into(),
+            Scalar::random(rng),
+        ));
+        let enc_balance = rcvr_enc_pub_key
+            .key
+            .encrypt_value(Scalar::from(balance), rng);
 
         Ok(PubAccount {
             content: PubAccountContent {
@@ -529,14 +541,15 @@ mod tests {
         })
     }
 
-    fn mock_ctx_init_data(
+    fn mock_ctx_init_data<R: RngCore + CryptoRng>(
         rcvr_pub_key: EncryptionPubKey,
-        expected_amount: u32,
-        asset_id: u32,
+        expected_amount: Balance,
+        asset_id: AssetId,
+        rng: &mut R,
     ) -> PubInitConfidentialTxData {
         PubInitConfidentialTxData {
             content: PubInitConfidentialTxDataContent {
-                memo: mock_ctx_init_memo(rcvr_pub_key, expected_amount, asset_id),
+                memo: mock_ctx_init_memo(rcvr_pub_key, expected_amount, asset_id, rng),
                 asset_id_equal_cipher_with_sndr_rcvr_keys_proof:
                     CipherEqualDifferentPubKeyProof::default(),
                 amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
@@ -556,16 +569,28 @@ mod tests {
     fn test_finalize_ctx_success() {
         let ctx_rcvr = CtxReceiver {};
         let expected_amount = 10;
-        let asset_id = 20;
+        let asset_id = AssetId::from(20u32);
         let balance = 0;
+        let mut rng = StdRng::from_seed([17u8; 32]);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
 
-        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, expected_amount, asset_id);
+        let ctx_init_data = mock_ctx_init_data(
+            rcvr_enc_keys.pblc,
+            expected_amount,
+            asset_id.clone(),
+            &mut rng,
+        );
         let rcvr_account = Account {
-            pblc: mock_gen_account(rcvr_enc_keys.pblc, rcvr_sign_pub_key, asset_id, balance)
-                .unwrap(),
+            pblc: mock_gen_account(
+                rcvr_enc_keys.pblc,
+                rcvr_sign_pub_key,
+                asset_id.clone(),
+                balance,
+                &mut rng,
+            )
+            .unwrap(),
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
@@ -579,7 +604,7 @@ mod tests {
             rcvr_account,
             valid_state,
             expected_amount,
-            &mut StdRng::from_seed([17u8; 32]),
+            &mut rng,
         );
 
         result.unwrap();
@@ -591,16 +616,28 @@ mod tests {
     fn test_finalize_ctx_prev_state_error() {
         let ctx_rcvr = CtxReceiver {};
         let expected_amount = 10;
-        let asset_id = 20;
+        let asset_id = AssetId::from(20u32);
         let balance = 0;
+        let mut rng = StdRng::from_seed([17u8; 32]);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
 
-        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, expected_amount, asset_id);
+        let ctx_init_data = mock_ctx_init_data(
+            rcvr_enc_keys.pblc,
+            expected_amount,
+            asset_id.clone(),
+            &mut rng,
+        );
         let rcvr_account = Account {
-            pblc: mock_gen_account(rcvr_enc_keys.pblc, rcvr_sign_pub_key, asset_id, balance)
-                .unwrap(),
+            pblc: mock_gen_account(
+                rcvr_enc_keys.pblc,
+                rcvr_sign_pub_key,
+                asset_id.clone(),
+                balance,
+                &mut rng,
+            )
+            .unwrap(),
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
@@ -614,7 +651,7 @@ mod tests {
             rcvr_account,
             invalid_state,
             expected_amount,
-            &mut StdRng::from_seed([17u8; 32]),
+            &mut rng,
         );
 
         assert_err!(
@@ -631,16 +668,28 @@ mod tests {
         let ctx_rcvr = CtxReceiver {};
         let expected_amount = 10;
         let received_amount = 20;
-        let asset_id = 20;
+        let asset_id = AssetId::from(20);
         let balance = 0;
+        let mut rng = StdRng::from_seed([17u8; 32]);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
 
-        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, received_amount, asset_id);
+        let ctx_init_data = mock_ctx_init_data(
+            rcvr_enc_keys.pblc,
+            received_amount,
+            asset_id.clone(),
+            &mut rng,
+        );
         let rcvr_account = Account {
-            pblc: mock_gen_account(rcvr_enc_keys.pblc, rcvr_sign_pub_key, asset_id, balance)
-                .unwrap(),
+            pblc: mock_gen_account(
+                rcvr_enc_keys.pblc,
+                rcvr_sign_pub_key,
+                asset_id.clone(),
+                balance,
+                &mut rng,
+            )
+            .unwrap(),
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
@@ -654,7 +703,7 @@ mod tests {
             rcvr_account,
             valid_state,
             expected_amount,
-            &mut StdRng::from_seed([17u8; 32]),
+            &mut rng,
         );
 
         assert_err!(
@@ -671,21 +720,33 @@ mod tests {
     fn test_finalize_ctx_pub_key_mismatch_error() {
         let ctx_rcvr = CtxReceiver {};
         let expected_amount = 10;
-        let asset_id = 20;
+        let asset_id = AssetId::from(20);
         let balance = 0;
+        let mut rng = StdRng::from_seed([17u8; 32]);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let wrong_enc_keys = mock_gen_enc_key_pair(18u8);
         let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
 
-        let ctx_init_data = mock_ctx_init_data(rcvr_enc_keys.pblc, expected_amount, asset_id);
+        let ctx_init_data = mock_ctx_init_data(
+            rcvr_enc_keys.pblc,
+            expected_amount,
+            asset_id.clone(),
+            &mut rng,
+        );
         let rcvr_account = Account {
-            pblc: mock_gen_account(wrong_enc_keys.pblc, rcvr_sign_pub_key, asset_id, balance)
-                .unwrap(),
+            pblc: mock_gen_account(
+                wrong_enc_keys.pblc,
+                rcvr_sign_pub_key,
+                asset_id.clone(),
+                balance,
+                &mut rng,
+            )
+            .unwrap(),
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
-                asset_id: asset_id,
+                asset_id: asset_id.clone(),
             },
         };
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Validated);
@@ -695,7 +756,7 @@ mod tests {
             rcvr_account,
             valid_state,
             expected_amount,
-            &mut StdRng::from_seed([17u8; 32]),
+            &mut rng,
         );
 
         assert_err!(result, ErrorKind::InputPubKeyMismatch);
@@ -710,7 +771,7 @@ mod tests {
         let rcvr = CtxReceiver {};
         let sndr_vldtr = CtxSenderValidator {};
         let rcvr_vldtr = CtxReceiverValidator {};
-        let asset_id = 20;
+        let asset_id = AssetId::from(20);
         let sndr_balance = 40;
         let rcvr_balance = 0;
         let amount = 30;
@@ -727,14 +788,15 @@ mod tests {
             pblc: mock_gen_account(
                 rcvr_enc_keys.pblc,
                 rcvr_sign_pub_key.clone(),
-                asset_id,
+                asset_id.clone(),
                 rcvr_balance,
+                &mut rng,
             )
             .unwrap(),
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
-                asset_id: asset_id,
+                asset_id: asset_id.clone(),
             },
         };
 
@@ -742,8 +804,9 @@ mod tests {
             pblc: mock_gen_account(
                 sndr_enc_keys.pblc,
                 sndr_sign_pub_key.clone(),
-                asset_id,
+                asset_id.clone(),
                 sndr_balance,
+                &mut rng,
             )
             .unwrap(),
             scrt: SecAccount {
