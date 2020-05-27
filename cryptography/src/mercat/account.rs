@@ -32,18 +32,16 @@ pub fn create_account(
     account_id: u32,
     rng: &mut StdRng,
 ) -> Fallible<PubAccount> {
-    let asset_blinding = Scalar::random(rng);
     let balance_blinding = Scalar::random(rng);
     let gens = &PedersenGens::default();
 
     // Encrypt asset id and prove that the encrypted asset is wellformed
-    let asset_witness = CommitmentWitness::new(scrt.asset_id.clone().into(), asset_blinding);
-    let enc_asset_id = scrt.enc_keys.pblc.key.encrypt(&asset_witness);
+    let enc_asset_id = scrt.enc_keys.pblc.key.encrypt(&scrt.asset_id_witness);
 
     let asset_wellformedness_proof = WellformednessProof::from(single_property_prover(
         WellformednessProverAwaitingChallenge {
             pub_key: scrt.enc_keys.pblc.key,
-            w: Zeroizing::new(asset_witness.clone()),
+            w: Zeroizing::new(scrt.asset_id_witness.clone()),
             pc_gens: &gens,
         },
         rng,

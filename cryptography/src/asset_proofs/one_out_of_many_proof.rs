@@ -251,6 +251,7 @@ impl Polynomial {
     }
     /// Computes the polynomial evaluation value at the given point `x`.
     /// Used for testing purposes.
+    #[allow(unused)]
     fn eval(&self, point: Scalar) -> Scalar {
         let mut value = Scalar::zero();
         let mut x: Scalar = Scalar::one();

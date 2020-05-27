@@ -14,12 +14,11 @@ use crate::{
     mercat::{
         Account, CipherEqualDifferentPubKeyProof, CipherEqualSamePubKeyProof,
         ConfidentialTransactionInitVerifier, ConfidentialTransactionReceiver,
-        ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAmount,
-        EncryptedAssetId, InRangeProof, PubAccount, PubFinalConfidentialTxData,
-        PubFinalConfidentialTxDataContent, PubInitConfidentialTxData,
-        PubInitConfidentialTxDataContent, TxSubstate,
+        ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAssetId,
+        InRangeProof, PubAccount, PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent,
+        PubInitConfidentialTxData, PubInitConfidentialTxDataContent, TxSubstate,
     },
-    AssetId, Balance, BALANCE_RANGE,
+    Balance, BALANCE_RANGE,
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
@@ -458,10 +457,11 @@ mod tests {
     use crate::{
         asset_proofs::ElgamalSecretKey,
         mercat::{
-            AccountMemo, ConfidentialTxMemo, CorrectnessProof, EncryptionKeys, EncryptionPubKey,
-            MembershipProof, PubAccountContent, SecAccount, Signature, SigningKeys, SigningPubKey,
-            WellformednessProof,
+            AccountMemo, ConfidentialTxMemo, CorrectnessProof, EncryptedAmount, EncryptionKeys,
+            EncryptionPubKey, MembershipProof, PubAccountContent, SecAccount, Signature,
+            SigningKeys, SigningPubKey, WellformednessProof,
         },
+        AssetId,
     };
     use curve25519_dalek::scalar::Scalar;
     use rand::SeedableRng;
