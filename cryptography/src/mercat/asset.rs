@@ -43,7 +43,7 @@ impl AssetTransactionIssuer for CtxIssuer {
     ) -> Fallible<(PubAssetTxData, AssetTxState)> {
         let gens = PedersenGens::default();
 
-        // Encrypt the asset_id to mediator's public key.
+        // Encrypt the asset_id with mediator's public key.
         let mdtr_enc_asset_id = mdtr_pub_key.key.encrypt(&issr_account.asset_id_witness);
 
         // Encrypt the balance issued to mediator's public key.
