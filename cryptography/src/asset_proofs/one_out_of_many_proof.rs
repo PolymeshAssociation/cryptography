@@ -26,6 +26,7 @@ use sha3::Sha3_512;
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Neg, Sub};
 use zeroize::{Zeroize, Zeroizing};
+use std::time::Instant;
 
 const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathOOONProofChallengeLabel";
@@ -36,7 +37,7 @@ const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 /// `n` is the fixed base. Usually we will work with base `4`.
 /// Returns the representation of the input number as the given base number
 /// The input number should be within the provided range [0, base^exp)
-fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<Vec<usize>> {
+pub (crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<Vec<usize>> {
     ensure!(
         number < base.pow(exp),
         ErrorKind::OOONProofIndexOutofRange { index: number }
@@ -274,6 +275,12 @@ pub struct R1ProofInitialMessage {
     c: RistrettoPoint,
     d: RistrettoPoint,
 }
+impl R1ProofInitialMessage {
+    pub fn get_b(&self) -> RistrettoPoint{
+        return self.b;
+    }
+}
+
 
 impl Default for R1ProofInitialMessage {
     fn default() -> Self {
@@ -304,6 +311,12 @@ pub struct R1ProofFinalResponse {
     z_c: Scalar,
     m: usize,
     n: usize,
+}
+
+impl R1ProofFinalResponse {
+    pub fn get_f_elements(&self) -> Vec<Scalar>{
+        return self.f_elements.clone();
+    }
 }
 
 #[derive(Clone, Debug, Zeroize)]
@@ -430,8 +443,8 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover {
 }
 
 pub struct R1ProofVerifier<'a> {
-    b: RistrettoPoint,
-    generators: &'a OooNProofGenerators,
+    pub (crate) b: RistrettoPoint,
+    pub (crate) generators: &'a OooNProofGenerators,
 }
 
 impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
@@ -509,6 +522,12 @@ impl OOONProofInitialMessage {
     pub fn get_m(&self) -> usize {
         return self.m;
     }
+    pub fn get_g_vec(&self) -> Vec<RistrettoPoint> {
+        return self.g_vec.clone();
+    }
+    pub fn get_r1_proof_initial_message(&self) -> R1ProofInitialMessage {
+        return self.r1_proof_initial_message;
+    }
 }
 /// A `default` implementation used for testing.
 impl Default for OOONProofInitialMessage {
@@ -536,6 +555,23 @@ pub struct OOONProofFinalResponse {
     z: Scalar,
     m: usize,
     n: usize,
+}
+
+impl OOONProofFinalResponse{
+    
+    pub fn get_r1_proof_final_response(&self)->R1ProofFinalResponse {
+        return self.r1_proof_final_response.clone();
+    }
+    pub fn get_z(&self) -> Scalar {
+        return self.z;
+    }
+    pub fn get_n(&self) -> usize {
+        return self.n;
+    }
+    pub fn get_m(&self) -> usize {
+        return self.m;
+    }
+
 }
 #[derive(Clone, Debug, Zeroize)]
 pub struct OOONProver {
@@ -692,6 +728,8 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         let m = final_response.m;
         let n = final_response.n;
 
+        let function_start = Instant::now();
+
         let b_comm = initial_message.r1_proof_initial_message.b;
         let r1_verifier = R1ProofVerifier {
             b: b_comm,
@@ -722,6 +760,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         let mut left: RistrettoPoint = RistrettoPoint::default();
         let right = final_response.z * self.generators.com_gens.B_blinding;
 
+        let start = Instant::now();
         for i in 0..size {
             p_i = Scalar::one();
             let i_rep = convert_to_base(i, n, m as u32).unwrap();
@@ -730,6 +769,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
             }
             left += p_i * self.commitments[i];
         }
+        println!("\nComputation of scalars in the slow(ooon) method: {:.2?}", start.elapsed());
         let mut temp = Scalar::one();
         for k in 0..m {
             left -= temp * initial_message.g_vec[k];
@@ -740,7 +780,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
             left == right,
             ErrorKind::OOONFinalResponseVerificationError { check: 2 }
         );
-
+        println!("\nSlow verification overall time: {:.2?}\n", function_start.elapsed());
         Ok(())
     }
 }
@@ -755,6 +795,7 @@ mod tests {
     const SEED_1: [u8; 32] = [42u8; 32];
 
     #[test]
+    #[ignore]
     #[wasm_bindgen_test]
     /// Tests the whole workflow of one-out-of-many proofs by setting up the parameters base = 4 and exp =3.
     /// This parameters enable to generate 1-out-of-64 proofs which means the prover can prove the knowledge of

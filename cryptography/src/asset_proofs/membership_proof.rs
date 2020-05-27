@@ -5,14 +5,14 @@
 //! <https://eprint.iacr.org/2015/643.pdf>
 
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-
+use std::time::Instant;
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
     },
     one_out_of_many_proof::{
         OOONProofFinalResponse, OOONProofInitialMessage, OOONProofVerifier, OOONProver,
-        OOONProverAwaitingChallenge, OooNProofGenerators,
+        OOONProverAwaitingChallenge, OooNProofGenerators, R1ProofVerifier, convert_to_base,
     },
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
@@ -239,10 +239,100 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
     }
 }
 
+impl<'a>  MembershipProofVerifier<'a> {
+    /// The verification of one-out-of-many proof is linear from the size of commitment set and
+    /// its computationally heavy part boils down to a big multi-exponentation operation of the form
+    /// `p_0 * C_0 + p_1 * C_1 + .... + p_{N-1} * C_{N-1}`, where the set `{C_0, C_1, ..., C_{N-1}`
+    /// is the public list of commitments, and each scalar element `p_i` is derived from the proof 
+    /// transcript elements during the verification process. Hence the verification of one-ouf-of-N proof  
+    /// requires O(N) computationally heavy scalar mutliplication operations. Considering the unique 
+    /// structure of commitments used for membership proofs, we can significanly lower the number of 
+    /// required scalar-multiplication operations and perform the verification by 
+    /// performing 2N addition operation + 2 scalar multiplication instead. 
+    fn fast_verify(
+        &self,
+        c: &ZKPChallenge,
+        initial_message: &MembershipProofInitialMessage,
+        final_response: &MembershipProofFinalResponse,
+    ) -> Fallible<()> {
+
+        
+        let m = final_response.ooon_proof_final_response.get_m();
+        let n = final_response.ooon_proof_final_response.get_n();
+        let size = n.pow(m as u32);
+
+        let b_comm = initial_message.ooon_proof_initial_message.get_r1_proof_initial_message().get_b();
+        let r1_verifier = R1ProofVerifier {
+            b: b_comm,
+            generators: self.generators,
+        };
+
+        let result_r1 = r1_verifier.verify(
+            c,
+            &initial_message.ooon_proof_initial_message.get_r1_proof_initial_message(),
+            &final_response.ooon_proof_final_response.get_r1_proof_final_response(),
+        );
+        ensure!(
+            result_r1.is_ok(),
+            ErrorKind::MembershipProofVerificationError { check: 1 }
+        );
+
+        let mut f_values = vec![*c.x(); m * n];
+        let proof_f_elements = &final_response.ooon_proof_final_response.get_r1_proof_final_response().get_f_elements();
+
+        for i in 0..m {
+            for j in 1..n {
+                f_values[(i * n + j)] = proof_f_elements[(i * (n - 1) + (j - 1))];
+                f_values[(i * n)] -= proof_f_elements[(i * (n - 1) + (j - 1))];
+            }
+        }
+
+        let mut p_i: Scalar;
+        let mut left: RistrettoPoint = RistrettoPoint::default();
+
+        let right = final_response.ooon_proof_final_response.get_z() * self.generators.com_gens.B_blinding;
+
+
+        let mut sum1 = Scalar::zero();
+        let mut sum2 = Scalar::zero();
+
+        let start = Instant::now();
+        for i in 0..size {
+            p_i = Scalar::one();
+            let i_rep = convert_to_base(i, n, m as u32)?;
+            for j in 0..m {
+                p_i *= f_values[j * n + i_rep[j]];
+            }
+            sum1 += p_i;
+            sum2 += self.elements_set[i] * p_i;
+        }
+        
+        println!("Computation of scalars in the fast method: {:.2?}", start.elapsed());
+
+        left  = sum1 * self.secret_element_com - sum2 * self.generators.com_gens.B;
+
+        let mut temp = Scalar::one();
+        for k in 0..m {
+            left -= temp * initial_message.ooon_proof_initial_message.get_g_vec()[k];
+            temp *= c.x();
+        }
+
+        ensure!(
+            left == right,
+            ErrorKind::MembershipProofVerificationError { check: 2 }
+        );
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
     extern crate wasm_bindgen_test;
+    extern crate time;
+    use time::PreciseTime;
+    
     use super::*;
     use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
@@ -254,9 +344,9 @@ mod tests {
 
     const SEED_1: [u8; 32] = [42u8; 32];
     #[test]
+    #[ignore]
     #[wasm_bindgen_test]
     /// Tests the whole workflow of membership proofs
-
     fn test_membership_proofs() {
         let mut rng = StdRng::from_seed(SEED_1);
         let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
@@ -301,8 +391,11 @@ mod tests {
             generators: &generators,
         };
 
-        let result = verifier.verify(&challenge, &initial_message.clone(), &final_response);
+        let result = verifier.verify(&challenge, &initial_message.clone(), &final_response.clone());
         assert!(result.is_ok());
+
+        let faster_result = verifier.fast_verify(&challenge, &initial_message.clone(), &final_response.clone());
+        assert!(faster_result.is_ok());
 
         // Negative test
         let verifier = MembershipProofVerifier {
@@ -375,6 +468,74 @@ mod tests {
     }
 
     #[test]
+    #[wasm_bindgen_test]
+    fn test_membership_proof_fast_verification() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
+
+        const BASE: usize = 4;
+        const EXPONENT: usize = 6;
+        let N : usize = BASE.pow(EXPONENT as u32);
+
+        let generators = OooNProofGenerators::new(EXPONENT, BASE);
+        
+        let elements_set: Vec<Scalar> = (0..N as u32).map(|m| Scalar::from(m)).collect();
+    
+        let secret = Scalar::from(85u32);
+        let blinding = Scalar::random(&mut rng);
+
+        let secret_commitment = generators.com_gens.commit(secret, blinding);
+
+        let prover = MembershipProverAwaitingChallenge::try_from((
+            secret,
+            blinding.clone(),
+            &generators,
+            elements_set.as_slice(),
+            BASE,
+            EXPONENT,
+        ))
+        .unwrap();
+
+        let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
+        
+        let proof_step1_start = Instant::now();
+        let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
+        let proof_step1_duration = proof_step1_start.elapsed();
+
+        initial_message.update_transcript(&mut transcript).unwrap();
+        let challenge = transcript
+            .scalar_challenge(MEMBERSHIP_PROOF_CHALLENGE_LABEL)
+            .unwrap();
+
+        let proof_step2_start = Instant::now();    
+        let final_response = prover.apply_challenge(&challenge);
+        let proof_step2_duration = proof_step2_start.elapsed();
+
+        let verifier = MembershipProofVerifier {
+            secret_element_com: secret_commitment,
+            elements_set: elements_set.as_slice(),
+            generators: &generators,
+        };
+
+        let slow_ver_start = Instant::now();
+        let result = verifier.verify(&challenge, &initial_message, &final_response);
+        let slow_duration = slow_ver_start.elapsed();
+
+        assert!(result.is_ok());
+
+        let fast_ver_start = Instant::now();
+        let faster_result = verifier.fast_verify(&challenge, &initial_message, &final_response);
+        let fast_duration = fast_ver_start.elapsed();
+
+        println!("\nProof: Initial Message generation time: {:.2?}", proof_step1_duration);
+        println!("Proof: Final Response generation time: {:.2?}", proof_step2_duration);
+        println!("Slow verification time: {:.2?}", slow_duration);
+        println!("Fast verification time: {:.2?}\n\n", fast_duration);
+        assert!(faster_result.is_ok());
+    }
+
+    #[test]
+    #[ignore]
     #[wasm_bindgen_test]
     fn serialize_deserialize_proof() {
         let mut rng = StdRng::from_seed(SEED_1);
