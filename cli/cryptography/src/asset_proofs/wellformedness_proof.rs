@@ -70,8 +70,11 @@ pub struct WellformednessProver {
 pub struct WellformednessProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
     pub pub_key: ElgamalPublicKey,
+
     /// The secret commitment witness.
     pub w: Zeroizing<CommitmentWitness>,
+
+    /// The Pedersen generators.
     pub pc_gens: &'a PedersenGens,
 }
 
@@ -167,12 +170,10 @@ mod tests {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 42u32;
-        let rand_blind = Scalar::random(&mut rng);
 
-        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = elg_secret.get_public_key();
-        let cipher = pub_key.encrypt(&w);
+        let (w, cipher) = pub_key.encrypt_value(secret_value.into(), &mut rng);
 
         let prover = WellformednessProverAwaitingChallenge {
             pub_key,

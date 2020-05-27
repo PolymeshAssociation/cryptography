@@ -7,6 +7,7 @@ use crate::errors::{ErrorKind, Fallible};
 use bulletproofs::PedersenGens;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use rand::rngs::StdRng;
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
@@ -38,6 +39,15 @@ impl CommitmentWitness {
 impl CommitmentWitness {
     pub fn new(value: Scalar, blinding: Scalar) -> Self {
         CommitmentWitness { value, blinding }
+    }
+}
+
+impl From<(Scalar, &mut StdRng)> for CommitmentWitness {
+    fn from(v: (Scalar, &mut StdRng)) -> Self {
+        CommitmentWitness {
+            value: v.0,
+            blinding: Scalar::random(v.1),
+        }
     }
 }
 
@@ -135,10 +145,17 @@ impl ElgamalPublicKey {
         self.encrypt_helper(witness.value, witness.blinding)
     }
 
-    /// Convenience encryption function for scenarios where we don't care to store the blinding factor.
-    pub fn encrypt_value<R: RngCore + CryptoRng>(&self, value: Scalar, rng: &mut R) -> CipherText {
+    /// Generates a blinding factor, and encrypts the value.
+    pub fn encrypt_value<R: RngCore + CryptoRng>(
+        &self,
+        value: Scalar,
+        rng: &mut R,
+    ) -> (CommitmentWitness, CipherText) {
         let blinding = Scalar::random(rng);
-        self.encrypt_helper(value, blinding)
+        (
+            CommitmentWitness { value, blinding },
+            self.encrypt_helper(value, blinding),
+        )
     }
 }
 
@@ -267,12 +284,12 @@ mod tests {
             blinding: blinding,
         };
         // Test encrypt().
-        let mut cipher = elg_pub.encrypt(&balance_witness);
+        let cipher = elg_pub.encrypt(&balance_witness);
         let balance1 = elg_secret.decrypt(&cipher).unwrap();
         assert_eq!(balance1, balance);
 
         // Test encrypt_value().
-        cipher = elg_pub.encrypt_value(balance_witness.value, &mut rng);
+        let (_, cipher) = elg_pub.encrypt_value(balance_witness.value, &mut rng);
         let balance2 = elg_secret.decrypt(&cipher).unwrap();
         assert_eq!(balance2, balance);
 
@@ -284,11 +301,11 @@ mod tests {
             blinding: blinding,
         };
         // Test encrypt().
-        cipher = elg_pub.encrypt(&asset_id_witness);
+        let cipher = elg_pub.encrypt(&asset_id_witness);
         assert!(elg_secret.verify(&cipher, &asset_id.clone().into()).is_ok());
 
         // Test encrypt_value().
-        cipher = elg_pub.encrypt_value(asset_id_witness.value, &mut rng);
+        let (_, cipher) = elg_pub.encrypt_value(asset_id_witness.value, &mut rng);
         assert!(elg_secret.verify(&cipher, &asset_id.into()).is_ok());
     }
 
