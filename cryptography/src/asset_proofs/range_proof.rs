@@ -132,8 +132,7 @@ mod tests {
         let rand_blind = Scalar::random(&mut rng);
 
         let (initial_message, final_response, range) =
-            prove_within_range(secret_value as u64, rand_blind, 32)
-                .unwrap();
+            prove_within_range(secret_value as u64, rand_blind, 32).unwrap();
         assert_eq!(range, 32);
 
         let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
