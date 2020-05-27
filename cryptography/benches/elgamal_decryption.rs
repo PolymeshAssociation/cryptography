@@ -25,7 +25,6 @@ fn bench_elgamal_decrypt(
 
 fn bench_elgamal(c: &mut Criterion) {
     let mut rng = StdRng::from_seed([42u8; 32]);
-    let r = Scalar::random(&mut rng);
 
     let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
     let elg_pub = elg_secret.get_public_key();
@@ -33,8 +32,7 @@ fn bench_elgamal(c: &mut Criterion) {
     let encrypted_values: Vec<CipherText> = (0..3)
         .map(|i| {
             let value = 2u32 << i;
-            let w = CommitmentWitness::new(value.into(), r);
-            elg_pub.encrypt(&w)
+            elg_pub.encrypt_value(value.into(), &mut rng).1
         })
         .collect();
 

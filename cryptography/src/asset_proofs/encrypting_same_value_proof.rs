@@ -211,11 +211,9 @@ mod tests {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 49u32;
-        let rand_blind = Scalar::random(&mut rng);
 
-        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
         let elg_pub1 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
-        let cipher1 = elg_pub1.encrypt(&w);
+        let (w, cipher1) = elg_pub1.encrypt_value(secret_value.into(), &mut rng);
 
         let elg_pub2 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
         let cipher2 = elg_pub2.encrypt(&w);

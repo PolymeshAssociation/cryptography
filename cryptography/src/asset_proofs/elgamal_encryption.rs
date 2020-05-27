@@ -145,7 +145,7 @@ impl ElgamalPublicKey {
         self.encrypt_helper(witness.value, witness.blinding)
     }
 
-    /// Convenience encryption function for scenarios where we don't care to store the blinding factor.
+    /// Generates a blinding factor, and encrypts the value.
     pub fn encrypt_value<R: RngCore + CryptoRng>(
         &self,
         value: Scalar,
