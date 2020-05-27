@@ -209,12 +209,10 @@ mod tests {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 13u32;
-        let rand_blind = Scalar::random(&mut rng);
 
-        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let cipher = elg_pub.encrypt(&w);
+        let (w, cipher) = elg_pub.encrypt_value(secret_value.into(), &mut rng);
 
         let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w, &gens);
         let verifier = CorrectnessVerifier::new(Scalar::from(secret_value), elg_pub, cipher, &gens);

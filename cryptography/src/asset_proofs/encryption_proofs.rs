@@ -258,9 +258,7 @@ mod tests {
         let secret_value = 42u32;
         let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = secret_key.get_public_key();
-        let rand_blind = Scalar::random(&mut rng);
-        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
-        let cipher = pub_key.encrypt(&w);
+        let (w, cipher) = pub_key.encrypt_value(secret_value.into(), &mut rng);
 
         let (prover0, verifier0) = create_correctness_proof_objects_helper(
             w.clone(),
@@ -303,9 +301,8 @@ mod tests {
     fn batched_proofs() {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_2);
-        let w = CommitmentWitness::new(6u32.into(), Scalar::random(&mut rng));
         let pub_key = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
-        let cipher = pub_key.encrypt(&w);
+        let (w, cipher) = pub_key.encrypt_value(6u32.into(), &mut rng);
         let mut transcript = Transcript::new(b"batch_proof_label");
 
         let (prover0, verifier0) = create_correctness_proof_objects_helper(

@@ -218,8 +218,8 @@ mod tests {
 
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let ciphertext1 = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
-        let ciphertext2 = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+        let (_, ciphertext1) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+        let (_, ciphertext2) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
 
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             elg_secret,
@@ -261,12 +261,10 @@ mod tests {
     #[wasm_bindgen_test]
     fn verify_ciphertext_refreshment_method() {
         let mut rng = StdRng::from_seed(SEED_2);
-        let rand_blind = Scalar::random(&mut rng);
-        let w = CommitmentWitness::new(3u32.into(), rand_blind);
         let gens = PedersenGens::default();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let cipher = elg_pub.encrypt(&w);
+        let (_, cipher) = elg_pub.encrypt_value(3u32.into(), &mut rng);
 
         let new_rand_blind = Scalar::random(&mut rng);
         let new_cipher = cipher.refresh(&elg_secret, new_rand_blind).unwrap();
@@ -295,8 +293,8 @@ mod tests {
         let gens = PedersenGens::default();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let ciphertext1 = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
-        let ciphertext2 = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+        let (_, ciphertext1) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+        let (_, ciphertext2) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
 
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             elg_secret,

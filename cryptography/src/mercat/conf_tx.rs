@@ -166,13 +166,13 @@ impl ConfidentialTransactionSender for CtxSender {
             memo: ConfidentialTxMemo {
                 sndr_account_id: sndr_pub_account.id,
                 rcvr_account_id: rcvr_pub_account.id,
-                enc_amount_using_sndr: EncryptedAmount::from(sndr_new_enc_amount),
-                enc_amount_using_rcvr: EncryptedAmount::from(rcvr_new_enc_amount),
+                enc_amount_using_sndr: sndr_new_enc_amount.into(),
+                enc_amount_using_rcvr: rcvr_new_enc_amount.into(),
                 sndr_pub_key: sndr_enc_keys.pblc,
                 rcvr_pub_key: rcvr_pub_key,
-                refreshed_enc_balance: EncryptedAmount::from(refreshed_enc_balance),
-                refreshed_enc_asset_id: EncryptedAssetId::from(refreshed_enc_asset_id),
-                enc_asset_id_using_rcvr: EncryptedAssetId::from(enc_asset_id_using_rcvr),
+                refreshed_enc_balance: refreshed_enc_balance.into(),
+                refreshed_enc_asset_id: refreshed_enc_asset_id.into(),
+                enc_asset_id_using_rcvr: enc_asset_id_using_rcvr.into(),
             },
         };
 
@@ -496,11 +496,8 @@ mod tests {
         asset_id: AssetId,
         rng: &mut R,
     ) -> ConfidentialTxMemo {
-        let enc_amount_using_rcvr = rcvr_pub_key.key.encrypt_value(Scalar::from(amount), rng);
-        let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt(&CommitmentWitness::new(
-            asset_id.into(),
-            Scalar::random(rng),
-        ));
+        let (_, enc_amount_using_rcvr) = rcvr_pub_key.key.encrypt_value(amount.into(), rng);
+        let (_, enc_asset_id_using_rcvr) = rcvr_pub_key.key.encrypt_value(asset_id.into(), rng);
         ConfidentialTxMemo {
             sndr_account_id: 0,
             rcvr_account_id: 0,
@@ -521,19 +518,16 @@ mod tests {
         balance: Balance,
         rng: &mut R,
     ) -> Fallible<PubAccount> {
-        let enc_asset_id = rcvr_enc_pub_key.key.encrypt(&CommitmentWitness::new(
-            asset_id.into(),
-            Scalar::random(rng),
-        ));
-        let enc_balance = rcvr_enc_pub_key
+        let (_, enc_asset_id) = rcvr_enc_pub_key.key.encrypt_value(asset_id.into(), rng);
+        let (_, enc_balance) = rcvr_enc_pub_key
             .key
             .encrypt_value(Scalar::from(balance), rng);
 
         Ok(PubAccount {
             content: PubAccountContent {
                 id: 1,
-                enc_asset_id: EncryptedAssetId::from(enc_asset_id),
-                enc_balance: EncryptedAmount::from(enc_balance),
+                enc_asset_id: enc_asset_id.into(),
+                enc_balance: enc_balance.into(),
                 asset_wellformedness_proof: WellformednessProof::default(),
                 asset_membership_proof: MembershipProof::default(),
                 balance_correctness_proof: CorrectnessProof::default(),
@@ -596,7 +590,8 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
-                asset_id: asset_id,
+                asset_id: asset_id.clone(),
+                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Validated);
@@ -643,7 +638,8 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
-                asset_id: asset_id,
+                asset_id: asset_id.clone(),
+                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
         let invalid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Started);
@@ -695,7 +691,8 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
-                asset_id: asset_id,
+                asset_id: asset_id.clone(),
+                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Validated);
@@ -749,6 +746,7 @@ mod tests {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
                 asset_id: asset_id.clone(),
+                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
         let valid_state = ConfidentialTxState::InitilaziationJustification(TxSubstate::Validated);
@@ -799,6 +797,7 @@ mod tests {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
                 asset_id: asset_id.clone(),
+                asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
             },
         };
 
@@ -814,7 +813,8 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: sndr_enc_keys,
                 sign_keys: sndr_sign_keys,
-                asset_id: asset_id,
+                asset_id: asset_id.clone(),
+                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
 
