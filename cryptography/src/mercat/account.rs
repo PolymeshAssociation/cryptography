@@ -204,10 +204,12 @@ mod tests {
             .map(|id| AssetId::from(id.clone()))
             .collect();
         let account_id = 2;
+        let asset_id_witness = CommitmentWitness::from((asset_id.clone().into(), &mut rng));
         let scrt_account = SecAccount {
             enc_keys,
             sign_keys,
             asset_id,
+            asset_id_witness,
         };
 
         // ----------------------- test

@@ -2,6 +2,7 @@
 //! of the MERCAT, as defined in the section 6 of the whitepaper.
 
 pub mod account;
+pub mod asset;
 pub mod conf_tx;
 
 use crate::{
@@ -17,7 +18,7 @@ use crate::{
         range_proof,
         range_proof::{RangeProofFinalResponse, RangeProofInitialMessage},
         wellformedness_proof::{WellformednessFinalResponse, WellformednessInitialMessage},
-        CipherText, ElgamalPublicKey, ElgamalSecretKey,
+        CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     },
     errors::{ErrorKind, Fallible},
     AssetId, Balance,
@@ -226,6 +227,7 @@ pub struct CipherEqualSamePubKeyProof {
     pub init: CipherTextRefreshmentInitialMessage,
     pub response: CipherTextRefreshmentFinalResponse,
 }
+
 impl
     From<(
         CipherTextRefreshmentInitialMessage,
@@ -301,6 +303,7 @@ pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
     pub sign_keys: SigningKeys,
     pub asset_id: AssetId,
+    pub asset_id_witness: CommitmentWitness,
 }
 
 /// Wrapper for both the secret and public account info
@@ -349,7 +352,7 @@ pub enum TxSubstate {
 
 /// Represents the two states (initialized, justified) of a
 /// confidentional asset issuance transaction.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssetTxState {
     Initialization(TxSubstate),
     Justification(TxSubstate),
@@ -371,15 +374,26 @@ pub enum ConfidentialTxState {
 
 /// Holds the public portion of an asset issuance transaction. This can be placed
 /// on the chain.
-pub struct PubAssetTxData {
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PubAssetTxDataContent {
     account_id: u32,
     enc_asset_id: EncryptedAssetId,
     enc_amount: EncryptedAmount,
     memo: AssetMemo,
-    asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof,
+    asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     balance_wellformedness_proof: WellformednessProof,
     balance_correctness_proof: CorrectnessProof,
-    sig: Signature,
+}
+
+impl PubAssetTxDataContent {
+    pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
+        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+    }
+}
+
+pub struct PubAssetTxData {
+    pub content: PubAssetTxDataContent,
+    pub sig: Signature,
 }
 
 /// The interface for the confidential asset issuance transaction.
@@ -389,12 +403,11 @@ pub trait AssetTransactionIssuer {
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
     fn initialize(
         &self,
-        issr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-        issr_sign_keys: SigningKeys,
+        issr_account_id: u32,
+        issr_account: &SecAccount,
+        mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
-        issr_account: PubAccount,
-        mdtr_pub_key: EncryptionPubKey,
-        asset_id: AssetId, // deviation from the paper
+        rng: &mut StdRng,
     ) -> Fallible<(PubAssetTxData, AssetTxState)>;
 }
 
@@ -403,9 +416,13 @@ pub trait AssetTransactionInitializeVerifier {
     /// and to verify the signature.
     fn verify(
         &self,
-        asset_tx: PubAssetTxData,
+        amount: Balance,
+        asset_tx: &PubAssetTxData,
         state: AssetTxState,
-        issr_sign_pub_key: SigningPubKey,
+        issr_sign_pub_key: &SigningPubKey,
+        issr_enc_pub_key: &EncryptionPubKey,
+        isser_acount_enc_asset_id: &EncryptedAssetId,
+        mdtr_enc_pub_key: &EncryptionPubKey,
     ) -> Fallible<AssetTxState>;
 }
 

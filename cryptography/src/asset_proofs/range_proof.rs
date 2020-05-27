@@ -101,27 +101,26 @@ mod tests {
     #[wasm_bindgen_test]
     fn basic_range_proof() {
         let mut rng = StdRng::from_seed(SEED_1);
-        // Positive test: secret value within range [0, 2^32)
         let secret_value = 42u32;
-        let rand_blind = Scalar::random(&mut rng);
 
+        let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let elg_pub = elg_secret.get_public_key();
+        let (witness, cipher) = elg_pub.encrypt_value(secret_value.into(), &mut rng);
+
+        // Positive test: secret value within range [0, 2^32)
         let (initial_message, final_response, range) =
-            prove_within_range(secret_value as u64, rand_blind, 32)
+            prove_within_range(secret_value as u64, witness.blinding().clone(), 32)
                 .expect("This shouldn't happen.");
         assert_eq!(range, 32);
         assert!(verify_within_range(initial_message, final_response, 32).is_ok());
 
         // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.
-        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
-        let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
-        let elg_pub = elg_secret.get_public_key();
-        let cipher = elg_pub.encrypt(&w);
         assert_eq!(initial_message.0, cipher.y.compress());
 
         // Negative test: secret value outside the allowed range
         let large_secret_value: u64 = u64::from(u32::max_value()) + 3;
         let (bad_proof, bad_commitment, _) =
-            prove_within_range(large_secret_value, rand_blind, 32).expect("This shouldn't happen.");
+            prove_within_range(large_secret_value, witness.blinding().clone(), 32).unwrap();
         assert!(!verify_within_range(bad_proof, bad_commitment, 32).is_ok());
     }
 
@@ -133,8 +132,7 @@ mod tests {
         let rand_blind = Scalar::random(&mut rng);
 
         let (initial_message, final_response, range) =
-            prove_within_range(secret_value as u64, rand_blind, 32)
-                .expect("This shouldn't happen.");
+            prove_within_range(secret_value as u64, rand_blind, 32).unwrap();
         assert_eq!(range, 32);
 
         let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
