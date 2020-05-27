@@ -32,7 +32,7 @@ use sp_core::crypto::Pair;
 // -                                  Constants                                        -
 // -------------------------------------------------------------------------------------
 
-const EXPONENT: usize = 3; // TODO EXPONENT=8 is very slow: tests take 9 minutes.
+const EXPONENT: usize = 3; // TODO: will be changed after CRYP-83
 const BASE: usize = 4;
 
 // -------------------------------------------------------------------------------------
@@ -327,7 +327,7 @@ pub trait AccountCreater {
 /// The interface for the verifying the account creation.
 pub trait AccountCreaterVerifier {
     /// Called by the validators to ensure that the account was created correctly.
-    fn verify(&self, account: PubAccount, valid_asset_ids: Vec<AssetId>) -> Fallible<()>;
+    fn verify(&self, account: &PubAccount, valid_asset_ids: &Vec<AssetId>) -> Fallible<()>;
 }
 
 // -------------------------------------------------------------------------------------
