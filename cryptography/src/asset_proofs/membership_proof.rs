@@ -20,10 +20,9 @@ use crate::errors::{ErrorKind, Fallible};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use zeroize::Zeroizing;
-// TODO: why is this unused?
-const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
+
+pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
@@ -374,9 +373,6 @@ mod tests {
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
         let even_elements: Vec<Scalar> = (0..64 as u32).map(|m| Scalar::from(2 * m)).collect();
         let blinding = Scalar::random(&mut rng);
-
-        // TODO why is this unsused?
-        let even_member = generators.com_gens.commit(Scalar::from(8u32), blinding);
 
         let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(8u32),

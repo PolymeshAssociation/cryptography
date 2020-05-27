@@ -10,9 +10,8 @@ use crate::{
     },
     errors::{ErrorKind, Fallible},
     mercat::{
-        AccountCreaterVerifier, AccountMemo, CorrectnessProof, EncryptedAmount, EncryptedAssetId,
-        MembershipProof, PubAccount, PubAccountContent, SecAccount, WellformednessProof, BASE,
-        EXPONENT,
+        AccountCreaterVerifier, AccountMemo, CorrectnessProof, EncryptedAmount, MembershipProof,
+        PubAccount, PubAccountContent, SecAccount, WellformednessProof, BASE, EXPONENT,
     },
     AssetId, Balance,
 };
@@ -37,9 +36,9 @@ pub fn create_account(
     let balance_blinding = Scalar::random(rng);
     let gens = &PedersenGens::default();
 
-    // encrypt asset id and prove that the encrypted asset is wellformed
+    // Encrypt asset id and prove that the encrypted asset is wellformed
     let asset_witness = CommitmentWitness::new(scrt.asset_id.clone().into(), asset_blinding);
-    let enc_asset_id = EncryptedAssetId::from(scrt.enc_keys.pblc.key.encrypt(&asset_witness));
+    let enc_asset_id = scrt.enc_keys.pblc.key.encrypt(&asset_witness);
 
     let asset_wellformedness_proof = WellformednessProof::from(single_property_prover(
         WellformednessProverAwaitingChallenge {
@@ -50,7 +49,7 @@ pub fn create_account(
         rng,
     )?);
 
-    // encrypt the balance and prove that the encrypted balance is correct
+    // Encrypt the balance and prove that the encrypted balance is correct
     let balance: Balance = 0;
     let balance_witness = CommitmentWitness::new(balance.into(), balance_blinding);
     let enc_balance = EncryptedAmount::from(scrt.enc_keys.pblc.key.encrypt(&balance_witness));
@@ -91,10 +90,10 @@ pub fn create_account(
         commitment: secret_element_com,
     };
 
-    // gather content and sign it
+    // Gather content and sign it
     let content = PubAccountContent {
         id: account_id,
-        enc_asset_id,
+        enc_asset_id: enc_asset_id.into(),
         enc_balance,
         asset_wellformedness_proof,
         asset_membership_proof,
@@ -139,12 +138,12 @@ impl AccountCreaterVerifier for AccountValidator {
         // Verify that the encrypted balance is correct
         let balance: Balance = 0;
         single_property_verifier(
-            &CorrectnessVerifier::new(
-                balance.into(),
-                account.content.memo.owner_enc_pub_key.key,
-                account.content.enc_balance.cipher,
-                &gens,
-            ),
+            &CorrectnessVerifier {
+                value: balance.into(),
+                pub_key: account.content.memo.owner_enc_pub_key.key,
+                cipher: account.content.enc_balance.cipher,
+                pc_gens: &gens,
+            },
             account.content.balance_correctness_proof.init,
             account.content.balance_correctness_proof.response,
         )?;

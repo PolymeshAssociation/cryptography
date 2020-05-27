@@ -221,8 +221,17 @@ mod tests {
         CorrectnessProverAwaitingChallenge<'a>,
         CorrectnessVerifier<'a>,
     ) {
-        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, witness.clone(), pc_gens);
-        let verifier = CorrectnessVerifier::new(witness.value().clone(), pub_key, cipher, pc_gens);
+        let prover = CorrectnessProverAwaitingChallenge {
+            pub_key,
+            w: witness.clone(),
+            pc_gens,
+        };
+        let verifier = CorrectnessVerifier {
+            value: witness.value().clone(),
+            pub_key,
+            cipher,
+            pc_gens,
+        };
 
         (prover, verifier)
     }
@@ -255,6 +264,7 @@ mod tests {
     fn nizkp_proofs() {
         let mut rng = StdRng::from_seed(SEED_1);
         let gens = PedersenGens::default();
+
         let secret_value = 42u32;
         let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = secret_key.get_public_key();
