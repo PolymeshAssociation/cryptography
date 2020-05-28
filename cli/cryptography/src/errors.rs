@@ -126,6 +126,10 @@ pub enum ErrorKind {
     #[fail(display = "Invalid asset type ")]
     MembershipProofInvalidAssetError,
 
+    /// Elements set is empty.
+    #[fail(display = "The elements set passed to the membership proof cannot be empty.")]
+    EmptyElementsSet,
+
     /// TODO: remove this once all the mercat methods are implemented.
     #[fail(display = "This method is not implemented yet")]
     NotImplemented,
