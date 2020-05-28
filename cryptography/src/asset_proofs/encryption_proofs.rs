@@ -227,7 +227,7 @@ mod tests {
             pc_gens,
         };
         let verifier = CorrectnessVerifier {
-            value: witness.value().clone(),
+            value: witness.value(),
             pub_key,
             cipher,
             pc_gens,

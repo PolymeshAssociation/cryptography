@@ -83,10 +83,10 @@ impl<'a> MembershipProverAwaitingChallenge<'a> {
     ) -> Fallible<Self> {
         let secret_position = elements_set.iter().position(|&r| r == secret_element);
 
-        let secret_position = match secret_position {
-            Some(index) => index,
-            None => return Err(ErrorKind::MembershipProofInvalidAssetError.into()),
-        };
+        let secret_position =
+            secret_position.ok_or_else(|| ErrorKind::MembershipProofInvalidAssetError)?;
+
+        ensure!(elements_set.len() != 0, ErrorKind::EmptyElementsSet);
 
         Ok(MembershipProverAwaitingChallenge {
             secret_element: Zeroizing::new(secret_element),
@@ -191,6 +191,8 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Fallible<()> {
+        ensure!(self.elements_set.len() != 0, ErrorKind::EmptyElementsSet);
+
         let n = initial_message
             .ooon_proof_initial_message
             .get_n()

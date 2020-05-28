@@ -67,7 +67,7 @@ impl ConfidentialTransactionSender for CtxSender {
 
         // Prove that the amount is not negative
         let witness = CommitmentWitness::new(amount.into(), Scalar::random(rng));
-        let amount_enc_blinding = *witness.blinding();
+        let amount_enc_blinding = witness.blinding();
 
         let non_neg_amount_proof = InRangeProof::from(prove_within_range(
             amount.into(),

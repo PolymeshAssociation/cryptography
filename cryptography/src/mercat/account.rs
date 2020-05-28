@@ -111,7 +111,7 @@ pub fn create_account(
 pub struct AccountValidator {}
 
 impl AccountCreaterVerifier for AccountValidator {
-    fn verify(&self, account: &PubAccount, valid_asset_ids: &Vec<AssetId>) -> Fallible<()> {
+    fn verify(&self, account: &PubAccount, valid_asset_ids: Vec<AssetId>) -> Fallible<()> {
         let gens = &PedersenGens::default();
         ensure!(
             sr25519::Pair::verify(
@@ -149,10 +149,10 @@ impl AccountCreaterVerifier for AccountValidator {
         // Verify that the asset is from the proper asset list
         let membership_proof = account.content.asset_membership_proof.clone();
         let generators = &OooNProofGenerators::new(EXPONENT, BASE);
-        let elements_set: Vec<Scalar> = valid_asset_ids
-            .iter()
-            .map(|m| Scalar::from(m.clone()))
-            .collect();
+        let elements_set = valid_asset_ids
+            .into_iter()
+            .map(|m| Scalar::from(m))
+            .collect::<Vec<_>>();
         single_property_verifier(
             &MembershipProofVerifier {
                 secret_element_com: membership_proof.commitment,
@@ -216,7 +216,7 @@ mod tests {
             create_account(&scrt_account, valid_asset_ids.clone(), account_id, &mut rng).unwrap();
 
         let account_vldtr = AccountValidator {};
-        let result = account_vldtr.verify(&sndr_account, &valid_asset_ids);
+        let result = account_vldtr.verify(&sndr_account, valid_asset_ids);
         result.unwrap();
     }
 }

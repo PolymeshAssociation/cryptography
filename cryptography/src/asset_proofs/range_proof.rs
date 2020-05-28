@@ -120,7 +120,7 @@ mod tests {
         // Negative test: secret value outside the allowed range
         let large_secret_value: u64 = u64::from(u32::max_value()) + 3;
         let (bad_proof, bad_commitment, _) =
-            prove_within_range(large_secret_value, witness.blinding().clone(), 32).unwrap();
+            prove_within_range(large_secret_value, witness.blinding(), 32).unwrap();
         assert!(!verify_within_range(bad_proof, bad_commitment, 32).is_ok());
     }
 
