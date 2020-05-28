@@ -12,7 +12,8 @@ use crate::asset_proofs::{
     },
     one_out_of_many_proof::{
         OOONProofFinalResponse, OOONProofInitialMessage, OOONProofVerifier, OOONProver,
-        OOONProverAwaitingChallenge, OooNProofGenerators, R1ProofVerifier, convert_to_base,
+        OOONProverAwaitingChallenge, OooNProofGenerators, R1ProofVerifier, convert_to_base, 
+        convert_to_matrix_rep, R1ProverAwaitingChallenge, Matrix, Polynomial,
     },
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
@@ -193,6 +194,8 @@ pub struct MembershipProofVerifier<'a> {
     pub generators: &'a OooNProofGenerators,
 }
 
+
+
 impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
     type ZKInitialMessage = MembershipProofInitialMessage;
     type ZKFinalResponse = MembershipProofFinalResponse;
@@ -205,8 +208,8 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
     ) -> Fallible<()> {
         let n = initial_message
             .ooon_proof_initial_message
-            .get_n()
-            .pow(initial_message.ooon_proof_initial_message.get_m() as u32);
+            .n
+            .pow(initial_message.ooon_proof_initial_message.m as u32);
         let initial_size = self.elements_set.len();
 
         let mut commitments_list: Vec<RistrettoPoint> = (0..self.elements_set.len())
@@ -238,15 +241,103 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         Ok(())
     }
 }
+impl<'a>  MembershipProverAwaitingChallenge<'a> {
+    fn fast_generate_initial_message(
+        &self,
+        rng: &mut TranscriptRng,
+    ) -> (MembershipProver, MembershipProofInitialMessage)
+    {
+        let exp = self.exp as u32;
+        let n = self.base.pow(exp);
+        let pc_gens = self.generators.com_gens;
 
+        let secret_commitment = pc_gens.commit(*self.secret_element, *self.random);
+
+        let mut initial_size = self.elements_set.len();
+        if initial_size > n {
+            initial_size = n;
+        }
+        println!("First check, {} - {}", initial_size, n);
+        let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
+        let l_bit_matrix = convert_to_matrix_rep(self.secret_position, self.base, exp).unwrap();
+
+        let b_matrix_rep = Matrix {
+            rows: self.exp,
+            columns: self.base,
+            elements: l_bit_matrix.clone(),
+        };
+
+        let r1_prover = R1ProverAwaitingChallenge {
+            b_matrix: Zeroizing::new(b_matrix_rep),
+            r_b: Zeroizing::new(*self.random),
+            generators: self.generators,
+            m: self.exp,
+            n: self.base,
+        };
+
+        let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(rng);
+
+        let one = Polynomial::new(self.exp);
+        let mut polynomials: Vec<Polynomial> = Vec::with_capacity(n);
+
+        for i in 0..n {
+            polynomials.push(one.clone());
+            let i_rep = convert_to_base(i, self.base, exp).unwrap();
+            for k in 0..self.exp {
+                let t = k * self.base + i_rep[k];
+                polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
+            }
+        }
+
+        let mut sum1 = Scalar::zero();
+        let mut sum2 = Scalar::zero();
+        let mut G_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp);
+        for k in 0..self.exp {
+            G_values.push(rho[k] * pc_gens.B_blinding); 
+            for i in 0..initial_size {
+                sum1 += polynomials[i].coeffs[k];
+                sum2 += polynomials[i].coeffs[k] * self.elements_set[i];
+            }
+            if initial_size < n {
+                for i in initial_size..n {
+                    sum1 += polynomials[i].coeffs[k];
+                    sum2 += polynomials[i].coeffs[k] * self.elements_set[initial_size-1];
+                }
+            }
+            G_values[k] += (sum1 * secret_commitment) - (sum2 * pc_gens.B);
+        }
+
+        let ooon_prover = OOONProver {
+                rho_values: rho,
+                r1_prover: Zeroizing::new(r1_prover),
+                m: self.exp,
+                n: self.base,
+            };
+        let ooon_proof_initial_message = OOONProofInitialMessage {
+                r1_proof_initial_message: r1_initial_message,
+                g_vec: G_values,
+                m: self.exp,
+                n: self.base,
+            };
+    
+        (
+            MembershipProver { ooon_prover },
+
+            MembershipProofInitialMessage {
+                ooon_proof_initial_message,
+                secret_element_comm: secret_commitment,
+            },
+        )
+    }
+}
 impl<'a>  MembershipProofVerifier<'a> {
     /// The verification of one-out-of-many proof is linear from the size of commitment set and
-    /// its computationally heavy part boils down to a big multi-exponentation operation of the form
-    /// `p_0 * C_0 + p_1 * C_1 + .... + p_{N-1} * C_{N-1}`, where the set `{C_0, C_1, ..., C_{N-1}`
-    /// is the public list of commitments, and each scalar element `p_i` is derived from the proof 
-    /// transcript elements during the verification process. Hence the verification of one-ouf-of-N proof  
-    /// requires O(N) computationally heavy scalar mutliplication operations. Considering the unique 
-    /// structure of commitments used for membership proofs, we can significanly lower the number of 
+    /// its most computationally heavy part boils down to a big multi-exponentation operation of the form
+    /// `p_0 * C_0 + p_1 * C_1 + .... + p_{N-1} * C_{N-1}`. Here the set `{C_0, C_1, ..., C_{N-1}`
+    /// is the public list of commitments, and each scalar element `p_i` is computed dynamically
+    /// during the verification process. Hence the verification of one-ouf-of-N proof  
+    /// requires O(N) computationally heavy scalar mutliplication operations. 
+    /// Considering the unique structure of commitments used for membership proofs, we can significanly lower the number of 
     /// required scalar-multiplication operations and perform the verification by 
     /// performing 2N addition operation + 2 scalar multiplication instead. 
     fn fast_verify(
@@ -257,11 +348,11 @@ impl<'a>  MembershipProofVerifier<'a> {
     ) -> Fallible<()> {
 
         
-        let m = final_response.ooon_proof_final_response.get_m();
-        let n = final_response.ooon_proof_final_response.get_n();
+        let m = final_response.ooon_proof_final_response.m();
+        let n = final_response.ooon_proof_final_response.n();
         let size = n.pow(m as u32);
 
-        let b_comm = initial_message.ooon_proof_initial_message.get_r1_proof_initial_message().get_b();
+        let b_comm = initial_message.ooon_proof_initial_message.r1_proof_initial_message.b();
         let r1_verifier = R1ProofVerifier {
             b: b_comm,
             generators: self.generators,
@@ -269,8 +360,8 @@ impl<'a>  MembershipProofVerifier<'a> {
 
         let result_r1 = r1_verifier.verify(
             c,
-            &initial_message.ooon_proof_initial_message.get_r1_proof_initial_message(),
-            &final_response.ooon_proof_final_response.get_r1_proof_final_response(),
+            &initial_message.ooon_proof_initial_message.r1_proof_initial_message,
+            &final_response.ooon_proof_final_response.r1_proof_final_response(),
         );
         ensure!(
             result_r1.is_ok(),
@@ -278,7 +369,7 @@ impl<'a>  MembershipProofVerifier<'a> {
         );
 
         let mut f_values = vec![*c.x(); m * n];
-        let proof_f_elements = &final_response.ooon_proof_final_response.get_r1_proof_final_response().get_f_elements();
+        let proof_f_elements = &final_response.ooon_proof_final_response.r1_proof_final_response().f_elements();
 
         for i in 0..m {
             for j in 1..n {
@@ -289,14 +380,10 @@ impl<'a>  MembershipProofVerifier<'a> {
 
         let mut p_i: Scalar;
         let mut left: RistrettoPoint = RistrettoPoint::default();
-
-        let right = final_response.ooon_proof_final_response.get_z() * self.generators.com_gens.B_blinding;
-
+        let right = final_response.ooon_proof_final_response.z() * self.generators.com_gens.B_blinding;
 
         let mut sum1 = Scalar::zero();
         let mut sum2 = Scalar::zero();
-
-        let start = Instant::now();
         for i in 0..size {
             p_i = Scalar::one();
             let i_rep = convert_to_base(i, n, m as u32)?;
@@ -307,13 +394,11 @@ impl<'a>  MembershipProofVerifier<'a> {
             sum2 += self.elements_set[i] * p_i;
         }
         
-        println!("Computation of scalars in the fast method: {:.2?}", start.elapsed());
-
         left  = sum1 * self.secret_element_com - sum2 * self.generators.com_gens.B;
 
         let mut temp = Scalar::one();
         for k in 0..m {
-            left -= temp * initial_message.ooon_proof_initial_message.get_g_vec()[k];
+            left -= temp * initial_message.ooon_proof_initial_message.g_vec[k];
             temp *= c.x();
         }
 
@@ -330,9 +415,6 @@ impl<'a>  MembershipProofVerifier<'a> {
 mod tests {
 
     extern crate wasm_bindgen_test;
-    extern crate time;
-    use time::PreciseTime;
-    
     use super::*;
     use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
@@ -344,7 +426,7 @@ mod tests {
 
     const SEED_1: [u8; 32] = [42u8; 32];
     #[test]
-    #[ignore]
+    
     #[wasm_bindgen_test]
     /// Tests the whole workflow of membership proofs
     fn test_membership_proofs() {
@@ -469,19 +551,19 @@ mod tests {
 
     #[test]
     #[wasm_bindgen_test]
-    fn test_membership_proof_fast_verification() {
+    fn test_membership_proof_fast_proof_generation_verification() {
         let mut rng = StdRng::from_seed(SEED_1);
         let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
 
         const BASE: usize = 4;
-        const EXPONENT: usize = 6;
+        const EXPONENT: usize = 3;
         let N : usize = BASE.pow(EXPONENT as u32);
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
         
         let elements_set: Vec<Scalar> = (0..N as u32).map(|m| Scalar::from(m)).collect();
     
-        let secret = Scalar::from(85u32);
+        let secret = Scalar::from(8u32);
         let blinding = Scalar::random(&mut rng);
 
         let secret_commitment = generators.com_gens.commit(secret, blinding);
@@ -499,7 +581,7 @@ mod tests {
         let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
         
         let proof_step1_start = Instant::now();
-        let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
+        let (prover, initial_message) = prover.fast_generate_initial_message(&mut transcript_rng);
         let proof_step1_duration = proof_step1_start.elapsed();
 
         initial_message.update_transcript(&mut transcript).unwrap();
@@ -535,7 +617,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     #[wasm_bindgen_test]
     fn serialize_deserialize_proof() {
         let mut rng = StdRng::from_seed(SEED_1);

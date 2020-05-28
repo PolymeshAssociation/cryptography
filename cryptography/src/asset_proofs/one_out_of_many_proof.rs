@@ -61,7 +61,7 @@ pub (crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible
 /// The number is represented as the given base number `n = n0 *base^0 + n1 *base^1 +...+ n_exp *base^{exp-1}`
 /// The return value is a bit-matrix of size `exp x base` where
 /// in the  `j`-th row there is exactly one 1 at the cell matrix[j][n_j].
-fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Fallible<Vec<Scalar>> {
+pub(crate) fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Fallible<Vec<Scalar>> {
     ensure!(
         number < base.pow(exp),
         ErrorKind::OOONProofIndexOutofRange { index: number }
@@ -132,9 +132,9 @@ impl Default for OooNProofGenerators {
 /// Matrix entry-wise multiplications, addition and subtraction operations are used
 /// during OOON Proof generation process.
 pub struct Matrix {
-    elements: Vec<Scalar>,
-    rows: usize,
-    columns: usize,
+    pub elements: Vec<Scalar>,
+    pub rows: usize,
+    pub columns: usize,
 }
 
 impl Matrix {
@@ -214,15 +214,15 @@ impl<'a, 'b> Sub<&'b Matrix> for &'a Matrix {
 /// The first element of the coefficients vector `coeffs[0]` is the polynomial's free term
 /// The `coeffs[degree]` is the leading coefficient of the polynomial.
 pub struct Polynomial {
-    degree: usize,
-    coeffs: Vec<Scalar>,
+    pub degree: usize,
+    pub coeffs: Vec<Scalar>,
 }
 
 impl Polynomial {
     /// Takes as parameter the expected degree of the polynomial
     /// to reserve enough capacity for the coefficient vector.
     /// A vector of size degree + 1 is reserved for storing the polynomial's coefficients.
-    fn new(expected_degree: usize) -> Polynomial {
+    pub fn new(expected_degree: usize) -> Polynomial {
         let mut vec = vec![Scalar::zero(); expected_degree + 1];
         vec[0] = Scalar::one();
         Polynomial {
@@ -232,7 +232,7 @@ impl Polynomial {
     }
 
     /// Multiplies the given polynomial `P(x)` with the provided linear `(a * x + b)`.
-    fn add_factor(&mut self, a: Scalar, b: Scalar) {
+    pub fn add_factor(&mut self, a: Scalar, b: Scalar) {
         let old = self.coeffs.clone();
         let old_degree = self.degree;
 
@@ -263,6 +263,7 @@ impl Polynomial {
 
         value
     }
+
 }
 
 /// The R1 Proof is a zero-knowledge proof for a (bit-matrix) commitment B having an opening
@@ -276,7 +277,7 @@ pub struct R1ProofInitialMessage {
     d: RistrettoPoint,
 }
 impl R1ProofInitialMessage {
-    pub fn get_b(&self) -> RistrettoPoint{
+    pub fn b(&self) -> RistrettoPoint{
         return self.b;
     }
 }
@@ -314,38 +315,39 @@ pub struct R1ProofFinalResponse {
 }
 
 impl R1ProofFinalResponse {
-    pub fn get_f_elements(&self) -> Vec<Scalar>{
+    pub fn f_elements(&self) -> Vec<Scalar>{
         return self.f_elements.clone();
     }
 }
 
 #[derive(Clone, Debug, Zeroize)]
 pub struct R1Prover {
-    a_values: Vec<Scalar>,
-    b_matrix: Zeroizing<Matrix>,
-    r_a: Scalar,
-    r_b: Scalar,
-    r_c: Scalar,
-    r_d: Scalar,
-    m: usize,
-    n: usize,
+    // Implement a getter instead of making this public
+    pub a_values: Vec<Scalar>,
+    pub b_matrix: Zeroizing<Matrix>,
+    pub r_a: Scalar,
+    pub r_b: Scalar,
+    pub r_c: Scalar,
+    pub r_d: Scalar,
+    pub m: usize,
+    pub n: usize,
 }
 #[derive(Clone)]
 pub struct R1ProverAwaitingChallenge<'a> {
     /// The bit-value matrix, where each row contains only one 1
-    b_matrix: Zeroizing<Matrix>,
+    pub b_matrix: Zeroizing<Matrix>,
 
     /// The randomness used for committing to the bit matrix
-    r_b: Zeroizing<Scalar>,
+    pub r_b: Zeroizing<Scalar>,
 
     /// The generator elemements.
-    generators: &'a OooNProofGenerators,
+    pub generators: &'a OooNProofGenerators,
 
     /// Specifies the matrix rows.
-    m: usize,
+    pub m: usize,
 
     /// Specifies the matrix columns.
-    n: usize,
+    pub n: usize,
 }
 
 impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
@@ -500,10 +502,10 @@ impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OOONProofInitialMessage {
-    r1_proof_initial_message: R1ProofInitialMessage,
-    g_vec: Vec<RistrettoPoint>,
-    n: usize,
-    m: usize,
+    pub(crate) r1_proof_initial_message: R1ProofInitialMessage,
+    pub(crate) g_vec: Vec<RistrettoPoint>,
+    pub(crate) n: usize,
+    pub(crate) m: usize,
 }
 
 impl OOONProofInitialMessage {
@@ -516,18 +518,6 @@ impl OOONProofInitialMessage {
         }
     }
 
-    pub fn get_n(&self) -> usize {
-        return self.n;
-    }
-    pub fn get_m(&self) -> usize {
-        return self.m;
-    }
-    pub fn get_g_vec(&self) -> Vec<RistrettoPoint> {
-        return self.g_vec.clone();
-    }
-    pub fn get_r1_proof_initial_message(&self) -> R1ProofInitialMessage {
-        return self.r1_proof_initial_message;
-    }
 }
 /// A `default` implementation used for testing.
 impl Default for OOONProofInitialMessage {
@@ -559,26 +549,26 @@ pub struct OOONProofFinalResponse {
 
 impl OOONProofFinalResponse{
     
-    pub fn get_r1_proof_final_response(&self)->R1ProofFinalResponse {
+    pub fn r1_proof_final_response(&self)->R1ProofFinalResponse {
         return self.r1_proof_final_response.clone();
     }
-    pub fn get_z(&self) -> Scalar {
+    pub fn z(&self) -> Scalar {
         return self.z;
     }
-    pub fn get_n(&self) -> usize {
+    pub fn n(&self) -> usize {
         return self.n;
     }
-    pub fn get_m(&self) -> usize {
+    pub fn m(&self) -> usize {
         return self.m;
     }
 
 }
 #[derive(Clone, Debug, Zeroize)]
 pub struct OOONProver {
-    rho_values: Vec<Scalar>,
-    r1_prover: Zeroizing<R1Prover>,
-    m: usize,
-    n: usize,
+    pub(crate) rho_values: Vec<Scalar>,
+    pub(crate) r1_prover: Zeroizing<R1Prover>,
+    pub(crate) m: usize,
+    pub(crate) n: usize,
 }
 
 /// Given the public list of commitments `C_0, C_1, ..., C_{N-1} where N = base^exp, the prover wants to
