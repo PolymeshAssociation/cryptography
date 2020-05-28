@@ -251,6 +251,7 @@ impl Polynomial {
     }
     /// Computes the polynomial evaluation value at the given point `x`.
     /// Used for testing purposes.
+    #[allow(unused)]
     fn eval(&self, point: Scalar) -> Scalar {
         let mut value = Scalar::zero();
         let mut x: Scalar = Scalar::one();
@@ -297,7 +298,7 @@ impl UpdateTranscript for R1ProofInitialMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default)]
 pub struct R1ProofFinalResponse {
     f_elements: Vec<Scalar>,
     z_a: Scalar,
@@ -530,7 +531,7 @@ impl UpdateTranscript for OOONProofInitialMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default)]
 pub struct OOONProofFinalResponse {
     r1_proof_final_response: R1ProofFinalResponse,
     z: Scalar,

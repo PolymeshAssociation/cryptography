@@ -157,8 +157,8 @@
 //! let pub_key = elg_secret.get_public_key();
 //! let cipher = pub_key.encrypt(&w);
 //!
-//! let prover_0 = CorrectnessProverAwaitingChallenge::new(pub_key, w.clone(), &gens);
-//! let verifier_0 = CorrectnessVerifier::new(Scalar::from(secret_value), pub_key, cipher, &gens);
+//! let prover_0 = CorrectnessProverAwaitingChallenge{pub_key, w: w.clone(), pc_gens: &gens};
+//! let verifier_0 = CorrectnessVerifier{value: Scalar::from(secret_value), pub_key, cipher, pc_gens: &gens};
 //!
 //! let prover_1 = WellformednessProverAwaitingChallenge { pub_key: pub_key, w: Zeroizing::new(w) , pc_gens :&gens };
 //! let verifier_1 = WellformednessVerifier { pub_key, cipher , pc_gens:&gens };

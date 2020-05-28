@@ -81,11 +81,11 @@ impl AssetTransactionIssuer for CtxIssuer {
 
         // Proof of memo's correctness.
         let memo_correctness_proof = CorrectnessProof::from(single_property_prover(
-            CorrectnessProverAwaitingChallenge::new(
-                issr_account.enc_keys.pblc.key,
-                issr_amount_witness,
-                &gens,
-            ),
+            CorrectnessProverAwaitingChallenge {
+                pub_key: issr_account.enc_keys.pblc.key,
+                w: issr_amount_witness,
+                pc_gens: &gens,
+            },
             rng,
         )?);
 
@@ -173,12 +173,12 @@ impl AssetTransactionInitializeVerifier for AssetTxIssueValidator {
 
         // Verify the proof of memo's correctness.
         single_property_verifier(
-            &CorrectnessVerifier::new(
-                amount.into(),
-                issr_enc_pub_key.key.into(),
-                asset_tx.content.memo.cipher,
-                &gens,
-            ),
+            &CorrectnessVerifier {
+                value: amount.into(),
+                pub_key: issr_enc_pub_key.key.into(),
+                cipher: asset_tx.content.memo.cipher,
+                pc_gens: &gens,
+            },
             asset_tx.content.balance_correctness_proof.init,
             asset_tx.content.balance_correctness_proof.response,
         )?;

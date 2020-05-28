@@ -14,19 +14,17 @@ use crate::{
     mercat::{
         Account, CipherEqualDifferentPubKeyProof, CipherEqualSamePubKeyProof,
         ConfidentialTransactionInitVerifier, ConfidentialTransactionReceiver,
-        ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAmount,
-        EncryptedAssetId, EncryptionKeys, EncryptionPubKey, EncryptionSecKey, InRangeProof,
-        PubAccount, PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent,
-        PubInitConfidentialTxData, PubInitConfidentialTxDataContent, SigningKeys, TxSubstate,
+        ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, EncryptedAssetId,
+        InRangeProof, PubAccount, PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent,
+        PubInitConfidentialTxData, PubInitConfidentialTxDataContent, TxSubstate,
     },
-    AssetId, Balance, BALANCE_RANGE,
+    Balance, BALANCE_RANGE,
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use rand::rngs::StdRng;
 use sp_application_crypto::sr25519;
 use sp_core::crypto::Pair;
-use std::convert::TryFrom;
 use zeroize::Zeroizing;
 
 // -------------------------------------------------------------------------------------
@@ -45,7 +43,6 @@ impl ConfidentialTransactionSender for CtxSender {
         amount: Balance,
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)> {
-        let rcvr_pub_key = rcvr_pub_account.content.memo.owner_enc_pub_key;
         let gens = PedersenGens::default();
         // NOTE: If this decryption ends up being too slow, we can pass in the balance
         // as input.
@@ -70,7 +67,7 @@ impl ConfidentialTransactionSender for CtxSender {
 
         // Prove that the amount is not negative
         let witness = CommitmentWitness::new(amount.into(), Scalar::random(rng));
-        let amount_enc_blinding = *witness.blinding();
+        let amount_enc_blinding = witness.blinding();
 
         let non_neg_amount_proof = InRangeProof::from(prove_within_range(
             amount.into(),
@@ -460,10 +457,11 @@ mod tests {
     use crate::{
         asset_proofs::ElgamalSecretKey,
         mercat::{
-            AccountMemo, ConfidentialTxMemo, CorrectnessProof, EncryptionKeys, EncryptionPubKey,
-            MembershipProof, PubAccountContent, SecAccount, Signature, SigningPubKey,
-            WellformednessProof,
+            AccountMemo, ConfidentialTxMemo, CorrectnessProof, EncryptedAmount, EncryptionKeys,
+            EncryptionPubKey, MembershipProof, PubAccountContent, SecAccount, Signature,
+            SigningKeys, SigningPubKey, WellformednessProof,
         },
+        AssetId,
     };
     use curve25519_dalek::scalar::Scalar;
     use rand::SeedableRng;

@@ -27,12 +27,12 @@ pub struct CommitmentWitness {
 }
 
 impl CommitmentWitness {
-    pub fn blinding(&self) -> &Scalar {
-        &self.blinding
+    pub fn blinding(&self) -> Scalar {
+        self.blinding
     }
 
-    pub fn value(&self) -> &Scalar {
-        &self.value
+    pub fn value(&self) -> Scalar {
+        self.value
     }
 }
 
