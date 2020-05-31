@@ -556,7 +556,6 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_membership_proof_fast_proof_generation_verification() {
         let mut rng = StdRng::from_seed(SEED_1);
-        let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
 
         const BASE: usize = 4;
         const EXPONENT: usize = 2;
