@@ -25,8 +25,8 @@ use sha3::Sha3_512;
 
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Neg, Sub};
-use zeroize::{Zeroize, Zeroizing};
 use std::time::Instant;
+use zeroize::{Zeroize, Zeroizing};
 
 const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathOOONProofChallengeLabel";
@@ -37,7 +37,7 @@ const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 /// `n` is the fixed base. Usually we will work with base `4`.
 /// Returns the representation of the input number as the given base number
 /// The input number should be within the provided range [0, base^exp)
-pub (crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<Vec<usize>> {
+pub(crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<Vec<usize>> {
     ensure!(
         number < base.pow(exp),
         ErrorKind::OOONProofIndexOutofRange { index: number }
@@ -264,7 +264,6 @@ impl Polynomial {
 
         value
     }
-
 }
 
 /// The R1 Proof is a zero-knowledge proof for a (bit-matrix) commitment B having an opening
@@ -278,11 +277,10 @@ pub struct R1ProofInitialMessage {
     d: RistrettoPoint,
 }
 impl R1ProofInitialMessage {
-    pub fn b(&self) -> RistrettoPoint{
+    pub fn b(&self) -> RistrettoPoint {
         return self.b;
     }
 }
-
 
 impl Default for R1ProofInitialMessage {
     fn default() -> Self {
@@ -316,7 +314,7 @@ pub struct R1ProofFinalResponse {
 }
 
 impl R1ProofFinalResponse {
-    pub fn f_elements(&self) -> Vec<Scalar>{
+    pub fn f_elements(&self) -> Vec<Scalar> {
         return self.f_elements.clone();
     }
 }
@@ -446,8 +444,8 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover {
 }
 
 pub struct R1ProofVerifier<'a> {
-    pub (crate) b: RistrettoPoint,
-    pub (crate) generators: &'a OooNProofGenerators,
+    pub(crate) b: RistrettoPoint,
+    pub(crate) generators: &'a OooNProofGenerators,
 }
 
 impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
@@ -518,7 +516,6 @@ impl OOONProofInitialMessage {
             m: exp,
         }
     }
-
 }
 /// A `default` implementation used for testing.
 impl Default for OOONProofInitialMessage {
@@ -548,9 +545,8 @@ pub struct OOONProofFinalResponse {
     n: usize,
 }
 
-impl OOONProofFinalResponse{
-    
-    pub fn r1_proof_final_response(&self)->R1ProofFinalResponse {
+impl OOONProofFinalResponse {
+    pub fn r1_proof_final_response(&self) -> R1ProofFinalResponse {
         return self.r1_proof_final_response.clone();
     }
     pub fn z(&self) -> Scalar {
@@ -562,7 +558,6 @@ impl OOONProofFinalResponse{
     pub fn m(&self) -> usize {
         return self.m;
     }
-
 }
 #[derive(Clone, Debug, Zeroize)]
 pub struct OOONProver {
@@ -757,7 +752,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
             }
             left += p_i * self.commitments[i];
         }
-       
+
         let mut temp = Scalar::one();
         for k in 0..m {
             left -= temp * initial_message.g_vec[k];
@@ -768,7 +763,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
             left == right,
             ErrorKind::OOONFinalResponseVerificationError { check: 2 }
         );
-        
+
         Ok(())
     }
 }
