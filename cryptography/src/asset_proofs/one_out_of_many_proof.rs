@@ -718,8 +718,6 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         let m = final_response.m;
         let n = final_response.n;
 
-        let function_start = Instant::now();
-
         let b_comm = initial_message.r1_proof_initial_message.b;
         let r1_verifier = R1ProofVerifier {
             b: b_comm,
@@ -750,7 +748,6 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         let mut left: RistrettoPoint = RistrettoPoint::default();
         let right = final_response.z * self.generators.com_gens.B_blinding;
 
-        let start = Instant::now();
         for i in 0..size {
             p_i = Scalar::one();
             let i_rep = convert_to_base(i, n, m as u32).unwrap();
@@ -759,7 +756,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
             }
             left += p_i * self.commitments[i];
         }
-        println!("\nComputation of scalars in the slow(ooon) method: {:.2?}", start.elapsed());
+       
         let mut temp = Scalar::one();
         for k in 0..m {
             left -= temp * initial_message.g_vec[k];
@@ -770,7 +767,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
             left == right,
             ErrorKind::OOONFinalResponseVerificationError { check: 2 }
         );
-        println!("\nSlow verification overall time: {:.2?}\n", function_start.elapsed());
+        
         Ok(())
     }
 }
