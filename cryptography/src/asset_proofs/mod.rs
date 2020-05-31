@@ -150,18 +150,18 @@
 //! let mut rng = StdRng::from_seed([7u8; 32]);
 //! let secret_value = 6u32;
 //! let rand_blind = Scalar::random(&mut rng);
-//! let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+//! let w = CommitmentWitness::new(secret_value.into(), rand_blind);
 //! let mut transcript = Transcript::new(b"batch_proof_label");
 //!
 //! let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
 //! let pub_key = elg_secret.get_public_key();
 //! let cipher = pub_key.encrypt(&w);
 //!
-//! let prover_0 = CorrectnessProverAwaitingChallenge::new(pub_key, w.clone(), &gens);
-//! let verifier_0 = CorrectnessVerifier::new(secret_value, pub_key, cipher, &gens);
+//! let prover_0 = CorrectnessProverAwaitingChallenge{pub_key, w: w.clone(), pc_gens: &gens};
+//! let verifier_0 = CorrectnessVerifier{value: Scalar::from(secret_value), pub_key, cipher, pc_gens: &gens};
 //!
-//! let prover_1 = WellformednessProverAwaitingChallenge { pub_key: pub_key, w: Zeroizing::new(w) , pc_gens :&gens};
-//! let verifier_1 = WellformednessVerifier { pub_key, cipher , pc_gens:&gens};
+//! let prover_1 = WellformednessProverAwaitingChallenge { pub_key: pub_key, w: Zeroizing::new(w) , pc_gens :&gens };
+//! let verifier_1 = WellformednessVerifier { pub_key, cipher , pc_gens:&gens };
 //!
 //! let mut transcript_rng0 = prover_0.create_transcript_rng(&mut rng, &transcript);
 //! let mut transcript_rng1 =
@@ -169,11 +169,11 @@
 //!
 //! // Provers generate the initial messages
 //! let (prover_0, initial_message0) =
-//!     prover_0.generate_initial_message( &mut transcript_rng0);
+//!     prover_0.generate_initial_message(&mut transcript_rng0);
 //! initial_message0.update_transcript(&mut transcript).unwrap();
 //!
 //! let (prover_1, initial_message1) =
-//!     prover_1.generate_initial_message( &mut transcript_rng1);
+//!     prover_1.generate_initial_message(&mut transcript_rng1);
 //! initial_message1.update_transcript(&mut transcript).unwrap();
 //!
 //! // Dealer calculates the challenge from the 2 initial messages

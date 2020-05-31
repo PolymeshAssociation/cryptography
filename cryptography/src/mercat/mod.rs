@@ -1,6 +1,8 @@
 //! mercat is the library that implements the confidential transactions
 //! of the MERCAT, as defined in the section 6 of the whitepaper.
 
+pub mod account;
+pub mod asset;
 pub mod conf_tx;
 
 use crate::{
@@ -12,28 +14,27 @@ use crate::{
         encrypting_same_value_proof::{
             EncryptingSameValueFinalResponse, EncryptingSameValueInitialMessage,
         },
+        membership_proof::{MembershipProofFinalResponse, MembershipProofInitialMessage},
         range_proof,
         range_proof::{RangeProofFinalResponse, RangeProofInitialMessage},
         wellformedness_proof::{WellformednessFinalResponse, WellformednessInitialMessage},
-        CipherText, ElgamalPublicKey, ElgamalSecretKey,
+        CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     },
     errors::{ErrorKind, Fallible},
+    AssetId, Balance,
 };
-use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use sp_application_crypto::sr25519;
 use sp_core::crypto::Pair;
 
-// ---------------------- START: temporary types, move them to the proper location
+// -------------------------------------------------------------------------------------
+// -                                  Constants                                        -
+// -------------------------------------------------------------------------------------
 
-// TODO move after CRYP-40
-#[derive(Default, Clone, Serialize, Deserialize)]
-pub struct MembershipProofInitialMessage {}
-#[derive(Default, Clone, Serialize, Deserialize)]
-pub struct MembershipProofFinalResponse {}
-
-// ---------------------- END: temporary types, move them to other files
+const EXPONENT: usize = 3; // TODO: will be changed after CRYP-83
+const BASE: usize = 4;
 
 // -------------------------------------------------------------------------------------
 // -                                 New Type Def                                      -
@@ -161,6 +162,7 @@ impl From<(CorrectnessInitialMessage, CorrectnessFinalResponse)> for Correctness
 pub struct MembershipProof {
     init: MembershipProofInitialMessage,
     response: MembershipProofFinalResponse,
+    commitment: RistrettoPoint,
 }
 
 /// Holds the non-interactive range proofs, equivalent of L_range of MERCAT paper.
@@ -225,6 +227,7 @@ pub struct CipherEqualSamePubKeyProof {
     pub init: CipherTextRefreshmentInitialMessage,
     pub response: CipherTextRefreshmentFinalResponse,
 }
+
 impl
     From<(
         CipherTextRefreshmentInitialMessage,
@@ -299,7 +302,8 @@ pub struct PubAccount {
 pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
     pub sign_keys: SigningKeys,
-    pub asset_id: u32,
+    pub asset_id: AssetId,
+    pub asset_id_witness: CommitmentWitness,
 }
 
 /// Wrapper for both the secret and public account info
@@ -317,7 +321,7 @@ pub trait AccountCreater {
     fn create_account(
         &self,
         scrt_account: &SecAccount,
-        valid_asset_ids: Vec<u32>,
+        valid_asset_ids: Vec<AssetId>,
         account_id: u32,
         rng: &mut StdRng,
     ) -> Fallible<PubAccount>;
@@ -326,7 +330,7 @@ pub trait AccountCreater {
 /// The interface for the verifying the account creation.
 pub trait AccountCreaterVerifier {
     /// Called by the validators to ensure that the account was created correctly.
-    fn verify(&self, account: PubAccount) -> Fallible<()>;
+    fn verify(&self, account: &PubAccount, valid_asset_ids: Vec<AssetId>) -> Fallible<()>;
 }
 
 // -------------------------------------------------------------------------------------
@@ -348,7 +352,7 @@ pub enum TxSubstate {
 
 /// Represents the two states (initialized, justified) of a
 /// confidentional asset issuance transaction.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssetTxState {
     Initialization(TxSubstate),
     Justification(TxSubstate),
@@ -370,15 +374,26 @@ pub enum ConfidentialTxState {
 
 /// Holds the public portion of an asset issuance transaction. This can be placed
 /// on the chain.
-pub struct PubAssetTxData {
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PubAssetTxDataContent {
     account_id: u32,
     enc_asset_id: EncryptedAssetId,
     enc_amount: EncryptedAmount,
     memo: AssetMemo,
-    asset_id_equal_cipher_proof: CipherEqualSamePubKeyProof,
+    asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     balance_wellformedness_proof: WellformednessProof,
     balance_correctness_proof: CorrectnessProof,
-    sig: Signature,
+}
+
+impl PubAssetTxDataContent {
+    pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
+        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+    }
+}
+
+pub struct PubAssetTxData {
+    pub content: PubAssetTxDataContent,
+    pub sig: Signature,
 }
 
 /// The interface for the confidential asset issuance transaction.
@@ -388,12 +403,11 @@ pub trait AssetTransactionIssuer {
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
     fn initialize(
         &self,
-        issr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-        issr_sign_keys: SigningKeys,
-        amount: u32,
-        issr_account: PubAccount,
-        mdtr_pub_key: EncryptionPubKey,
-        asset_id: u32, // deviation from the paper
+        issr_account_id: u32,
+        issr_account: &SecAccount,
+        mdtr_pub_key: &EncryptionPubKey,
+        amount: Balance,
+        rng: &mut StdRng,
     ) -> Fallible<(PubAssetTxData, AssetTxState)>;
 }
 
@@ -402,9 +416,13 @@ pub trait AssetTransactionInitializeVerifier {
     /// and to verify the signature.
     fn verify(
         &self,
-        asset_tx: PubAssetTxData,
+        amount: Balance,
+        asset_tx: &PubAssetTxData,
         state: AssetTxState,
-        issr_sign_pub_key: SigningPubKey,
+        issr_sign_pub_key: &SigningPubKey,
+        issr_enc_pub_key: &EncryptionPubKey,
+        isser_acount_enc_asset_id: &EncryptedAssetId,
+        mdtr_enc_pub_key: &EncryptionPubKey,
     ) -> Fallible<AssetTxState>;
 }
 
@@ -507,7 +525,7 @@ pub trait ConfidentialTransactionSender {
         &self,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
-        amount: u32,
+        amount: Balance,
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)>;
 }
@@ -539,7 +557,7 @@ pub trait ConfidentialTransactionReceiver {
         sndr_pub_account: &PubAccount,
         rcvr_account: Account,
         enc_asset_id: EncryptedAssetId,
-        amount: u32,
+        amount: Balance,
         state: ConfidentialTxState,
         rng: &mut StdRng,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)>;

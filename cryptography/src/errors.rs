@@ -1,3 +1,4 @@
+use crate::mercat::AssetTxState;
 use crate::mercat::ConfidentialTxState;
 
 use bulletproofs::ProofError;
@@ -125,6 +126,10 @@ pub enum ErrorKind {
     #[fail(display = "Invalid asset type ")]
     MembershipProofInvalidAssetError,
 
+    /// Elements set is empty.
+    #[fail(display = "The elements set passed to the membership proof cannot be empty.")]
+    EmptyElementsSet,
+
     /// TODO: remove this once all the mercat methods are implemented.
     #[fail(display = "This method is not implemented yet")]
     NotImplemented,
@@ -132,6 +137,13 @@ pub enum ErrorKind {
     /// The incoming transaction state does not match the expectation.
     #[fail(display = "Received an invalid previous state: {:?}", state)]
     InvalidPreviousState { state: ConfidentialTxState },
+
+    /// The incoming asset transaction state does not match the expectation.
+    #[fail(
+        display = "Received an invalid previous asset transaction state: {:?}",
+        state
+    )]
+    InvalidPreviousAssetTransactionState { state: AssetTxState },
 
     /// The amount in the initial transaction does not match the amount that receiver expacted.
     #[fail(

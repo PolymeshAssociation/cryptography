@@ -21,12 +21,12 @@ use crate::errors::{ErrorKind, Fallible};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use zeroize::Zeroizing;
-const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
+
+pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct MembershipProofInitialMessage {
     ooon_proof_initial_message: OOONProofInitialMessage,
     secret_element_comm: RistrettoPoint,
@@ -44,7 +44,7 @@ impl UpdateTranscript for MembershipProofInitialMessage {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct MembershipProofFinalResponse {
     ooon_proof_final_response: OOONProofFinalResponse,
 }
@@ -73,46 +73,34 @@ pub struct MembershipProverAwaitingChallenge<'a> {
     pub exp: usize,
 }
 
-impl<'a>
-    TryFrom<(
-        Scalar,
-        Scalar,
-        &'a OooNProofGenerators,
-        &'a [Scalar],
-        usize,
-        usize,
-    )> for MembershipProverAwaitingChallenge<'a>
-{
-    type Error = ErrorKind;
+impl<'a> MembershipProverAwaitingChallenge<'a> {
+    pub fn new(
+        secret_element: Scalar,
+        random: Scalar,
+        generators: &'a OooNProofGenerators,
+        elements_set: &'a [Scalar],
+        base: usize,
+        exp: usize,
+    ) -> Fallible<Self> {
+        let secret_position = elements_set.iter().position(|&r| r == secret_element);
 
-    fn try_from(
-        prover: (
-            Scalar,
-            Scalar,
-            &'a OooNProofGenerators,
-            &'a [Scalar],
-            usize,
-            usize,
-        ),
-    ) -> Result<Self, ErrorKind> {
-        let secret_position = prover.3.iter().position(|&r| r == prover.0);
+        let secret_position =
+            secret_position.ok_or_else(|| ErrorKind::MembershipProofInvalidAssetError)?;
 
-        let secret_position = match secret_position {
-            Some(index) => index,
-            None => return Err(ErrorKind::MembershipProofInvalidAssetError),
-        };
+        ensure!(elements_set.len() != 0, ErrorKind::EmptyElementsSet);
 
         Ok(MembershipProverAwaitingChallenge {
-            secret_element: Zeroizing::new(prover.0),
-            random: Zeroizing::new(prover.1),
-            generators: prover.2,
-            elements_set: prover.3,
-            secret_position: secret_position,
-            base: prover.4,
-            exp: prover.5,
+            secret_element: Zeroizing::new(secret_element),
+            random: Zeroizing::new(random),
+            generators,
+            elements_set,
+            secret_position,
+            base,
+            exp,
         })
     }
 }
+
 impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge<'a> {
     type ZKInitialMessage = MembershipProofInitialMessage;
     type ZKFinalResponse = MembershipProofFinalResponse;
@@ -156,7 +144,11 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             .collect();
         
         if n != initial_size {
+<<<<<<< HEAD
             commitments_list.resize(n, commitments_list[initial_size-1]);
+=======
+            commitments_list.resize(n, commitments_list[initial_size - 1]);
+>>>>>>> master
         }
         
         let ooon_prover = OOONProverAwaitingChallenge {
@@ -208,6 +200,8 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Fallible<()> {
+        ensure!(self.elements_set.len() != 0, ErrorKind::EmptyElementsSet);
+
         let n = initial_message
             .ooon_proof_initial_message
             .n
@@ -459,14 +453,14 @@ mod tests {
         let even_member = generators.com_gens.commit(Scalar::from(8u32), blinding);
         let odd_member = generators.com_gens.commit(Scalar::from(75u32), blinding);
 
-        let prover = MembershipProverAwaitingChallenge::try_from((
+        let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(8u32),
             blinding.clone(),
             &generators,
             even_elements.as_slice(),
             BASE,
             EXPONENT,
-        ))
+        )
         .unwrap();
 
         let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
@@ -505,25 +499,25 @@ mod tests {
         );
 
         // Testing the attempt of initializting the prover with ian nvalid asset or an asset list.
-        let prover = MembershipProverAwaitingChallenge::try_from((
+        let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(78953u32),
             blinding.clone(),
             &generators,
             even_elements.as_slice(),
             BASE,
             EXPONENT,
-        ));
+        );
         assert!(prover.is_err());
 
         // Testing the non-interactive API
-        let prover = MembershipProverAwaitingChallenge::try_from((
+        let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(75u32),
             blinding.clone(),
             &generators,
             odd_elements.as_slice(),
             BASE,
             EXPONENT,
-        ))
+        )
         .unwrap();
 
         let verifier = MembershipProofVerifier {
@@ -633,7 +627,6 @@ mod tests {
     #[wasm_bindgen_test]
     fn serialize_deserialize_proof() {
         let mut rng = StdRng::from_seed(SEED_1);
-        let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
 
         const BASE: usize = 4;
         const EXPONENT: usize = 3;
@@ -642,16 +635,14 @@ mod tests {
         let even_elements: Vec<Scalar> = (0..64 as u32).map(|m| Scalar::from(2 * m)).collect();
         let blinding = Scalar::random(&mut rng);
 
-        let even_member = generators.com_gens.commit(Scalar::from(8u32), blinding);
-
-        let prover = MembershipProverAwaitingChallenge::try_from((
+        let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(8u32),
             blinding.clone(),
             &generators,
             even_elements.as_slice(),
             BASE,
             EXPONENT,
-        ))
+        )
         .unwrap();
 
         let (initial_message0, final_response0) =

@@ -70,8 +70,11 @@ pub struct WellformednessProver {
 pub struct WellformednessProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
     pub pub_key: ElgamalPublicKey,
+
     /// The secret commitment witness.
     pub w: Zeroizing<CommitmentWitness>,
+
+    /// The Pedersen generators.
     pub pc_gens: &'a PedersenGens,
 }
 
@@ -112,7 +115,7 @@ impl AssetProofProver<WellformednessFinalResponse> for WellformednessProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> WellformednessFinalResponse {
         WellformednessFinalResponse {
             z1: self.rand_a + c.x() * self.w.blinding(),
-            z2: self.rand_b + c.x() * Scalar::from(self.w.value()),
+            z2: self.rand_b + c.x() * self.w.value(),
         }
     }
 }
@@ -157,7 +160,6 @@ mod tests {
     use crate::asset_proofs::*;
     use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
-    use std::convert::TryFrom;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
@@ -168,12 +170,10 @@ mod tests {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 42u32;
-        let rand_blind = Scalar::random(&mut rng);
 
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = elg_secret.get_public_key();
-        let cipher = pub_key.encrypt(&w);
+        let (w, cipher) = pub_key.encrypt_value(secret_value.into(), &mut rng);
 
         let prover = WellformednessProverAwaitingChallenge {
             pub_key,
@@ -275,7 +275,7 @@ mod tests {
         let secret_value = 42u32;
         let rand_blind = Scalar::random(&mut rng);
         let gens = PedersenGens::default();
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
+        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = elg_secret.get_public_key();
 

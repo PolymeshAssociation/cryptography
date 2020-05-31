@@ -221,8 +221,17 @@ mod tests {
         CorrectnessProverAwaitingChallenge<'a>,
         CorrectnessVerifier<'a>,
     ) {
-        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, witness.clone(), pc_gens);
-        let verifier = CorrectnessVerifier::new(witness.value(), pub_key, cipher, pc_gens);
+        let prover = CorrectnessProverAwaitingChallenge {
+            pub_key,
+            w: witness.clone(),
+            pc_gens,
+        };
+        let verifier = CorrectnessVerifier {
+            value: witness.value(),
+            pub_key,
+            cipher,
+            pc_gens,
+        };
 
         (prover, verifier)
     }
@@ -255,12 +264,11 @@ mod tests {
     fn nizkp_proofs() {
         let mut rng = StdRng::from_seed(SEED_1);
         let gens = PedersenGens::default();
+
         let secret_value = 42u32;
         let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = secret_key.get_public_key();
-        let rand_blind = Scalar::random(&mut rng);
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
-        let cipher = pub_key.encrypt(&w);
+        let (w, cipher) = pub_key.encrypt_value(secret_value.into(), &mut rng);
 
         let (prover0, verifier0) = create_correctness_proof_objects_helper(
             w.clone(),
@@ -303,9 +311,8 @@ mod tests {
     fn batched_proofs() {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_2);
-        let w = CommitmentWitness::try_from((6u32, Scalar::random(&mut rng))).unwrap();
         let pub_key = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
-        let cipher = pub_key.encrypt(&w);
+        let (w, cipher) = pub_key.encrypt_value(6u32.into(), &mut rng);
         let mut transcript = Transcript::new(b"batch_proof_label");
 
         let (prover0, verifier0) = create_correctness_proof_objects_helper(
