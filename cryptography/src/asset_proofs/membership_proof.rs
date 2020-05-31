@@ -144,11 +144,7 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             .collect();
         
         if n != initial_size {
-<<<<<<< HEAD
-            commitments_list.resize(n, commitments_list[initial_size-1]);
-=======
             commitments_list.resize(n, commitments_list[initial_size - 1]);
->>>>>>> master
         }
         
         let ooon_prover = OOONProverAwaitingChallenge {
@@ -575,15 +571,14 @@ mod tests {
 
         let secret_commitment = generators.com_gens.commit(secret, blinding);
 
-        let prover = MembershipProverAwaitingChallenge::try_from((
+        let prover = MembershipProverAwaitingChallenge::new(
             secret,
             blinding.clone(),
             &generators,
             elements_set.as_slice(),
             BASE,
             EXPONENT,
-        ))
-        .unwrap();
+        );
 
         let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
         
