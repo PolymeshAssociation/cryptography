@@ -129,17 +129,14 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
         &self,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
-        let start = Instant::now();
         let exp = self.exp as u32;
         let size = self.base.pow(exp);
         let pc_gens = self.generators.com_gens;
 
         let secret_commitment = pc_gens.commit(*self.secret_element, *self.random);
 
-        let mut initial_size = self.elements_set.len();
-        if initial_size > size {
-            initial_size = size;
-        }
+        let initial_size = std::cmp::min(self.elements_set.len(), size);
+
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
         let l_bit_matrix = convert_to_matrix_rep(self.secret_position, self.base, exp);
 
@@ -173,9 +170,9 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
 
         let mut sum1: Scalar;
         let mut sum2: Scalar;
-        let mut G_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp);
+        let mut g_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp);
         for k in 0..self.exp {
-            G_values.push(rho[k] * pc_gens.B_blinding);
+            g_values.push(rho[k] * pc_gens.B_blinding);
             sum1 = Scalar::zero();
             sum2 = Scalar::zero();
             for i in 0..initial_size {
@@ -188,7 +185,7 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
                     sum2 += polynomials[i].coeffs[k] * self.elements_set[initial_size - 1];
                 }
             }
-            G_values[k] += (sum1 * secret_commitment) - (sum2 * pc_gens.B);
+            g_values[k] += (sum1 * secret_commitment) - (sum2 * pc_gens.B);
         }
 
         let ooon_prover = OOONProver {
@@ -199,7 +196,7 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
         };
         let ooon_proof_initial_message = OOONProofInitialMessage {
             r1_proof_initial_message: r1_initial_message,
-            g_vec: G_values,
+            g_vec: g_values,
             m: self.exp,
             n: self.base,
         };
@@ -242,7 +239,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
     ) -> Fallible<()> {
         let mut initial_size = self.elements_set.len();
         ensure!(initial_size != 0, ErrorKind::EmptyElementsSet);
-        let start = Instant::now();
+
         let m = initial_message.ooon_proof_initial_message.m;
         let n = initial_message.ooon_proof_initial_message.n;
         let size = initial_message
@@ -295,6 +292,9 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         let mut sum1 = Scalar::zero();
         let mut sum2 = Scalar::zero();
 
+        // For all given asset identifiers from the list of public asset ids
+        // we compute the corresponding elements `p_i` and compute the aggregates
+        // sum1` ands `sum2`.
         for i in 0..initial_size {
             p_i = Scalar::one();
             let i_rep = convert_to_base(i, n, m as u32);
@@ -304,6 +304,17 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
             sum1 += p_i;
             sum2 += self.elements_set[i] * p_i;
         }
+        // Membership proof require the list of asset ids to have a certain lenght `size`.
+        // In case of the list actual size is smaller than the required size. we should pad the list
+        // with the last element until the size of the resulted set will be equal to `size`.
+        // This padding operation can be directly incorporated into the computation
+        // of the aggregated value `sum2`.
+
+        // The code snippet within the lines 316-321 duplicates the snippet from 299-304 and obviously we
+        // could avoid of this by simply checking if `i > initial_size` during the `sum2` aggregation,
+        // but that would require making the `if` checks for all `i in initial_size..size`
+        // which would be more inefficient approach.
+
         if size > initial_size {
             let last = self.elements_set[initial_size - 1];
             for i in initial_size..size {
@@ -318,202 +329,6 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         }
 
         left = sum1 * self.secret_element_com - sum2 * self.generators.com_gens.B;
-        let mut temp = Scalar::one();
-        for k in 0..m {
-            left -= temp * initial_message.ooon_proof_initial_message.g_vec[k];
-            temp *= c.x();
-        }
-
-        ensure!(
-            left == right,
-            ErrorKind::MembershipProofVerificationError { check: 2 }
-        );
-
-        Ok(())
-    }
-}
-impl<'a> MembershipProverAwaitingChallenge<'a> {
-    fn fast_generate_initial_message(
-        &self,
-        rng: &mut TranscriptRng,
-    ) -> (MembershipProver, MembershipProofInitialMessage) {
-        let start = Instant::now();
-        let exp = self.exp as u32;
-        let size = self.base.pow(exp);
-        let pc_gens = self.generators.com_gens;
-
-        let secret_commitment = pc_gens.commit(*self.secret_element, *self.random);
-
-        let mut initial_size = self.elements_set.len();
-        if initial_size > size {
-            initial_size = size;
-        }
-        let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
-        let l_bit_matrix = convert_to_matrix_rep(self.secret_position, self.base, exp);
-
-        let b_matrix_rep = Matrix {
-            rows: self.exp,
-            columns: self.base,
-            elements: l_bit_matrix.clone(),
-        };
-
-        let r1_prover = R1ProverAwaitingChallenge {
-            b_matrix: Zeroizing::new(b_matrix_rep),
-            r_b: Zeroizing::new(*self.random),
-            generators: self.generators,
-            m: self.exp,
-            n: self.base,
-        };
-
-        let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(rng);
-
-        let one = Polynomial::new(self.exp);
-        let mut polynomials: Vec<Polynomial> = Vec::with_capacity(size);
-
-        for i in 0..size {
-            polynomials.push(one.clone());
-            let i_rep = convert_to_base(i, self.base, exp);
-            for k in 0..self.exp {
-                let t = k * self.base + i_rep[k];
-                polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
-            }
-        }
-
-        let mut sum1: Scalar;
-        let mut sum2: Scalar;
-        let mut G_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp);
-        for k in 0..self.exp {
-            G_values.push(rho[k] * pc_gens.B_blinding);
-            sum1 = Scalar::zero();
-            sum2 = Scalar::zero();
-            for i in 0..initial_size {
-                sum1 += polynomials[i].coeffs[k];
-                sum2 += polynomials[i].coeffs[k] * self.elements_set[i];
-            }
-            if size > initial_size {
-                for i in initial_size..size {
-                    sum1 += polynomials[i].coeffs[k];
-                    sum2 += polynomials[i].coeffs[k] * self.elements_set[initial_size - 1];
-                }
-            }
-            G_values[k] += (sum1 * secret_commitment) - (sum2 * pc_gens.B);
-        }
-
-        let ooon_prover = OOONProver {
-            rho_values: rho,
-            r1_prover: Zeroizing::new(r1_prover),
-            m: self.exp,
-            n: self.base,
-        };
-        let ooon_proof_initial_message = OOONProofInitialMessage {
-            r1_proof_initial_message: r1_initial_message,
-            g_vec: G_values,
-            m: self.exp,
-            n: self.base,
-        };
-
-        (
-            MembershipProver { ooon_prover },
-            MembershipProofInitialMessage {
-                ooon_proof_initial_message,
-                secret_element_comm: secret_commitment,
-            },
-        )
-    }
-}
-impl<'a> MembershipProofVerifier<'a> {
-    /// The verification of one-out-of-many proof is linear from the size of commitment set and
-    /// its most computationally heavy part boils down to a big multi-exponentation operation of the form
-    /// `p_0 * C_0 + p_1 * C_1 + .... + p_{N-1} * C_{N-1}`. Here the set `{C_0, C_1, ..., C_{N-1}`
-    /// is the public list of commitments, and each scalar element `p_i` is computed dynamically
-    /// during the verification process. Hence the verification of one-ouf-of-N proof  
-    /// requires O(N) computationally heavy scalar mutliplication operations.
-    /// Considering the unique structure of commitments used for membership proofs, we can significanly lower the number of
-    /// required scalar-multiplication operations and perform the verification by
-    /// performing 2N addition operation + 2 scalar multiplication instead.
-    fn fast_verify(
-        &self,
-        c: &ZKPChallenge,
-        initial_message: &MembershipProofInitialMessage,
-        final_response: &MembershipProofFinalResponse,
-    ) -> Fallible<()> {
-        let start = Instant::now();
-        let m = final_response.ooon_proof_final_response.m();
-        let n = final_response.ooon_proof_final_response.n();
-
-        let size = n.pow(m as u32);
-        let mut initial_size = self.elements_set.len();
-        if initial_size > size {
-            initial_size = size;
-        }
-        let b_comm = initial_message
-            .ooon_proof_initial_message
-            .r1_proof_initial_message
-            .b();
-        let r1_verifier = R1ProofVerifier {
-            b: b_comm,
-            generators: self.generators,
-        };
-
-        let result_r1 = r1_verifier.verify(
-            c,
-            &initial_message
-                .ooon_proof_initial_message
-                .r1_proof_initial_message,
-            &final_response
-                .ooon_proof_final_response
-                .r1_proof_final_response(),
-        );
-        ensure!(
-            result_r1.is_ok(),
-            ErrorKind::MembershipProofVerificationError { check: 1 }
-        );
-
-        let mut f_values = vec![*c.x(); m * n];
-        let proof_f_elements = &final_response
-            .ooon_proof_final_response
-            .r1_proof_final_response()
-            .f_elements();
-
-        for i in 0..m {
-            for j in 1..n {
-                f_values[(i * n + j)] = proof_f_elements[(i * (n - 1) + (j - 1))];
-                f_values[(i * n)] -= proof_f_elements[(i * (n - 1) + (j - 1))];
-            }
-        }
-
-        let mut p_i: Scalar;
-        let mut left: RistrettoPoint = RistrettoPoint::default();
-        let right =
-            final_response.ooon_proof_final_response.z() * self.generators.com_gens.B_blinding;
-
-        let mut sum1 = Scalar::zero();
-        let mut sum2 = Scalar::zero();
-
-        for i in 0..initial_size {
-            p_i = Scalar::one();
-            let i_rep = convert_to_base(i, n, m as u32);
-            for j in 0..m {
-                p_i *= f_values[j * n + i_rep[j]];
-            }
-            sum1 += p_i;
-            sum2 += self.elements_set[i] * p_i;
-        }
-        if size > initial_size {
-            let last = self.elements_set[initial_size - 1];
-            for i in initial_size..size {
-                p_i = Scalar::one();
-                let i_rep = convert_to_base(i, n, m as u32);
-                for j in 0..m {
-                    p_i *= f_values[j * n + i_rep[j]];
-                }
-                sum1 += p_i;
-                sum2 += last * p_i;
-            }
-        }
-
-        left = sum1 * self.secret_element_com - sum2 * self.generators.com_gens.B;
-
         let mut temp = Scalar::one();
         for k in 0..m {
             left -= temp * initial_message.ooon_proof_initial_message.g_vec[k];
