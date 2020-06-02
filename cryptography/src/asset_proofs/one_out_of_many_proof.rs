@@ -37,12 +37,7 @@ const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 /// `n` is the fixed base. Usually we will work with base `4`.
 /// Returns the representation of the input number as the given base number
 /// The input number should be within the provided range [0, base^exp)
-pub(crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<Vec<usize>> {
-    ensure!(
-        number < base.pow(exp),
-        ErrorKind::OOONProofIndexOutofRange { index: number }
-    );
-
+pub(crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Vec<usize> {
     let mut rem: usize;
     let mut number = number;
     let mut base_rep = Vec::with_capacity(exp as usize);
@@ -53,7 +48,7 @@ pub(crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<
         base_rep.push(rem);
     }
 
-    Ok(base_rep)
+    base_rep
 }
 
 /// Returns a special bit-matrix representation of the input number.
@@ -61,12 +56,7 @@ pub(crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<
 /// The number is represented as the given base number `n = n0 *base^0 + n1 *base^1 +...+ n_exp *base^{exp-1}`
 /// The return value is a bit-matrix of size `exp x base` where
 /// in the  `j`-th row there is exactly one 1 at the cell matrix[j][n_j].
-pub(crate) fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Fallible<Vec<Scalar>> {
-    ensure!(
-        number < base.pow(exp),
-        ErrorKind::OOONProofIndexOutofRange { index: number }
-    );
-
+pub(crate) fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Vec<Scalar> {
     let mut rem: usize;
     let mut number = number;
     let mut matrix_rep = vec![Scalar::zero(); (exp as usize) * base];
@@ -76,7 +66,7 @@ pub(crate) fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Fal
         matrix_rep[j * base + rem] = Scalar::one();
     }
 
-    Ok(matrix_rep)
+    matrix_rep
 }
 
 /// Generates `n * m + 2` group generators exploited by the one-out-of-many proof algorithm. The later
@@ -617,7 +607,7 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
 
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
 
-        let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, exp).unwrap();
+        let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, exp);
 
         let b_matrix_rep = Matrix {
             rows: rows,
@@ -640,7 +630,7 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
 
         for i in 0..n {
             polynomials.push(one.clone());
-            let i_rep = convert_to_base(i, self.base, exp).unwrap();
+            let i_rep = convert_to_base(i, self.base, exp);
             for k in 0..self.exp {
                 let t = k * self.base + i_rep[k];
                 polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
@@ -746,7 +736,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
 
         for i in 0..size {
             p_i = Scalar::one();
-            let i_rep = convert_to_base(i, n, m as u32).unwrap();
+            let i_rep = convert_to_base(i, n, m as u32);
             for j in 0..m {
                 p_i *= f_values[j * n + i_rep[j]];
             }
@@ -963,7 +953,7 @@ mod tests {
         // For each index `i` we compute the corresponding valid bit-matrix representation.
         // Next commit to the  bit-matrix represenation and prove its well-formedness.
         for i in 10..64 {
-            base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT as u32).unwrap();
+            base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT as u32);
 
             b = Matrix {
                 rows: EXPONENT,

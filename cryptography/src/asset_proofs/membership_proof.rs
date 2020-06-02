@@ -141,7 +141,7 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             initial_size = size;
         }
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
-        let l_bit_matrix = convert_to_matrix_rep(self.secret_position, self.base, exp).unwrap();
+        let l_bit_matrix = convert_to_matrix_rep(self.secret_position, self.base, exp);
 
         let b_matrix_rep = Matrix {
             rows: self.exp,
@@ -164,7 +164,7 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
 
         for i in 0..size {
             polynomials.push(one.clone());
-            let i_rep = convert_to_base(i, self.base, exp).unwrap();
+            let i_rep = convert_to_base(i, self.base, exp);
             for k in 0..self.exp {
                 let t = k * self.base + i_rep[k];
                 polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
@@ -262,19 +262,17 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
             generators: self.generators,
         };
 
-        let result_r1 = r1_verifier.verify(
-            c,
-            &initial_message
-                .ooon_proof_initial_message
-                .r1_proof_initial_message,
-            &final_response
-                .ooon_proof_final_response
-                .r1_proof_final_response(),
-        );
-        ensure!(
-            result_r1.is_ok(),
-            ErrorKind::MembershipProofVerificationError { check: 1 }
-        );
+        r1_verifier
+            .verify(
+                c,
+                &initial_message
+                    .ooon_proof_initial_message
+                    .r1_proof_initial_message,
+                &final_response
+                    .ooon_proof_final_response
+                    .r1_proof_final_response(),
+            )
+            .map_err(|_| ErrorKind::MembershipProofVerificationError { check: 1 })?;
 
         let mut f_values = vec![*c.x(); m * n];
         let proof_f_elements = &final_response
@@ -299,7 +297,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
 
         for i in 0..initial_size {
             p_i = Scalar::one();
-            let i_rep = convert_to_base(i, n, m as u32)?;
+            let i_rep = convert_to_base(i, n, m as u32);
             for j in 0..m {
                 p_i *= f_values[j * n + i_rep[j]];
             }
@@ -310,7 +308,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
             let last = self.elements_set[initial_size - 1];
             for i in initial_size..size {
                 p_i = Scalar::one();
-                let i_rep = convert_to_base(i, n, m as u32)?;
+                let i_rep = convert_to_base(i, n, m as u32);
                 for j in 0..m {
                     p_i *= f_values[j * n + i_rep[j]];
                 }
@@ -351,7 +349,7 @@ impl<'a> MembershipProverAwaitingChallenge<'a> {
             initial_size = size;
         }
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
-        let l_bit_matrix = convert_to_matrix_rep(self.secret_position, self.base, exp).unwrap();
+        let l_bit_matrix = convert_to_matrix_rep(self.secret_position, self.base, exp);
 
         let b_matrix_rep = Matrix {
             rows: self.exp,
@@ -374,7 +372,7 @@ impl<'a> MembershipProverAwaitingChallenge<'a> {
 
         for i in 0..size {
             polynomials.push(one.clone());
-            let i_rep = convert_to_base(i, self.base, exp).unwrap();
+            let i_rep = convert_to_base(i, self.base, exp);
             for k in 0..self.exp {
                 let t = k * self.base + i_rep[k];
                 polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
@@ -494,7 +492,7 @@ impl<'a> MembershipProofVerifier<'a> {
 
         for i in 0..initial_size {
             p_i = Scalar::one();
-            let i_rep = convert_to_base(i, n, m as u32)?;
+            let i_rep = convert_to_base(i, n, m as u32);
             for j in 0..m {
                 p_i *= f_values[j * n + i_rep[j]];
             }
@@ -505,7 +503,7 @@ impl<'a> MembershipProofVerifier<'a> {
             let last = self.elements_set[initial_size - 1];
             for i in initial_size..size {
                 p_i = Scalar::one();
-                let i_rep = convert_to_base(i, n, m as u32)?;
+                let i_rep = convert_to_base(i, n, m as u32);
                 for j in 0..m {
                     p_i *= f_values[j * n + i_rep[j]];
                 }
@@ -676,7 +674,7 @@ mod tests {
         let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
 
         const BASE: usize = 4;
-        const EXPONENT: usize = 7;
+        const EXPONENT: usize = 8;
         let N: usize = BASE.pow(EXPONENT as u32);
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
