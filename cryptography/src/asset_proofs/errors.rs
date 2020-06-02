@@ -1,5 +1,6 @@
 use bulletproofs::ProofError;
 use failure::{Error, Fail};
+use sp_std::prelude::*;
 
 /// Represents an error resulted from asset value encryption,
 /// decryption, or proof generation.
@@ -75,8 +76,8 @@ pub enum AssetProofError {
     EncryptingSameValueFinalResponseVerificationError { check: u16 },
 
     /// A range proof error occured.
-    #[fail(display = "A range proof error occured: {}", source)]
+    #[fail(display = "A range proof error occured: {:?}", source)]
     ProvingError { source: ProofError },
 }
 
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub type Result<T, E = Error> = sp_std::result::Result<T, E>;

@@ -11,9 +11,11 @@ pub use claim_proofs::{
 pub mod pedersen_commitments;
 pub use pedersen_commitments::PedersenGenerators;
 
-use rand::Rng;
+use rand_core::{CryptoRng, RngCore};
 
-pub fn random_claim<R: Rng + ?Sized>(rng: &mut R) -> (CDDClaimData, ScopeClaimData) {
+pub fn random_claim<R: RngCore + CryptoRng + ?Sized>(
+    rng: &mut R,
+) -> (CDDClaimData, ScopeClaimData) {
     let mut investor_did = RawData::default();
     let mut investor_unique_id = RawData::default();
     let mut scope_did = RawData::default();

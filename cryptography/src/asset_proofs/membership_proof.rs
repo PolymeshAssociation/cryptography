@@ -4,8 +4,6 @@
 //! This implementation is based on one-out-of-many proof construction desribed in the following paper
 //! <https://eprint.iacr.org/2015/643.pdf>
 
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
@@ -18,10 +16,13 @@ use crate::asset_proofs::{
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
 
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
+
+use sp_std::prelude::*;
 
 const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";

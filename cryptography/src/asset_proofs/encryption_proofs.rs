@@ -5,7 +5,7 @@ use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
-use std::convert::TryFrom;
+use sp_std::convert::TryFrom;
 
 use crate::{
     asset_proofs::errors::{AssetProofError, Result},

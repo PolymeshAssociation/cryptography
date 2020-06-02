@@ -1,9 +1,10 @@
-use criterion::{criterion_group, criterion_main, Criterion};
 use cryptography::asset_proofs::{CipherText, CommitmentWitness, ElgamalSecretKey};
-use curve25519_dalek::scalar::Scalar;
 
-use rand::{rngs::StdRng, SeedableRng};
-use std::{convert::TryFrom, time::Duration};
+use criterion::{criterion_group, criterion_main, Criterion};
+use curve25519_dalek::scalar::Scalar;
+use rand_core::{RngCore, SeedableRng};
+
+use sp_std::{convert::TryFrom, time::Duration};
 
 fn bench_elgamal_decrypt(
     c: &mut Criterion,
@@ -24,7 +25,7 @@ fn bench_elgamal_decrypt(
 }
 
 fn bench_elgamal(c: &mut Criterion) {
-    let mut rng = StdRng::from_seed([42u8; 32]);
+    let mut rng = RngCore::default();
     let r = Scalar::random(&mut rng);
 
     let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
