@@ -4,17 +4,18 @@
 //! addition and subtraction API over the cipher texts.
 
 use crate::asset_proofs::errors::{AssetProofError, Result};
+
 use bulletproofs::PedersenGens;
 use core::ops::{Add, Sub};
 use core::ops::{AddAssign, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use rand_core::{CryptoRng, OsRng, RngCore};
+
 use failure::Error;
-use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use zeroize::Zeroize;
 
-use sp_std::prelude::*;
+use sp_std::{convert::TryFrom, prelude::*};
 
 /// Prover's representation of the commitment secret.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Zeroize)]
@@ -162,7 +163,8 @@ impl ElgamalPublicKey {
     }
 
     pub fn encrypt_value(&self, value: u32) -> Result<CipherText> {
-        let blinding = Scalar::random(&mut rand::thread_rng());
+        let mut rng = OsRng::default();
+        let blinding = Scalar::random(&mut rng);
         Ok(self.encrypt(&CommitmentWitness::try_from((value, blinding))?))
     }
 }
@@ -224,7 +226,7 @@ impl CipherText {
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand_core::{BlockRngCore, SeedableRng};
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
@@ -233,7 +235,7 @@ mod tests {
     #[test]
     #[wasm_bindgen_test]
     fn basic_enc_dec() {
-        let mut rng = StdRng::from_seed(SEED_1);
+        let mut rng = BlockRngCore::from_seed(SEED_1);
         let v = 256u32;
         let b = Scalar::random(&mut rng);
         let w = CommitmentWitness::try_from((v, b)).unwrap();

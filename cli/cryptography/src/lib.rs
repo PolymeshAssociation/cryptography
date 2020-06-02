@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
 /// That `ensure` does not transform into a string representation like `failure::ensure` is doing.
 #[allow(unused_macros)]
 macro_rules! ensure {

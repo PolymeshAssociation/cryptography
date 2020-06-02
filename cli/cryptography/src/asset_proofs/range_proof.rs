@@ -4,9 +4,11 @@
 //! is within a range.
 
 use crate::asset_proofs::errors::{AssetProofError, Result};
+
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use merlin::Transcript;
+use rand_core::OsRng;
 
 const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 
@@ -34,14 +36,16 @@ pub fn prove_within_range(
     // Transcripts eliminate the need for a dealer by employing
     // the Fiat-Shamir huristic.
     let mut prover_transcript = Transcript::new(RANGE_PROOF_LABEL);
+    let mut rng = OsRng::default();
 
-    RangeProof::prove_single(
+    RangeProof::prove_single_with_rng(
         &bp_gens,
         &pc_gens,
         &mut prover_transcript,
         secret_value,
         &rand_blind,
         range,
+        &mut rng,
     )
     .map_err(|source| AssetProofError::ProvingError { source }.into())
 }
@@ -62,14 +66,16 @@ pub fn verify_within_range(
     // Transcripts eliminate the need for a dealer by employing
     // the Fiat-Shamir huristic.
     let mut verifier_transcript = Transcript::new(RANGE_PROOF_LABEL);
+    let mut rng = OsRng::default();
 
     proof
-        .verify_single(
+        .verify_single_with_rng(
             &bp_gens,
             &pc_gens,
             &mut verifier_transcript,
             &commitment,
             range,
+            &mut rng,
         )
         .is_ok()
 }

@@ -10,9 +10,11 @@ use crate::asset_proofs::{
     transcript::{TranscriptProtocol, UpdateTranscript},
     CipherText, CommitmentWitness, ElgamalPublicKey,
 };
+
 use bulletproofs::PedersenGens;
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use zeroize::{Zeroize, Zeroizing};
