@@ -4,37 +4,37 @@
 //! This implementation is based on one-out-of-many proof construction desribed in the following paper
 //! <https://eprint.iacr.org/2015/643.pdf>
 
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
     },
-    errors::{AssetProofError, Result},
     one_out_of_many_proof::{
         OOONProofFinalResponse, OOONProofInitialMessage, OOONProofVerifier, OOONProver,
         OOONProverAwaitingChallenge, OooNProofGenerators,
     },
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
-
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use crate::errors::{ErrorKind, Fallible};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
-use sp_std::prelude::*;
+use sp_std::vec::Vec;
 
-const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
+pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct MembershipProofInitialMessage {
     ooon_proof_initial_message: OOONProofInitialMessage,
     secret_element_comm: RistrettoPoint,
 }
 
 impl UpdateTranscript for MembershipProofInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(MEMBERSHIP_PROOF_CHALLENGE_LABEL);
         self.ooon_proof_initial_message
             .update_transcript(transcript)?;
@@ -45,7 +45,7 @@ impl UpdateTranscript for MembershipProofInitialMessage {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct MembershipProofFinalResponse {
     ooon_proof_final_response: OOONProofFinalResponse,
 }
@@ -66,10 +66,40 @@ pub struct MembershipProverAwaitingChallenge<'a> {
     pub generators: &'a OooNProofGenerators,
     /// The set of elements which the committed secret element belongs to.
     pub elements_set: &'a [Scalar],
+    /// Indicates the index of the secret eleent in the elements set.
+    pub secret_position: usize,
     /// The element set size is represented as a power of the given base.
     pub base: usize,
     /// Used to specify the commitment list size for the underlying one-out-of-many proofs.
     pub exp: usize,
+}
+
+impl<'a> MembershipProverAwaitingChallenge<'a> {
+    pub fn new(
+        secret_element: Scalar,
+        random: Scalar,
+        generators: &'a OooNProofGenerators,
+        elements_set: &'a [Scalar],
+        base: usize,
+        exp: usize,
+    ) -> Fallible<Self> {
+        let secret_position = elements_set.iter().position(|&r| r == secret_element);
+
+        let secret_position =
+            secret_position.ok_or_else(|| ErrorKind::MembershipProofInvalidAssetError)?;
+
+        ensure!(elements_set.len() != 0, ErrorKind::EmptyElementsSet);
+
+        Ok(MembershipProverAwaitingChallenge {
+            secret_element: Zeroizing::new(secret_element),
+            random: Zeroizing::new(random),
+            generators,
+            elements_set,
+            secret_position,
+            base,
+            exp,
+        })
+    }
 }
 
 impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge<'a> {
@@ -113,17 +143,11 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             .collect();
 
         if n != initial_size {
-            commitments_list.resize(n, commitments_list[initial_size]);
+            commitments_list.resize(n, commitments_list[initial_size - 1]);
         }
 
-        let secret_position = self
-            .elements_set
-            .iter()
-            .position(|&r| r == *self.secret_element)
-            .unwrap_or_default();
-
         let ooon_prover = OOONProverAwaitingChallenge {
-            secret_index: secret_position,
+            secret_index: self.secret_position,
             random: *self.random,
             generators: self.generators,
             commitments: commitments_list.as_slice(),
@@ -168,11 +192,13 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         c: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
+        ensure!(self.elements_set.len() != 0, ErrorKind::EmptyElementsSet);
+
         let n = initial_message
             .ooon_proof_initial_message
-            .n
-            .pow(initial_message.ooon_proof_initial_message.m as u32);
+            .get_n()
+            .pow(initial_message.ooon_proof_initial_message.get_m() as u32);
         let initial_size = self.elements_set.len();
 
         let mut commitments_list: Vec<RistrettoPoint> = (0..self.elements_set.len())
@@ -183,7 +209,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         // pad the resulted commitment list with its last commitment to make the list size equal to N.
         // Padding has a critical security importance.
         if n != initial_size {
-            commitments_list.resize(n, commitments_list[initial_size]);
+            commitments_list.resize(n, commitments_list[initial_size - 1]);
         }
 
         let ooon_verifier = OOONProofVerifier {
@@ -198,7 +224,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         );
         ensure!(
             result.is_ok(),
-            AssetProofError::MembershipProofVerificationError { check: 1 }
+            ErrorKind::MembershipProofVerificationError { check: 1 }
         );
 
         Ok(())
@@ -210,6 +236,7 @@ mod tests {
 
     extern crate wasm_bindgen_test;
     use super::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
 
@@ -237,17 +264,17 @@ mod tests {
         let blinding = Scalar::random(&mut rng);
 
         let even_member = generators.com_gens.commit(Scalar::from(8u32), blinding);
-
         let odd_member = generators.com_gens.commit(Scalar::from(75u32), blinding);
 
-        let prover = MembershipProverAwaitingChallenge {
-            secret_element: Zeroizing::new(Scalar::from(8u32)),
-            random: Zeroizing::new(blinding),
-            generators: &generators,
-            elements_set: even_elements.as_slice(),
-            base: BASE,
-            exp: EXPONENT,
-        };
+        let prover = MembershipProverAwaitingChallenge::new(
+            Scalar::from(8u32),
+            blinding.clone(),
+            &generators,
+            even_elements.as_slice(),
+            BASE,
+            EXPONENT,
+        )
+        .unwrap();
 
         let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
         let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
@@ -278,54 +305,31 @@ mod tests {
         let result = verifier.verify(&challenge, &initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::MembershipProofVerificationError { check: 1 }
+            ErrorKind::MembershipProofVerificationError { check: 1 }
         );
 
-        // Testing adversarial proof generation where the Prover tries to generate
-        // a proof for non-existing set member.
-
-        let prover = MembershipProverAwaitingChallenge {
-            secret_element: Zeroizing::new(Scalar::from(2778u32)),
-            random: Zeroizing::new(blinding),
-            generators: &generators,
-            elements_set: odd_elements.as_slice(),
-            base: BASE,
-            exp: EXPONENT,
-        };
-        let non_existing_member = generators.com_gens.commit(Scalar::from(2778u32), blinding);
-
-        let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
-        let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
-
-        initial_message.update_transcript(&mut transcript).unwrap();
-        let challenge = transcript
-            .scalar_challenge(MEMBERSHIP_PROOF_CHALLENGE_LABEL)
-            .unwrap();
-
-        let final_response = prover.apply_challenge(&challenge);
-
-        let verifier = MembershipProofVerifier {
-            secret_element_com: non_existing_member,
-            elements_set: odd_elements.as_slice(),
-            generators: &generators,
-        };
-
-        let result = verifier.verify(&challenge, &initial_message.clone(), &final_response);
-        assert_err!(
-            result,
-            AssetProofError::MembershipProofVerificationError { check: 1 }
+        // Testing the attempt of initializting the prover with ian nvalid asset or an asset list.
+        let prover = MembershipProverAwaitingChallenge::new(
+            Scalar::from(78953u32),
+            blinding.clone(),
+            &generators,
+            even_elements.as_slice(),
+            BASE,
+            EXPONENT,
         );
-        /////////////////////////////////////
+        assert!(prover.is_err());
 
         // Testing the non-interactive API
-        let prover = MembershipProverAwaitingChallenge {
-            secret_element: Zeroizing::new(Scalar::from(75u32)),
-            random: Zeroizing::new(blinding),
-            generators: &generators,
-            elements_set: odd_elements.as_slice(),
-            base: BASE,
-            exp: EXPONENT,
-        };
+        let prover = MembershipProverAwaitingChallenge::new(
+            Scalar::from(75u32),
+            blinding.clone(),
+            &generators,
+            odd_elements.as_slice(),
+            BASE,
+            EXPONENT,
+        )
+        .unwrap();
+
         let verifier = MembershipProofVerifier {
             secret_element_com: odd_member,
             elements_set: odd_elements.as_slice(),
@@ -353,12 +357,48 @@ mod tests {
         let bad_final_response = final_response;
         assert_err!(
             single_property_verifier(&verifier, bad_initial_message, final_response_1),
-            AssetProofError::MembershipProofVerificationError { check: 1 }
+            ErrorKind::MembershipProofVerificationError { check: 1 }
         );
 
         assert_err!(
             single_property_verifier(&verifier, initial_message_1, bad_final_response),
-            AssetProofError::MembershipProofVerificationError { check: 1 }
+            ErrorKind::MembershipProofVerificationError { check: 1 }
         );
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+
+        const BASE: usize = 4;
+        const EXPONENT: usize = 3;
+
+        let generators = OooNProofGenerators::new(EXPONENT, BASE);
+        let even_elements: Vec<Scalar> = (0..64 as u32).map(|m| Scalar::from(2 * m)).collect();
+        let blinding = Scalar::random(&mut rng);
+
+        let prover = MembershipProverAwaitingChallenge::new(
+            Scalar::from(8u32),
+            blinding.clone(),
+            &generators,
+            even_elements.as_slice(),
+            BASE,
+            EXPONENT,
+        )
+        .unwrap();
+
+        let (initial_message0, final_response0) =
+            single_property_prover::<StdRng, MembershipProverAwaitingChallenge>(prover, &mut rng)
+                .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message0).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response0).unwrap();
+        let recovered_initial_message: MembershipProofInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: MembershipProofFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message0);
+        assert_eq!(recovered_final_response, final_response0);
     }
 }

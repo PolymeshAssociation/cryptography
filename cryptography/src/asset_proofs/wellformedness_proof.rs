@@ -2,13 +2,15 @@
 //! This proofs the knoweledge about the encrypted value.
 //! For more details see section 5.1 of the whitepaper.
 
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    errors::{AssetProofError, Result},
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, CommitmentWitness, ElgamalPublicKey,
+    errors::{ErrorKind, Fallible},
 };
 
 use bulletproofs::PedersenGens;
@@ -17,6 +19,7 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
 
 /// The domain label for the wellformedness proof.
@@ -24,13 +27,13 @@ pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathWellforme
 /// The domain label for the challenge.
 pub const WELLFORMEDNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathWellformednessProofChallenge";
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
 pub struct WellformednessFinalResponse {
     z1: Scalar,
     z2: Scalar,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct WellformednessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -47,7 +50,7 @@ impl Default for WellformednessInitialMessage {
 }
 
 impl UpdateTranscript for WellformednessInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(WELLFORMEDNESS_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A", &self.a.compress())?;
         transcript.append_validated_point(b"B", &self.b.compress())?;
@@ -69,8 +72,11 @@ pub struct WellformednessProver {
 pub struct WellformednessProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
     pub pub_key: ElgamalPublicKey,
+
     /// The secret commitment witness.
     pub w: Zeroizing<CommitmentWitness>,
+
+    /// The Pedersen generators.
     pub pc_gens: &'a PedersenGens,
 }
 
@@ -111,7 +117,7 @@ impl AssetProofProver<WellformednessFinalResponse> for WellformednessProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> WellformednessFinalResponse {
         WellformednessFinalResponse {
             z1: self.rand_a + c.x() * self.w.blinding(),
-            z2: self.rand_b + c.x() * Scalar::from(self.w.value()),
+            z2: self.rand_b + c.x() * self.w.value(),
         }
     }
 }
@@ -132,15 +138,15 @@ impl<'a> AssetProofVerifier for WellformednessVerifier<'a> {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         response: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         ensure!(
             response.z1 * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
             response.z1 * self.pc_gens.B_blinding + response.z2 * self.pc_gens.B
                 == initial_message.b + challenge.x() * self.cipher.y,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 2 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
     }
@@ -154,8 +160,9 @@ mod tests {
         single_property_prover, single_property_verifier,
     };
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
-    use std::convert::TryFrom;
+    use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
@@ -166,12 +173,10 @@ mod tests {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 42u32;
-        let rand_blind = Scalar::random(&mut rng);
 
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = elg_secret.get_public_key();
-        let cipher = pub_key.encrypt(&w);
+        let (w, cipher) = pub_key.encrypt_value(secret_value.into(), &mut rng);
 
         let prover = WellformednessProverAwaitingChallenge {
             pub_key,
@@ -213,7 +218,7 @@ mod tests {
         let result = verifier.verify(&challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = WellformednessFinalResponse {
@@ -223,7 +228,7 @@ mod tests {
         let result = verifier.verify(&challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         // ------------------------------- Non-interactive case
@@ -256,13 +261,45 @@ mod tests {
         assert_err!(
             // 4th round
             single_property_verifier(&verifier, bad_initial_message, final_response),
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         assert_err!(
             // 4th round
             single_property_verifier(&verifier, initial_message, bad_final_response),
-            AssetProofError::WellformednessFinalResponseVerificationError { check: 1 }
+            ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = 42u32;
+        let rand_blind = Scalar::random(&mut rng);
+        let gens = PedersenGens::default();
+        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
+        let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let pub_key = elg_secret.get_public_key();
+
+        let prover = WellformednessProverAwaitingChallenge {
+            pub_key,
+            w: Zeroizing::new(w.clone()),
+            pc_gens: &gens,
+        };
+        let (initial_message, final_response) = encryption_proofs::single_property_prover::<
+            StdRng,
+            WellformednessProverAwaitingChallenge,
+        >(prover, &mut rng)
+        .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
+        let recovered_initial_message: WellformednessInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: WellformednessFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message);
+        assert_eq!(recovered_final_response, final_response);
     }
 }

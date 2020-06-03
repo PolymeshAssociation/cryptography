@@ -1,15 +1,14 @@
 //! Encryption proofs' interface definitions and
 //! Non-Interactive Zero Knowledge Proof API.
 
-use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use sp_std::convert::TryFrom;
 
 use crate::{
-    asset_proofs::errors::{AssetProofError, Result},
     asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript},
+    errors::{Error, ErrorKind, Fallible},
 };
 
 /// The domain label for the encryption proofs.
@@ -33,10 +32,10 @@ impl ZKPChallenge {
 }
 
 impl TryFrom<Scalar> for ZKPChallenge {
-    type Error = failure::Error;
+    type Error = Error;
 
-    fn try_from(x: Scalar) -> Result<Self> {
-        ensure!(x != Scalar::zero(), AssetProofError::VerificationError);
+    fn try_from(x: Scalar) -> Result<Self, Self::Error> {
+        ensure!(x != Scalar::zero(), ErrorKind::VerificationError);
         Ok(ZKPChallenge { x })
     }
 }
@@ -119,7 +118,7 @@ pub trait AssetProofVerifier {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
-    ) -> Result<()>;
+    ) -> Fallible<()>;
 }
 
 // ------------------------------------------------------------------------
@@ -141,7 +140,7 @@ pub fn single_property_prover<
 >(
     prover_ac: ProverAwaitingChallenge,
     rng: &mut T,
-) -> Result<(
+) -> Fallible<(
     ProverAwaitingChallenge::ZKInitialMessage,
     ProverAwaitingChallenge::ZKFinalResponse,
 )> {
@@ -173,7 +172,7 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
     verifier: &Verifier,
     initial_message: Verifier::ZKInitialMessage,
     final_response: Verifier::ZKFinalResponse,
-) -> Result<()> {
+) -> Fallible<()> {
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
 
     // Update the transcript with Prover's initial message
@@ -193,16 +192,20 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::asset_proofs::{
-        correctness_proof::{
-            CorrectnessInitialMessage, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+    use crate::{
+        asset_proofs::{
+            correctness_proof::{
+                CorrectnessFinalResponse, CorrectnessInitialMessage,
+                CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
+            },
+            wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
+            CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
         },
-        errors::AssetProofError,
-        wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
-        CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
+        errors::ErrorKind,
     };
+    use bulletproofs::PedersenGens;
     use rand::{rngs::StdRng, SeedableRng};
-    use std::convert::TryFrom;
+    use sp_std::convert::TryFrom;
     use wasm_bindgen_test::*;
     use zeroize::Zeroizing;
 
@@ -218,8 +221,17 @@ mod tests {
         CorrectnessProverAwaitingChallenge<'a>,
         CorrectnessVerifier<'a>,
     ) {
-        let prover = CorrectnessProverAwaitingChallenge::new(pub_key, witness.clone(), pc_gens);
-        let verifier = CorrectnessVerifier::new(witness.value(), pub_key, cipher, pc_gens);
+        let prover = CorrectnessProverAwaitingChallenge {
+            pub_key,
+            w: witness.clone(),
+            pc_gens,
+        };
+        let verifier = CorrectnessVerifier {
+            value: witness.value(),
+            pub_key,
+            cipher,
+            pc_gens,
+        };
 
         (prover, verifier)
     }
@@ -252,12 +264,11 @@ mod tests {
     fn nizkp_proofs() {
         let mut rng = StdRng::from_seed(SEED_1);
         let gens = PedersenGens::default();
+
         let secret_value = 42u32;
         let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let pub_key = secret_key.get_public_key();
-        let rand_blind = Scalar::random(&mut rng);
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
-        let cipher = pub_key.encrypt(&w);
+        let (w, cipher) = pub_key.encrypt_value(secret_value.into(), &mut rng);
 
         let (prover0, verifier0) = create_correctness_proof_objects_helper(
             w.clone(),
@@ -285,13 +296,13 @@ mod tests {
         let bad_initial_message = CorrectnessInitialMessage::default();
         assert_err!(
             single_property_verifier(&verifier0, bad_initial_message, final_response0),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_final_response = Scalar::one();
+        let bad_final_response = CorrectnessFinalResponse::from(Scalar::one());
         assert_err!(
             single_property_verifier(&verifier0, initial_message0, bad_final_response),
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }
 
@@ -300,9 +311,8 @@ mod tests {
     fn batched_proofs() {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_2);
-        let w = CommitmentWitness::try_from((6u32, Scalar::random(&mut rng))).unwrap();
         let pub_key = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
-        let cipher = pub_key.encrypt(&w);
+        let (w, cipher) = pub_key.encrypt_value(6u32.into(), &mut rng);
         let mut transcript = Transcript::new(b"batch_proof_label");
 
         let (prover0, verifier0) = create_correctness_proof_objects_helper(

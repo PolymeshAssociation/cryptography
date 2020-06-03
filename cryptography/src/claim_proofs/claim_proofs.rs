@@ -1,7 +1,5 @@
 //! The `claim_proofs` library contains API for generating
-//! claim proofs and verifying them as part of the
-//! Asset Granularity Unique Identity project.
-//!
+//! claim proofs and verifying them as part of the Asset Granularity Unique Identity project.
 //! The investor would use the `ProofKeyPair` API to generate
 //! the proofs.
 //!
@@ -42,7 +40,8 @@
 
 use super::pedersen_commitments::PedersenGenerators;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use schnorrkel::{signing_context, Keypair, PublicKey, Signature};
+use lazy_static::lazy_static;
+use schnorrkel::{context::SigningContext, signing_context, Keypair, PublicKey, Signature};
 use serde::{Deserialize, Serialize};
 use sha3::{
     digest::{FixedOutput, Input},
@@ -53,6 +52,10 @@ use sp_std::prelude::*;
 
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
+
+lazy_static! {
+    static ref SIG_CTXT: SigningContext = { signing_context(SIGNING_CTX) };
+}
 
 #[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]
 pub struct RawData(pub [u8; 32]);
@@ -202,8 +205,7 @@ impl ProofKeyPair {
     /// # Output
     /// A proof in the form of an Schnorrkel/Ristretto x25519 signature.
     pub fn generate_id_match_proof(&self, message: &[u8]) -> Signature {
-        let context = signing_context(SIGNING_CTX);
-        self.keypair.sign(context.bytes(message))
+        self.keypair.sign(SIG_CTXT.bytes(message))
     }
 }
 

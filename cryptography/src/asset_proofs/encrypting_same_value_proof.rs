@@ -2,13 +2,15 @@
 //! under different public keys.
 //! For more details see section 5.4 of the whitepaper.
 
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    errors::{AssetProofError, Result},
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, CommitmentWitness, ElgamalPublicKey,
+    errors::{ErrorKind, Fallible},
 };
 
 use bulletproofs::PedersenGens;
@@ -17,6 +19,7 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
 
 /// The domain label for the encrypting the same value proof.
@@ -31,13 +34,13 @@ pub const ENCRYPTING_SAME_VALUE_PROOF_CHALLENGE_LABEL: &[u8] =
 // Public Keys
 // ------------------------------------------------------------------------
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
 pub struct EncryptingSameValueFinalResponse {
     z1: Scalar,
     z2: Scalar,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct EncryptingSameValueInitialMessage {
     a1: RistrettoPoint,
     a2: RistrettoPoint,
@@ -56,7 +59,7 @@ impl Default for EncryptingSameValueInitialMessage {
 }
 
 impl UpdateTranscript for EncryptingSameValueInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(ENCRYPTING_SAME_VALUE_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A1", &self.a1.compress())?;
         transcript.append_validated_point(b"A2", &self.a2.compress())?;
@@ -74,6 +77,8 @@ pub struct EncryptingSameValueProverAwaitingChallenge<'a> {
 
     /// The secret commitment witness.
     pub w: Zeroizing<CommitmentWitness>,
+
+    /// The Pedersen generators.
     pub pc_gens: &'a PedersenGens,
 }
 
@@ -129,7 +134,7 @@ impl AssetProofProver<EncryptingSameValueFinalResponse> for EncryptingSameValueP
     fn apply_challenge(&self, c: &ZKPChallenge) -> EncryptingSameValueFinalResponse {
         EncryptingSameValueFinalResponse {
             z1: self.u1 + c.x() * self.w.blinding(),
-            z2: self.u2 + c.x() * Scalar::from(self.w.value()),
+            z2: self.u2 + c.x() * self.w.value(),
         }
     }
 }
@@ -160,27 +165,27 @@ impl<'a> AssetProofVerifier for EncryptingSameValueVerifier<'a> {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         // 2 ciphertexts that encrypt the same witness must have the same Y value.
         ensure!(
             self.cipher1.y == self.cipher2.y,
-            AssetProofError::VerificationError
+            ErrorKind::VerificationError
         );
 
         ensure!(
             final_response.z1 * self.pub_key1.pub_key
                 == initial_message.a1 + challenge.x() * self.cipher1.x,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 1 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
         );
         ensure!(
             final_response.z1 * self.pub_key2.pub_key
                 == initial_message.a2 + challenge.x() * self.cipher2.x,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 2 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 2 }
         );
         ensure!(
             final_response.z1 * self.pc_gens.B_blinding + final_response.z2 * self.pc_gens.B
                 == initial_message.b + challenge.x() * self.cipher1.y,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 3 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 3 }
         );
         Ok(())
     }
@@ -195,8 +200,9 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
-    use std::convert::TryFrom;
+    use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [17u8; 32];
@@ -207,12 +213,9 @@ mod tests {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 49u32;
-        let rand_blind = Scalar::random(&mut rng);
-
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
 
         let elg_pub1 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
-        let cipher1 = elg_pub1.encrypt(&w);
+        let (w, cipher1) = elg_pub1.encrypt_value(secret_value.into(), &mut rng);
 
         let elg_pub2 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
         let cipher2 = elg_pub2.encrypt(&w);
@@ -249,14 +252,14 @@ mod tests {
         let result = verifier.verify(&challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 1 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = EncryptingSameValueFinalResponse::default();
         let result = verifier.verify(&challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
-            AssetProofError::EncryptingSameValueFinalResponseVerificationError { check: 1 }
+            ErrorKind::EncryptingSameValueFinalResponseVerificationError { check: 1 }
         );
 
         // Non-Interactive ZKP test
@@ -268,5 +271,40 @@ mod tests {
             final_response
         )
         .is_ok());
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = 49u32;
+        let rand_blind = Scalar::random(&mut rng);
+        let gens = PedersenGens::default();
+        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
+
+        let elg_pub1 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
+        let elg_pub2 = ElgamalSecretKey::new(Scalar::random(&mut rng)).get_public_key();
+
+        let prover = EncryptingSameValueProverAwaitingChallenge {
+            pub_key1: elg_pub1,
+            pub_key2: elg_pub2,
+            w: Zeroizing::new(w),
+            pc_gens: &gens,
+        };
+
+        let (initial_message, final_response) = encryption_proofs::single_property_prover::<
+            StdRng,
+            EncryptingSameValueProverAwaitingChallenge,
+        >(prover, &mut rng)
+        .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
+        let recovered_initial_message: EncryptingSameValueInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: EncryptingSameValueFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message);
+        assert_eq!(recovered_final_response, final_response);
     }
 }
