@@ -7,7 +7,7 @@
 use crate::{
     asset_proofs::elgamal_encryption::CommitmentWitness,
     asset_proofs::encryption_proofs::ZKPChallenge,
-    asset_proofs::errors::{AssetProofError, Result},
+    errors::{ErrorKind, Fallible},
 };
 
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
@@ -30,7 +30,7 @@ pub trait TranscriptProtocol {
         &mut self,
         label: &'static [u8],
         message: &CompressedRistretto,
-    ) -> Result<()>;
+    ) -> Fallible<()>;
 
     /// Appends a domain separator string to the transcript's state.
     ///
@@ -45,7 +45,7 @@ pub trait TranscriptProtocol {
     ///
     /// # Output
     /// A scalar challenge.
-    fn scalar_challenge(&mut self, label: &'static [u8]) -> Result<ZKPChallenge>;
+    fn scalar_challenge(&mut self, label: &'static [u8]) -> Fallible<ZKPChallenge>;
 
     /// Create an RNG seeded from the transcript's cloned state and
     /// randomness from an external `rng`.
@@ -68,10 +68,10 @@ impl TranscriptProtocol for Transcript {
         &mut self,
         label: &'static [u8],
         message: &CompressedRistretto,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         use curve25519_dalek::traits::IsIdentity;
 
-        ensure!(!message.is_identity(), AssetProofError::VerificationError);
+        ensure!(!message.is_identity(), ErrorKind::VerificationError);
         Ok(self.append_message(label, message.as_bytes()))
     }
 
@@ -79,7 +79,7 @@ impl TranscriptProtocol for Transcript {
         self.append_message(b"dom-sep", message)
     }
 
-    fn scalar_challenge(&mut self, label: &'static [u8]) -> Result<ZKPChallenge> {
+    fn scalar_challenge(&mut self, label: &'static [u8]) -> Fallible<ZKPChallenge> {
         let mut buf = [0u8; 64];
         self.challenge_bytes(label, &mut buf);
 
@@ -92,7 +92,7 @@ impl TranscriptProtocol for Transcript {
         witness: &CommitmentWitness,
     ) -> TranscriptRng {
         self.build_rng()
-            .rekey_with_witness_bytes(b"w_value", &witness.value().to_le_bytes())
+            .rekey_with_witness_bytes(b"w_value", &witness.value().to_bytes())
             .rekey_with_witness_bytes(b"w_blinding", witness.blinding().as_bytes())
             .finalize(rng)
     }
@@ -101,7 +101,7 @@ impl TranscriptProtocol for Transcript {
 /// A trait that is used to update the transcript with the initial message
 /// that results from the first round of the protocol.
 pub trait UpdateTranscript {
-    fn update_transcript(&self, d: &mut Transcript) -> Result<()>;
+    fn update_transcript(&self, d: &mut Transcript) -> Fallible<()>;
 }
 
 #[cfg(test)]
@@ -114,7 +114,7 @@ mod tests {
         let mut transcript = Transcript::new(b"unit test");
         assert_err!(
             transcript.append_validated_point(b"identity", &CompressedRistretto::default()),
-            AssetProofError::VerificationError
+            ErrorKind::VerificationError
         );
     }
 }

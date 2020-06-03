@@ -3,15 +3,16 @@
 //! It is important to note that the provided list size should be exactly N=n^m.
 //! If the commitment list size is smaller than N, it should be padded with the last commitment.
 //! For more details see the original paper <https://eprint.iacr.org/2015/643.pdf>.
+
 #![allow(non_snake_case)]
 
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
     },
-    errors::{AssetProofError, Result},
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
+use crate::errors::{ErrorKind, Fallible};
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
@@ -20,6 +21,7 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use sha3::Sha3_512;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -37,10 +39,10 @@ const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 /// `n` is the fixed base. Usually we will work with base `4`.
 /// Returns the representation of the input number as the given base number
 /// The input number should be within the provided range [0, base^exp)
-fn convert_to_base(number: usize, base: usize, exp: u32) -> Result<Vec<usize>, AssetProofError> {
+fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<Vec<usize>> {
     ensure!(
         number < base.pow(exp),
-        AssetProofError::OOONProofIndexOutofRange { index: number }
+        ErrorKind::OOONProofIndexOutofRange { index: number }
     );
 
     let mut rem: usize;
@@ -61,14 +63,10 @@ fn convert_to_base(number: usize, base: usize, exp: u32) -> Result<Vec<usize>, A
 /// The number is represented as the given base number `n = n0 *base^0 + n1 *base^1 +...+ n_exp *base^{exp-1}`
 /// The return value is a bit-matrix of size `exp x base` where
 /// in the  `j`-th row there is exactly one 1 at the cell matrix[j][n_j].
-fn convert_to_matrix_rep(
-    number: usize,
-    base: usize,
-    exp: u32,
-) -> Result<Vec<Scalar>, AssetProofError> {
+fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Fallible<Vec<Scalar>> {
     ensure!(
         number < base.pow(exp),
-        AssetProofError::OOONProofIndexOutofRange { index: number }
+        ErrorKind::OOONProofIndexOutofRange { index: number }
     );
 
     let mut rem: usize;
@@ -151,12 +149,9 @@ impl Matrix {
         }
     }
     /// Computes the entry-wise (Hadamard) product of two matrixes of the same dimensions.
-    fn entrywise_product(&self, right: &Matrix) -> Result<Matrix, AssetProofError> {
-        ensure!(self.rows == right.rows, AssetProofError::OOONProofWrongSize);
-        ensure!(
-            self.columns == right.columns,
-            AssetProofError::OOONProofWrongSize
-        );
+    fn entrywise_product(&self, right: &Matrix) -> Fallible<Matrix> {
+        ensure!(self.rows == right.rows, ErrorKind::OOONProofWrongSize);
+        ensure!(self.columns == right.columns, ErrorKind::OOONProofWrongSize);
 
         let mut entrywise_product: Matrix = Matrix::new(self.rows, right.columns, Scalar::zero());
         for i in 0..self.rows {
@@ -259,6 +254,7 @@ impl Polynomial {
     }
     /// Computes the polynomial evaluation value at the given point `x`.
     /// Used for testing purposes.
+    #[allow(unused)]
     fn eval(&self, point: Scalar) -> Scalar {
         let mut value = Scalar::zero();
         let mut x: Scalar = Scalar::one();
@@ -275,7 +271,7 @@ impl Polynomial {
 /// The R1 Proof is a zero-knowledge proof for a (bit-matrix) commitment B having an opening
 /// to a bit-matrix of size m x n, where in each row there is exactly one 1.
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct R1ProofInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -295,7 +291,7 @@ impl Default for R1ProofInitialMessage {
 }
 
 impl UpdateTranscript for R1ProofInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(R1_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A", &self.a.compress())?;
         transcript.append_validated_point(b"B", &self.b.compress())?;
@@ -305,7 +301,7 @@ impl UpdateTranscript for R1ProofInitialMessage {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default)]
 pub struct R1ProofFinalResponse {
     f_elements: Vec<Scalar>,
     z_a: Scalar,
@@ -451,7 +447,7 @@ impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
         c: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         let rows = final_response.m;
         let columns = final_response.n;
 
@@ -481,19 +477,19 @@ impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
 
         ensure!(
             c.x() * self.b + initial_message.a == com_f,
-            AssetProofError::R1FinalResponseVerificationError { check: 1 }
+            ErrorKind::R1FinalResponseVerificationError { check: 1 }
         );
 
         ensure!(
             c.x() * initial_message.c + initial_message.d == com_fx,
-            AssetProofError::R1FinalResponseVerificationError { check: 2 }
+            ErrorKind::R1FinalResponseVerificationError { check: 2 }
         );
 
         Ok(())
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OOONProofInitialMessage {
     r1_proof_initial_message: R1ProofInitialMessage,
     g_vec: Vec<RistrettoPoint>,
@@ -510,6 +506,13 @@ impl OOONProofInitialMessage {
             m: exp,
         }
     }
+
+    pub fn get_n(&self) -> usize {
+        return self.n;
+    }
+    pub fn get_m(&self) -> usize {
+        return self.m;
+    }
 }
 /// A `default` implementation used for testing.
 impl Default for OOONProofInitialMessage {
@@ -519,7 +522,7 @@ impl Default for OOONProofInitialMessage {
 }
 
 impl UpdateTranscript for OOONProofInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(OOON_PROOF_CHALLENGE_LABEL);
         self.r1_proof_initial_message
             .update_transcript(transcript)?;
@@ -531,7 +534,7 @@ impl UpdateTranscript for OOONProofInitialMessage {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default)]
 pub struct OOONProofFinalResponse {
     r1_proof_final_response: R1ProofFinalResponse,
     z: Scalar,
@@ -688,7 +691,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         c: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         let size = final_response.n.pow(final_response.m as u32);
         let m = final_response.m;
         let n = final_response.n;
@@ -706,7 +709,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         );
         ensure!(
             result_r1.is_ok(),
-            AssetProofError::OOONFinalResponseVerificationError { check: 1 }
+            ErrorKind::OOONFinalResponseVerificationError { check: 1 }
         );
 
         let mut f_values = vec![*c.x(); m * n];
@@ -739,7 +742,7 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
 
         ensure!(
             left == right,
-            AssetProofError::OOONFinalResponseVerificationError { check: 2 }
+            ErrorKind::OOONFinalResponseVerificationError { check: 2 }
         );
 
         Ok(())
@@ -863,7 +866,7 @@ mod tests {
 
             assert_err!(
                 result,
-                AssetProofError::OOONFinalResponseVerificationError { check: 2 }
+                ErrorKind::OOONFinalResponseVerificationError { check: 2 }
             );
         }
 
@@ -906,7 +909,7 @@ mod tests {
 
             assert_err!(
                 result,
-                AssetProofError::OOONFinalResponseVerificationError { check: 2 }
+                ErrorKind::OOONFinalResponseVerificationError { check: 2 }
             );
         }
     }
@@ -1007,7 +1010,7 @@ mod tests {
 
         assert_err!(
             result,
-            AssetProofError::R1FinalResponseVerificationError { check: 1 }
+            ErrorKind::R1FinalResponseVerificationError { check: 1 }
         );
     }
 

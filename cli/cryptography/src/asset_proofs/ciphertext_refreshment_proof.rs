@@ -5,13 +5,15 @@
 //! For more details see sections 3.6 and 5.3 of the
 //! whitepaper.
 
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, ElgamalPublicKey, ElgamalSecretKey,
     },
-    errors::{AssetProofError, Result},
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, ElgamalPublicKey, ElgamalSecretKey,
+    errors::{ErrorKind, Fallible},
 };
 
 use bulletproofs::PedersenGens;
@@ -20,6 +22,7 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 /// The domain label for the ciphertext refreshment proof.
@@ -34,9 +37,10 @@ pub const CIPHERTEXT_REFRESHMENT_PROOF_CHALLENGE_LABEL: &[u8] =
 // public key
 // ------------------------------------------------------------------------
 
-pub type CipherTextRefreshmentFinalResponse = Scalar;
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
+pub struct CipherTextRefreshmentFinalResponse(Scalar);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct CipherTextRefreshmentInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -53,7 +57,7 @@ impl Default for CipherTextRefreshmentInitialMessage {
 }
 
 impl UpdateTranscript for CipherTextRefreshmentInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(CIPHERTEXT_REFRESHMENT_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A", &self.a.compress())?;
         transcript.append_validated_point(b"B", &self.b.compress())?;
@@ -133,22 +137,22 @@ impl<'a> AssetProofProverAwaitingChallenge for CipherTextRefreshmentProverAwaiti
 
 impl AssetProofProver<CipherTextRefreshmentFinalResponse> for CipherTextRefreshmentProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> CipherTextRefreshmentFinalResponse {
-        self.u + c.x() * self.secret_key.secret
+        CipherTextRefreshmentFinalResponse(self.u + c.x() * self.secret_key.secret)
     }
 }
 
 pub struct CipherTextRefreshmentVerifier<'a> {
     /// The public key to which the `value` is encrypted.
-    pub_key: ElgamalPublicKey,
+    pub pub_key: ElgamalPublicKey,
 
     /// The difference between the X part of the two ciphertexts:
     /// X = ciphertext1.x - ciphertext2.x
-    x: RistrettoPoint,
+    pub x: RistrettoPoint,
 
     /// The difference between the Y part of the two ciphertexts:
     /// Y = ciphertext1.y - ciphertext2.y
-    y: RistrettoPoint,
-    pc_gens: &'a PedersenGens,
+    pub y: RistrettoPoint,
+    pub pc_gens: &'a PedersenGens,
 }
 
 impl<'a> CipherTextRefreshmentVerifier<'a> {
@@ -176,14 +180,15 @@ impl<'a> AssetProofVerifier for CipherTextRefreshmentVerifier<'a> {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         z: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         ensure!(
-            z * self.y == initial_message.a + challenge.x() * self.x,
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
+            z.0 * self.y == initial_message.a + challenge.x() * self.x,
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * self.pc_gens.B_blinding == initial_message.b + challenge.x() * self.pub_key.pub_key,
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 2 }
+            z.0 * self.pc_gens.B_blinding
+                == initial_message.b + challenge.x() * self.pub_key.pub_key,
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 2 }
         );
         Ok(())
     }
@@ -198,8 +203,9 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
-    use std::convert::TryFrom;
+    use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [17u8; 32];
@@ -210,12 +216,12 @@ mod tests {
     fn test_ciphertext_refreshment_proof() {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
-        let secret_value = 13u32;
+        let secret_value = Scalar::from(13u32);
 
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let ciphertext1 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
-        let ciphertext2 = elg_pub.encrypt_value(secret_value.clone()).unwrap();
+        let (_, ciphertext1) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+        let (_, ciphertext2) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
 
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             elg_secret,
@@ -243,13 +249,13 @@ mod tests {
         let result = verifier.verify(&challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_final_response = Scalar::default();
+        let bad_final_response = CipherTextRefreshmentFinalResponse(Scalar::default());
         assert_err!(
             verifier.verify(&challenge, &initial_message, &bad_final_response),
-            AssetProofError::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
+            ErrorKind::CiphertextRefreshmentFinalResponseVerificationError { check: 1 }
         );
     }
 
@@ -257,16 +263,13 @@ mod tests {
     #[wasm_bindgen_test]
     fn verify_ciphertext_refreshment_method() {
         let mut rng = StdRng::from_seed(SEED_2);
-        let rand_blind = Scalar::random(&mut rng);
-        let w = CommitmentWitness::try_from((3u32, rand_blind)).unwrap();
         let gens = PedersenGens::default();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let cipher = elg_pub.encrypt(&w);
+        let (_, cipher) = elg_pub.encrypt_value(3u32.into(), &mut rng);
 
-        let new_cipher = cipher
-            .ciphertext_refreshment_method(&elg_secret, &mut rng)
-            .unwrap();
+        let new_rand_blind = Scalar::random(&mut rng);
+        let new_cipher = cipher.refresh(&elg_secret, new_rand_blind).unwrap();
 
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             elg_secret, cipher, new_cipher, &gens,
@@ -282,5 +285,38 @@ mod tests {
             final_response
         )
         .is_ok());
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = Scalar::from(13u32);
+        let gens = PedersenGens::default();
+        let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let elg_pub = elg_secret.get_public_key();
+        let (_, ciphertext1) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+        let (_, ciphertext2) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+
+        let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
+            elg_secret,
+            ciphertext1,
+            ciphertext2,
+            &gens,
+        );
+        let (initial_message0, final_response0) = encryption_proofs::single_property_prover::<
+            StdRng,
+            CipherTextRefreshmentProverAwaitingChallenge,
+        >(prover, &mut rng)
+        .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message0).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response0).unwrap();
+        let recovered_initial_message: CipherTextRefreshmentInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: CipherTextRefreshmentFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message0);
+        assert_eq!(recovered_final_response, final_response0);
     }
 }

@@ -1,22 +1,26 @@
 //! The proof of correct encryption of the given value.
 //! For more details see section 5.2 of the whitepaper.
 
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    errors::{AssetProofError, Result},
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, CommitmentWitness, ElgamalPublicKey,
+    errors::{ErrorKind, Fallible},
 };
-
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
+
+use sp_std::convert::From;
 
 /// The domain label for the correctness proof.
 pub const CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathCorrectnessFinalResponse";
@@ -27,9 +31,16 @@ pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessChalle
 // Proof of Correct Encryption of the Given Value
 // ------------------------------------------------------------------------
 
-pub type CorrectnessFinalResponse = Scalar;
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
+pub struct CorrectnessFinalResponse(Scalar);
 
-#[derive(Copy, Clone, Debug)]
+impl From<Scalar> for CorrectnessFinalResponse {
+    fn from(response: Scalar) -> Self {
+        CorrectnessFinalResponse(response)
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct CorrectnessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -46,7 +57,7 @@ impl Default for CorrectnessInitialMessage {
 }
 
 impl UpdateTranscript for CorrectnessInitialMessage {
-    fn update_transcript(&self, transcript: &mut Transcript) -> Result<()> {
+    fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(CORRECTNESS_PROOF_CHALLENGE_LABEL);
         transcript.append_validated_point(b"A", &self.a.compress())?;
         transcript.append_validated_point(b"B", &self.b.compress())?;
@@ -56,23 +67,13 @@ impl UpdateTranscript for CorrectnessInitialMessage {
 
 pub struct CorrectnessProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
-    pub_key: ElgamalPublicKey,
+    pub pub_key: ElgamalPublicKey,
 
     /// The secret commitment witness.
-    w: CommitmentWitness,
+    pub w: CommitmentWitness,
 
     /// Pedersen Generators
-    pc_gens: &'a PedersenGens,
-}
-
-impl<'a> CorrectnessProverAwaitingChallenge<'a> {
-    pub fn new(pub_key: ElgamalPublicKey, w: CommitmentWitness, pc_gens: &'a PedersenGens) -> Self {
-        CorrectnessProverAwaitingChallenge {
-            pub_key,
-            w,
-            pc_gens,
-        }
-    }
+    pub pc_gens: &'a PedersenGens,
 }
 
 #[derive(Zeroize)]
@@ -119,38 +120,22 @@ impl<'a> AssetProofProverAwaitingChallenge for CorrectnessProverAwaitingChalleng
 
 impl AssetProofProver<CorrectnessFinalResponse> for CorrectnessProver {
     fn apply_challenge(&self, c: &ZKPChallenge) -> CorrectnessFinalResponse {
-        self.u + c.x() * self.w.blinding()
+        CorrectnessFinalResponse(self.u + c.x() * self.w.blinding())
     }
 }
 
 pub struct CorrectnessVerifier<'a> {
     /// The encrypted value (aka the plain text).
-    value: u32,
+    pub value: Scalar,
 
     /// The public key to which the `value` is encrypted.
-    pub_key: ElgamalPublicKey,
+    pub pub_key: ElgamalPublicKey,
 
     /// The encryption cipher text.
-    cipher: CipherText,
+    pub cipher: CipherText,
 
     /// The Generator Points
-    pc_gens: &'a PedersenGens,
-}
-
-impl<'a> CorrectnessVerifier<'a> {
-    pub fn new(
-        value: u32,
-        pub_key: ElgamalPublicKey,
-        cipher: CipherText,
-        pc_gens: &'a PedersenGens,
-    ) -> Self {
-        CorrectnessVerifier {
-            value,
-            pub_key,
-            cipher,
-            pc_gens,
-        }
-    }
+    pub pc_gens: &'a PedersenGens,
 }
 
 impl<'a> AssetProofVerifier for CorrectnessVerifier<'a> {
@@ -162,18 +147,17 @@ impl<'a> AssetProofVerifier for CorrectnessVerifier<'a> {
         challenge: &ZKPChallenge,
         initial_message: &Self::ZKInitialMessage,
         z: &Self::ZKFinalResponse,
-    ) -> Result<()> {
+    ) -> Fallible<()> {
         let generators = self.pc_gens;
-
         let y_prime = self.cipher.y - (Scalar::from(self.value) * generators.B);
 
         ensure!(
-            z * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            z.0 * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
         ensure!(
-            z * generators.B_blinding == initial_message.b + challenge.x() * y_prime,
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 2 }
+            z.0 * generators.B_blinding == initial_message.b + challenge.x() * y_prime,
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 2 }
         );
         Ok(())
     }
@@ -188,8 +172,9 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
+    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
-    use std::convert::TryFrom;
+    use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [17u8; 32];
@@ -200,15 +185,22 @@ mod tests {
         let gens = PedersenGens::default();
         let mut rng = StdRng::from_seed(SEED_1);
         let secret_value = 13u32;
-        let rand_blind = Scalar::random(&mut rng);
 
-        let w = CommitmentWitness::try_from((secret_value, rand_blind)).unwrap();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let cipher = elg_pub.encrypt(&w);
+        let (w, cipher) = elg_pub.encrypt_value(secret_value.into(), &mut rng);
 
-        let prover = CorrectnessProverAwaitingChallenge::new(elg_pub, w, &gens);
-        let verifier = CorrectnessVerifier::new(secret_value, elg_pub, cipher, &gens);
+        let prover = CorrectnessProverAwaitingChallenge {
+            pub_key: elg_pub,
+            w,
+            pc_gens: &gens,
+        };
+        let verifier = CorrectnessVerifier {
+            value: Scalar::from(secret_value),
+            pub_key: elg_pub,
+            cipher,
+            pc_gens: &gens,
+        };
         let mut transcript = Transcript::new(CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL);
 
         // Positive tests
@@ -228,14 +220,45 @@ mod tests {
         let result = verifier.verify(&challenge, &bad_initial_message, &final_response);
         assert_err!(
             result,
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
-        let bad_final_response = Scalar::default();
+        let bad_final_response = CorrectnessFinalResponse(Scalar::default());
         let result = verifier.verify(&challenge, &initial_message, &bad_final_response);
         assert_err!(
             result,
-            AssetProofError::CorrectnessFinalResponseVerificationError { check: 1 }
+            ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn serialize_deserialize_proof() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let secret_value = 42u32;
+        let secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let pub_key = secret_key.get_public_key();
+        let rand_blind = Scalar::random(&mut rng);
+        let w = CommitmentWitness::new(secret_value.into(), rand_blind);
+        let gens = PedersenGens::default();
+        let prover = CorrectnessProverAwaitingChallenge {
+            pub_key,
+            w,
+            pc_gens: &gens,
+        };
+        let (initial_message, final_response) = encryption_proofs::single_property_prover::<
+            StdRng,
+            CorrectnessProverAwaitingChallenge,
+        >(prover, &mut rng)
+        .unwrap();
+
+        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
+        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
+        let recovered_initial_message: CorrectnessInitialMessage =
+            deserialize(&initial_message_bytes).unwrap();
+        let recovered_final_response: CorrectnessFinalResponse =
+            deserialize(&final_response_bytes).unwrap();
+        assert_eq!(recovered_initial_message, initial_message);
+        assert_eq!(recovered_final_response, final_response);
     }
 }
