@@ -1,11 +1,9 @@
-use cryptography::asset_proofs::{CipherText, CommitmentWitness, ElgamalSecretKey};
-
 use criterion::{criterion_group, criterion_main, Criterion};
+use cryptography::asset_proofs::{CipherText, CommitmentWitness, ElgamalSecretKey};
 use curve25519_dalek::scalar::Scalar;
-use rand::rngs::StdRng;
-use rand_core::{RngCore, SeedableRng};
 
-use sp_std::{convert::TryFrom, time::Duration};
+use rand::{rngs::StdRng, SeedableRng};
+use std::time::Duration;
 
 fn bench_elgamal_decrypt(
     c: &mut Criterion,
@@ -26,7 +24,7 @@ fn bench_elgamal_decrypt(
 }
 
 fn bench_elgamal(c: &mut Criterion) {
-    let mut rng = RngCore::default();
+    let mut rng = StdRng::from_seed([42u8; 32]);
 
     let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
     let elg_pub = elg_secret.get_public_key();
@@ -46,7 +44,9 @@ criterion_group! {
     // Lower the sample size to run faster; larger shuffle sizes are
     // long so we're not microbenchmarking anyways.
     // 10 is the minimum allowed sample size in Criterion.
-    config = Criterion::default().sample_size(10).measurement_time(Duration::new(60, 0));
+    config = Criterion::default()
+        .sample_size(10)
+        .measurement_time(Duration::new(60, 0));
     targets = bench_elgamal,
 }
 

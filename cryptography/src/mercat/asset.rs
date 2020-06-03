@@ -26,7 +26,7 @@ use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
 
 lazy_static! {
-    static ref SIG_CTXT: SigningContext = { signing_context(b"mercat/assert") };
+    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/assert");
 }
 
 // -------------------------------------------------------------------------------------

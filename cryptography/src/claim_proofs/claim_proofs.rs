@@ -54,7 +54,7 @@ use sp_std::prelude::*;
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
 
 lazy_static! {
-    static ref SIG_CTXT: SigningContext = { signing_context(SIGNING_CTX) };
+    static ref SIG_CTXT: SigningContext = signing_context(SIGNING_CTX);
 }
 
 #[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]

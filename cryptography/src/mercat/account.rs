@@ -26,7 +26,7 @@ use zeroize::Zeroizing;
 use sp_std::vec::Vec;
 
 lazy_static! {
-    static ref SIG_CTXT: SigningContext = { signing_context(b"mercat/account") };
+    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/account");
 }
 // ------------------------------------------------------------------------------------------------
 // -                                        Any User                                              -
