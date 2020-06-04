@@ -20,11 +20,22 @@ use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use std::time::Instant;
 use zeroize::Zeroizing;
 
 pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
+
+enum Base {
+    TWO = 2,
+    FOUR = 4,
+}
+
+enum Exp {
+    EIGHT = 8,
+    TEN = 10,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct MembershipProofInitialMessage {
@@ -168,13 +179,11 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             }
         }
 
-        let mut sum1: Scalar;
-        let mut sum2: Scalar;
         let mut g_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp);
         for k in 0..self.exp {
             g_values.push(rho[k] * pc_gens.B_blinding);
-            sum1 = Scalar::zero();
-            sum2 = Scalar::zero();
+            let mut sum1 = Scalar::zero();
+            let mut sum2 = Scalar::zero();
             for i in 0..initial_size {
                 sum1 += polynomials[i].coeffs[k];
                 sum2 += polynomials[i].coeffs[k] * self.elements_set[i];
@@ -237,19 +246,13 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Fallible<()> {
-        let mut initial_size = self.elements_set.len();
-        ensure!(initial_size != 0, ErrorKind::EmptyElementsSet);
-
         let m = initial_message.ooon_proof_initial_message.m;
         let n = initial_message.ooon_proof_initial_message.n;
-        let size = initial_message
-            .ooon_proof_initial_message
-            .n
-            .pow(initial_message.ooon_proof_initial_message.m as u32);
+        let exp = u32::try_from(m).map_err(|_| ErrorKind::InvalidExponentParameter)?;
+        let size = initial_message.ooon_proof_initial_message.n.pow(exp);
 
-        if initial_size > size {
-            initial_size = size;
-        }
+        let initial_size = std::cmp::min(self.elements_set.len(), size);
+        ensure!(initial_size != 0, ErrorKind::EmptyElementsSet);
         let b_comm = initial_message
             .ooon_proof_initial_message
             .r1_proof_initial_message
