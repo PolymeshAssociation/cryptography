@@ -14,7 +14,8 @@ use std::time::Duration;
 
 const SEED_1: [u8; 32] = [42u8; 32];
 const BASE: usize = 4;
-const EXPONENT: usize = 3;
+const EXPONENT: usize = 8;
+const SET_SIZE: u32 = 65536;
 
 fn bench_membership_verify(
     c: &mut Criterion,
@@ -24,7 +25,7 @@ fn bench_membership_verify(
     let label = format!("membership verification");
 
     let generators = OooNProofGenerators::new(EXPONENT, BASE);
-    let even_elements: Vec<Scalar> = (0..64 as u32).map(|m| Scalar::from(2 * m)).collect();
+    let elements: Vec<Scalar> = (0..SET_SIZE as u32).map(|m| Scalar::from(m)).collect();
 
     c.bench_function_over_inputs(
         &label,
@@ -33,7 +34,7 @@ fn bench_membership_verify(
                 single_property_verifier(
                     &MembershipProofVerifier {
                         secret_element_com,
-                        elements_set: even_elements.as_slice(),
+                        elements_set: elements.as_slice(),
                         generators: &generators,
                     },
                     proof.0.clone(),
@@ -51,19 +52,18 @@ fn bench_membership_proof(c: &mut Criterion) {
 
     let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
-    let even_elements: Vec<Scalar> = (0..64 as u32).map(|m| Scalar::from(2 * m)).collect();
-    // let odd_elements: Vec<Scalar> = (0..64 as u32).map(|m| Scalar::from(2 * m + 1)).collect();
+    let elements: Vec<Scalar> = (0..SET_SIZE as u32).map(|m| Scalar::from(m)).collect();
 
+    let secret_member = Scalar::from(8u32);
     let blinding = Scalar::random(&mut rng);
 
-    let even_member = generators.com_gens.commit(Scalar::from(8u32), blinding);
-    // let odd_member = generators.com_gens.commit(Scalar::from(75u32), blinding);
+    let commited_member = generators.com_gens.commit(secret_member, blinding);
 
     let prover = MembershipProverAwaitingChallenge::new(
-        Scalar::from(8u32),
+        secret_member,
         blinding,
         &generators,
-        even_elements.as_slice().clone(),
+        elements.as_slice(),
         BASE,
         EXPONENT,
     )
@@ -73,7 +73,7 @@ fn bench_membership_proof(c: &mut Criterion) {
         single_property_prover::<StdRng, MembershipProverAwaitingChallenge>(prover, &mut rng)
             .unwrap();
 
-    bench_membership_verify(c, even_member, vec![proof])
+    bench_membership_verify(c, commited_member, vec![proof])
 }
 
 criterion_group! {
@@ -81,7 +81,7 @@ criterion_group! {
     // Lower the sample size to run faster; larger shuffle sizes are
     // long so we're not microbenchmarking anyways.
     // 10 is the minimum allowed sample size in Criterion.
-    config = Criterion::default().sample_size(10).measurement_time(Duration::new(60, 0));
+    config = Criterion::default().sample_size(10).measurement_time(Duration::new(600, 0));
     targets = bench_membership_proof,
 }
 
