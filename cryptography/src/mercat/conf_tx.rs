@@ -25,6 +25,7 @@ use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use lazy_static::lazy_static;
 use rand::rngs::StdRng;
+use rand_core::OsRng;
 use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
 
@@ -74,11 +75,13 @@ impl ConfidentialTransactionSender for CtxSender {
         let witness = CommitmentWitness::new(amount.into(), Scalar::random(rng));
         let amount_enc_blinding = witness.blinding();
 
-        let non_neg_amount_proof = InRangeProof::from(prove_within_range(
-            amount.into(),
-            amount_enc_blinding,
-            BALANCE_RANGE,
-        )?);
+        let (init, response, range) =
+            prove_within_range(amount.into(), amount_enc_blinding, BALANCE_RANGE, rng)?;
+        let non_neg_amount_proof = InRangeProof {
+            init,
+            response,
+            range,
+        };
 
         // Prove that the amount encrypted under different public keys are the same
         let (sndr_new_enc_amount, rcvr_new_enc_amount) =
@@ -115,11 +118,13 @@ impl ConfidentialTransactionSender for CtxSender {
 
         // Prove that the sender has enough funds
         let blinding = balance_refresh_enc_blinding - amount_enc_blinding;
-        let enough_fund_proof = InRangeProof::from(prove_within_range(
-            (balance - amount).into(),
-            blinding,
-            BALANCE_RANGE,
-        )?);
+        let (init, response, range) =
+            prove_within_range((balance - amount).into(), blinding, BALANCE_RANGE, rng)?;
+        let enough_fund_proof = InRangeProof {
+            init,
+            response,
+            range,
+        };
 
         // Refresh the encrypted asset id of the sender account and prove that the
         // refreshment was done correctly
@@ -312,11 +317,14 @@ fn verify_initital_transaction_proofs(
         init_data.amount_equal_cipher_proof.response,
     )?;
 
+    let mut rng = OsRng::default();
+
     // Verify that the amount is not negative
     verify_within_range(
         init_data.non_neg_amount_proof.init.clone(),
         init_data.non_neg_amount_proof.response.clone(),
         init_data.non_neg_amount_proof.range,
+        &mut rng,
     )?;
 
     // verify that the balance refreshment was done correctly
@@ -336,6 +344,7 @@ fn verify_initital_transaction_proofs(
         init_data.enough_fund_proof.init.clone(),
         init_data.enough_fund_proof.response.clone(),
         init_data.enough_fund_proof.range,
+        &mut rng,
     )?;
 
     // Verify that the asset id refreshment was done correctly

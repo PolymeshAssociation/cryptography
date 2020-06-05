@@ -27,6 +27,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::rngs::StdRng;
+use rand_core::OsRng;
 use schnorrkel::keys::{Keypair, PublicKey};
 use serde::{Deserialize, Serialize};
 
@@ -157,9 +158,10 @@ pub struct InRangeProof {
 
 impl Default for InRangeProof {
     fn default() -> Self {
+        let mut rng = OsRng::default();
         let range = 32;
         InRangeProof::from(
-            range_proof::prove_within_range(0, Scalar::one(), range)
+            range_proof::prove_within_range(0, Scalar::one(), range, &mut rng)
                 .expect("This shouldn't happen."),
         )
     }

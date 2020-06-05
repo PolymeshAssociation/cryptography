@@ -13,9 +13,6 @@ exclude = [".gitignore"]
 
 [dependencies]
 sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, rev = "a439a7aa5a9a3df2a42d9b25ea04288d3a0866e8" }
-# sp-application-crypto = { git = "https://github.com/paritytech/substrate", default-features = false, rev = "a439a7aa5a9a3df2a42d9b25ea04288d3a0866e8" }
-# sp-core = { git = "https://github.com/paritytech/substrate", default-features = false, rev = "a439a7aa5a9a3df2a42d9b25ea04288d3a0866e8" }
-
 
 # Common
 serde = { version = "1.0.105", features = ["derive"] }
@@ -23,81 +20,80 @@ serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_bytes = { version = "0.11", default-features = false, features = ["alloc"] }
 bincode = { version = "1.2" }
 zeroize = { version = "1.1", default-features = false }
-chrono = { version = "0.4",  default-features = false }
 criterion = { version = "0.3", optional = true }
 lazy_static = "1.4.0"
 failure = "0.1.7"
 
 # Crypto
-curve25519-dalek = { version = "2", default-features = false }
-merlin = { version = "2.0.0", default-features = false }
-schnorrkel = { version = "0.9.1", default-features = false }
-
-getrandom = { version = "0.1.14", default-features = false, optional = true } 
-rand_core = { version = "0.5", default-features = false }
-rand = { version = "0.7", default-features = false }
 sha3 = { version = "0.8", default-features = false }
 
-# Customized libraries for `no_std` targets.
-bulletproofs = { git = "https://github.com/fmiguelgarcia/bulletproofs.git", branch = "CRYP-92/integration_test", default-features = false }
+rand_core = { version = "0.5", default-features = false}
+rand = { version = "0.7", default-features = false }
+getrandom = { version = "0.1.14", default-features = false} 
+chrono = { version = "0.4",  default-features = false}
 
+curve25519-dalek = { version = "2", default-features = false }
+schnorrkel = { version = "0.9.1", default-features = false }
+merlin = { version = "2.0.0", default-features = false }
+bulletproofs = { git = "https://github.com/fmiguelgarcia/bulletproofs.git", branch = "CRYP-92/integration_test", default-features = false }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.10"
-# env_logger = "0.7.1"
 
 [features]
-common = [
-	"curve25519-dalek/nightly", 
+default = ["std"] 
+
+# Backends
+u64_backend = [ "curve25519-dalek/u64_backend", "schnorrkel/u64_backend" ]
+avx2_backend = [ "curve25519-dalek/avx2_backend", "schnorrkel/avx2_backend" ]
+u32_backend = [ "curve25519-dalek/u32_backend", "schnorrkel/u32_backend" ]
+
+serde_all = [
+	"chrono/serde", 
 	"curve25519-dalek/serde", 
-	"curve25519-dalek/alloc",
 	"schnorrkel/serde",
-	"chrono/serde",
-	"chrono/clock",
-]
-u64_backend = [
-	"curve25519-dalek/u64_backend",
-	"schnorrkel/u64_backend"
-]
-avx2_backend = [
-	"curve25519-dalek/avx2_backend",
-	"schnorrkel/avx2_backend"
-]
-u32_backend = [
-	"curve25519-dalek/u32_backend", 
-	"schnorrkel/u32_backend"
 ]
 
-default = ["std"]
-no_std = [
-	"common", 
-	"u32_backend",
-	"getrandom/wasm-bindgen",
-	"rand_core/alloc",
-	"rand_core/getrandom",
-	"bulletproofs/no_std",
-	"schnorrkel/wasm-bindgen",
-	"rand/wasm-bindgen",
+alloc = [
+	"rand_core/alloc", 
 	"rand/alloc",
-	"chrono/wasmbind",
 	"chrono/alloc",
+	"curve25519-dalek/alloc", 
 ]
+
+no_std = [
+	# General
+	"u32_backend",
+	"serde_all",
+	"alloc",
+	# Other
+	"rand_core/getrandom",
+	"rand/wasm-bindgen",
+	"chrono/clock", 
+	"chrono/wasmbind", 
+	"getrandom/wasm-bindgen",
+	"curve25519-dalek/nightly",
+	"schnorrkel/wasm-bindgen",
+	"bulletproofs/no_std"
+]
+
 std = [ 
+	# General and optional
+	"u64_backend",
+	"serde_all",
 	"criterion",
-	"common", 
-	"avx2_backend",
-	"rand_core/std",
-	"bulletproofs/std",
+	# Crypto 
+	"curve25519-dalek/nightly", 
 	"schnorrkel/std",
+	"rand_core/std",
 	"rand/std",
+	"bulletproofs/std",
+	# Other
+	"chrono/clock",
 	"chrono/std",
-	# "sp-core/std",
 	"sp-std/std"
 ]
 
 [[bench]]
 name = "elgamal_decryption"
 harness = false
-
-# [lib]
-# crate-type = ["cdylib","rlib"]

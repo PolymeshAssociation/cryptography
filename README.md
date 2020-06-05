@@ -64,7 +64,7 @@ in WASM, you have to enable `no_std` feature.
 
 ```
 $> cd cryptography
-cryptography $> cargo +nightly b --features no_std
+cryptography $> cargo build --target wasm32-unknown-unknown --no-default-features --features no_std
 ```
 
 To run tests on WASM, follow [wasm-bindgen-test][wasm-bindgen-test].
