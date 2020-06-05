@@ -58,3 +58,7 @@ std = [
 [[bench]]
 name = "elgamal_decryption"
 harness = false
+
+[[bench]]
+name = "membership_verification"
+harness = false
