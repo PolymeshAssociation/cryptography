@@ -313,6 +313,20 @@ pub struct Account {
     pub scrt: SecAccount,
 }
 
+impl Account {
+    /// Utility method that can decrypt the the balance of an account.
+    pub fn decrypt_balance(&self) -> Fallible<Balance> {
+        let balance = self
+            .scrt
+            .enc_keys
+            .scrt
+            .key
+            .decrypt(&self.pblc.content.enc_balance.cipher)?;
+
+        Ok(Balance::from(balance))
+    }
+}
+
 /// The interface for the account creation.
 pub trait AccountCreater {
     /// Creates a public account for a user and initializes the balance to zero.
