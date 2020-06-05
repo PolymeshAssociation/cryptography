@@ -521,7 +521,7 @@ pub trait ConfidentialTransactionSender {
     /// This is called by the sender of a confidential transaction. The outputs
     /// can be safely placed on the chain. It corresponds to `CreateCTX` function of
     /// MERCAT paper.
-    fn create(
+    fn create_transaction(
         &self,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,

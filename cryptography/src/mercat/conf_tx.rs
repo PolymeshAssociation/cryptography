@@ -36,7 +36,7 @@ use zeroize::Zeroizing;
 pub struct CtxSender {}
 
 impl ConfidentialTransactionSender for CtxSender {
-    fn create(
+    fn create_transaction(
         &self,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
@@ -817,7 +817,7 @@ mod tests {
         };
 
         // Create the trasaction and check its result and state
-        let result = sndr.create(&sndr_account, &rcvr_account.pblc, amount, &mut rng);
+        let result = sndr.create_transaction(&sndr_account, &rcvr_account.pblc, amount, &mut rng);
         let (ctx_init_data, state) = result.unwrap();
         assert_eq!(
             state,
