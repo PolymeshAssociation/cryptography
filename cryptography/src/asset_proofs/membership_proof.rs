@@ -27,16 +27,6 @@ use zeroize::Zeroizing;
 pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
 
-enum Base {
-    TWO = 2,
-    FOUR = 4,
-}
-
-enum Exp {
-    EIGHT = 8,
-    TEN = 10,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct MembershipProofInitialMessage {
     ooon_proof_initial_message: OOONProofInitialMessage,
