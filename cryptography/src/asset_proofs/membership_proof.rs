@@ -516,18 +516,14 @@ mod tests {
 
         let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
 
-        let proof_step1_start = Instant::now();
         let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
-        let proof_step1_duration = proof_step1_start.elapsed();
 
         initial_message.update_transcript(&mut transcript).unwrap();
         let challenge = transcript
             .scalar_challenge(MEMBERSHIP_PROOF_CHALLENGE_LABEL)
             .unwrap();
 
-        let proof_step2_start = Instant::now();
         let final_response = prover.apply_challenge(&challenge);
-        let proof_step2_duration = proof_step2_start.elapsed();
 
         let verifier = MembershipProofVerifier {
             secret_element_com: secret_commitment,
@@ -535,19 +531,9 @@ mod tests {
             generators: &generators,
         };
 
-        let ver_start = Instant::now();
         let result = verifier.verify(&challenge, &initial_message, &final_response);
-        let ver_duration = ver_start.elapsed();
+
         assert!(result.is_ok());
-        println!(
-            "\nProof: Initial Message generation time: {:.2?}",
-            proof_step1_duration
-        );
-        println!(
-            "Proof: Final Response generation time: {:.2?}",
-            proof_step2_duration
-        );
-        println!("Fast verification time: {:.2?}\n\n", ver_duration);
     }
 
     #[test]
