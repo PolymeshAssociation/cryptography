@@ -1,5 +1,7 @@
 //! The `claim_proofs` library contains API for generating
-//! claim proofs and verifying them as part of the Asset Granularity Unique Identity project.
+//! claim proofs and verifying them as part of the
+//! Asset Granularity Unique Identity project.
+//!
 //! The investor would use the `ProofKeyPair` API to generate
 //! the proofs.
 //!
