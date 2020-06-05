@@ -37,6 +37,7 @@ const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 /// `n` is the fixed base. Usually we will work with base `4`.
 /// Returns the representation of the input number as the given base number
 /// The input number should be within the provided range [0, base^exp)
+#[inline(always)]
 pub(crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Vec<usize> {
     let mut rem: usize;
     let mut number = number;
@@ -56,6 +57,7 @@ pub(crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Vec<usize
 /// The number is represented as the given base number `n = n0 *base^0 + n1 *base^1 +...+ n_exp *base^{exp-1}`
 /// The return value is a bit-matrix of size `exp x base` where
 /// in the  `j`-th row there is exactly one 1 at the cell matrix[j][n_j].
+#[inline(always)]
 pub(crate) fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Vec<Scalar> {
     let mut rem: usize;
     let mut number = number;
