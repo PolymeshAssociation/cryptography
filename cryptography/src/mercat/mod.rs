@@ -280,7 +280,7 @@ pub struct PubAccountContent {
     pub enc_balance: EncryptedAmount,
     pub asset_wellformedness_proof: WellformednessProof,
     pub asset_membership_proof: MembershipProof,
-    pub balance_correctness_proof: CorrectnessProof,
+    pub initial_balance_correctness_proof: CorrectnessProof,
     pub memo: AccountMemo,
 }
 
@@ -294,7 +294,7 @@ impl PubAccountContent {
 #[derive(Clone)]
 pub struct PubAccount {
     pub content: PubAccountContent,
-    pub sig: Signature,
+    pub initial_sig: Signature,
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.

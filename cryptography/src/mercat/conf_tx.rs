@@ -528,10 +528,10 @@ mod tests {
                 enc_balance: enc_balance.into(),
                 asset_wellformedness_proof: WellformednessProof::default(),
                 asset_membership_proof: MembershipProof::default(),
-                balance_correctness_proof: CorrectnessProof::default(),
+                initial_balance_correctness_proof: CorrectnessProof::default(),
                 memo: AccountMemo::from((rcvr_enc_pub_key, rcvr_sign_pub_key)),
             },
-            sig: Signature::default(),
+            initial_sig: Signature::default(),
         })
     }
 

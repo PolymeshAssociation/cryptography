@@ -52,7 +52,7 @@ pub fn create_account(
     let balance_witness = CommitmentWitness::new(balance.into(), balance_blinding);
     let enc_balance = EncryptedAmount::from(scrt.enc_keys.pblc.key.encrypt(&balance_witness));
 
-    let balance_correctness_proof = CorrectnessProof::from(single_property_prover(
+    let initial_balance_correctness_proof = CorrectnessProof::from(single_property_prover(
         CorrectnessProverAwaitingChallenge {
             pub_key: scrt.enc_keys.pblc.key,
             w: balance_witness,
@@ -95,13 +95,16 @@ pub fn create_account(
         enc_balance,
         asset_wellformedness_proof,
         asset_membership_proof,
-        balance_correctness_proof,
+        initial_balance_correctness_proof,
         memo: AccountMemo::from((scrt.enc_keys.pblc, scrt.sign_keys.pblc())),
     };
 
-    let sig = scrt.sign_keys.pair.sign(&content.to_bytes()?);
+    let initial_sig = scrt.sign_keys.pair.sign(&content.to_bytes()?);
 
-    Ok(PubAccount { content, sig })
+    Ok(PubAccount {
+        content,
+        initial_sig,
+    })
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -115,7 +118,7 @@ impl AccountCreaterVerifier for AccountValidator {
         let gens = &PedersenGens::default();
         ensure!(
             sr25519::Pair::verify(
-                &account.sig,
+                &account.initial_sig,
                 &account.content.to_bytes()?,
                 &account.content.memo.owner_sign_pub_key.key,
             ),
@@ -142,8 +145,8 @@ impl AccountCreaterVerifier for AccountValidator {
                 cipher: account.content.enc_balance.cipher,
                 pc_gens: &gens,
             },
-            account.content.balance_correctness_proof.init,
-            account.content.balance_correctness_proof.response,
+            account.content.initial_balance_correctness_proof.init,
+            account.content.initial_balance_correctness_proof.response,
         )?;
 
         // Verify that the asset is from the proper asset list
