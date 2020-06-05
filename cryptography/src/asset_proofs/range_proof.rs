@@ -16,11 +16,8 @@ const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 // Range Proof
 // ------------------------------------------------------------------------
 
-// #[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
-// pub struct RangeProofInitialMessage(pub CompressedRistretto);
 pub type RangeProofInitialMessage = CompressedRistretto;
 
-// #[derive(Serialize, Deserialize, Clone, Debug)]
 pub type RangeProofFinalResponse = RangeProof;
 
 /// Generate a range proof for a commitment to a secret value.
