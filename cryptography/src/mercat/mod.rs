@@ -142,7 +142,7 @@ impl From<(WellformednessInitialMessage, WellformednessFinalResponse)> for Wellf
 }
 
 /// Holds the non-interactive proofs of correctness, equivalent of L_correct of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug)]
 pub struct CorrectnessProof {
     init: CorrectnessInitialMessage,
     response: CorrectnessFinalResponse,
@@ -353,7 +353,7 @@ pub trait AccountCreaterVerifier {
 
 /// Represents the three substates (started, verified, rejected) of a
 /// confidential transaction state.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TxSubstate {
     /// The action on transaction has been taken but is not verified yet.
     Started,
@@ -374,11 +374,11 @@ pub enum AssetTxState {
 
 /// Represents the four states (initialized, justified, finalized, reversed) of a
 /// confidentional transaction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConfidentialTxState {
     Initialization(TxSubstate),
-    InitilaziationJustification(TxSubstate),
     Finalization(TxSubstate),
+    FinalizationJustification(TxSubstate),
     Reversal(TxSubstate),
 }
 
@@ -482,6 +482,8 @@ pub struct ConfidentialTxMemo {
     pub refreshed_enc_balance: EncryptedAmount,
     pub refreshed_enc_asset_id: EncryptedAssetId,
     pub enc_asset_id_using_rcvr: EncryptedAssetId,
+    pub enc_asset_id_for_mdtr: EncryptedAssetId,
+    pub enc_amount_for_mdtr: EncryptedAmount,
 }
 
 /// Holds the proofs and memo of the confidential transaction sent by the sender.
@@ -494,6 +496,8 @@ pub struct PubInitConfidentialTxDataContent {
     pub asset_id_equal_cipher_with_sndr_rcvr_keys_proof: CipherEqualDifferentPubKeyProof,
     pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
+    pub asset_id_correctness_proof: CorrectnessProof,
+    pub amount_correctness_proof: CorrectnessProof,
 }
 
 impl PubInitConfidentialTxDataContent {
@@ -522,11 +526,26 @@ impl PubFinalConfidentialTxDataContent {
         bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
     }
 }
+
 /// Wrapper for the contents and the signature of the content sent by the
 /// receiver of the transaction.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PubFinalConfidentialTxData {
     pub content: PubFinalConfidentialTxDataContent,
+    pub sig: Signature,
+}
+
+impl PubFinalConfidentialTxData {
+    pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
+        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+    }
+}
+
+/// Wrapper for the contents and the signature of the justifified and finalized
+/// transaction.
+#[derive(Debug)]
+pub struct JustifiedPubFinalConfidentialTxData {
+    pub conf_tx_final_data: PubFinalConfidentialTxData,
     pub sig: Signature,
 }
 
@@ -539,6 +558,7 @@ pub trait ConfidentialTransactionSender {
         &self,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
+        mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
         rng: &mut StdRng,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)>;
@@ -557,8 +577,24 @@ pub trait ConfidentialTransactionInitVerifier {
 
 pub trait ConfidentialTransactionMediator {
     /// Justify the transaction by mediator.
-    /// TODO: missing from the paper, will discuss and decide later.
-    fn justify_init() -> Fallible<ConfidentialTxState>;
+    fn justify(
+        &self,
+        conf_tx_final_data: PubFinalConfidentialTxData,
+        state: ConfidentialTxState,
+        mdtr_sec_account: &SecAccount,
+        // NOTE: without this, decryption takes a very long time. Since asset id to scalar takes the hash of the asset id array.
+        asset_id_hint: AssetId,
+    ) -> Fallible<(JustifiedPubFinalConfidentialTxData, ConfidentialTxState)>;
+}
+
+pub trait ConfidentialTransactionMediatorVerifier {
+    /// This is called by the validators to verify the justification phase which was done by the mediator.
+    fn verify(
+        &self,
+        conf_tx_justified_final_data: &JustifiedPubFinalConfidentialTxData,
+        mdtr_sign_pub_key: &SigningPubKey,
+        state: ConfidentialTxState,
+    ) -> Fallible<ConfidentialTxState>;
 }
 
 pub trait ConfidentialTransactionReceiver {
