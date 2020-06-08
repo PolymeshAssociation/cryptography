@@ -344,7 +344,7 @@ pub trait AccountCreater {
 /// The interface for the verifying the account creation.
 pub trait AccountCreaterVerifier {
     /// Called by the validators to ensure that the account was created correctly.
-    fn verify(&self, account: &PubAccount, valid_asset_ids: Vec<AssetId>) -> Fallible<()>;
+    fn verify(&self, account: &PubAccount, valid_asset_ids: &Vec<Scalar>) -> Fallible<()>;
 }
 
 // -------------------------------------------------------------------------------------

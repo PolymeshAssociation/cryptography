@@ -27,9 +27,16 @@ use zeroize::Zeroizing;
 // -                                        Any User                                              -
 // ------------------------------------------------------------------------------------------------
 
+pub fn convert_asset_ids(valid_asset_ids: Vec<AssetId>) -> Vec<Scalar> {
+    valid_asset_ids
+        .into_iter()
+        .map(|m| Scalar::from(m))
+        .collect::<Vec<_>>()
+}
+
 pub fn create_account(
     scrt: SecAccount,
-    valid_asset_ids: Vec<AssetId>,
+    valid_asset_ids: &Vec<Scalar>,
     account_id: u32,
     rng: &mut StdRng,
 ) -> Fallible<Account> {
@@ -66,16 +73,12 @@ pub fn create_account(
     let generators = &OooNProofGenerators::new(EXPONENT, BASE);
     let asset_id = Scalar::from(scrt.asset_id.clone());
     let secret_element_com = enc_asset_id.y;
-    let elements_set = valid_asset_ids
-        .into_iter()
-        .map(|m| Scalar::from(m))
-        .collect::<Vec<_>>();
     let (init, response) = single_property_prover(
         MembershipProverAwaitingChallenge::new(
             asset_id,
             scrt.asset_id_witness.blinding(),
             generators,
-            elements_set.as_slice(),
+            valid_asset_ids.as_slice(),
             BASE,
             EXPONENT,
         )?,
@@ -143,7 +146,7 @@ pub fn withdraw(account: PubAccount, enc_amount: EncryptedAmount) -> PubAccount 
 pub struct AccountValidator {}
 
 impl AccountCreaterVerifier for AccountValidator {
-    fn verify(&self, account: &PubAccount, valid_asset_ids: Vec<AssetId>) -> Fallible<()> {
+    fn verify(&self, account: &PubAccount, valid_asset_ids: &Vec<Scalar>) -> Fallible<()> {
         let gens = &PedersenGens::default();
         ensure!(
             sr25519::Pair::verify(
@@ -181,15 +184,11 @@ impl AccountCreaterVerifier for AccountValidator {
         // Verify that the asset is from the proper asset list
         let membership_proof = account.content.asset_membership_proof.clone();
         let generators = &OooNProofGenerators::new(EXPONENT, BASE);
-        let elements_set = valid_asset_ids
-            .into_iter()
-            .map(|m| Scalar::from(m))
-            .collect::<Vec<_>>();
         single_property_verifier(
             &MembershipProofVerifier {
                 secret_element_com: membership_proof.commitment,
                 generators,
-                elements_set: elements_set.as_slice(),
+                elements_set: valid_asset_ids,
             },
             membership_proof.init,
             membership_proof.response,
@@ -233,6 +232,7 @@ mod tests {
             .iter()
             .map(|id| AssetId::from(id.clone()))
             .collect();
+        let valid_asset_ids = convert_asset_ids(valid_asset_ids);
         let account_id = 2;
         let asset_id_witness = CommitmentWitness::from((asset_id.clone().into(), &mut rng));
         let scrt_account = SecAccount {
@@ -244,18 +244,13 @@ mod tests {
 
         // ----------------------- test
 
-        let sndr_account = create_account(
-            scrt_account.clone(),
-            valid_asset_ids.clone(),
-            account_id,
-            &mut rng,
-        )
-        .unwrap();
+        let sndr_account =
+            create_account(scrt_account.clone(), &valid_asset_ids, account_id, &mut rng).unwrap();
         let decrypted_balance = sndr_account.decrypt_balance().unwrap();
         assert_eq!(decrypted_balance, 0);
 
         let account_vldtr = AccountValidator {};
-        let result = account_vldtr.verify(&sndr_account.pblc, valid_asset_ids);
+        let result = account_vldtr.verify(&sndr_account.pblc, &valid_asset_ids);
         result.unwrap();
     }
 
@@ -277,6 +272,7 @@ mod tests {
             .iter()
             .map(|id| AssetId::from(id.clone()))
             .collect();
+        let valid_asset_ids = convert_asset_ids(valid_asset_ids);
         let account_id = 2;
         let asset_id_witness = CommitmentWitness::from((asset_id.clone().into(), &mut rng));
         let scrt_account = SecAccount {
@@ -288,8 +284,7 @@ mod tests {
 
         // ----------------------- test
 
-        let account =
-            create_account(scrt_account, valid_asset_ids.clone(), account_id, &mut rng).unwrap();
+        let account = create_account(scrt_account, &valid_asset_ids, account_id, &mut rng).unwrap();
         let balance = account.decrypt_balance().unwrap();
         assert_eq!(balance, 0);
 
