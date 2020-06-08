@@ -199,8 +199,7 @@ mod tests {
         asset_proofs::{CommitmentWitness, ElgamalSecretKey},
         mercat::{
             AccountMemo, CorrectnessProof, EncryptedAmount, EncryptedAssetId, EncryptionKeys,
-            EncryptionPubKey, MembershipProof, PubAccountContent, SecAccount, Signature,
-            SigningKeys,
+            EncryptionPubKey, MembershipProof, PubAccountContent, SecAccount,
         },
         AssetId,
     };
@@ -271,7 +270,6 @@ mod tests {
             .unwrap();
 
         let validator = AssetTxIssueValidator {};
-        let sign_pub_key = &sign_keys.public;
         let result = validator
             .verify(
                 &asset_tx,
