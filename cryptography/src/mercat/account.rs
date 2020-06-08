@@ -63,18 +63,17 @@ pub fn create_account(
     )?);
 
     // Prove that the asset id is among the list of publicly known asset ids
-    let membership_blinding = Scalar::random(rng);
     let generators = &OooNProofGenerators::new(EXPONENT, BASE);
     let asset_id = Scalar::from(scrt.asset_id.clone());
-    let secret_element_com = generators.com_gens.commit(asset_id, membership_blinding);
-    let elements_set: Vec<Scalar> = valid_asset_ids
-        .iter()
-        .map(|m| Scalar::from(m.clone()))
-        .collect();
+    let secret_element_com = enc_asset_id.y;
+    let elements_set = valid_asset_ids
+        .into_iter()
+        .map(|m| Scalar::from(m))
+        .collect::<Vec<_>>();
     let (init, response) = single_property_prover(
         MembershipProverAwaitingChallenge::new(
             asset_id,
-            membership_blinding,
+            scrt.asset_id_witness.blinding(),
             generators,
             elements_set.as_slice(),
             BASE,
