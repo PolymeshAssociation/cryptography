@@ -401,12 +401,9 @@ pub trait AssetTransactionInitializeVerifier {
     /// and to verify the signature.
     fn verify(
         &self,
-        amount: Balance,
         asset_tx: &PubAssetTxData,
         state: AssetTxState,
-        issr_sign_pub_key: &SigningPubKey,
-        issr_enc_pub_key: &EncryptionPubKey,
-        isser_acount_enc_asset_id: &EncryptedAssetId,
+        issr_pub_account: &PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
     ) -> Fallible<AssetTxState>;
 }
