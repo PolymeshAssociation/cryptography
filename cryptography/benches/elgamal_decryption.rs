@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use cryptography::asset_proofs::{CipherText, CommitmentWitness, ElgamalSecretKey};
+use cryptography::asset_proofs::{CipherText, ElgamalSecretKey};
 use curve25519_dalek::scalar::Scalar;
 
 use rand::{rngs::StdRng, SeedableRng};
