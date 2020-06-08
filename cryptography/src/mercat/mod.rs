@@ -471,10 +471,10 @@ impl PubInitConfidentialTxDataContent {
 }
 
 /// Wrapper for the initial transaction data and its signature.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PubInitConfidentialTxData {
     pub content: PubInitConfidentialTxDataContent,
-    pub sig: Option<Signature>,
+    pub sig: Signature,
 }
 
 /// Holds the initial transaction data and the proof of equality of asset ids
@@ -563,16 +563,16 @@ pub trait ConfidentialTransactionFinalizeAndProcessVerifier {
 
 /// Holds the public portion of the reversal transaction.
 pub struct PubReverseConfidentialTxData {
-    final_data: PubInitConfidentialTxData,
-    memo: ReverseConfidentialTxMemo,
-    sig: Signature,
+    _final_data: PubInitConfidentialTxData,
+    _memo: ReverseConfidentialTxMemo,
+    _sig: Signature,
 }
 
 /// Holds the memo for reversal of the confidential transaction sent by the mediator.
 pub struct ReverseConfidentialTxMemo {
-    enc_amount_using_rcvr: EncryptedAmount,
-    enc_refreshed_amount: EncryptedAmount,
-    enc_asset_id_using_rcvr: EncryptedAssetId,
+    _enc_amount_using_rcvr: EncryptedAmount,
+    _enc_refreshed_amount: EncryptedAmount,
+    _enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
 pub trait ConfidentialTransactionReverseAndProcessMediator {

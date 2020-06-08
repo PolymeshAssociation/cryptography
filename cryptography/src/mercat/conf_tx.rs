@@ -184,7 +184,7 @@ impl ConfidentialTransactionSender for CtxSender {
         };
 
         let message = content.to_bytes()?;
-        let sig = Some(sndr_sign_keys.sign(SIG_CTXT.bytes(&message)));
+        let sig = sndr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
             PubInitConfidentialTxData { content, sig },
@@ -397,16 +397,11 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
         );
 
         let message = transaction.content.to_bytes()?;
-        let signature = transaction
-            .sig
-            .as_ref()
-            .ok_or(ErrorKind::SignatureValidationFailure)?;
-
         let _ = sndr_account
             .content
             .memo
             .owner_sign_pub_key
-            .verify(SIG_CTXT.bytes(&message), &signature)
+            .verify(SIG_CTXT.bytes(&message), &transaction.sig)
             .map_err(|_| ErrorKind::SignatureValidationFailure)?;
 
         verify_initital_transaction_proofs(transaction, sndr_account)?;
@@ -478,8 +473,8 @@ mod tests {
         asset_proofs::ElgamalSecretKey,
         mercat::{
             AccountMemo, ConfidentialTxMemo, CorrectnessProof, EncryptedAmount, EncryptionKeys,
-            EncryptionPubKey, MembershipProof, PubAccountContent, SecAccount, SigningKeys,
-            SigningPubKey, WellformednessProof,
+            EncryptionPubKey, MembershipProof, PubAccountContent, SecAccount, Signature,
+            SigningKeys, SigningPubKey, WellformednessProof,
         },
         AssetId,
     };
@@ -500,12 +495,9 @@ mod tests {
         }
     }
 
-    fn mock_gen_sign_key_pair(seed: u8) -> (SigningKeys, SigningPubKey) {
+    fn mock_gen_sign_key_pair(seed: u8) -> SigningKeys {
         let mut rng = StdRng::from_seed([seed; 32]);
-        let pair = schnorrkel::Keypair::generate_with(&mut rng);
-        let sign_pub_key = pair.public;
-
-        (pair, sign_pub_key)
+        schnorrkel::Keypair::generate_with(&mut rng)
     }
 
     fn mock_ctx_init_memo<R: RngCore + CryptoRng>(
@@ -559,6 +551,7 @@ mod tests {
         rcvr_pub_key: EncryptionPubKey,
         expected_amount: Balance,
         asset_id: AssetId,
+        sig: Signature,
         rng: &mut R,
     ) -> PubInitConfidentialTxData {
         PubInitConfidentialTxData {
@@ -572,7 +565,7 @@ mod tests {
                 balance_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
                 asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
             },
-            ..Default::default()
+            sig,
         }
     }
 
@@ -588,18 +581,21 @@ mod tests {
         let mut rng = StdRng::from_seed([17u8; 32]);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
-        let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
+
+        let sign = rcvr_sign_keys.sign(SIG_CTXT.bytes(b""));
 
         let ctx_init_data = mock_ctx_init_data(
             rcvr_enc_keys.pblc,
             expected_amount,
             asset_id.clone(),
+            sign,
             &mut rng,
         );
         let rcvr_account = Account {
             pblc: mock_gen_account(
                 rcvr_enc_keys.pblc,
-                rcvr_sign_pub_key,
+                rcvr_sign_keys.public,
                 asset_id.clone(),
                 balance,
                 &mut rng,
@@ -636,18 +632,20 @@ mod tests {
         let mut rng = StdRng::from_seed([17u8; 32]);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
-        let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
+        let sign = rcvr_sign_keys.sign(SIG_CTXT.bytes(b""));
 
         let ctx_init_data = mock_ctx_init_data(
             rcvr_enc_keys.pblc,
             expected_amount,
             asset_id.clone(),
+            sign,
             &mut rng,
         );
         let rcvr_account = Account {
             pblc: mock_gen_account(
                 rcvr_enc_keys.pblc,
-                rcvr_sign_pub_key,
+                rcvr_sign_keys.public,
                 asset_id.clone(),
                 balance,
                 &mut rng,
@@ -689,18 +687,20 @@ mod tests {
         let mut rng = StdRng::from_seed([17u8; 32]);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
-        let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
+        let sign = rcvr_sign_keys.sign(SIG_CTXT.bytes(b""));
 
         let ctx_init_data = mock_ctx_init_data(
             rcvr_enc_keys.pblc,
             received_amount,
             asset_id.clone(),
+            sign,
             &mut rng,
         );
         let rcvr_account = Account {
             pblc: mock_gen_account(
                 rcvr_enc_keys.pblc,
-                rcvr_sign_pub_key,
+                rcvr_sign_keys.public,
                 asset_id.clone(),
                 balance,
                 &mut rng,
@@ -743,18 +743,20 @@ mod tests {
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let wrong_enc_keys = mock_gen_enc_key_pair(18u8);
-        let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
+        let sign = rcvr_sign_keys.sign(SIG_CTXT.bytes(b""));
 
         let ctx_init_data = mock_ctx_init_data(
             rcvr_enc_keys.pblc,
             expected_amount,
             asset_id.clone(),
+            sign,
             &mut rng,
         );
         let rcvr_account = Account {
             pblc: mock_gen_account(
                 wrong_enc_keys.pblc,
-                rcvr_sign_pub_key,
+                rcvr_sign_keys.public,
                 asset_id.clone(),
                 balance,
                 &mut rng,
@@ -797,15 +799,15 @@ mod tests {
         let mut rng = StdRng::from_seed([17u8; 32]);
 
         let sndr_enc_keys = mock_gen_enc_key_pair(10u8);
-        let (sndr_sign_keys, sndr_sign_pub_key) = mock_gen_sign_key_pair(11u8);
+        let sndr_sign_keys = mock_gen_sign_key_pair(11u8);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(12u8);
-        let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(13u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(13u8);
 
         let rcvr_account = Account {
             pblc: mock_gen_account(
                 rcvr_enc_keys.pblc,
-                rcvr_sign_pub_key.clone(),
+                rcvr_sign_keys.public.clone(),
                 asset_id.clone(),
                 rcvr_balance,
                 &mut rng,
@@ -822,7 +824,7 @@ mod tests {
         let sndr_account = Account {
             pblc: mock_gen_account(
                 sndr_enc_keys.pblc,
-                sndr_sign_pub_key.clone(),
+                sndr_sign_keys.public.clone(),
                 asset_id.clone(),
                 sndr_balance,
                 &mut rng,
