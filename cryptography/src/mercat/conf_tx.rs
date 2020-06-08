@@ -205,9 +205,9 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
     fn finalize_and_process(
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
-        _sndr_pub_account: &PubAccount,
+        sndr_pub_account: &PubAccount,
         rcvr_account: Account,
-        _enc_asset_id: EncryptedAssetId,
+        enc_asset_id: EncryptedAssetId,
         amount: Balance,
         state: ConfidentialTxState,
         rng: &mut StdRng,
