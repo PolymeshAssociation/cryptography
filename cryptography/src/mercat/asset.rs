@@ -2,7 +2,7 @@
 //!
 use crate::{
     asset_proofs::{
-        correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
+        correctness_proof::CorrectnessProverAwaitingChallenge,
         encrypting_same_value_proof::EncryptingSameValueProverAwaitingChallenge,
         encrypting_same_value_proof::EncryptingSameValueVerifier,
         encryption_proofs::single_property_prover,
@@ -12,9 +12,8 @@ use crate::{
     errors::{ErrorKind, Fallible},
     mercat::{
         AssetMemo, AssetTransactionInitializeVerifier, AssetTransactionIssuer, AssetTxState,
-        CipherEqualDifferentPubKeyProof, CorrectnessProof, EncryptedAssetId, EncryptionPubKey,
-        PubAssetTxData, PubAssetTxDataContent, SecAccount, SigningPubKey, TxSubstate,
-        WellformednessProof,
+        CipherEqualDifferentPubKeyProof, CorrectnessProof, EncryptionPubKey, PubAccount,
+        PubAssetTxData, PubAssetTxDataContent, SecAccount, TxSubstate, WellformednessProof,
     },
     Balance,
 };
@@ -23,6 +22,51 @@ use rand::rngs::StdRng;
 use sp_application_crypto::sr25519;
 use sp_core::crypto::Pair;
 use zeroize::Zeroizing;
+
+/// Helper function to verify the proofs on an asset initialization transaction.
+fn asset_issuance_init_verify(
+    asset_tx: &PubAssetTxData,
+    issr_pub_account: &PubAccount,
+    mdtr_enc_pub_key: &EncryptionPubKey,
+) -> Fallible<()> {
+    let gens = PedersenGens::default();
+
+    // Verify the signature on the transaction.
+    ensure!(
+        sr25519::Pair::verify(
+            &asset_tx.sig,
+            &asset_tx.content.to_bytes()?,
+            &issr_pub_account.content.memo.owner_sign_pub_key.key,
+        ),
+        ErrorKind::SignatureValidationFailure
+    );
+
+    // Verify the proof of encrypting the same asset type as the account type.
+    single_property_verifier(
+        &EncryptingSameValueVerifier {
+            pub_key1: issr_pub_account.content.memo.owner_enc_pub_key.key,
+            pub_key2: mdtr_enc_pub_key.key,
+            cipher1: issr_pub_account.content.enc_asset_id.cipher,
+            cipher2: asset_tx.content.enc_asset_id.cipher,
+            pc_gens: &gens,
+        },
+        asset_tx.content.asset_id_equal_cipher_proof.init,
+        asset_tx.content.asset_id_equal_cipher_proof.response,
+    )?;
+
+    // Verify the proof of memo's wellformedness.
+    single_property_verifier(
+        &WellformednessVerifier {
+            pub_key: issr_pub_account.content.memo.owner_enc_pub_key.key,
+            cipher: asset_tx.content.memo.cipher,
+            pc_gens: &gens,
+        },
+        asset_tx.content.balance_wellformedness_proof.init,
+        asset_tx.content.balance_wellformedness_proof.response,
+    )?;
+
+    Ok(())
+}
 
 // -------------------------------------------------------------------------------------
 // -                                    Issuer                                         -
@@ -121,67 +165,18 @@ impl AssetTransactionInitializeVerifier for AssetTxIssueValidator {
     /// and to verify the signature.
     fn verify(
         &self,
-        amount: Balance,
         asset_tx: &PubAssetTxData,
         state: AssetTxState,
-        issr_sign_pub_key: &SigningPubKey,
-        issr_enc_pub_key: &EncryptionPubKey,
-        isser_acount_enc_asset_id: &EncryptedAssetId,
+        issr_pub_account: &PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
     ) -> Fallible<AssetTxState> {
-        let gens = PedersenGens::default();
-
         // Validate the state.
         ensure!(
             state == AssetTxState::Initialization(TxSubstate::Started),
             ErrorKind::InvalidPreviousAssetTransactionState { state }
         );
 
-        // Verify the signature on the transaction.
-        ensure!(
-            sr25519::Pair::verify(
-                &asset_tx.sig,
-                &asset_tx.content.to_bytes()?,
-                &issr_sign_pub_key.key,
-            ),
-            ErrorKind::SignatureValidationFailure
-        );
-
-        // Verify the proof of encrypting the same asset type as the account type.
-        single_property_verifier(
-            &EncryptingSameValueVerifier {
-                pub_key1: issr_enc_pub_key.key,
-                pub_key2: mdtr_enc_pub_key.key,
-                cipher1: isser_acount_enc_asset_id.cipher,
-                cipher2: asset_tx.content.enc_asset_id.cipher,
-                pc_gens: &gens,
-            },
-            asset_tx.content.asset_id_equal_cipher_proof.init,
-            asset_tx.content.asset_id_equal_cipher_proof.response,
-        )?;
-
-        // Verify the proof of memo's wellformedness.
-        single_property_verifier(
-            &WellformednessVerifier {
-                pub_key: issr_enc_pub_key.key,
-                cipher: asset_tx.content.memo.cipher,
-                pc_gens: &gens,
-            },
-            asset_tx.content.balance_wellformedness_proof.init,
-            asset_tx.content.balance_wellformedness_proof.response,
-        )?;
-
-        // Verify the proof of memo's correctness.
-        single_property_verifier(
-            &CorrectnessVerifier {
-                value: amount.into(),
-                pub_key: issr_enc_pub_key.key.into(),
-                cipher: asset_tx.content.memo.cipher,
-                pc_gens: &gens,
-            },
-            asset_tx.content.balance_correctness_proof.init,
-            asset_tx.content.balance_correctness_proof.response,
-        )?;
+        asset_issuance_init_verify(asset_tx, issr_pub_account, mdtr_enc_pub_key)?;
 
         Ok(AssetTxState::Initialization(TxSubstate::Validated))
     }
@@ -197,7 +192,11 @@ mod tests {
     use super::*;
     use crate::{
         asset_proofs::{CommitmentWitness, ElgamalSecretKey},
-        mercat::{EncryptionKeys, EncryptionPubKey, SecAccount, SigningKeys},
+        mercat::{
+            AccountMemo, CorrectnessProof, EncryptedAmount, EncryptedAssetId, EncryptionKeys,
+            EncryptionPubKey, MembershipProof, PubAccountContent, SecAccount, Signature,
+            SigningKeys,
+        },
         AssetId,
     };
     use curve25519_dalek::scalar::Scalar;
@@ -236,6 +235,21 @@ mod tests {
                 .encrypt(&issuer_secret_account.asset_id_witness),
         );
 
+        // Note that we use default proof values since we don't reverify these proofs during asset issuance.
+        // Asset issuance also doesn't concern with the current account balance at the moment.
+        let issuer_public_account = PubAccount {
+            content: PubAccountContent {
+                id: 1,
+                enc_asset_id: pub_account_enc_asset_id,
+                enc_balance: EncryptedAmount::default(),
+                asset_wellformedness_proof: WellformednessProof::default(),
+                asset_membership_proof: MembershipProof::default(),
+                balance_correctness_proof: CorrectnessProof::default(),
+                memo: AccountMemo::from((issuer_enc_key.pblc, issuer_signing_pair.public().into())),
+            },
+            sig: Signature::default(),
+        };
+
         // Generate keys for the mediator.
         let mediator_enc_pub_key: EncryptionPubKey =
             ElgamalSecretKey::new(Scalar::random(&mut rng))
@@ -257,12 +271,9 @@ mod tests {
         let validator = AssetTxIssueValidator {};
         let result = validator
             .verify(
-                20u32.into(),
                 &asset_tx,
                 state,
-                &issuer_signing_pair.public().into(),
-                &issuer_enc_key.pblc,
-                &pub_account_enc_asset_id,
+                &issuer_public_account,
                 &mediator_enc_pub_key,
             )
             .unwrap();
