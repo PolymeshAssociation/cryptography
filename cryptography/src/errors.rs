@@ -134,6 +134,9 @@ pub enum ErrorKind {
     #[fail(display = "This method is not implemented yet")]
     NotImplemented,
 
+    #[fail(display = "Wrong exponent parameter is passed")]
+    InvalidExponentParameter,
+
     /// The incoming transaction state does not match the expectation.
     #[fail(display = "Received an invalid previous state: {:?}", state)]
     InvalidPreviousState { state: ConfidentialTxState },
