@@ -33,7 +33,7 @@ use sp_core::crypto::Pair;
 // -                                  Constants                                        -
 // -------------------------------------------------------------------------------------
 
-const EXPONENT: usize = 3;
+const EXPONENT: usize = 3; // TODO: change to 8. CRYP-112
 const BASE: usize = 4;
 
 // -------------------------------------------------------------------------------------
@@ -124,6 +124,8 @@ impl From<CipherText> for EncryptedAmount {
         Self { cipher }
     }
 }
+
+// TODO: move all these XXXProof to the proper file. CRYP-113
 
 /// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
 #[derive(Default, Clone, Serialize, Deserialize)]

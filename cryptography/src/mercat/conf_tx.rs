@@ -240,6 +240,8 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
         rng: &mut StdRng,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)> {
         self.finalize_by_receiver(conf_tx_init_data, rcvr_account, state, amount, rng)?;
+
+        // TODO: CRYP-110
         Err(ErrorKind::NotImplemented.into())
     }
 }
@@ -318,6 +320,7 @@ impl ConfidentialTransactionMediator for CtxMediator {
         mdtr_sec_account: &SecAccount,
         asset_id_hint: AssetId,
     ) -> Fallible<(JustifiedPubFinalConfidentialTxData, ConfidentialTxState)> {
+        // TODO: may need to change the signature CRYP-111
         ensure!(
             state == ConfidentialTxState::Finalization(TxSubstate::Validated),
             ErrorKind::InvalidPreviousState { state }
