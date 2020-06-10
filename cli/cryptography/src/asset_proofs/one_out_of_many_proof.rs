@@ -25,6 +25,7 @@ use sha3::Sha3_512;
 
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Neg, Sub};
+use std::time::Instant;
 use zeroize::{Zeroize, Zeroizing};
 
 const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
@@ -36,12 +37,8 @@ const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
 /// `n` is the fixed base. Usually we will work with base `4`.
 /// Returns the representation of the input number as the given base number
 /// The input number should be within the provided range [0, base^exp)
-fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<Vec<usize>> {
-    ensure!(
-        number < base.pow(exp),
-        ErrorKind::OOONProofIndexOutofRange { index: number }
-    );
-
+#[inline(always)]
+pub(crate) fn convert_to_base(number: usize, base: usize, exp: u32) -> Vec<usize> {
     let mut rem: usize;
     let mut number = number;
     let mut base_rep = Vec::with_capacity(exp as usize);
@@ -52,7 +49,7 @@ fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<Vec<usize>>
         base_rep.push(rem);
     }
 
-    Ok(base_rep)
+    base_rep
 }
 
 /// Returns a special bit-matrix representation of the input number.
@@ -60,12 +57,8 @@ fn convert_to_base(number: usize, base: usize, exp: u32) -> Fallible<Vec<usize>>
 /// The number is represented as the given base number `n = n0 *base^0 + n1 *base^1 +...+ n_exp *base^{exp-1}`
 /// The return value is a bit-matrix of size `exp x base` where
 /// in the  `j`-th row there is exactly one 1 at the cell matrix[j][n_j].
-fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Fallible<Vec<Scalar>> {
-    ensure!(
-        number < base.pow(exp),
-        ErrorKind::OOONProofIndexOutofRange { index: number }
-    );
-
+#[inline(always)]
+pub(crate) fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Vec<Scalar> {
     let mut rem: usize;
     let mut number = number;
     let mut matrix_rep = vec![Scalar::zero(); (exp as usize) * base];
@@ -75,7 +68,7 @@ fn convert_to_matrix_rep(number: usize, base: usize, exp: u32) -> Fallible<Vec<S
         matrix_rep[j * base + rem] = Scalar::one();
     }
 
-    Ok(matrix_rep)
+    matrix_rep
 }
 
 /// Generates `n * m + 2` group generators exploited by the one-out-of-many proof algorithm. The later
@@ -131,9 +124,9 @@ impl Default for OooNProofGenerators {
 /// Matrix entry-wise multiplications, addition and subtraction operations are used
 /// during OOON Proof generation process.
 pub struct Matrix {
-    elements: Vec<Scalar>,
-    rows: usize,
-    columns: usize,
+    pub elements: Vec<Scalar>,
+    pub rows: usize,
+    pub columns: usize,
 }
 
 impl Matrix {
@@ -213,15 +206,15 @@ impl<'a, 'b> Sub<&'b Matrix> for &'a Matrix {
 /// The first element of the coefficients vector `coeffs[0]` is the polynomial's free term
 /// The `coeffs[degree]` is the leading coefficient of the polynomial.
 pub struct Polynomial {
-    degree: usize,
-    coeffs: Vec<Scalar>,
+    pub degree: usize,
+    pub coeffs: Vec<Scalar>,
 }
 
 impl Polynomial {
     /// Takes as parameter the expected degree of the polynomial
     /// to reserve enough capacity for the coefficient vector.
     /// A vector of size degree + 1 is reserved for storing the polynomial's coefficients.
-    fn new(expected_degree: usize) -> Polynomial {
+    pub fn new(expected_degree: usize) -> Polynomial {
         let mut vec = vec![Scalar::zero(); expected_degree + 1];
         vec[0] = Scalar::one();
         Polynomial {
@@ -231,7 +224,8 @@ impl Polynomial {
     }
 
     /// Multiplies the given polynomial `P(x)` with the provided linear `(a * x + b)`.
-    fn add_factor(&mut self, a: Scalar, b: Scalar) {
+    #[inline(always)]
+    pub fn add_factor(&mut self, a: Scalar, b: Scalar) {
         let old = self.coeffs.clone();
         let old_degree = self.degree;
 
@@ -275,6 +269,11 @@ pub struct R1ProofInitialMessage {
     c: RistrettoPoint,
     d: RistrettoPoint,
 }
+impl R1ProofInitialMessage {
+    pub fn b(&self) -> RistrettoPoint {
+        return self.b;
+    }
+}
 
 impl Default for R1ProofInitialMessage {
     fn default() -> Self {
@@ -307,33 +306,40 @@ pub struct R1ProofFinalResponse {
     n: usize,
 }
 
+impl R1ProofFinalResponse {
+    pub fn f_elements(&self) -> Vec<Scalar> {
+        return self.f_elements.clone();
+    }
+}
+
 #[derive(Clone, Debug, Zeroize)]
 pub struct R1Prover {
-    a_values: Vec<Scalar>,
-    b_matrix: Zeroizing<Matrix>,
-    r_a: Scalar,
-    r_b: Scalar,
-    r_c: Scalar,
-    r_d: Scalar,
-    m: usize,
-    n: usize,
+    // Implement a getter instead of making this public
+    pub a_values: Vec<Scalar>,
+    pub b_matrix: Zeroizing<Matrix>,
+    pub r_a: Scalar,
+    pub r_b: Scalar,
+    pub r_c: Scalar,
+    pub r_d: Scalar,
+    pub m: usize,
+    pub n: usize,
 }
 #[derive(Clone)]
 pub struct R1ProverAwaitingChallenge<'a> {
     /// The bit-value matrix, where each row contains only one 1
-    b_matrix: Zeroizing<Matrix>,
+    pub b_matrix: Zeroizing<Matrix>,
 
     /// The randomness used for committing to the bit matrix
-    r_b: Zeroizing<Scalar>,
+    pub r_b: Zeroizing<Scalar>,
 
     /// The generator elemements.
-    generators: &'a OooNProofGenerators,
+    pub generators: &'a OooNProofGenerators,
 
     /// Specifies the matrix rows.
-    m: usize,
+    pub m: usize,
 
     /// Specifies the matrix columns.
-    n: usize,
+    pub n: usize,
 }
 
 impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
@@ -431,8 +437,8 @@ impl AssetProofProver<R1ProofFinalResponse> for R1Prover {
 }
 
 pub struct R1ProofVerifier<'a> {
-    b: RistrettoPoint,
-    generators: &'a OooNProofGenerators,
+    pub(crate) b: RistrettoPoint,
+    pub(crate) generators: &'a OooNProofGenerators,
 }
 
 impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
@@ -488,10 +494,10 @@ impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct OOONProofInitialMessage {
-    r1_proof_initial_message: R1ProofInitialMessage,
-    g_vec: Vec<RistrettoPoint>,
-    n: usize,
-    m: usize,
+    pub(crate) r1_proof_initial_message: R1ProofInitialMessage,
+    pub(crate) g_vec: Vec<RistrettoPoint>,
+    pub(crate) n: usize,
+    pub(crate) m: usize,
 }
 
 impl OOONProofInitialMessage {
@@ -502,13 +508,6 @@ impl OOONProofInitialMessage {
             n: base,
             m: exp,
         }
-    }
-
-    pub fn get_n(&self) -> usize {
-        return self.n;
-    }
-    pub fn get_m(&self) -> usize {
-        return self.m;
     }
 }
 /// A `default` implementation used for testing.
@@ -538,12 +537,27 @@ pub struct OOONProofFinalResponse {
     m: usize,
     n: usize,
 }
+
+impl OOONProofFinalResponse {
+    pub fn r1_proof_final_response(&self) -> R1ProofFinalResponse {
+        return self.r1_proof_final_response.clone();
+    }
+    pub fn z(&self) -> Scalar {
+        return self.z;
+    }
+    pub fn n(&self) -> usize {
+        return self.n;
+    }
+    pub fn m(&self) -> usize {
+        return self.m;
+    }
+}
 #[derive(Clone, Debug, Zeroize)]
 pub struct OOONProver {
-    rho_values: Vec<Scalar>,
-    r1_prover: Zeroizing<R1Prover>,
-    m: usize,
-    n: usize,
+    pub(crate) rho_values: Vec<Scalar>,
+    pub(crate) r1_prover: Zeroizing<R1Prover>,
+    pub(crate) m: usize,
+    pub(crate) n: usize,
 }
 
 /// Given the public list of commitments `C_0, C_1, ..., C_{N-1} where N = base^exp, the prover wants to
@@ -596,7 +610,7 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
 
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
 
-        let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, exp).unwrap();
+        let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, exp);
 
         let b_matrix_rep = Matrix {
             rows: rows,
@@ -619,7 +633,7 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
 
         for i in 0..n {
             polynomials.push(one.clone());
-            let i_rep = convert_to_base(i, self.base, exp).unwrap();
+            let i_rep = convert_to_base(i, self.base, exp);
             for k in 0..self.exp {
                 let t = k * self.base + i_rep[k];
                 polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
@@ -725,12 +739,13 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
 
         for i in 0..size {
             p_i = Scalar::one();
-            let i_rep = convert_to_base(i, n, m as u32).unwrap();
+            let i_rep = convert_to_base(i, n, m as u32);
             for j in 0..m {
                 p_i *= f_values[j * n + i_rep[j]];
             }
             left += p_i * self.commitments[i];
         }
+
         let mut temp = Scalar::one();
         for k in 0..m {
             left -= temp * initial_message.g_vec[k];
@@ -756,6 +771,7 @@ mod tests {
     const SEED_1: [u8; 32] = [42u8; 32];
 
     #[test]
+    #[ignore]
     #[wasm_bindgen_test]
     /// Tests the whole workflow of one-out-of-many proofs by setting up the parameters base = 4 and exp =3.
     /// This parameters enable to generate 1-out-of-64 proofs which means the prover can prove the knowledge of
@@ -940,7 +956,7 @@ mod tests {
         // For each index `i` we compute the corresponding valid bit-matrix representation.
         // Next commit to the  bit-matrix represenation and prove its well-formedness.
         for i in 10..64 {
-            base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT as u32).unwrap();
+            base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT as u32);
 
             b = Matrix {
                 rows: EXPONENT,
