@@ -27,10 +27,7 @@ jobs:
             - v2-cli-cache-{{ checksum "./rust.version" }}
       - run:
           name: Build nightly
-          command: >-
-            cargo +nightly build &&
-            cd crytpgraphy && 
-            cargo build --package crytography --target wasm32-unknown-unknown --no-default-features --features no_std
+          command: cargo +nightly build
           no_output_timeout: 4h
       - save_cache:
           key: v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
@@ -56,6 +53,10 @@ jobs:
           command: >-
             cargo +nightly test &&
             cargo +nightly build --bench elgamal_decryption &&
+            echo "Wasm build (features 'no_std')"  &&
+            cd crytpgraphy && 
+            cargo +nightly build --package crytography --target wasm32-unknown-unknown --no-default-features --features no_std &&
+            cd .. &&
             echo "TODO: add wasm tests"
           no_output_timeout: 30m
       - save_cache:
