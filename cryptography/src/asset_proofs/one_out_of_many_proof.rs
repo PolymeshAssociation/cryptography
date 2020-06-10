@@ -224,6 +224,7 @@ impl Polynomial {
     }
 
     /// Multiplies the given polynomial `P(x)` with the provided linear `(a * x + b)`.
+    #[inline(always)]
     pub fn add_factor(&mut self, a: Scalar, b: Scalar) {
         let old = self.coeffs.clone();
         let old_degree = self.degree;
