@@ -240,9 +240,6 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
         rng: &mut StdRng,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)> {
         self.finalize_by_receiver(conf_tx_init_data, rcvr_account, state, amount, rng)?;
-
-        // TODO: will complete this in the ctx processing story
-        //ensure!(false, ErrorKind::NotImplemented)
         Err(ErrorKind::NotImplemented.into())
     }
 }
@@ -267,17 +264,13 @@ impl CtxReceiver {
         let rcvr_pub_account = &rcvr_account.pblc.content;
 
         // Check that the amount is correct
-        let received_amount = rcvr_enc_sec
+        rcvr_enc_sec
             .key
-            .decrypt(&conf_tx_init_data.content.memo.enc_amount_using_rcvr.cipher)?;
-
-        ensure!(
-            received_amount == expected_amount,
-            ErrorKind::TransactionAmountMismatch {
-                expected_amount,
-                received_amount
-            }
-        );
+            .verify(
+                &conf_tx_init_data.content.memo.enc_amount_using_rcvr.cipher,
+                &expected_amount.into(),
+            )
+            .map_err(|_| ErrorKind::TransactionAmountMismatch { expected_amount })?;
 
         // Check that the received public keys match
         let acc_key = conf_tx_init_data.content.memo.rcvr_pub_key.key;
@@ -325,10 +318,6 @@ impl ConfidentialTransactionMediator for CtxMediator {
         mdtr_sec_account: &SecAccount,
         asset_id_hint: AssetId,
     ) -> Fallible<(JustifiedPubFinalConfidentialTxData, ConfidentialTxState)> {
-        // TODO: I think that the caller of this function might want to do some
-        //       checks on the amount and the asset id, so it should either know
-        //       them beforehand, or this function should return them after decrypting
-        //       them.
         ensure!(
             state == ConfidentialTxState::Finalization(TxSubstate::Validated),
             ErrorKind::InvalidPreviousState { state }
@@ -355,11 +344,11 @@ impl ConfidentialTransactionMediator for CtxMediator {
         )?;
 
         // Verify that the encrypted asset_id is correct
-        mdtr_sec_account.enc_keys.scrt.key.clone().verify(
+        mdtr_sec_account.enc_keys.scrt.key.verify(
             &tx_data.memo.enc_asset_id_for_mdtr.cipher,
             &asset_id_hint.clone().into(),
         )?;
-        //.decrypt(&tx_data.memo.enc_asset_id_for_mdtr.cipher)?;
+
         let asset_id = asset_id_hint;
         single_property_verifier(
             &CorrectnessVerifier {
@@ -855,10 +844,7 @@ mod tests {
 
         assert_err!(
             result,
-            ErrorKind::TransactionAmountMismatch {
-                expected_amount,
-                received_amount
-            }
+            ErrorKind::TransactionAmountMismatch { expected_amount }
         );
     }
 

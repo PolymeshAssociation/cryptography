@@ -33,7 +33,7 @@ use sp_core::crypto::Pair;
 // -                                  Constants                                        -
 // -------------------------------------------------------------------------------------
 
-const EXPONENT: usize = 3; // TODO: will be changed after CRYP-83
+const EXPONENT: usize = 3;
 const BASE: usize = 4;
 
 // -------------------------------------------------------------------------------------
@@ -360,7 +360,6 @@ pub enum TxSubstate {
     /// The action on transaction has been verified by validators.
     Validated,
     /// The action on transaction has failed the verification by validators.
-    /// TODO: this ended up not being used. We need to disucss, how to handle it.
     Rejected,
 }
 
@@ -541,7 +540,7 @@ impl PubFinalConfidentialTxData {
     }
 }
 
-/// Wrapper for the contents and the signature of the justifified and finalized
+/// Wrapper for the contents and the signature of the justified and finalized
 /// transaction.
 #[derive(Debug)]
 pub struct JustifiedPubFinalConfidentialTxData {
