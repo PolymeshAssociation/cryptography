@@ -4,25 +4,25 @@
 //! This implementation is based on one-out-of-many proof construction desribed in the following paper
 //! <https://eprint.iacr.org/2015/643.pdf>
 
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
     },
     one_out_of_many_proof::{
-        OOONProofFinalResponse, OOONProofInitialMessage, OOONProofVerifier, OOONProver,
-        OOONProverAwaitingChallenge, OooNProofGenerators,
+        convert_to_base, convert_to_matrix_rep, Matrix, OOONProofFinalResponse,
+        OOONProofInitialMessage, OOONProofVerifier, OOONProver, OOONProverAwaitingChallenge,
+        OooNProofGenerators, Polynomial, R1ProofVerifier, R1ProverAwaitingChallenge,
     },
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
 use crate::errors::{ErrorKind, Fallible};
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
-use sp_std::vec::Vec;
+use sp_std::{cmp::min, convert::TryFrom, prelude::*};
 
 pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
@@ -118,6 +118,7 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             .rekey_with_witness_bytes(b"random", self.random.as_bytes())
             .finalize(rng)
     }
+
     /// Given a commitment `C = m*B+r*B_blinding` to a secret element `m`, a membership proof proves that
     /// `m` belongs to the given public set of elements `m_1, m_2, ..., m_N`. Membership proof is comprised
     /// of an one-out-of-many proof generated with respect to an
@@ -130,32 +131,74 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
         let exp = self.exp as u32;
-        let n = self.base.pow(exp);
-
+        let size = self.base.pow(exp);
         let pc_gens = self.generators.com_gens;
 
         let secret_commitment = pc_gens.commit(*self.secret_element, *self.random);
 
-        let initial_size = self.elements_set.len();
+        let initial_size = min(self.elements_set.len(), size);
 
-        let mut commitments_list: Vec<RistrettoPoint> = (0..initial_size)
-            .map(|m| secret_commitment - self.elements_set[m] * pc_gens.B)
-            .collect();
+        let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
+        let l_bit_matrix = convert_to_matrix_rep(self.secret_position, self.base, exp);
 
-        if n != initial_size {
-            commitments_list.resize(n, commitments_list[initial_size - 1]);
-        }
-
-        let ooon_prover = OOONProverAwaitingChallenge {
-            secret_index: self.secret_position,
-            random: *self.random,
-            generators: self.generators,
-            commitments: commitments_list.as_slice(),
-            exp: self.exp,
-            base: self.base,
+        let b_matrix_rep = Matrix {
+            rows: self.exp,
+            columns: self.base,
+            elements: l_bit_matrix.clone(),
         };
 
-        let (ooon_prover, ooon_proof_initial_message) = ooon_prover.generate_initial_message(rng);
+        let r1_prover = R1ProverAwaitingChallenge {
+            b_matrix: Zeroizing::new(b_matrix_rep),
+            r_b: Zeroizing::new(*self.random),
+            generators: self.generators,
+            m: self.exp,
+            n: self.base,
+        };
+
+        let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(rng);
+
+        let one = Polynomial::new(self.exp);
+        let mut polynomials: Vec<Polynomial> = Vec::with_capacity(size);
+
+        for i in 0..size {
+            polynomials.push(one.clone());
+            let i_rep = convert_to_base(i, self.base, exp);
+            for k in 0..self.exp {
+                let t = k * self.base + i_rep[k];
+                polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
+            }
+        }
+
+        let mut g_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp);
+        for k in 0..self.exp {
+            g_values.push(rho[k] * pc_gens.B_blinding);
+            let mut sum1 = Scalar::zero();
+            let mut sum2 = Scalar::zero();
+            for i in 0..initial_size {
+                sum1 += polynomials[i].coeffs[k];
+                sum2 += polynomials[i].coeffs[k] * self.elements_set[i];
+            }
+            if size > initial_size {
+                for i in initial_size..size {
+                    sum1 += polynomials[i].coeffs[k];
+                    sum2 += polynomials[i].coeffs[k] * self.elements_set[initial_size - 1];
+                }
+            }
+            g_values[k] += (sum1 * secret_commitment) - (sum2 * pc_gens.B);
+        }
+
+        let ooon_prover = OOONProver {
+            rho_values: rho,
+            r1_prover: Zeroizing::new(r1_prover),
+            m: self.exp,
+            n: self.base,
+        };
+        let ooon_proof_initial_message = OOONProofInitialMessage {
+            r1_proof_initial_message: r1_initial_message,
+            g_vec: g_values,
+            m: self.exp,
+            n: self.base,
+        };
 
         (
             MembershipProver { ooon_prover },
@@ -193,38 +236,101 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Fallible<()> {
-        ensure!(self.elements_set.len() != 0, ErrorKind::EmptyElementsSet);
+        let m = initial_message.ooon_proof_initial_message.m;
+        let n = initial_message.ooon_proof_initial_message.n;
+        let exp = u32::try_from(m).map_err(|_| ErrorKind::InvalidExponentParameter)?;
+        let size = initial_message.ooon_proof_initial_message.n.pow(exp);
 
-        let n = initial_message
+        let initial_size = min(self.elements_set.len(), size);
+        ensure!(initial_size != 0, ErrorKind::EmptyElementsSet);
+        let b_comm = initial_message
             .ooon_proof_initial_message
-            .get_n()
-            .pow(initial_message.ooon_proof_initial_message.get_m() as u32);
-        let initial_size = self.elements_set.len();
-
-        let mut commitments_list: Vec<RistrettoPoint> = (0..self.elements_set.len())
-            .map(|m| self.secret_element_com - self.elements_set[m] * self.generators.com_gens.B)
-            .collect();
-
-        // If the elements set size does not match to the system parameter N = n^m, we have to
-        // pad the resulted commitment list with its last commitment to make the list size equal to N.
-        // Padding has a critical security importance.
-        if n != initial_size {
-            commitments_list.resize(n, commitments_list[initial_size - 1]);
-        }
-
-        let ooon_verifier = OOONProofVerifier {
+            .r1_proof_initial_message
+            .b();
+        let r1_verifier = R1ProofVerifier {
+            b: b_comm,
             generators: self.generators,
-            commitments: &commitments_list,
         };
 
-        let result = ooon_verifier.verify(
-            c,
-            &initial_message.ooon_proof_initial_message,
-            &final_response.ooon_proof_final_response,
-        );
+        r1_verifier
+            .verify(
+                c,
+                &initial_message
+                    .ooon_proof_initial_message
+                    .r1_proof_initial_message,
+                &final_response
+                    .ooon_proof_final_response
+                    .r1_proof_final_response(),
+            )
+            .map_err(|_| ErrorKind::MembershipProofVerificationError { check: 1 })?;
+
+        let mut f_values = vec![*c.x(); m * n];
+        let proof_f_elements = &final_response
+            .ooon_proof_final_response
+            .r1_proof_final_response()
+            .f_elements();
+
+        for i in 0..m {
+            for j in 1..n {
+                f_values[(i * n + j)] = proof_f_elements[(i * (n - 1) + (j - 1))];
+                f_values[(i * n)] -= proof_f_elements[(i * (n - 1) + (j - 1))];
+            }
+        }
+
+        let mut p_i: Scalar;
+        let mut left: RistrettoPoint = RistrettoPoint::default();
+        let right =
+            final_response.ooon_proof_final_response.z() * self.generators.com_gens.B_blinding;
+
+        let mut sum1 = Scalar::zero();
+        let mut sum2 = Scalar::zero();
+
+        // For all given asset identifiers from the list of public asset ids
+        // we compute the corresponding elements `p_i` and compute the aggregates
+        // sum1` ands `sum2`.
+        for i in 0..initial_size {
+            p_i = Scalar::one();
+            let i_rep = convert_to_base(i, n, m as u32);
+            for j in 0..m {
+                p_i *= f_values[j * n + i_rep[j]];
+            }
+            sum1 += p_i;
+            sum2 += self.elements_set[i] * p_i;
+        }
+        // Membership proof require the list of asset ids to have a certain lenght `size`.
+        // In case of the list actual size is smaller than the required size. we should pad the list
+        // with the last element until the size of the resulted set will be equal to `size`.
+        // This padding operation can be directly incorporated into the computation
+        // of the aggregated value `sum2`.
+
+        // The code snippet within the lines 316-321 duplicates the snippet from 299-304 and obviously we
+        // could avoid of this by simply checking if `i > initial_size` during the `sum2` aggregation,
+        // but that would require making the `if` checks for all `i in initial_size..size`
+        // which would be more inefficient approach.
+
+        if size > initial_size {
+            let last = self.elements_set[initial_size - 1];
+            for i in initial_size..size {
+                p_i = Scalar::one();
+                let i_rep = convert_to_base(i, n, m as u32);
+                for j in 0..m {
+                    p_i *= f_values[j * n + i_rep[j]];
+                }
+                sum1 += p_i;
+                sum2 += last * p_i;
+            }
+        }
+
+        left = sum1 * self.secret_element_com - sum2 * self.generators.com_gens.B;
+        let mut temp = Scalar::one();
+        for k in 0..m {
+            left -= temp * initial_message.ooon_proof_initial_message.g_vec[k];
+            temp *= c.x();
+        }
+
         ensure!(
-            result.is_ok(),
-            ErrorKind::MembershipProofVerificationError { check: 1 }
+            left == right,
+            ErrorKind::MembershipProofVerificationError { check: 2 }
         );
 
         Ok(())
@@ -248,7 +354,6 @@ mod tests {
     #[test]
     #[wasm_bindgen_test]
     /// Tests the whole workflow of membership proofs
-
     fn test_membership_proofs() {
         let mut rng = StdRng::from_seed(SEED_1);
         let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
@@ -264,7 +369,7 @@ mod tests {
         let blinding = Scalar::random(&mut rng);
 
         let even_member = generators.com_gens.commit(Scalar::from(8u32), blinding);
-        let odd_member = generators.com_gens.commit(Scalar::from(75u32), blinding);
+        let odd_member = generators.com_gens.commit(Scalar::from(7u32), blinding);
 
         let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(8u32),
@@ -293,7 +398,11 @@ mod tests {
             generators: &generators,
         };
 
-        let result = verifier.verify(&challenge, &initial_message.clone(), &final_response);
+        let result = verifier.verify(
+            &challenge,
+            &initial_message.clone(),
+            &final_response.clone(),
+        );
         assert!(result.is_ok());
 
         // Negative test
@@ -305,10 +414,10 @@ mod tests {
         let result = verifier.verify(&challenge, &initial_message, &final_response);
         assert_err!(
             result,
-            ErrorKind::MembershipProofVerificationError { check: 1 }
+            ErrorKind::MembershipProofVerificationError { check: 2 }
         );
 
-        // Testing the attempt of initializting the prover with ian nvalid asset or an asset list.
+        // Testing the attempt of initializting the prover with an invalid asset or an asset list.
         let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(78953u32),
             blinding.clone(),
@@ -321,7 +430,7 @@ mod tests {
 
         // Testing the non-interactive API
         let prover = MembershipProverAwaitingChallenge::new(
-            Scalar::from(75u32),
+            Scalar::from(7u32),
             blinding.clone(),
             &generators,
             odd_elements.as_slice(),
@@ -364,6 +473,57 @@ mod tests {
             single_property_verifier(&verifier, initial_message_1, bad_final_response),
             ErrorKind::MembershipProofVerificationError { check: 1 }
         );
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn test_membership_proof_fast_proof_generation_verification() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
+
+        const BASE: usize = 4;
+        const EXPONENT: usize = 8;
+        let N: usize = BASE.pow(EXPONENT as u32);
+
+        let generators = OooNProofGenerators::new(EXPONENT, BASE);
+
+        let elements_set: Vec<Scalar> = (0..(2000) as u32).map(|m| Scalar::from(m)).collect();
+
+        let secret = Scalar::from(8u32);
+        let blinding = Scalar::random(&mut rng);
+
+        let secret_commitment = generators.com_gens.commit(secret, blinding);
+
+        let prover = MembershipProverAwaitingChallenge::new(
+            secret,
+            blinding.clone(),
+            &generators,
+            elements_set.as_slice(),
+            BASE,
+            EXPONENT,
+        )
+        .unwrap();
+
+        let mut transcript_rng = prover.create_transcript_rng(&mut rng, &transcript);
+
+        let (prover, initial_message) = prover.generate_initial_message(&mut transcript_rng);
+
+        initial_message.update_transcript(&mut transcript).unwrap();
+        let challenge = transcript
+            .scalar_challenge(MEMBERSHIP_PROOF_CHALLENGE_LABEL)
+            .unwrap();
+
+        let final_response = prover.apply_challenge(&challenge);
+
+        let verifier = MembershipProofVerifier {
+            secret_element_com: secret_commitment,
+            elements_set: elements_set.as_slice(),
+            generators: &generators,
+        };
+
+        let result = verifier.verify(&challenge, &initial_message, &final_response);
+
+        assert!(result.is_ok());
     }
 
     #[test]
