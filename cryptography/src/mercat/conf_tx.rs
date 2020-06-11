@@ -75,13 +75,12 @@ impl ConfidentialTransactionSender for CtxSender {
         let witness = CommitmentWitness::new(amount.into(), Scalar::random(rng));
         let amount_enc_blinding = witness.blinding();
 
-        let (init, response, range) =
-            prove_within_range(amount.into(), amount_enc_blinding, BALANCE_RANGE, rng)?;
-        let non_neg_amount_proof = InRangeProof {
-            init,
-            response,
-            range,
-        };
+        let non_neg_amount_proof = InRangeProof::from(prove_within_range(
+            amount.into(),
+            amount_enc_blinding,
+            BALANCE_RANGE,
+            rng,
+        )?);
 
         // Prove that the amount encrypted under different public keys are the same
         let (sndr_new_enc_amount, rcvr_new_enc_amount) =
@@ -118,13 +117,12 @@ impl ConfidentialTransactionSender for CtxSender {
 
         // Prove that the sender has enough funds
         let blinding = balance_refresh_enc_blinding - amount_enc_blinding;
-        let (init, response, range) =
-            prove_within_range((balance - amount).into(), blinding, BALANCE_RANGE, rng)?;
-        let enough_fund_proof = InRangeProof {
-            init,
-            response,
-            range,
-        };
+        let enough_fund_proof = InRangeProof::from(prove_within_range(
+            (balance - amount).into(),
+            blinding,
+            BALANCE_RANGE,
+            rng,
+        )?);
 
         // Refresh the encrypted asset id of the sender account and prove that the
         // refreshment was done correctly
