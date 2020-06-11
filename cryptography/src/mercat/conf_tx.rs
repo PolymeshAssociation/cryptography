@@ -539,7 +539,7 @@ mod tests {
                 balance_correctness_proof: CorrectnessProof::default(),
                 memo: AccountMemo::new(rcvr_enc_pub_key, rcvr_sign_pub_key),
             },
-            sig: None,
+            sig: Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature"),
         })
     }
 

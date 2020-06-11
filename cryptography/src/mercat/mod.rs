@@ -279,7 +279,7 @@ impl PubAccountContent {
 #[derive(Clone)]
 pub struct PubAccount {
     pub content: PubAccountContent,
-    pub sig: Option<Signature>,
+    pub sig: Signature,
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
