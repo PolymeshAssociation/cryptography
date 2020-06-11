@@ -21,6 +21,7 @@ impl Error {
 }
 
 impl From<ErrorKind> for Error {
+    #[inline]
     fn from(kind: ErrorKind) -> Error {
         Error {
             inner: Context::new(kind),
@@ -29,8 +30,23 @@ impl From<ErrorKind> for Error {
 }
 
 impl From<Context<ErrorKind>> for Error {
+    #[inline]
     fn from(inner: Context<ErrorKind>) -> Error {
         Error { inner: inner }
+    }
+}
+
+impl From<schnorrkel::errors::SignatureError> for Error {
+    #[inline]
+    fn from(_inner: schnorrkel::errors::SignatureError) -> Error {
+        Error::from(ErrorKind::SignatureValidationFailure)
+    }
+}
+
+impl From<bincode::Error> for Error {
+    #[inline]
+    fn from(_inner: bincode::Error) -> Error {
+        Error::from(ErrorKind::SerializationError)
     }
 }
 

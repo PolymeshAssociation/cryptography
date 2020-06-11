@@ -20,7 +20,7 @@ use crate::{
         wellformedness_proof::{WellformednessFinalResponse, WellformednessInitialMessage},
         CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     },
-    errors::{ErrorKind, Fallible},
+    errors::{Error, Fallible},
     AssetId, Balance,
 };
 
@@ -31,7 +31,7 @@ use rand_core::OsRng;
 use schnorrkel::keys::{Keypair, PublicKey};
 use serde::{Deserialize, Serialize};
 
-use sp_std::vec::Vec;
+use sp_std::{convert::From, vec::Vec};
 
 // -------------------------------------------------------------------------------------
 // -                                  Constants                                        -
@@ -85,7 +85,7 @@ type SigningKeys = Keypair;
 pub type Signature = schnorrkel::sign::Signature;
 
 /// New type for Twisted ElGamal ciphertext of asset ids.
-#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EncryptedAssetId {
     pub cipher: CipherText,
 }
@@ -271,7 +271,7 @@ pub struct PubAccountContent {
 
 impl PubAccountContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
@@ -324,7 +324,7 @@ pub trait AccountCreaterVerifier {
 
 /// Represents the three substates (started, verified, rejected) of a
 /// confidential transaction state.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TxSubstate {
     /// The action on transaction has been taken but is not verified yet.
     Started,
@@ -337,7 +337,7 @@ pub enum TxSubstate {
 
 /// Represents the two states (initialized, justified) of a
 /// confidentional asset issuance transaction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AssetTxState {
     Initialization(TxSubstate),
     Justification(TxSubstate),
@@ -357,8 +357,8 @@ pub enum ConfidentialTxState {
 // -                                 Asset Issuance                                    -
 // -------------------------------------------------------------------------------------
 
-/// Holds the public portion of an asset issuance transaction. This can be placed
-/// on the chain.
+/// Holds the public portion of an asset issuance transaction after initialization.
+/// This can be placed on the chain.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PubAssetTxDataContent {
     account_id: u32,
@@ -372,12 +372,33 @@ pub struct PubAssetTxDataContent {
 
 impl PubAssetTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PubAssetTxData {
     pub content: PubAssetTxDataContent,
+    pub sig: Signature,
+}
+
+/// Holds the public portion of an asset issuance transaction after Justification.
+/// This can be placed on the chain.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PubJustifiedAssetTxDataContent {
+    pub tx_content: PubAssetTxData,
+    pub state: AssetTxState,
+}
+
+impl PubJustifiedAssetTxDataContent {
+    pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
+        bincode::serialize(self).map_err(Error::from)
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PubJustifiedAssetTxData {
+    pub content: PubJustifiedAssetTxDataContent,
     pub sig: Signature,
 }
 
@@ -399,7 +420,7 @@ pub trait AssetTransactionIssuer {
 pub trait AssetTransactionInitializeVerifier {
     /// Called by validators to verify the ZKP of the wellformedness of encrypted balance
     /// and to verify the signature.
-    fn verify(
+    fn verify_initialization(
         &self,
         asset_tx: &PubAssetTxData,
         state: AssetTxState,
@@ -411,26 +432,25 @@ pub trait AssetTransactionInitializeVerifier {
 pub trait AssetTransactionMediator {
     /// Justifies and processes a confidential asset issue transaction. This method is called
     /// by mediator. Corresponds to `JustifyAssetTx` and `ProcessCTx` of MERCAT paper.
-    /// If the trasaction is justified, it will be processed immediately.
+    /// If the trasaction is justified, it will be processed immediately and the updated account
+    /// is returned.
     fn justify_and_process(
         &self,
         asset_tx: PubAssetTxData,
-        issr_account: PubAccount,
+        issr_pub_account: &PubAccount,
         state: AssetTxState,
-        mdtr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-        mdtr_sign_keys: SigningKeys,
-        issr_pub_key: EncryptionPubKey,
-        issr_acount: PubAccount,
-    ) -> Fallible<(Signature, PubAccount, AssetTxState)>;
+        mdtr_enc_keys: &EncryptionKeys,
+        mdtr_sign_keys: &SigningKeys,
+    ) -> Fallible<(PubJustifiedAssetTxData, PubAccount)>;
 }
 
 pub trait AssetTransactionFinalizeAndProcessVerifier {
     /// Called by validators to verify the justification and processing of the transaction.
-    fn verify(
+    fn verify_justification(
         &self,
-        sig: Signature,
-        issr_account: PubAccount,
-        mdtr_sign_pub_key: SigningPubKey,
+        asset_tx: &PubJustifiedAssetTxData,
+        issr_account: &PubAccount,
+        mdtr_sign_pub_key: &SigningPubKey,
     ) -> Fallible<AssetTxState>;
 }
 
@@ -466,7 +486,7 @@ pub struct PubInitConfidentialTxDataContent {
 
 impl PubInitConfidentialTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
@@ -487,7 +507,7 @@ pub struct PubFinalConfidentialTxDataContent {
 
 impl PubFinalConfidentialTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 /// Wrapper for the contents and the signature of the content sent by the
@@ -525,7 +545,6 @@ pub trait ConfidentialTransactionInitVerifier {
 
 pub trait ConfidentialTransactionMediator {
     /// Justify the transaction by mediator.
-    /// TODO: missing from the paper, will discuss and decide later.
     fn justify_init() -> Fallible<ConfidentialTxState>;
 }
 

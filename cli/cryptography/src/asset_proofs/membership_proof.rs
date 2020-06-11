@@ -10,8 +10,8 @@ use crate::asset_proofs::{
     },
     one_out_of_many_proof::{
         convert_to_base, convert_to_matrix_rep, Matrix, OOONProofFinalResponse,
-        OOONProofInitialMessage, OOONProofVerifier, OOONProver, OOONProverAwaitingChallenge,
-        OooNProofGenerators, Polynomial, R1ProofVerifier, R1ProverAwaitingChallenge,
+        OOONProofInitialMessage, OOONProver, OooNProofGenerators, Polynomial, R1ProofVerifier,
+        R1ProverAwaitingChallenge,
     },
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
@@ -278,7 +278,6 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         }
 
         let mut p_i: Scalar;
-        let mut left: RistrettoPoint = RistrettoPoint::default();
         let right =
             final_response.ooon_proof_final_response.z() * self.generators.com_gens.B_blinding;
 
@@ -321,7 +320,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
             }
         }
 
-        left = sum1 * self.secret_element_com - sum2 * self.generators.com_gens.B;
+        let mut left = sum1 * self.secret_element_com - sum2 * self.generators.com_gens.B;
         let mut temp = Scalar::one();
         for k in 0..m {
             left -= temp * initial_message.ooon_proof_initial_message.g_vec[k];

@@ -2,7 +2,7 @@
 //!
 use crate::{
     asset_proofs::{
-        correctness_proof::CorrectnessProverAwaitingChallenge,
+        correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
         encrypting_same_value_proof::EncryptingSameValueProverAwaitingChallenge,
         encrypting_same_value_proof::EncryptingSameValueVerifier,
         encryption_proofs::single_property_prover,
@@ -11,9 +11,12 @@ use crate::{
     },
     errors::{ErrorKind, Fallible},
     mercat::{
-        AssetMemo, AssetTransactionInitializeVerifier, AssetTransactionIssuer, AssetTxState,
-        CipherEqualDifferentPubKeyProof, CorrectnessProof, EncryptionPubKey, PubAccount,
-        PubAssetTxData, PubAssetTxDataContent, SecAccount, TxSubstate, WellformednessProof,
+        AssetMemo, AssetTransactionFinalizeAndProcessVerifier, AssetTransactionInitializeVerifier,
+        AssetTransactionIssuer, AssetTransactionMediator, AssetTxState,
+        CipherEqualDifferentPubKeyProof, CorrectnessProof, EncryptionKeys, EncryptionPubKey,
+        PubAccount, PubAssetTxData, PubAssetTxDataContent, PubJustifiedAssetTxData,
+        PubJustifiedAssetTxDataContent, SecAccount, SigningKeys, SigningPubKey, TxSubstate,
+        WellformednessProof,
     },
     Balance,
 };
@@ -42,8 +45,7 @@ fn asset_issuance_init_verify(
         .content
         .memo
         .owner_sign_pub_key
-        .verify(SIG_CTXT.bytes(&message), &asset_tx.sig)
-        .map_err(|_| ErrorKind::SignatureValidationFailure)?;
+        .verify(SIG_CTXT.bytes(&message), &asset_tx.sig)?;
 
     // Verify the proof of encrypting the same asset type as the account type.
     single_property_verifier(
@@ -168,7 +170,7 @@ pub struct AssetTxIssueValidator {}
 impl AssetTransactionInitializeVerifier for AssetTxIssueValidator {
     /// Called by validators to verify the ZKP of the wellformedness of encrypted balance
     /// and to verify the signature.
-    fn verify(
+    fn verify_initialization(
         &self,
         asset_tx: &PubAssetTxData,
         state: AssetTxState,
@@ -187,6 +189,105 @@ impl AssetTransactionInitializeVerifier for AssetTxIssueValidator {
     }
 }
 
+impl AssetTransactionFinalizeAndProcessVerifier for AssetTxIssueValidator {
+    /// Called by validators to verify the justification and processing of the transaction.
+    fn verify_justification(
+        &self,
+        asset_tx: &PubJustifiedAssetTxData,
+        issr_account: &PubAccount,
+        mdtr_sign_pub_key: &SigningPubKey,
+    ) -> Fallible<AssetTxState> {
+        // Validate the state.
+        let state = asset_tx.content.state;
+        ensure!(
+            state == AssetTxState::Justification(TxSubstate::Started),
+            ErrorKind::InvalidPreviousAssetTransactionState { state }
+        );
+
+        // Verify mediator's signature on the transaction.
+        let message = asset_tx.content.to_bytes()?;
+        let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &asset_tx.sig)?;
+
+        // Verify issuer's signature on the transaction.
+        // Note that this check is redundant as it was also performed by verify_initialization().
+        let message = asset_tx.content.tx_content.content.to_bytes()?;
+        let _ = issr_account
+            .content
+            .memo
+            .owner_sign_pub_key
+            .verify(SIG_CTXT.bytes(&message), &asset_tx.content.tx_content.sig)?;
+
+        Ok(AssetTxState::Justification(TxSubstate::Validated))
+    }
+}
+
+// -------------------------------------------------------------------------------------
+// -                                    Mediator                                       -
+// -------------------------------------------------------------------------------------
+
+pub struct AssetTxIssueMediator {}
+
+impl AssetTransactionMediator for AssetTxIssueMediator {
+    /// Justifies and processes a confidential asset issue transaction. This method is called
+    /// by mediator. Corresponds to `JustifyAssetTx` and `ProcessCTx` of MERCAT paper.
+    /// If the trasaction is justified, it will be processed immediately.
+    fn justify_and_process(
+        &self,
+        asset_tx: PubAssetTxData,
+        issr_pub_account: &PubAccount,
+        state: AssetTxState,
+        mdtr_enc_keys: &EncryptionKeys,
+        mdtr_sign_keys: &SigningKeys,
+    ) -> Fallible<(PubJustifiedAssetTxData, PubAccount)> {
+        let gens = PedersenGens::default();
+
+        // Validate the state.
+        ensure!(
+            state == AssetTxState::Initialization(TxSubstate::Validated),
+            ErrorKind::InvalidPreviousAssetTransactionState { state }
+        );
+
+        // Mediator revalidates all proofs.
+        asset_issuance_init_verify(&asset_tx, issr_pub_account, &mdtr_enc_keys.pblc)?;
+
+        // Mediator decrypts the encrypted amount and uses it to verify the correctness proof.
+        let amount = mdtr_enc_keys
+            .scrt
+            .key
+            .decrypt(&asset_tx.content.enc_amount.cipher)?;
+
+        single_property_verifier(
+            &CorrectnessVerifier {
+                value: amount.into(),
+                pub_key: issr_pub_account.content.memo.owner_enc_pub_key.key,
+                cipher: asset_tx.content.memo.cipher,
+                pc_gens: &gens,
+            },
+            asset_tx.content.balance_correctness_proof.init,
+            asset_tx.content.balance_correctness_proof.response,
+        )?;
+
+        // After successfully justifying the transaction, mediator deposits the amount
+        // to issuer's account (aka processing phase).
+        let mut updated_issr_account = issr_pub_account.clone();
+        updated_issr_account.content.enc_balance.cipher += asset_tx.content.memo.cipher;
+
+        // On successful justification, mediator transitions the state.
+        let new_state = AssetTxState::Justification(TxSubstate::Started);
+        let content = PubJustifiedAssetTxDataContent {
+            tx_content: asset_tx,
+            state: new_state,
+        };
+        let message = content.to_bytes()?;
+        let sig = mdtr_sign_keys.sign(SIG_CTXT.bytes(&message));
+
+        Ok((
+            PubJustifiedAssetTxData { content, sig },
+            updated_issr_account,
+        ))
+    }
+}
+
 // ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
@@ -199,19 +300,21 @@ mod tests {
         asset_proofs::{CommitmentWitness, ElgamalSecretKey},
         mercat::{
             AccountMemo, CorrectnessProof, EncryptedAmount, EncryptedAssetId, EncryptionKeys,
-            EncryptionPubKey, MembershipProof, PubAccountContent, SecAccount,
+            MembershipProof, PubAccountContent, SecAccount, Signature, SigningKeys,
         },
         AssetId,
     };
     use curve25519_dalek::scalar::Scalar;
     use rand::SeedableRng;
+    use schnorrkel::{ExpansionMode, MiniSecretKey};
     use wasm_bindgen_test::*;
 
     #[test]
     #[wasm_bindgen_test]
     fn asset_issuance_and_validation() {
-        // ----------------------- setup
+        // ----------------------- Setup
         let mut rng = StdRng::from_seed([10u8; 32]);
+        let issued_amount: Balance = 20u32.into();
 
         // Generate keys for the issuer.
         let issuer_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
@@ -237,11 +340,11 @@ mod tests {
         );
 
         // Note that we use default proof values since we don't reverify these proofs during asset issuance.
-        // Asset issuance also doesn't concern with the current account balance at the moment.
         let issuer_public_account = PubAccount {
             content: PubAccountContent {
                 id: 1,
                 enc_asset_id: pub_account_enc_asset_id,
+                // Set the initial encrypted balance to 0.
                 enc_balance: EncryptedAmount::default(),
                 asset_wellformedness_proof: WellformednessProof::default(),
                 asset_membership_proof: MembershipProof::default(),
@@ -252,32 +355,108 @@ mod tests {
         };
 
         // Generate keys for the mediator.
-        let mediator_enc_pub_key: EncryptionPubKey =
-            ElgamalSecretKey::new(Scalar::random(&mut rng))
-                .get_public_key()
-                .into();
+        let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let mediator_enc_key = EncryptionKeys {
+            pblc: mediator_elg_secret_key.get_public_key().into(),
+            scrt: mediator_elg_secret_key.into(),
+        };
 
-        // Positive tests.
+        let seed = [12u8; 32];
+        let mediator_signing_pair = MiniSecretKey::from_bytes(&seed)
+            .expect("Invalid seed")
+            .expand_to_keypair(ExpansionMode::Ed25519);
+
+        // ----------------------- Initialization
         let issuer = CtxIssuer {};
         let (asset_tx, state) = issuer
             .initialize(
                 1234u32,
                 &issuer_secret_account,
-                &mediator_enc_pub_key,
-                20u32.into(),
+                &mediator_enc_key.pblc,
+                issued_amount,
                 &mut rng,
             )
             .unwrap();
 
         let validator = AssetTxIssueValidator {};
-        let result = validator
-            .verify(
+        // Positive tests.
+        let state = validator
+            .verify_initialization(
                 &asset_tx,
                 state,
                 &issuer_public_account,
-                &mediator_enc_pub_key,
+                &mediator_enc_key.pblc,
             )
             .unwrap();
-        assert_eq!(result, AssetTxState::Initialization(TxSubstate::Validated));
+        assert_eq!(state, AssetTxState::Initialization(TxSubstate::Validated));
+
+        // Negative tests.
+        // Invalid issuer signature.
+        let mut invalid_tx = asset_tx.clone();
+        invalid_tx.sig = Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature");
+
+        let result = validator.verify_initialization(
+            &invalid_tx,
+            AssetTxState::Initialization(TxSubstate::Started),
+            &issuer_public_account,
+            &mediator_enc_key.pblc,
+        );
+        assert_err!(result, ErrorKind::SignatureValidationFailure);
+
+        // ----------------------- Justification
+        let mediator = AssetTxIssueMediator {};
+        let (justified_tx, updated_issuer_account) = mediator
+            .justify_and_process(
+                asset_tx,
+                &issuer_public_account,
+                state,
+                &mediator_enc_key,
+                &mediator_signing_pair,
+            )
+            .unwrap();
+        assert_eq!(
+            justified_tx.content.state,
+            AssetTxState::Justification(TxSubstate::Started)
+        );
+
+        // Positive test.
+        let state = validator
+            .verify_justification(
+                &justified_tx,
+                &updated_issuer_account,
+                &mediator_signing_pair.public.into(),
+            )
+            .unwrap();
+        assert_eq!(state, AssetTxState::Justification(TxSubstate::Validated));
+
+        // Negative test.
+        // Invalid mediator signature.
+        let mut invalid_justified_tx = justified_tx.clone();
+        invalid_justified_tx.sig =
+            Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature");
+
+        let result = validator.verify_justification(
+            &invalid_justified_tx,
+            &updated_issuer_account,
+            &mediator_signing_pair.public.into(),
+        );
+        assert_err!(result, ErrorKind::SignatureValidationFailure);
+
+        // ----------------------- Processing
+        // Check that the issued amount is added to the account balance.
+        assert!(issuer_enc_key
+            .scrt
+            .key
+            .verify(
+                &updated_issuer_account.content.enc_balance.cipher,
+                &Scalar::from(issued_amount)
+            )
+            .is_ok());
+
+        // Check that the asset_id is still the same.
+        assert_eq!(
+            updated_issuer_account.content.enc_asset_id,
+            pub_account_enc_asset_id
+        );
     }
 }

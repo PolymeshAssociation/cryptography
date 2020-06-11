@@ -131,8 +131,7 @@ impl AccountCreaterVerifier for AccountValidator {
             .content
             .memo
             .owner_sign_pub_key
-            .verify(SIG_CTXT.bytes(&message), &signature)
-            .map_err(|_| ErrorKind::SignatureValidationFailure)?;
+            .verify(SIG_CTXT.bytes(&message), &signature)?;
 
         // Verify that the encrypted asset id is wellformed
         single_property_verifier(
