@@ -8,7 +8,7 @@ use crate::{
         wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
         CommitmentWitness,
     },
-    errors::{ErrorKind, Fallible},
+    errors::Fallible,
     mercat::{
         AccountCreaterVerifier, AccountMemo, CorrectnessProof, EncryptedAmount, MembershipProof,
         PubAccount, PubAccountContent, SecAccount, WellformednessProof, BASE, EXPONENT,
@@ -106,7 +106,7 @@ pub fn create_account<Rng: RngCore + CryptoRng>(
     };
 
     let message = content.to_bytes()?;
-    let sig = Some(scrt.sign_keys.sign(SIG_CTXT.bytes(&message)));
+    let sig = scrt.sign_keys.sign(SIG_CTXT.bytes(&message));
 
     Ok(PubAccount { content, sig })
 }
@@ -122,16 +122,11 @@ impl AccountCreaterVerifier for AccountValidator {
         let gens = &PedersenGens::default();
 
         let message = account.content.to_bytes()?;
-        let signature = account
-            .sig
-            .as_ref()
-            .ok_or(ErrorKind::SignatureValidationFailure)?;
-
         let _ = account
             .content
             .memo
             .owner_sign_pub_key
-            .verify(SIG_CTXT.bytes(&message), &signature)?;
+            .verify(SIG_CTXT.bytes(&message), &account.sig)?;
 
         // Verify that the encrypted asset id is wellformed
         single_property_verifier(

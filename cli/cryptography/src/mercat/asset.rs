@@ -351,7 +351,7 @@ mod tests {
                 balance_correctness_proof: CorrectnessProof::default(),
                 memo: AccountMemo::new(issuer_enc_key.pblc, sign_keys.public.into()),
             },
-            sig: Default::default(),
+            sig: Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature"),
         };
 
         // Generate keys for the mediator.
