@@ -399,8 +399,7 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
             .content
             .memo
             .owner_sign_pub_key
-            .verify(SIG_CTXT.bytes(&message), &transaction.sig)
-            .map_err(|_| ErrorKind::SignatureValidationFailure)?;
+            .verify(SIG_CTXT.bytes(&message), &transaction.sig)?;
 
         verify_initital_transaction_proofs(transaction, sndr_account)?;
 
@@ -430,8 +429,7 @@ impl CtxReceiverValidator {
             .content
             .memo
             .owner_sign_pub_key
-            .verify(SIG_CTXT.bytes(&message), &conf_tx_final_data.sig)
-            .map_err(|_| ErrorKind::SignatureValidationFailure);
+            .verify(SIG_CTXT.bytes(&message), &conf_tx_final_data.sig)?;
 
         let memo = &conf_tx_final_data.content.init_data.content.memo;
         let init_data = &conf_tx_final_data.content.init_data;
