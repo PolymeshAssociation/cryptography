@@ -300,7 +300,7 @@ mod tests {
         asset_proofs::{CommitmentWitness, ElgamalSecretKey},
         mercat::{
             AccountMemo, CorrectnessProof, EncryptedAmount, EncryptedAssetId, EncryptionKeys,
-            MembershipProof, PubAccountContent, SecAccount, Signature, SigningKeys,
+            MembershipProof, PubAccountContent, SecAccount, Signature,
         },
         AssetId,
     };
