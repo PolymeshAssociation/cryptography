@@ -190,7 +190,7 @@ mod tests {
     use crate::{asset_proofs::ElgamalSecretKey, mercat::EncryptionKeys};
     use curve25519_dalek::scalar::Scalar;
     use rand::{rngs::StdRng, SeedableRng};
-    use schnorrkel::Keypair;
+    use schnorrkel::{ExpansionMode, MiniSecretKey};
     use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
@@ -205,7 +205,11 @@ mod tests {
             pblc: elg_pub.into(),
             scrt: elg_secret.into(),
         };
-        let sign_keys = Keypair::generate();
+        let seed = [11u8; 32];
+        let sign_keys = MiniSecretKey::from_bytes(&seed)
+            .expect("Invalid seed")
+            .expand_to_keypair(ExpansionMode::Ed25519);
+
         let asset_id = AssetId::from(1);
         let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
             .iter()
