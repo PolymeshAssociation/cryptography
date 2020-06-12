@@ -20,12 +20,18 @@ use crate::{
     },
     Balance, BALANCE_RANGE,
 };
+
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
+use lazy_static::lazy_static;
 use rand::rngs::StdRng;
-use sp_application_crypto::sr25519;
-use sp_core::crypto::Pair;
+use rand_core::OsRng;
+use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
+
+lazy_static! {
+    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/conf_tx");
+}
 
 // -------------------------------------------------------------------------------------
 // -                                    Sender                                         -
@@ -73,6 +79,7 @@ impl ConfidentialTransactionSender for CtxSender {
             amount.into(),
             amount_enc_blinding,
             BALANCE_RANGE,
+            rng,
         )?);
 
         // Prove that the amount encrypted under different public keys are the same
@@ -114,6 +121,7 @@ impl ConfidentialTransactionSender for CtxSender {
             (balance - amount).into(),
             blinding,
             BALANCE_RANGE,
+            rng,
         )?);
 
         // Refresh the encrypted asset id of the sender account and prove that the
@@ -173,7 +181,8 @@ impl ConfidentialTransactionSender for CtxSender {
             },
         };
 
-        let sig = sndr_sign_keys.pair.sign(&content.to_bytes()?);
+        let message = content.to_bytes()?;
+        let sig = sndr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
             PubInitConfidentialTxData { content, sig },
@@ -265,7 +274,9 @@ impl CtxReceiver {
             asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof { init, response },
         };
 
-        let sig = rcvr_sign_keys.pair.sign(&content.to_bytes()?);
+        let message = content.to_bytes()?;
+        let sig = rcvr_sign_keys.sign(SIG_CTXT.bytes(&message));
+
         Ok((
             PubFinalConfidentialTxData { content, sig },
             ConfidentialTxState::Finalization(TxSubstate::Started),
@@ -304,11 +315,14 @@ fn verify_initital_transaction_proofs(
         init_data.amount_equal_cipher_proof.response,
     )?;
 
+    let mut rng = OsRng::default();
+
     // Verify that the amount is not negative
     verify_within_range(
         init_data.non_neg_amount_proof.init.clone(),
         init_data.non_neg_amount_proof.response.clone(),
         init_data.non_neg_amount_proof.range,
+        &mut rng,
     )?;
 
     // verify that the balance refreshment was done correctly
@@ -328,6 +342,7 @@ fn verify_initital_transaction_proofs(
         init_data.enough_fund_proof.init.clone(),
         init_data.enough_fund_proof.response.clone(),
         init_data.enough_fund_proof.range,
+        &mut rng,
     )?;
 
     // Verify that the asset id refreshment was done correctly
@@ -379,14 +394,12 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
             ErrorKind::InvalidPreviousState { state }
         );
 
-        ensure!(
-            sr25519::Pair::verify(
-                &transaction.sig,
-                &transaction.content.to_bytes()?,
-                &sndr_account.content.memo.owner_sign_pub_key.key,
-            ),
-            ErrorKind::SignatureValidationFailure
-        );
+        let message = transaction.content.to_bytes()?;
+        let _ = sndr_account
+            .content
+            .memo
+            .owner_sign_pub_key
+            .verify(SIG_CTXT.bytes(&message), &transaction.sig)?;
 
         verify_initital_transaction_proofs(transaction, sndr_account)?;
 
@@ -411,14 +424,12 @@ impl CtxReceiverValidator {
             ErrorKind::InvalidPreviousState { state }
         );
 
-        ensure!(
-            sr25519::Pair::verify(
-                &conf_tx_final_data.sig,
-                &conf_tx_final_data.content.to_bytes()?,
-                &rcvr_account.content.memo.owner_sign_pub_key.key,
-            ),
-            ErrorKind::SignatureValidationFailure
-        );
+        let message = conf_tx_final_data.content.to_bytes()?;
+        let _ = rcvr_account
+            .content
+            .memo
+            .owner_sign_pub_key
+            .verify(SIG_CTXT.bytes(&message), &conf_tx_final_data.sig)?;
 
         let memo = &conf_tx_final_data.content.init_data.content.memo;
         let init_data = &conf_tx_final_data.content.init_data;
@@ -480,12 +491,9 @@ mod tests {
         }
     }
 
-    fn mock_gen_sign_key_pair(seed: u8) -> (SigningKeys, SigningPubKey) {
-        let pair = sr25519::Pair::from_seed(&[seed; 32]);
-        (
-            SigningKeys { pair: pair.clone() },
-            SigningPubKey::from(pair.public()),
-        )
+    fn mock_gen_sign_key_pair(seed: u8) -> SigningKeys {
+        let mut rng = StdRng::from_seed([seed; 32]);
+        schnorrkel::Keypair::generate_with(&mut rng)
     }
 
     fn mock_ctx_init_memo<R: RngCore + CryptoRng>(
@@ -529,9 +537,9 @@ mod tests {
                 asset_wellformedness_proof: WellformednessProof::default(),
                 asset_membership_proof: MembershipProof::default(),
                 balance_correctness_proof: CorrectnessProof::default(),
-                memo: AccountMemo::from((rcvr_enc_pub_key, rcvr_sign_pub_key)),
+                memo: AccountMemo::new(rcvr_enc_pub_key, rcvr_sign_pub_key),
             },
-            sig: Signature::default(),
+            sig: Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature"),
         })
     }
 
@@ -539,6 +547,7 @@ mod tests {
         rcvr_pub_key: EncryptionPubKey,
         expected_amount: Balance,
         asset_id: AssetId,
+        sig: Signature,
         rng: &mut R,
     ) -> PubInitConfidentialTxData {
         PubInitConfidentialTxData {
@@ -552,7 +561,7 @@ mod tests {
                 balance_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
                 asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
             },
-            sig: Signature::default(),
+            sig,
         }
     }
 
@@ -568,18 +577,21 @@ mod tests {
         let mut rng = StdRng::from_seed([17u8; 32]);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
-        let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
+
+        let sign = rcvr_sign_keys.sign(SIG_CTXT.bytes(b""));
 
         let ctx_init_data = mock_ctx_init_data(
             rcvr_enc_keys.pblc,
             expected_amount,
             asset_id.clone(),
+            sign,
             &mut rng,
         );
         let rcvr_account = Account {
             pblc: mock_gen_account(
                 rcvr_enc_keys.pblc,
-                rcvr_sign_pub_key,
+                rcvr_sign_keys.public,
                 asset_id.clone(),
                 balance,
                 &mut rng,
@@ -616,18 +628,20 @@ mod tests {
         let mut rng = StdRng::from_seed([17u8; 32]);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
-        let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
+        let sign = rcvr_sign_keys.sign(SIG_CTXT.bytes(b""));
 
         let ctx_init_data = mock_ctx_init_data(
             rcvr_enc_keys.pblc,
             expected_amount,
             asset_id.clone(),
+            sign,
             &mut rng,
         );
         let rcvr_account = Account {
             pblc: mock_gen_account(
                 rcvr_enc_keys.pblc,
-                rcvr_sign_pub_key,
+                rcvr_sign_keys.public,
                 asset_id.clone(),
                 balance,
                 &mut rng,
@@ -669,18 +683,20 @@ mod tests {
         let mut rng = StdRng::from_seed([17u8; 32]);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
-        let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
+        let sign = rcvr_sign_keys.sign(SIG_CTXT.bytes(b""));
 
         let ctx_init_data = mock_ctx_init_data(
             rcvr_enc_keys.pblc,
             received_amount,
             asset_id.clone(),
+            sign,
             &mut rng,
         );
         let rcvr_account = Account {
             pblc: mock_gen_account(
                 rcvr_enc_keys.pblc,
-                rcvr_sign_pub_key,
+                rcvr_sign_keys.public,
                 asset_id.clone(),
                 balance,
                 &mut rng,
@@ -723,18 +739,20 @@ mod tests {
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
         let wrong_enc_keys = mock_gen_enc_key_pair(18u8);
-        let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(18u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
+        let sign = rcvr_sign_keys.sign(SIG_CTXT.bytes(b""));
 
         let ctx_init_data = mock_ctx_init_data(
             rcvr_enc_keys.pblc,
             expected_amount,
             asset_id.clone(),
+            sign,
             &mut rng,
         );
         let rcvr_account = Account {
             pblc: mock_gen_account(
                 wrong_enc_keys.pblc,
-                rcvr_sign_pub_key,
+                rcvr_sign_keys.public,
                 asset_id.clone(),
                 balance,
                 &mut rng,
@@ -777,15 +795,15 @@ mod tests {
         let mut rng = StdRng::from_seed([17u8; 32]);
 
         let sndr_enc_keys = mock_gen_enc_key_pair(10u8);
-        let (sndr_sign_keys, sndr_sign_pub_key) = mock_gen_sign_key_pair(11u8);
+        let sndr_sign_keys = mock_gen_sign_key_pair(11u8);
 
         let rcvr_enc_keys = mock_gen_enc_key_pair(12u8);
-        let (rcvr_sign_keys, rcvr_sign_pub_key) = mock_gen_sign_key_pair(13u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(13u8);
 
         let rcvr_account = Account {
             pblc: mock_gen_account(
                 rcvr_enc_keys.pblc,
-                rcvr_sign_pub_key.clone(),
+                rcvr_sign_keys.public.clone(),
                 asset_id.clone(),
                 rcvr_balance,
                 &mut rng,
@@ -802,7 +820,7 @@ mod tests {
         let sndr_account = Account {
             pblc: mock_gen_account(
                 sndr_enc_keys.pblc,
-                sndr_sign_pub_key.clone(),
+                sndr_sign_keys.public.clone(),
                 asset_id.clone(),
                 sndr_balance,
                 &mut rng,

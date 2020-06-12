@@ -1,4 +1,9 @@
-use curve25519_dalek::scalar::Scalar;
+#![cfg_attr(not(feature = "std"), no_std)]
+
+pub use curve25519_dalek::{
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
+};
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_512;
 use zeroize::Zeroize;
@@ -81,3 +86,7 @@ impl From<AssetId> for Scalar {
 pub mod asset_proofs;
 pub mod claim_proofs;
 pub mod mercat;
+
+// Reexport
+pub use bulletproofs::RangeProof as BRangeProof;
+pub use rand_core::*;

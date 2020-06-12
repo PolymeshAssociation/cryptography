@@ -10,8 +10,8 @@ use crate::asset_proofs::{
     },
     one_out_of_many_proof::{
         convert_to_base, convert_to_matrix_rep, Matrix, OOONProofFinalResponse,
-        OOONProofInitialMessage, OOONProofVerifier, OOONProver, OOONProverAwaitingChallenge,
-        OooNProofGenerators, Polynomial, R1ProofVerifier, R1ProverAwaitingChallenge,
+        OOONProofInitialMessage, OOONProver, OooNProofGenerators, Polynomial, R1ProofVerifier,
+        R1ProverAwaitingChallenge,
     },
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
@@ -20,9 +20,9 @@ use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
-use std::time::Instant;
 use zeroize::Zeroizing;
+
+use sp_std::{cmp::min, convert::TryFrom, prelude::*};
 
 pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
@@ -136,7 +136,7 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
 
         let secret_commitment = pc_gens.commit(*self.secret_element, *self.random);
 
-        let initial_size = std::cmp::min(self.elements_set.len(), size);
+        let initial_size = min(self.elements_set.len(), size);
 
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
         let l_bit_matrix = convert_to_matrix_rep(self.secret_position, self.base, exp);
@@ -241,7 +241,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         let exp = u32::try_from(m).map_err(|_| ErrorKind::InvalidExponentParameter)?;
         let size = initial_message.ooon_proof_initial_message.n.pow(exp);
 
-        let initial_size = std::cmp::min(self.elements_set.len(), size);
+        let initial_size = min(self.elements_set.len(), size);
         ensure!(initial_size != 0, ErrorKind::EmptyElementsSet);
         let b_comm = initial_message
             .ooon_proof_initial_message
@@ -278,7 +278,6 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         }
 
         let mut p_i: Scalar;
-        let mut left: RistrettoPoint = RistrettoPoint::default();
         let right =
             final_response.ooon_proof_final_response.z() * self.generators.com_gens.B_blinding;
 
@@ -321,7 +320,7 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
             }
         }
 
-        left = sum1 * self.secret_element_com - sum2 * self.generators.com_gens.B;
+        let mut left = sum1 * self.secret_element_com - sum2 * self.generators.com_gens.B;
         let mut temp = Scalar::one();
         for k in 0..m {
             left -= temp * initial_message.ooon_proof_initial_message.g_vec[k];

@@ -20,11 +20,16 @@ use crate::{
     },
     Balance,
 };
+
 use bulletproofs::PedersenGens;
+use lazy_static::lazy_static;
 use rand::rngs::StdRng;
-use sp_application_crypto::sr25519;
-use sp_core::crypto::Pair;
+use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
+
+lazy_static! {
+    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/assert");
+}
 
 /// Helper function to verify the proofs on an asset initialization transaction.
 fn asset_issuance_init_verify(
@@ -35,14 +40,12 @@ fn asset_issuance_init_verify(
     let gens = PedersenGens::default();
 
     // Verify the signature on the transaction.
-    ensure!(
-        sr25519::Pair::verify(
-            &asset_tx.sig,
-            &asset_tx.content.to_bytes()?,
-            &issr_pub_account.content.memo.owner_sign_pub_key.key,
-        ),
-        ErrorKind::SignatureValidationFailure
-    );
+    let message = asset_tx.content.to_bytes()?;
+    issr_pub_account
+        .content
+        .memo
+        .owner_sign_pub_key
+        .verify(SIG_CTXT.bytes(&message), &asset_tx.sig)?;
 
     // Verify the proof of encrypting the same asset type as the account type.
     single_property_verifier(
@@ -148,7 +151,8 @@ impl AssetTransactionIssuer for CtxIssuer {
         };
 
         // Sign the issuance content.
-        let sig = issr_account.sign_keys.pair.sign(&content.to_bytes()?);
+        let message = content.to_bytes()?;
+        let sig = issr_account.sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
             PubAssetTxData { content, sig },
@@ -201,25 +205,17 @@ impl AssetTransactionFinalizeAndProcessVerifier for AssetTxIssueValidator {
         );
 
         // Verify mediator's signature on the transaction.
-        ensure!(
-            sr25519::Pair::verify(
-                &asset_tx.sig,
-                &asset_tx.content.to_bytes()?,
-                &mdtr_sign_pub_key.key,
-            ),
-            ErrorKind::SignatureValidationFailure
-        );
+        let message = asset_tx.content.to_bytes()?;
+        let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &asset_tx.sig)?;
 
         // Verify issuer's signature on the transaction.
         // Note that this check is redundant as it was also performed by verify_initialization().
-        ensure!(
-            sr25519::Pair::verify(
-                &asset_tx.content.tx_content.sig,
-                &asset_tx.content.tx_content.content.to_bytes()?,
-                &issr_account.content.memo.owner_sign_pub_key.key,
-            ),
-            ErrorKind::SignatureValidationFailure
-        );
+        let message = asset_tx.content.tx_content.content.to_bytes()?;
+        let _ = issr_account
+            .content
+            .memo
+            .owner_sign_pub_key
+            .verify(SIG_CTXT.bytes(&message), &asset_tx.content.tx_content.sig)?;
 
         Ok(AssetTxState::Justification(TxSubstate::Validated))
     }
@@ -282,7 +278,8 @@ impl AssetTransactionMediator for AssetTxIssueMediator {
             tx_content: asset_tx,
             state: new_state,
         };
-        let sig = mdtr_sign_keys.pair.sign(&content.to_bytes()?);
+        let message = content.to_bytes()?;
+        let sig = mdtr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
             PubJustifiedAssetTxData { content, sig },
@@ -303,12 +300,13 @@ mod tests {
         asset_proofs::{CommitmentWitness, ElgamalSecretKey},
         mercat::{
             AccountMemo, CorrectnessProof, EncryptedAmount, EncryptedAssetId, EncryptionKeys,
-            MembershipProof, PubAccountContent, SecAccount, Signature, SigningKeys,
+            MembershipProof, PubAccountContent, SecAccount, Signature,
         },
         AssetId,
     };
     use curve25519_dalek::scalar::Scalar;
     use rand::SeedableRng;
+    use schnorrkel::{ExpansionMode, MiniSecretKey};
     use wasm_bindgen_test::*;
 
     #[test]
@@ -324,15 +322,12 @@ mod tests {
             pblc: issuer_elg_secret_key.get_public_key().into(),
             scrt: issuer_elg_secret_key.into(),
         };
-        let issuer_signing_pair = sr25519::Pair::from_seed(&[11u8; 32]);
-        let sign_keys = SigningKeys {
-            pair: issuer_signing_pair.clone(),
-        };
+        let sign_keys = schnorrkel::Keypair::generate_with(&mut rng);
         let asset_id = AssetId::from(1);
 
         let issuer_secret_account = SecAccount {
             enc_keys: issuer_enc_key.clone(),
-            sign_keys: sign_keys,
+            sign_keys: sign_keys.clone(),
             asset_id: asset_id.clone(),
             asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
         };
@@ -354,9 +349,9 @@ mod tests {
                 asset_wellformedness_proof: WellformednessProof::default(),
                 asset_membership_proof: MembershipProof::default(),
                 balance_correctness_proof: CorrectnessProof::default(),
-                memo: AccountMemo::from((issuer_enc_key.pblc, issuer_signing_pair.public().into())),
+                memo: AccountMemo::new(issuer_enc_key.pblc, sign_keys.public.into()),
             },
-            sig: Signature::default(),
+            sig: Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature"),
         };
 
         // Generate keys for the mediator.
@@ -366,9 +361,10 @@ mod tests {
             scrt: mediator_elg_secret_key.into(),
         };
 
-        let mediator_signing_pair = SigningKeys {
-            pair: sr25519::Pair::from_seed(&[12u8; 32]),
-        };
+        let seed = [12u8; 32];
+        let mediator_signing_pair = MiniSecretKey::from_bytes(&seed)
+            .expect("Invalid seed")
+            .expand_to_keypair(ExpansionMode::Ed25519);
 
         // ----------------------- Initialization
         let issuer = CtxIssuer {};
@@ -397,7 +393,8 @@ mod tests {
         // Negative tests.
         // Invalid issuer signature.
         let mut invalid_tx = asset_tx.clone();
-        invalid_tx.sig = Signature::default();
+        invalid_tx.sig = Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature");
+
         let result = validator.verify_initialization(
             &invalid_tx,
             AssetTxState::Initialization(TxSubstate::Started),
@@ -427,7 +424,7 @@ mod tests {
             .verify_justification(
                 &justified_tx,
                 &updated_issuer_account,
-                &mediator_signing_pair.pair.public().into(),
+                &mediator_signing_pair.public.into(),
             )
             .unwrap();
         assert_eq!(state, AssetTxState::Justification(TxSubstate::Validated));
@@ -435,11 +432,13 @@ mod tests {
         // Negative test.
         // Invalid mediator signature.
         let mut invalid_justified_tx = justified_tx.clone();
-        invalid_justified_tx.sig = Signature::default();
+        invalid_justified_tx.sig =
+            Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature");
+
         let result = validator.verify_justification(
             &invalid_justified_tx,
             &updated_issuer_account,
-            &mediator_signing_pair.pair.public().into(),
+            &mediator_signing_pair.public.into(),
         );
         assert_err!(result, ErrorKind::SignatureValidationFailure);
 
