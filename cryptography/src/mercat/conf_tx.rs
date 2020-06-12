@@ -28,8 +28,7 @@ use crate::{
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
 use lazy_static::lazy_static;
-use rand::rngs::OsRng;
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, OsRng, RngCore};
 use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
 
@@ -241,16 +240,16 @@ impl ConfidentialTransactionReceiver for CtxReceiver {
     fn finalize_and_process<T: RngCore + CryptoRng>(
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
-        sndr_pub_account: &PubAccount,
+        _sndr_pub_account: &PubAccount,
         rcvr_account: Account,
-        enc_asset_id: EncryptedAssetId,
+        _enc_asset_id: EncryptedAssetId,
         amount: Balance,
         state: ConfidentialTxState,
         rng: &mut T,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)> {
         self.finalize_by_receiver(conf_tx_init_data, rcvr_account, state, amount, rng)?;
 
-        // TODO: CRYP-110
+        // TODO: CRYP-110 also ensure that _sndr_pub_account and _enc_asset_id are actually used
         Err(ErrorKind::NotImplemented.into())
     }
 }
