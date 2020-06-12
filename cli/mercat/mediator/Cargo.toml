@@ -1,10 +1,10 @@
 [package]
-name = "mercat-account"
+name = "mercat-mediator"
 version = "0.1.0"
 authors = [ "Polymath Inc" ]
-edition = "2018"
 repository = "https://github.com/PolymathNetwork/cryptography"
-description = "MERCAT account CLI."
+description = "MERCAT Asset Issuer"
+edition = "2018"
 
 [dependencies]
 cryptography = { package = "cryptography", path = "../../../cryptography/" }
@@ -24,6 +24,10 @@ base64 = { version = "0.12.1" }
 failure = { version = "0.1.7" }
 
 # Crypto
-rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
-curve25519-dalek = { version = "2.0.0", features = ["u64_backend", "alloc", "serde"], default-features = false }
+curve25519-dalek = { version = "2", default-features = false }
 schnorrkel = { version = "0.9.1", default-features = false }
+rand_core = { version = "0.5", default-features = false }
+rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
+
+# Only binaries
+exitcode = { version = "1.1.2", default-features = false }

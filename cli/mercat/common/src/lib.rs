@@ -1,12 +1,17 @@
 pub mod errors;
 
+use codec::{Decode, Encode};
+use cryptography::mercat::AssetTxState;
 use curve25519_dalek::scalar::Scalar;
 use errors::Error;
 use log::info;
 use metrics::Recorder;
 use metrics_core::Key;
+use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
+use std::io::BufReader;
 use std::{
+    convert::TryInto,
     fs::{create_dir_all, File},
     path::PathBuf,
 };
@@ -14,9 +19,24 @@ use std::{
 pub const ON_CHAIN_DIR: &str = "on-chain";
 pub const OFF_CHAIN_DIR: &str = "off-chain";
 pub const PUBLIC_ACCOUNT_FILE: &str = "public_account.json";
+pub const VALIDATED_PUBLIC_ACCOUNT_FILE: &str = "validated_public_account.json";
 pub const SECRET_ACCOUNT_FILE: &str = "secret_account.json";
 pub const ASSET_ID_LIST_FILE: &str = "valid_asset_ids.json";
 pub const COMMON_OBJECTS_DIR: &str = "common";
+pub const INIT_STATE: &str = "initialization_started";
+pub const JUSTIFY_STATE: &str = "justification_started";
+
+#[inline]
+pub fn transaction_file(tx_id: u32, state: AssetTxState) -> String {
+    format!("tx_{}_{}.json", tx_id, state)
+}
+
+#[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
+pub struct Instruction {
+    pub state: AssetTxState,
+    #[serde(with = "serde_bytes")]
+    pub data: Vec<u8>,
+}
 
 #[allow(dead_code)]
 static RECORDER: PrintRecorder = PrintRecorder;
@@ -105,6 +125,29 @@ where
     Ok(())
 }
 
+/// Utility function to read and deserializable data from a location inside the database directory,
+/// for a particular user.
+#[inline]
+pub fn load_from_file<T: serde::de::DeserializeOwned>(
+    db_dir: PathBuf,
+    on_off_chain: &str,
+    user: &str,
+    file_name: &str,
+) -> Result<T, Error> {
+    let file_path = construct_path(db_dir, on_off_chain, user, file_name);
+    let file = File::open(file_path.clone()).map_err(|error| Error::FileReadError {
+        error,
+        path: file_path.clone(),
+    })?;
+
+    let data = BufReader::new(file);
+
+    serde_json::from_reader(data).map_err(|error| Error::ObjectDeserializationError {
+        error,
+        path: file_path.clone(),
+    })
+}
+
 /// Utility function to remove a file from the database directory for a particular user.
 #[inline]
 pub fn remove_file(
@@ -140,4 +183,54 @@ pub fn get_asset_ids(db_dir: PathBuf) -> Result<Vec<Scalar>, Error> {
             path: ASSET_ID_LIST_FILE.into(),
         })?;
     Ok(valid_asset_ids.0)
+}
+
+#[inline]
+pub fn save_object<T: Encode>(
+    db_dir: PathBuf,
+    on_off_chain: &str,
+    user: &str,
+    file_name: &str,
+    data: &T,
+) -> Result<(), Error> {
+    let mut file_path = db_dir;
+    file_path.push(on_off_chain);
+    file_path.push(user);
+
+    // file_path is now the path to the user directory. Create it if it does not exist.
+    create_dir_all(file_path.clone()).map_err(|error| Error::FileCreationError {
+        error,
+        path: file_path.clone(),
+    })?;
+
+    file_path.push(file_name);
+
+    std::fs::write(file_path, data.encode())
+        .expect("Failed to write the issuer_public_account to file.");
+
+    Ok(())
+}
+
+#[inline]
+pub fn load_object<T: Decode>(
+    db_dir: PathBuf,
+    on_off_chain: &str,
+    user: &str,
+    file_name: &str,
+) -> Result<T, Error> {
+    let file_path = construct_path(db_dir, on_off_chain, user, file_name);
+    let data = std::fs::read(file_path).expect("Failed to read the issuer account");
+    Ok(T::decode(&mut &data[..])
+        .unwrap_or_else(|error| panic!("Failed to deserialize the an object: {}", error)))
+}
+
+#[inline]
+pub fn create_rng_from_seed(seed: Option<String>) -> Result<StdRng, Error> {
+    let seed = seed.ok_or(Error::EmptySeed)?;
+    let seed: &[u8] = &base64::decode(seed).map_err(|e| Error::SeedDecodeError { error: e })?;
+    let seed = seed
+        .try_into()
+        .map_err(|_| Error::SeedLengthError { length: seed.len() })?;
+
+    Ok(StdRng::from_seed(seed))
 }

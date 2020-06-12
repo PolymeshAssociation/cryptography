@@ -357,7 +357,8 @@ mod tests {
             scrt: mediator_elg_secret_key.into(),
         };
 
-        let seed = [12u8; 32];
+        let mut seed = [0u8; 32];
+        rng.fill_bytes(&mut seed);
         let mediator_signing_pair = MiniSecretKey::from_bytes(&seed)
             .expect("Invalid seed")
             .expand_to_keypair(ExpansionMode::Ed25519);

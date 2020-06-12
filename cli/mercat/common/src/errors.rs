@@ -37,7 +37,20 @@ pub enum Error {
 
     /// An error occurred while reading from a file.
     #[fail(display = "Failed to read the file {:?}: {:?}", path, error)]
-    FileReadError { error: std::io::Error, path: String },
+    FileReadError {
+        error: std::io::Error,
+        path: PathBuf,
+    },
+
+    /// An error occurred while reading from a file.
+    #[fail(
+        display = "Failed to deserialize an object read from file {:?}: {:?}",
+        path, error
+    )]
+    ObjectDeserializationError {
+        error: serde_json::Error,
+        path: PathBuf,
+    },
 
     /// An error occurred while writing to a file.
     #[fail(display = "Failed to write to the file {:?}: {:?}", path, error)]

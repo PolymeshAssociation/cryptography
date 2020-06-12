@@ -10,7 +10,7 @@ use crate::{
     },
     errors::Fallible,
     mercat::{
-        Account, AccountCreaterVerifier, AccountMemo, CorrectnessProof, EncryptedAmount,
+        Account, AccountCreatorVerifier, AccountMemo, CorrectnessProof, EncryptedAmount,
         MembershipProof, PubAccount, PubAccountContent, SecAccount, WellformednessProof, BASE,
         EXPONENT,
     },
@@ -152,7 +152,7 @@ pub fn withdraw(account: PubAccount, enc_amount: EncryptedAmount) -> PubAccount 
 
 pub struct AccountValidator {}
 
-impl AccountCreaterVerifier for AccountValidator {
+impl AccountCreatorVerifier for AccountValidator {
     fn verify(&self, account: &PubAccount, valid_asset_ids: &Vec<Scalar>) -> Fallible<()> {
         let gens = &PedersenGens::default();
 
