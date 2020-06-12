@@ -482,7 +482,6 @@ mod tests {
 
         const BASE: usize = 4;
         const EXPONENT: usize = 8;
-        let N: usize = BASE.pow(EXPONENT as u32);
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 

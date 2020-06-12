@@ -773,13 +773,11 @@ mod tests {
     const SEED_1: [u8; 32] = [42u8; 32];
 
     #[test]
-    #[ignore]
     #[wasm_bindgen_test]
     /// Tests the whole workflow of one-out-of-many proofs by setting up the parameters base = 4 and exp =3.
     /// This parameters enable to generate 1-out-of-64 proofs which means the prover can prove the knowledge of
     /// one commitment among the public list of 64 commitments, which is opening to 0. The prover does this
     /// without revealing the secret commitment index or its random factor.
-
     fn test_ooon_proof_api() {
         let mut rng = StdRng::from_seed(SEED_1);
 
