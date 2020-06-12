@@ -5,11 +5,6 @@
 //! For more details see the original paper <https://eprint.iacr.org/2015/643.pdf>.
 
 #![allow(non_snake_case)]
-use bulletproofs::PedersenGens;
-use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_COMPRESSED, constants::RISTRETTO_BASEPOINT_POINT,
-    ristretto::RistrettoPoint, scalar::Scalar, traits::MultiscalarMul,
-};
 
 use crate::asset_proofs::{
     encryption_proofs::{
@@ -19,14 +14,21 @@ use crate::asset_proofs::{
 };
 use crate::errors::{ErrorKind, Fallible};
 
+use bulletproofs::PedersenGens;
+use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_COMPRESSED, constants::RISTRETTO_BASEPOINT_POINT,
+    ristretto::RistrettoPoint, scalar::Scalar, traits::MultiscalarMul,
+};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
-use sha3::Sha3_512;
-
 use serde::{Deserialize, Serialize};
-use std::ops::{Add, Neg, Sub};
-use std::time::Instant;
+use sha3::Sha3_512;
 use zeroize::{Zeroize, Zeroizing};
+
+use sp_std::{
+    ops::{Add, Neg, Sub},
+    prelude::*,
+};
 
 const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
 const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathOOONProofChallengeLabel";

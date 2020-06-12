@@ -20,14 +20,18 @@ use crate::{
         wellformedness_proof::{WellformednessFinalResponse, WellformednessInitialMessage},
         CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     },
-    errors::{ErrorKind, Fallible},
+    errors::{Error, Fallible},
     AssetId, Balance,
 };
+
+use chrono::{DateTime, Utc};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::rngs::StdRng;
+use rand_core::OsRng;
+use schnorrkel::keys::{Keypair, PublicKey};
 use serde::{Deserialize, Serialize};
-use sp_application_crypto::sr25519;
-use sp_core::crypto::Pair;
+
+use sp_std::{convert::From, vec::Vec};
 
 // -------------------------------------------------------------------------------------
 // -                                  Constants                                        -
@@ -75,31 +79,10 @@ pub struct EncryptionKeys {
 }
 
 /// Holds the SR25519 signature scheme public key.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct SigningPubKey {
-    pub key: sr25519::Public,
-}
+type SigningPubKey = PublicKey;
+type SigningKeys = Keypair;
 
-impl From<sr25519::Public> for SigningPubKey {
-    fn from(key: sr25519::Public) -> Self {
-        Self { key }
-    }
-}
-
-/// Holds the SR25519 signature scheme public and private key pair.
-#[derive(Clone)]
-pub struct SigningKeys {
-    pub pair: sr25519::Pair,
-}
-
-impl SigningKeys {
-    pub fn pblc(&self) -> SigningPubKey {
-        SigningPubKey::from(self.pair.public())
-    }
-}
-
-/// Type alias for SR25519 signature.
-pub type Signature = sr25519::Signature;
+pub type Signature = schnorrkel::sign::Signature;
 
 /// New type for Twisted ElGamal ciphertext of asset ids.
 #[derive(Default, Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
@@ -175,9 +158,10 @@ pub struct InRangeProof {
 
 impl Default for InRangeProof {
     fn default() -> Self {
+        let mut rng = OsRng::default();
         let range = 32;
         InRangeProof::from(
-            range_proof::prove_within_range(0, Scalar::one(), range)
+            range_proof::prove_within_range(0, Scalar::one(), range, &mut rng)
                 .expect("This shouldn't happen."),
         )
     }
@@ -259,15 +243,16 @@ pub type AssetMemo = EncryptedAmount;
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
     pub owner_sign_pub_key: SigningPubKey,
-    pub timestamp: std::time::SystemTime,
+    pub timestamp: DateTime<Utc>,
 }
 
-impl From<(EncryptionPubKey, SigningPubKey)> for AccountMemo {
-    fn from(pub_keys: (EncryptionPubKey, SigningPubKey)) -> Self {
+impl AccountMemo {
+    pub fn new(owner_enc_pub_key: EncryptionPubKey, owner_sign_pub_key: SigningPubKey) -> Self {
+        let timestamp = Utc::now();
         AccountMemo {
-            owner_enc_pub_key: pub_keys.0,
-            owner_sign_pub_key: pub_keys.1,
-            timestamp: std::time::SystemTime::now(),
+            owner_enc_pub_key,
+            owner_sign_pub_key,
+            timestamp,
         }
     }
 }
@@ -286,7 +271,7 @@ pub struct PubAccountContent {
 
 impl PubAccountContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
@@ -387,7 +372,7 @@ pub struct PubAssetTxDataContent {
 
 impl PubAssetTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
@@ -407,7 +392,7 @@ pub struct PubJustifiedAssetTxDataContent {
 
 impl PubJustifiedAssetTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
@@ -501,12 +486,12 @@ pub struct PubInitConfidentialTxDataContent {
 
 impl PubInitConfidentialTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
 /// Wrapper for the initial transaction data and its signature.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PubInitConfidentialTxData {
     pub content: PubInitConfidentialTxDataContent,
     pub sig: Signature,
@@ -522,7 +507,7 @@ pub struct PubFinalConfidentialTxDataContent {
 
 impl PubFinalConfidentialTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 /// Wrapper for the contents and the signature of the content sent by the
@@ -597,16 +582,16 @@ pub trait ConfidentialTransactionFinalizeAndProcessVerifier {
 
 /// Holds the public portion of the reversal transaction.
 pub struct PubReverseConfidentialTxData {
-    final_data: PubInitConfidentialTxData,
-    memo: ReverseConfidentialTxMemo,
-    sig: Signature,
+    _final_data: PubInitConfidentialTxData,
+    _memo: ReverseConfidentialTxMemo,
+    _sig: Signature,
 }
 
 /// Holds the memo for reversal of the confidential transaction sent by the mediator.
 pub struct ReverseConfidentialTxMemo {
-    enc_amount_using_rcvr: EncryptedAmount,
-    enc_refreshed_amount: EncryptedAmount,
-    enc_asset_id_using_rcvr: EncryptedAssetId,
+    _enc_amount_using_rcvr: EncryptedAmount,
+    _enc_refreshed_amount: EncryptedAmount,
+    _enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
 pub trait ConfidentialTransactionReverseAndProcessMediator {
