@@ -8,7 +8,7 @@ use crate::{
         wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
         CommitmentWitness,
     },
-    errors::{ErrorKind, Fallible},
+    errors::Fallible,
     mercat::{
         Account, AccountCreaterVerifier, AccountMemo, CorrectnessProof, EncryptedAmount,
         MembershipProof, PubAccount, PubAccountContent, SecAccount, WellformednessProof, BASE,
@@ -16,13 +16,19 @@ use crate::{
     },
     AssetId, Balance,
 };
+
 use bulletproofs::PedersenGens;
 use curve25519_dalek::scalar::Scalar;
-use rand::rngs::StdRng;
-use sp_application_crypto::sr25519;
-use sp_core::crypto::Pair;
+use lazy_static::lazy_static;
+use rand_core::{CryptoRng, RngCore};
+use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
 
+use sp_std::vec::Vec;
+
+lazy_static! {
+    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/account");
+}
 // ------------------------------------------------------------------------------------------------
 // -                                        Any User                                              -
 // ------------------------------------------------------------------------------------------------
@@ -34,11 +40,11 @@ pub fn convert_asset_ids(valid_asset_ids: Vec<AssetId>) -> Vec<Scalar> {
         .collect::<Vec<_>>()
 }
 
-pub fn create_account(
+pub fn create_account<T: RngCore + CryptoRng>(
     scrt: SecAccount,
     valid_asset_ids: &Vec<Scalar>,
     account_id: u32,
-    rng: &mut StdRng,
+    rng: &mut T,
 ) -> Fallible<Account> {
     let balance_blinding = Scalar::random(rng);
     let gens = &PedersenGens::default();
@@ -99,10 +105,11 @@ pub fn create_account(
         asset_wellformedness_proof,
         asset_membership_proof,
         initial_balance_correctness_proof,
-        memo: AccountMemo::from((scrt.enc_keys.pblc, scrt.sign_keys.pblc())),
+        memo: AccountMemo::new(scrt.enc_keys.pblc, scrt.sign_keys.public),
     };
 
-    let initial_sig = scrt.sign_keys.pair.sign(&content.to_bytes()?);
+    let message = content.to_bytes()?;
+    let initial_sig = scrt.sign_keys.sign(SIG_CTXT.bytes(&message));
 
     Ok(Account {
         pblc: PubAccount {
@@ -148,14 +155,13 @@ pub struct AccountValidator {}
 impl AccountCreaterVerifier for AccountValidator {
     fn verify(&self, account: &PubAccount, valid_asset_ids: &Vec<Scalar>) -> Fallible<()> {
         let gens = &PedersenGens::default();
-        ensure!(
-            sr25519::Pair::verify(
-                &account.initial_sig,
-                &account.content.to_bytes()?,
-                &account.content.memo.owner_sign_pub_key.key,
-            ),
-            ErrorKind::SignatureValidationFailure
-        );
+
+        let message = account.content.to_bytes()?;
+        let _ = account
+            .content
+            .memo
+            .owner_sign_pub_key
+            .verify(SIG_CTXT.bytes(&message), &account.initial_sig)?;
 
         // Verify that the encrypted asset id is wellformed
         single_property_verifier(
@@ -206,12 +212,11 @@ impl AccountCreaterVerifier for AccountValidator {
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::{
-        asset_proofs::ElgamalSecretKey,
-        mercat::{EncryptionKeys, SigningKeys},
-    };
+    use crate::{asset_proofs::ElgamalSecretKey, mercat::EncryptionKeys};
     use curve25519_dalek::scalar::Scalar;
-    use rand::SeedableRng;
+    use rand::{rngs::StdRng, SeedableRng};
+    use schnorrkel::{ExpansionMode, MiniSecretKey};
+    use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
     #[test]
@@ -225,8 +230,11 @@ mod tests {
             pblc: elg_pub.into(),
             scrt: elg_secret.into(),
         };
-        let pair = sr25519::Pair::from_seed(&[11u8; 32]);
-        let sign_keys = SigningKeys { pair: pair.clone() };
+        let seed = [11u8; 32];
+        let sign_keys = MiniSecretKey::from_bytes(&seed)
+            .expect("Invalid seed")
+            .expand_to_keypair(ExpansionMode::Ed25519);
+
         let asset_id = AssetId::from(1);
         let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
             .iter()
@@ -265,8 +273,10 @@ mod tests {
             pblc: elg_pub.into(),
             scrt: elg_secret.into(),
         };
-        let pair = sr25519::Pair::from_seed(&[11u8; 32]);
-        let sign_keys = SigningKeys { pair: pair.clone() };
+        let sign_keys = MiniSecretKey::from_bytes(&[11u8; 32])
+            .expect("Invalid seed")
+            .expand_to_keypair(ExpansionMode::Ed25519);
+
         let asset_id = AssetId::from(1);
         let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
             .iter()

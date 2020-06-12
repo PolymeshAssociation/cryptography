@@ -10,49 +10,91 @@ repository = "https://github.com/PolymathNetwork/cryptography"
 description = "The Repository for cryptographic libraries used in Polymesh"
 edition = "2018"
 exclude = [".gitignore"]
-build = "build.rs"
 
 [dependencies]
-sp-std = { package = "sp-std", git = "https://github.com/paritytech/substrate", default-features = false, rev = "93569d0d1af7aa5eb67b9de8b58d7fffde63b421" }
+sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, rev = "a439a7aa5a9a3df2a42d9b25ea04288d3a0866e8" }
 
 # Common
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_bytes = { version = "0.11", default-features = false, features = ["alloc"] }
 bincode = { version = "1.2" }
-byteorder = { version = "1.3.4", default-features = false }
+zeroize = { version = "1.1", default-features = false }
+criterion = { version = "0.3", optional = true }
+lazy_static = "1.4.0"
 failure = "0.1.7"
 
 # Crypto
 sha3 = { version = "0.8", default-features = false }
-rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
-rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
-zeroize = { version = "1.1", default-features = false }
 # Force the dependency graph to use an older version of clear_on_drop.
 clear_on_drop = { version = "= 0.2.3", default-features = false }
 
-# Use avx2_backend for avx2 optimizations.
-curve25519-dalek = { version = "2.0.0", features = ["u64_backend", "alloc", "serde"], default-features = false }
-schnorrkel = { version = "0.9.1", features = ["u64_backend", "wasm-bindgen"], default-features = false }
-bulletproofs = { version = "2.0.0", features = ["std"], default-features = false }
-merlin = { version = "2.0.0", default-features = false }
-sp-application-crypto = { version = "2.0.0-alpha.8" }
-sp-core = { version = "2.0.0-alpha.8" }
 
-[build-dependencies]
-# WASM builder is using `WasmBuilderSource::Crates("1.0.8")`, please see `build.rs`.
-wasm-builder-runner = { package = "substrate-wasm-builder-runner", git = "https://github.com/paritytech/substrate", default-features = false, rev = "93569d0d1af7aa5eb67b9de8b58d7fffde63b421" }
+rand_core = { version = "0.5", default-features = false}
+rand = { version = "0.7", default-features = false }
+getrandom = { version = "0.1.14", default-features = false} 
+chrono = { version = "0.4",  default-features = false}
+
+curve25519-dalek = { version = "2", default-features = false }
+schnorrkel = { version = "0.9.1", default-features = false }
+merlin = { version = "2.0.0", default-features = false }
+bulletproofs = { git = "https://github.com/fmiguelgarcia/bulletproofs.git", branch = "CRYP-92/integration_test", default-features = false }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.10"
-criterion = "0.3"
-env_logger = "0.7.1"
 
 [features]
-default = ["std"]
-no_std = [ ]
-std = [
-	"sp-std/std",
+default = ["std"] 
+
+# Backends
+u64_backend = [ "curve25519-dalek/u64_backend", "schnorrkel/u64_backend" ]
+avx2_backend = [ "curve25519-dalek/avx2_backend", "schnorrkel/avx2_backend" ]
+u32_backend = [ "curve25519-dalek/u32_backend", "schnorrkel/u32_backend" ]
+
+serde_all = [
+	"chrono/serde", 
+	"curve25519-dalek/serde", 
+	"schnorrkel/serde",
+]
+
+alloc = [
+	"rand_core/alloc", 
+	"rand/alloc",
+	"chrono/alloc",
+	"curve25519-dalek/alloc", 
+]
+
+no_std = [
+	# General
+	"u32_backend",
+	"serde_all",
+	"alloc",
+	# Other
+	"rand_core/getrandom",
+	"rand/wasm-bindgen",
+	"chrono/clock", 
+	"chrono/wasmbind", 
+	"getrandom/wasm-bindgen",
+	"curve25519-dalek/nightly",
+	"schnorrkel/wasm-bindgen",
+	"bulletproofs/no_std"
+]
+
+std = [ 
+	# General and optional
+	"u64_backend",
+	"serde_all",
+	"criterion",
+	# Crypto 
+	"curve25519-dalek/nightly", 
+	"schnorrkel/std",
+	"rand_core/std",
+	"rand/std",
+	"bulletproofs/std",
+	# Other
+	"chrono/clock",
+	"chrono/std",
+	"sp-std/std"
 ]
 
 [[bench]]

@@ -12,9 +12,11 @@ use crate::{
     },
     errors::{ErrorKind, Fallible},
 };
+
 use bulletproofs::PedersenGens;
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::{
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -160,6 +162,7 @@ mod tests {
     use crate::asset_proofs::*;
     use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
+    use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];

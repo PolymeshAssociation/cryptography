@@ -4,7 +4,7 @@ use crate::mercat::ConfidentialTxState;
 use bulletproofs::ProofError;
 use failure::{Backtrace, Context, Fail};
 
-use sp_std::fmt;
+use sp_std::{fmt, result::Result};
 
 /// Represents an error resulted from asset value encryption,
 /// decryption, or proof generation.
@@ -21,6 +21,7 @@ impl Error {
 }
 
 impl From<ErrorKind> for Error {
+    #[inline]
     fn from(kind: ErrorKind) -> Error {
         Error {
             inner: Context::new(kind),
@@ -29,8 +30,23 @@ impl From<ErrorKind> for Error {
 }
 
 impl From<Context<ErrorKind>> for Error {
+    #[inline]
     fn from(inner: Context<ErrorKind>) -> Error {
         Error { inner: inner }
+    }
+}
+
+impl From<schnorrkel::errors::SignatureError> for Error {
+    #[inline]
+    fn from(_inner: schnorrkel::errors::SignatureError) -> Error {
+        Error::from(ErrorKind::SignatureValidationFailure)
+    }
+}
+
+impl From<bincode::Error> for Error {
+    #[inline]
+    fn from(_inner: bincode::Error) -> Error {
+        Error::from(ErrorKind::SerializationError)
     }
 }
 
@@ -134,6 +150,9 @@ pub enum ErrorKind {
     #[fail(display = "This method is not implemented yet")]
     NotImplemented,
 
+    #[fail(display = "Wrong exponent parameter is passed")]
+    InvalidExponentParameter,
+
     /// The incoming transaction state does not match the expectation.
     #[fail(display = "Received an invalid previous state: {:?}", state)]
     InvalidPreviousState { state: ConfidentialTxState },
@@ -180,8 +199,8 @@ pub enum ErrorKind {
     SignatureValidationFailure,
 
     /// A range proof error occurred.
-    #[fail(display = "A range proof error occured: {}", source)]
+    #[fail(display = "A range proof error occured: {:?}", source)]
     ProvingError { source: ProofError },
 }
 
-pub type Fallible<T, E = Error> = std::result::Result<T, E>;
+pub type Fallible<T, E = Error> = Result<T, E>;

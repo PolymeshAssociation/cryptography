@@ -20,14 +20,18 @@ use crate::{
         wellformedness_proof::{WellformednessFinalResponse, WellformednessInitialMessage},
         CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     },
-    errors::{ErrorKind, Fallible},
+    errors::{Error, ErrorKind, Fallible},
     AssetId, Balance,
 };
+
+use chrono::{DateTime, Utc};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
-use rand::rngs::StdRng;
+use rand_core::OsRng;
+use rand_core::{CryptoRng, RngCore};
+use schnorrkel::keys::{Keypair, PublicKey};
 use serde::{Deserialize, Serialize};
-use sp_application_crypto::sr25519;
-use sp_core::crypto::Pair;
+
+use sp_std::{convert::From, vec::Vec};
 
 // -------------------------------------------------------------------------------------
 // -                                  Constants                                        -
@@ -75,34 +79,13 @@ pub struct EncryptionKeys {
 }
 
 /// Holds the SR25519 signature scheme public key.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct SigningPubKey {
-    pub key: sr25519::Public,
-}
+type SigningPubKey = PublicKey;
+type SigningKeys = Keypair;
 
-impl From<sr25519::Public> for SigningPubKey {
-    fn from(key: sr25519::Public) -> Self {
-        Self { key }
-    }
-}
-
-/// Holds the SR25519 signature scheme public and private key pair.
-#[derive(Clone)]
-pub struct SigningKeys {
-    pub pair: sr25519::Pair,
-}
-
-impl SigningKeys {
-    pub fn pblc(&self) -> SigningPubKey {
-        SigningPubKey::from(self.pair.public())
-    }
-}
-
-/// Type alias for SR25519 signature.
-pub type Signature = sr25519::Signature;
+pub type Signature = schnorrkel::sign::Signature;
 
 /// New type for Twisted ElGamal ciphertext of asset ids.
-#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EncryptedAssetId {
     pub cipher: CipherText,
 }
@@ -177,9 +160,10 @@ pub struct InRangeProof {
 
 impl Default for InRangeProof {
     fn default() -> Self {
+        let mut rng = OsRng::default();
         let range = 32;
         InRangeProof::from(
-            range_proof::prove_within_range(0, Scalar::one(), range)
+            range_proof::prove_within_range(0, Scalar::one(), range, &mut rng)
                 .expect("This shouldn't happen."),
         )
     }
@@ -261,15 +245,16 @@ pub type AssetMemo = EncryptedAmount;
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
     pub owner_sign_pub_key: SigningPubKey,
-    pub timestamp: std::time::SystemTime,
+    pub timestamp: DateTime<Utc>,
 }
 
-impl From<(EncryptionPubKey, SigningPubKey)> for AccountMemo {
-    fn from(pub_keys: (EncryptionPubKey, SigningPubKey)) -> Self {
+impl AccountMemo {
+    pub fn new(owner_enc_pub_key: EncryptionPubKey, owner_sign_pub_key: SigningPubKey) -> Self {
+        let timestamp = Utc::now();
         AccountMemo {
-            owner_enc_pub_key: pub_keys.0,
-            owner_sign_pub_key: pub_keys.1,
-            timestamp: std::time::SystemTime::now(),
+            owner_enc_pub_key,
+            owner_sign_pub_key,
+            timestamp,
         }
     }
 }
@@ -288,7 +273,7 @@ pub struct PubAccountContent {
 
 impl PubAccountContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
@@ -334,12 +319,12 @@ pub trait AccountCreater {
     /// Creates a public account for a user and initializes the balance to zero.
     /// Corresponds to `CreateAccount` method of the MERCAT paper.
     /// This function assumes that the given input `account_id` is unique.
-    fn create_account(
+    fn create_account<T: RngCore + CryptoRng>(
         &self,
         scrt_account: &SecAccount,
         valid_asset_ids: Vec<AssetId>,
         account_id: u32,
-        rng: &mut StdRng,
+        rng: &mut T,
     ) -> Fallible<PubAccount>;
 }
 
@@ -367,7 +352,7 @@ pub enum TxSubstate {
 
 /// Represents the two states (initialized, justified) of a
 /// confidentional asset issuance transaction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AssetTxState {
     Initialization(TxSubstate),
     Justification(TxSubstate),
@@ -387,8 +372,8 @@ pub enum ConfidentialTxState {
 // -                                 Asset Issuance                                    -
 // -------------------------------------------------------------------------------------
 
-/// Holds the public portion of an asset issuance transaction. This can be placed
-/// on the chain.
+/// Holds the public portion of an asset issuance transaction after initialization.
+/// This can be placed on the chain.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PubAssetTxDataContent {
     account_id: u32,
@@ -402,12 +387,33 @@ pub struct PubAssetTxDataContent {
 
 impl PubAssetTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PubAssetTxData {
     pub content: PubAssetTxDataContent,
+    pub sig: Signature,
+}
+
+/// Holds the public portion of an asset issuance transaction after Justification.
+/// This can be placed on the chain.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PubJustifiedAssetTxDataContent {
+    pub tx_content: PubAssetTxData,
+    pub state: AssetTxState,
+}
+
+impl PubJustifiedAssetTxDataContent {
+    pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
+        bincode::serialize(self).map_err(Error::from)
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PubJustifiedAssetTxData {
+    pub content: PubJustifiedAssetTxDataContent,
     pub sig: Signature,
 }
 
@@ -416,20 +422,20 @@ pub trait AssetTransactionIssuer {
     /// Initializes a confidentional asset issue transaction. Note that the returing
     /// values of this function contain sensitive information. Corresponds
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
-    fn initialize(
+    fn initialize<T: RngCore + CryptoRng>(
         &self,
         issr_account_id: u32,
         issr_account: &SecAccount,
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
-        rng: &mut StdRng,
+        rng: &mut T,
     ) -> Fallible<(PubAssetTxData, AssetTxState)>;
 }
 
 pub trait AssetTransactionInitializeVerifier {
     /// Called by validators to verify the ZKP of the wellformedness of encrypted balance
     /// and to verify the signature.
-    fn verify(
+    fn verify_initialization(
         &self,
         asset_tx: &PubAssetTxData,
         state: AssetTxState,
@@ -441,26 +447,25 @@ pub trait AssetTransactionInitializeVerifier {
 pub trait AssetTransactionMediator {
     /// Justifies and processes a confidential asset issue transaction. This method is called
     /// by mediator. Corresponds to `JustifyAssetTx` and `ProcessCTx` of MERCAT paper.
-    /// If the trasaction is justified, it will be processed immediately.
+    /// If the trasaction is justified, it will be processed immediately and the updated account
+    /// is returned.
     fn justify_and_process(
         &self,
         asset_tx: PubAssetTxData,
-        issr_account: PubAccount,
+        issr_pub_account: &PubAccount,
         state: AssetTxState,
-        mdtr_enc_keys: (EncryptionPubKey, EncryptionSecKey),
-        mdtr_sign_keys: SigningKeys,
-        issr_pub_key: EncryptionPubKey,
-        issr_acount: PubAccount,
-    ) -> Fallible<(Signature, PubAccount, AssetTxState)>;
+        mdtr_enc_keys: &EncryptionKeys,
+        mdtr_sign_keys: &SigningKeys,
+    ) -> Fallible<(PubJustifiedAssetTxData, PubAccount)>;
 }
 
 pub trait AssetTransactionFinalizeAndProcessVerifier {
     /// Called by validators to verify the justification and processing of the transaction.
-    fn verify(
+    fn verify_justification(
         &self,
-        sig: Signature,
-        issr_account: PubAccount,
-        mdtr_sign_pub_key: SigningPubKey,
+        asset_tx: &PubJustifiedAssetTxData,
+        issr_account: &PubAccount,
+        mdtr_sign_pub_key: &SigningPubKey,
     ) -> Fallible<AssetTxState>;
 }
 
@@ -500,12 +505,12 @@ pub struct PubInitConfidentialTxDataContent {
 
 impl PubInitConfidentialTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
 /// Wrapper for the initial transaction data and its signature.
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PubInitConfidentialTxData {
     pub content: PubInitConfidentialTxDataContent,
     pub sig: Signature,
@@ -521,7 +526,7 @@ pub struct PubFinalConfidentialTxDataContent {
 
 impl PubFinalConfidentialTxDataContent {
     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-        bincode::serialize(self).map_err(|_| ErrorKind::SerializationError.into())
+        bincode::serialize(self).map_err(Error::from)
     }
 }
 
@@ -552,13 +557,13 @@ pub trait ConfidentialTransactionSender {
     /// This is called by the sender of a confidential transaction. The outputs
     /// can be safely placed on the chain. It corresponds to `CreateCTX` function of
     /// MERCAT paper.
-    fn create_transaction(
+    fn create_transaction<T: RngCore + CryptoRng>(
         &self,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
-        rng: &mut StdRng,
+        rng: &mut T,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)>;
 }
 
@@ -599,7 +604,7 @@ pub trait ConfidentialTransactionReceiver {
     /// This function is called the receiver of the transaction to finalize and process
     /// the transaction. It corresponds to `FinalizeCTX` and `ProcessCTX` functions
     /// of the MERCAT paper.
-    fn finalize_and_process(
+    fn finalize_and_process<T: RngCore + CryptoRng>(
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
         sndr_pub_account: &PubAccount,
@@ -607,7 +612,7 @@ pub trait ConfidentialTransactionReceiver {
         enc_asset_id: EncryptedAssetId,
         amount: Balance,
         state: ConfidentialTxState,
-        rng: &mut StdRng,
+        rng: &mut T,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)>;
 }
 
@@ -629,16 +634,16 @@ pub trait ConfidentialTransactionFinalizeAndProcessVerifier {
 
 /// Holds the public portion of the reversal transaction.
 pub struct PubReverseConfidentialTxData {
-    final_data: PubInitConfidentialTxData,
-    memo: ReverseConfidentialTxMemo,
-    sig: Signature,
+    _final_data: PubInitConfidentialTxData,
+    _memo: ReverseConfidentialTxMemo,
+    _sig: Signature,
 }
 
 /// Holds the memo for reversal of the confidential transaction sent by the mediator.
 pub struct ReverseConfidentialTxMemo {
-    enc_amount_using_rcvr: EncryptedAmount,
-    enc_refreshed_amount: EncryptedAmount,
-    enc_asset_id_using_rcvr: EncryptedAssetId,
+    _enc_amount_using_rcvr: EncryptedAmount,
+    _enc_refreshed_amount: EncryptedAmount,
+    _enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
 pub trait ConfidentialTransactionReverseAndProcessMediator {

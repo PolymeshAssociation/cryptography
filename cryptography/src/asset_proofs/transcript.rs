@@ -13,7 +13,8 @@ use crate::{
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
-use std::convert::TryInto;
+
+use sp_std::convert::TryInto;
 
 pub trait TranscriptProtocol {
     /// If the inputted message is not trivial append it to the

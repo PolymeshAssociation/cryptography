@@ -4,11 +4,13 @@
 //! addition and subtraction API over the cipher texts.
 
 use crate::errors::{ErrorKind, Fallible};
+
 use bulletproofs::PedersenGens;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::rngs::StdRng;
 use rand_core::{CryptoRng, RngCore};
+
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
@@ -263,8 +265,9 @@ mod tests {
     use super::*;
     use crate::{AssetId, Balance};
     use rand::{rngs::StdRng, SeedableRng};
-    use std::convert::TryFrom;
     use wasm_bindgen_test::*;
+
+    use sp_std::convert::TryFrom;
 
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [56u8; 32];

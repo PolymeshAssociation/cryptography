@@ -44,7 +44,9 @@ criterion_group! {
     // Lower the sample size to run faster; larger shuffle sizes are
     // long so we're not microbenchmarking anyways.
     // 10 is the minimum allowed sample size in Criterion.
-    config = Criterion::default().sample_size(10).measurement_time(Duration::new(60, 0));
+    config = Criterion::default()
+        .sample_size(10)
+        .measurement_time(Duration::new(60, 0));
     targets = bench_elgamal,
 }
 
