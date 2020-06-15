@@ -43,13 +43,6 @@ impl From<schnorrkel::errors::SignatureError> for Error {
     }
 }
 
-impl From<bincode::Error> for Error {
-    #[inline]
-    fn from(_inner: bincode::Error) -> Error {
-        Error::from(ErrorKind::SerializationError)
-    }
-}
-
 impl Fail for Error {
     fn cause(&self) -> Option<&dyn Fail> {
         self.inner.cause()
@@ -97,7 +90,7 @@ pub enum ErrorKind {
 
     /// The index is out of range.
     #[fail(display = "The index is out of range {}", index)]
-    OOONProofIndexOutofRange { index: usize },
+    OOONProofIndexOutofRange { index: u64 },
 
     /// Input vector or matrix size does not match to the expected value
     #[fail(display = "The provided matrix or vector size does not match to the expected")]

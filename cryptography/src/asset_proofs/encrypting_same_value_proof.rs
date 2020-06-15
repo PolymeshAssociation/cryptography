@@ -15,12 +15,16 @@ use crate::{
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+    constants::RISTRETTO_BASEPOINT_POINT,
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
+
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
 
 /// The domain label for the encrypting the same value proof.
 pub const ENCRYPTING_SAME_VALUE_PROOF_FINAL_RESPONSE_LABEL: &[u8] =
@@ -34,17 +38,74 @@ pub const ENCRYPTING_SAME_VALUE_PROOF_CHALLENGE_LABEL: &[u8] =
 // Public Keys
 // ------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptingSameValueFinalResponse {
     z1: Scalar,
     z2: Scalar,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
+impl Encode for EncryptingSameValueFinalResponse {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        64usize
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        (self.z1.as_bytes(), self.z2.as_bytes()).encode_to(dest);
+    }
+}
+
+impl Decode for EncryptingSameValueFinalResponse {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (z1, z2) = <([u8; 32], [u8; 32])>::decode(input)?;
+        let z1 = Scalar::from_canonical_bytes(z1)
+            .ok_or_else(|| CodecError::from("EncryptingSameValueFinalResponse `z1` is invalid"))?;
+        let z2 = Scalar::from_canonical_bytes(z2)
+            .ok_or_else(|| CodecError::from("EncryptingSameValueFinalResponse `z2` is invalid"))?;
+
+        Ok(EncryptingSameValueFinalResponse { z1, z2 })
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptingSameValueInitialMessage {
     a1: RistrettoPoint,
     a2: RistrettoPoint,
     b: RistrettoPoint,
+}
+
+impl Encode for EncryptingSameValueInitialMessage {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        96
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let a1 = self.a1.compress();
+        let a2 = self.a2.compress();
+        let b = self.b.compress();
+
+        (a1.as_bytes(), a2.as_bytes(), b.as_bytes()).encode_to(dest);
+    }
+}
+
+impl Decode for EncryptingSameValueInitialMessage {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (a1, a2, b) = <([u8; 32], [u8; 32], [u8; 32])>::decode(input)?;
+        let a1 = CompressedRistretto(a1)
+            .decompress()
+            .ok_or_else(|| CodecError::from("EncryptingSameValueInitialMessage `a1` is invalid"))?;
+        let a2 = CompressedRistretto(a2)
+            .decompress()
+            .ok_or_else(|| CodecError::from("EncryptingSameValueInitialMessage `a2` is invalid"))?;
+        let b = CompressedRistretto(b)
+            .decompress()
+            .ok_or_else(|| CodecError::from("EncryptingSameValueInitialMessage `b` is invalid"))?;
+
+        Ok(EncryptingSameValueInitialMessage { a1, a2, b })
+    }
 }
 
 /// A default implementation used for testing.
@@ -200,7 +261,6 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
-    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use sp_std::prelude::*;
     use wasm_bindgen_test::*;

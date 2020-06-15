@@ -26,9 +26,9 @@ pub type RangeProofFinalResponse = RangeProof;
 pub fn prove_within_range<Rng: RngCore + CryptoRng>(
     secret_value: u64,
     rand_blind: Scalar,
-    range: usize,
+    range: u32,
     rng: &mut Rng,
-) -> Fallible<(RangeProofInitialMessage, RangeProofFinalResponse, usize)> {
+) -> Fallible<(RangeProofInitialMessage, RangeProofFinalResponse, u32)> {
     // Generators for Pedersen commitments.
     let pc_gens = PedersenGens::default();
 
@@ -48,7 +48,7 @@ pub fn prove_within_range<Rng: RngCore + CryptoRng>(
         &mut prover_transcript,
         secret_value,
         &rand_blind,
-        range,
+        range as usize,
         rng,
     )
     .map_err(|source| ErrorKind::ProvingError { source })?;
@@ -60,7 +60,7 @@ pub fn prove_within_range<Rng: RngCore + CryptoRng>(
 pub fn verify_within_range<Rng: RngCore + CryptoRng>(
     init: RangeProofInitialMessage,
     response: RangeProofFinalResponse,
-    range: usize,
+    range: u32,
     rng: &mut Rng,
 ) -> Fallible<()> {
     // Generators for Pedersen commitments.
@@ -80,7 +80,7 @@ pub fn verify_within_range<Rng: RngCore + CryptoRng>(
             &pc_gens,
             &mut verifier_transcript,
             &init,
-            range,
+            range as usize,
             rng,
         )
         .map_err(|_| ErrorKind::VerificationError.into())
@@ -95,7 +95,6 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
-    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use sp_std::prelude::*;
     use wasm_bindgen_test::*;

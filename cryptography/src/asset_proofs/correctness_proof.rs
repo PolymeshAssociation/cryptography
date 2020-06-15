@@ -13,13 +13,16 @@ use crate::{
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+    constants::RISTRETTO_BASEPOINT_POINT,
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use sp_std::convert::From;
 
 /// The domain label for the correctness proof.
@@ -40,10 +43,60 @@ impl From<Scalar> for CorrectnessFinalResponse {
     }
 }
 
+impl Encode for CorrectnessFinalResponse {
+    fn size_hint(&self) -> usize {
+        32
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.0.as_bytes().encode_to(dest)
+    }
+}
+
+impl Decode for CorrectnessFinalResponse {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let scalar = <[u8; 32]>::decode(input)?;
+        let scalar = Scalar::from_canonical_bytes(scalar)
+            .ok_or_else(|| CodecError::from("CorrectnessFinalResponse is invalid"))?;
+
+        Ok(CorrectnessFinalResponse(scalar))
+    }
+}
+
+/// # TODO
+/// - Duplicated code, see `WellformednessInitialMessage`.
 #[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct CorrectnessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
+}
+
+impl Encode for CorrectnessInitialMessage {
+    fn size_hint(&self) -> usize {
+        64
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let a = self.a.compress();
+        let b = self.b.compress();
+
+        a.as_bytes().encode_to(dest);
+        b.as_bytes().encode_to(dest);
+    }
+}
+
+impl Decode for CorrectnessInitialMessage {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (a, b) = <([u8; 32], [u8; 32])>::decode(input)?;
+        let a = CompressedRistretto(a)
+            .decompress()
+            .ok_or_else(|| CodecError::from("CorrectnessInitialMessage 'a' point is invalid"))?;
+        let b = CompressedRistretto(b)
+            .decompress()
+            .ok_or_else(|| CodecError::from("CorrectnessInitialMessage 'b' point is invalid"))?;
+
+        Ok(CorrectnessInitialMessage { a, b })
+    }
 }
 
 /// A default implementation used for testing.
@@ -172,7 +225,6 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
-    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use sp_std::prelude::*;
     use wasm_bindgen_test::*;
