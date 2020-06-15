@@ -13,8 +13,8 @@ use rand::{rngs::StdRng, SeedableRng};
 use std::time::Duration;
 
 const SEED_1: [u8; 32] = [42u8; 32];
-const BASE: usize = 4;
-const EXPONENT: usize = 8;
+const BASE: u64 = 4;
+const EXPONENT: u64 = 8;
 const SET_SIZE: u32 = 65536;
 
 fn bench_membership_verify(

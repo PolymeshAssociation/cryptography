@@ -7,18 +7,23 @@ use crate::errors::{ErrorKind, Fallible};
 
 use bulletproofs::PedersenGens;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::{
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
+};
 use rand::rngs::StdRng;
 use rand_core::{CryptoRng, RngCore};
 
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use sp_std::prelude::*;
 
 /// Prover's representation of the commitment secret.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Zeroize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Zeroize)]
 #[zeroize(drop)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct CommitmentWitness {
     /// Depending on how the witness was created this variable stores the
     /// balance value or the asset id in Scalar format.
@@ -54,10 +59,40 @@ impl From<(Scalar, &mut StdRng)> for CommitmentWitness {
 }
 
 /// Prover's representation of the encrypted secret.
-#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize, Default)]
+#[derive(PartialEq, Copy, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherText {
     pub x: RistrettoPoint,
     pub y: RistrettoPoint,
+}
+
+impl Encode for CipherText {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        64
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let x = self.x.compress();
+        let y = self.y.compress();
+
+        x.as_bytes().encode_to(dest);
+        y.as_bytes().encode_to(dest);
+    }
+}
+
+impl Decode for CipherText {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (x, y) = <([u8; 32], [u8; 32])>::decode(input)?;
+        let x = CompressedRistretto(x)
+            .decompress()
+            .ok_or_else(|| CodecError::from("CipherText X point is invalid"))?;
+        let y = CompressedRistretto(y)
+            .decompress()
+            .ok_or_else(|| CodecError::from("CipherText Y point is invalid"))?;
+
+        Ok(CipherText { x, y })
+    }
 }
 
 // ------------------------------------------------------------------------
@@ -123,14 +158,37 @@ define_sub_assign_variants!(LHS = CipherText, RHS = CipherText);
 /// where g and h are 2 orthogonal generators.
 
 /// An Elgamal Secret Key is a random scalar.
-#[derive(Debug, Clone, Serialize, Deserialize, Zeroize)]
+#[derive(Clone, Serialize, Deserialize, Zeroize)]
+#[cfg_attr(feature = "std", derive(Debug))]
 #[zeroize(drop)]
 pub struct ElgamalSecretKey {
     pub secret: Scalar,
 }
 
+impl Encode for ElgamalSecretKey {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        32
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.secret.as_bytes().encode_to(dest);
+    }
+}
+
+impl Decode for ElgamalSecretKey {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let secret = <[u8; 32]>::decode(input)?;
+        let secret = Scalar::from_canonical_bytes(secret)
+            .ok_or_else(|| CodecError::from("ElgamalSecretKey.secret is invalid"))?;
+
+        Ok(ElgamalSecretKey { secret })
+    }
+}
+
 /// The Elgamal Public Key is the secret key multiplied by the blinding generator (g).
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Copy, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct ElgamalPublicKey {
     pub pub_key: RistrettoPoint,
 }
@@ -158,6 +216,30 @@ impl ElgamalPublicKey {
             CommitmentWitness { value, blinding },
             self.encrypt_helper(value, blinding),
         )
+    }
+}
+
+impl Encode for ElgamalPublicKey {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        32
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let pub_key = self.pub_key.compress();
+
+        pub_key.as_bytes().encode_to(dest);
+    }
+}
+
+impl Decode for ElgamalPublicKey {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let pub_key = <[u8; 32]>::decode(input)?;
+        let pub_key = CompressedRistretto(pub_key)
+            .decompress()
+            .ok_or_else(|| CodecError::from("ElgamalPublicKey.pub_key is invalid"))?;
+
+        Ok(ElgamalPublicKey { pub_key })
     }
 }
 
