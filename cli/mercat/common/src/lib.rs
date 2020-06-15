@@ -1,3 +1,5 @@
+use cryptography::{mercat::account::convert_asset_ids, AssetId};
+use curve25519_dalek::scalar::Scalar;
 use log::info;
 use metrics::Recorder;
 use metrics_core::Key;
@@ -40,4 +42,13 @@ pub fn init_print_logger() {
 #[cfg(not(feature = "std"))]
 pub fn init_print_logger() {
     metrics::set_recorder(&RECORDER).unwrap()
+}
+
+pub fn get_asset_ids() -> Vec<Scalar> {
+    let valid_asset_ids = vec![1, 2, 3]; // TODO make this configurable
+    let valid_asset_ids: Vec<AssetId> = valid_asset_ids
+        .into_iter()
+        .map(|asset_id| AssetId::from(asset_id))
+        .collect();
+    convert_asset_ids(valid_asset_ids)
 }
