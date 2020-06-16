@@ -159,13 +159,10 @@ pub enum ErrorKind {
 
     /// The amount in the initial transaction does not match the amount that receiver expacted.
     #[fail(
-        display = "Expected to receive {:?} form the sender, got {:?}",
-        expected_amount, received_amount
+        display = "Expected to receive {:?} form the sender, got a different amount.",
+        expected_amount
     )]
-    TransactionAmountMismatch {
-        expected_amount: u32,
-        received_amount: u32,
-    },
+    TransactionAmountMismatch { expected_amount: u32 },
 
     /// The public key in the memo of the initial transaction does not match the public key
     /// in the memo.

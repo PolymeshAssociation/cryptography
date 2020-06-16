@@ -23,7 +23,7 @@ use crate::{
 
 use bulletproofs::PedersenGens;
 use lazy_static::lazy_static;
-use rand::rngs::StdRng;
+use rand_core::{CryptoRng, RngCore};
 use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
 
@@ -83,13 +83,13 @@ fn asset_issuance_init_verify(
 pub struct CtxIssuer {}
 
 impl AssetTransactionIssuer for CtxIssuer {
-    fn initialize(
+    fn initialize<T: RngCore + CryptoRng>(
         &self,
         issr_account_id: u32,
         issr_account: &SecAccount,
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
-        rng: &mut StdRng,
+        rng: &mut T,
     ) -> Fallible<(PubAssetTxData, AssetTxState)> {
         let gens = PedersenGens::default();
 
@@ -301,6 +301,7 @@ mod tests {
         AssetId,
     };
     use curve25519_dalek::scalar::Scalar;
+    use rand::rngs::StdRng;
     use rand::SeedableRng;
     use schnorrkel::{ExpansionMode, MiniSecretKey};
     use wasm_bindgen_test::*;
@@ -343,10 +344,10 @@ mod tests {
                 enc_balance: EncryptedAmount::default(),
                 asset_wellformedness_proof: WellformednessProof::default(),
                 asset_membership_proof: MembershipProof::default(),
-                balance_correctness_proof: CorrectnessProof::default(),
+                initial_balance_correctness_proof: CorrectnessProof::default(),
                 memo: AccountMemo::new(issuer_enc_key.pblc, sign_keys.public.into()),
             },
-            sig: Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature"),
+            initial_sig: Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature"),
         };
 
         // Generate keys for the mediator.

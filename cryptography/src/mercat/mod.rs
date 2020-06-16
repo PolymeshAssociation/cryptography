@@ -29,8 +29,8 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-use rand::rngs::StdRng;
 use rand_core::OsRng;
+use rand_core::{CryptoRng, RngCore};
 use schnorrkel::keys::{Keypair, PublicKey};
 use serde::{Deserialize, Serialize};
 
@@ -41,7 +41,7 @@ use sp_std::{convert::From, mem, vec::Vec};
 // -                                  Constants                                        -
 // -------------------------------------------------------------------------------------
 
-const EXPONENT: u32 = 3; // TODO: will be changed after CRYP-83
+const EXPONENT: u32 = 3; // TODO: change to 8. CRYP-112
 const BASE: u32 = 4;
 
 // -------------------------------------------------------------------------------------
@@ -96,6 +96,8 @@ impl From<CipherText> for EncryptedAmount {
     }
 }
 
+// TODO: move all these XXXProof to the proper file. CRYP-113
+
 /// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
 #[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct WellformednessProof {
@@ -114,6 +116,7 @@ impl From<(WellformednessInitialMessage, WellformednessFinalResponse)> for Wellf
 
 /// Holds the non-interactive proofs of correctness, equivalent of L_correct of MERCAT paper.
 #[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct CorrectnessProof {
     init: CorrectnessInitialMessage,
     response: CorrectnessFinalResponse,
@@ -348,7 +351,7 @@ pub struct PubAccountContent {
     pub enc_balance: EncryptedAmount,
     pub asset_wellformedness_proof: WellformednessProof,
     pub asset_membership_proof: MembershipProof,
-    pub balance_correctness_proof: CorrectnessProof,
+    pub initial_balance_correctness_proof: CorrectnessProof,
     pub memo: AccountMemo,
 }
 
@@ -363,7 +366,7 @@ impl PubAccountContent {
 #[derive(Clone)]
 pub struct PubAccount {
     pub content: PubAccountContent,
-    pub sig: Signature,
+    pub initial_sig: Signature,
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
@@ -382,24 +385,37 @@ pub struct Account {
     pub scrt: SecAccount,
 }
 
+impl Account {
+    /// Utility method that can decrypt the the balance of an account.
+    pub fn decrypt_balance(&self) -> Fallible<Balance> {
+        let balance = self
+            .scrt
+            .enc_keys
+            .scrt
+            .decrypt(&self.pblc.content.enc_balance.cipher)?;
+
+        Ok(Balance::from(balance))
+    }
+}
+
 /// The interface for the account creation.
 pub trait AccountCreater {
     /// Creates a public account for a user and initializes the balance to zero.
     /// Corresponds to `CreateAccount` method of the MERCAT paper.
     /// This function assumes that the given input `account_id` is unique.
-    fn create_account(
+    fn create_account<T: RngCore + CryptoRng>(
         &self,
         scrt_account: &SecAccount,
         valid_asset_ids: Vec<AssetId>,
         account_id: u32,
-        rng: &mut StdRng,
+        rng: &mut T,
     ) -> Fallible<PubAccount>;
 }
 
 /// The interface for the verifying the account creation.
 pub trait AccountCreaterVerifier {
     /// Called by the validators to ensure that the account was created correctly.
-    fn verify(&self, account: &PubAccount, valid_asset_ids: Vec<AssetId>) -> Fallible<()>;
+    fn verify(&self, account: &PubAccount, valid_asset_ids: &Vec<Scalar>) -> Fallible<()>;
 }
 
 // -------------------------------------------------------------------------------------
@@ -415,7 +431,6 @@ pub enum TxSubstate {
     /// The action on transaction has been verified by validators.
     Validated,
     /// The action on transaction has failed the verification by validators.
-    /// TODO: this ended up not being used. We need to disucss, how to handle it.
     Rejected,
 }
 
@@ -432,8 +447,8 @@ pub enum AssetTxState {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ConfidentialTxState {
     Initialization(TxSubstate),
-    InitilaziationJustification(TxSubstate),
     Finalization(TxSubstate),
+    FinalizationJustification(TxSubstate),
     Reversal(TxSubstate),
 }
 
@@ -515,13 +530,13 @@ pub trait AssetTransactionIssuer {
     /// Initializes a confidentional asset issue transaction. Note that the returing
     /// values of this function contain sensitive information. Corresponds
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
-    fn initialize(
+    fn initialize<T: RngCore + CryptoRng>(
         &self,
         issr_account_id: u32,
         issr_account: &SecAccount,
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
-        rng: &mut StdRng,
+        rng: &mut T,
     ) -> Fallible<(PubAssetTxData, AssetTxState)>;
 }
 
@@ -579,6 +594,8 @@ pub struct ConfidentialTxMemo {
     pub refreshed_enc_balance: EncryptedAmount,
     pub refreshed_enc_asset_id: EncryptedAssetId,
     pub enc_asset_id_using_rcvr: EncryptedAssetId,
+    pub enc_asset_id_for_mdtr: EncryptedAssetId,
+    pub enc_amount_for_mdtr: EncryptedAmount,
 }
 
 /// Holds the proofs and memo of the confidential transaction sent by the sender.
@@ -592,6 +609,8 @@ pub struct PubInitConfidentialTxDataContent {
     pub asset_id_equal_cipher_with_sndr_rcvr_keys_proof: CipherEqualDifferentPubKeyProof,
     pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
+    pub asset_id_correctness_proof: CorrectnessProof,
+    pub amount_correctness_proof: CorrectnessProof,
 }
 
 impl PubInitConfidentialTxDataContent {
@@ -647,6 +666,7 @@ impl PubFinalConfidentialTxDataContent {
         self.encode()
     }
 }
+
 /// Wrapper for the contents and the signature of the content sent by the
 /// receiver of the transaction.
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -655,17 +675,56 @@ pub struct PubFinalConfidentialTxData {
     pub sig: Signature,
 }
 
+impl Encode for PubFinalConfidentialTxData {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.content.size_hint() + 64
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.content.encode_to(dest);
+        self.sig.to_bytes().encode_to(dest);
+    }
+}
+
+impl Decode for PubFinalConfidentialTxData {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let content = <PubFinalConfidentialTxDataContent>::decode(input)?;
+        let sig = <[u8; 64]>::decode(input)?;
+        let sig = Signature::from_bytes(&sig)
+            .map_err(|_| CodecError::from("PubFinalConfidentialTxData::sig is invalid"))?;
+
+        Ok(PubFinalConfidentialTxData { content, sig })
+    }
+}
+
+impl PubFinalConfidentialTxData {
+    #[inline]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.encode()
+    }
+}
+
+/// Wrapper for the contents and the signature of the justified and finalized
+/// transaction.
+#[derive(Debug)]
+pub struct JustifiedPubFinalConfidentialTxData {
+    pub conf_tx_final_data: PubFinalConfidentialTxData,
+    pub sig: Signature,
+}
+
 /// The interface for confidential transaction.
 pub trait ConfidentialTransactionSender {
     /// This is called by the sender of a confidential transaction. The outputs
     /// can be safely placed on the chain. It corresponds to `CreateCTX` function of
     /// MERCAT paper.
-    fn create(
+    fn create_transaction<T: RngCore + CryptoRng>(
         &self,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
+        mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
-        rng: &mut StdRng,
+        rng: &mut T,
     ) -> Fallible<(PubInitConfidentialTxData, ConfidentialTxState)>;
 }
 
@@ -682,14 +741,31 @@ pub trait ConfidentialTransactionInitVerifier {
 
 pub trait ConfidentialTransactionMediator {
     /// Justify the transaction by mediator.
-    fn justify_init() -> Fallible<ConfidentialTxState>;
+    fn justify(
+        &self,
+        conf_tx_final_data: PubFinalConfidentialTxData,
+        state: ConfidentialTxState,
+        mdtr_sec_account: &SecAccount,
+        // NOTE: without this, decryption takes a very long time. Since asset id to scalar takes the hash of the asset id array.
+        asset_id_hint: AssetId,
+    ) -> Fallible<(JustifiedPubFinalConfidentialTxData, ConfidentialTxState)>;
+}
+
+pub trait ConfidentialTransactionMediatorVerifier {
+    /// This is called by the validators to verify the justification phase which was done by the mediator.
+    fn verify(
+        &self,
+        conf_tx_justified_final_data: &JustifiedPubFinalConfidentialTxData,
+        mdtr_sign_pub_key: &SigningPubKey,
+        state: ConfidentialTxState,
+    ) -> Fallible<ConfidentialTxState>;
 }
 
 pub trait ConfidentialTransactionReceiver {
     /// This function is called the receiver of the transaction to finalize and process
     /// the transaction. It corresponds to `FinalizeCTX` and `ProcessCTX` functions
     /// of the MERCAT paper.
-    fn finalize_and_process(
+    fn finalize_and_process<T: RngCore + CryptoRng>(
         &self,
         conf_tx_init_data: PubInitConfidentialTxData,
         sndr_pub_account: &PubAccount,
@@ -697,7 +773,7 @@ pub trait ConfidentialTransactionReceiver {
         enc_asset_id: EncryptedAssetId,
         amount: Balance,
         state: ConfidentialTxState,
-        rng: &mut StdRng,
+        rng: &mut T,
     ) -> Fallible<(PubFinalConfidentialTxData, ConfidentialTxState)>;
 }
 
