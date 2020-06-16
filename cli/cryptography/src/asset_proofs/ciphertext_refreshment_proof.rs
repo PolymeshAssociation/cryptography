@@ -260,7 +260,6 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
-    use chrono::prelude::*;
     use rand::{rngs::StdRng, SeedableRng};
     use sp_std::prelude::*;
     use wasm_bindgen_test::*;
@@ -367,13 +366,16 @@ mod tests {
         >(prover, &mut rng)
         .unwrap();
 
-        let initial_message_bytes: Vec<u8> = serialize(&initial_message0).unwrap();
-        let final_response_bytes: Vec<u8> = serialize(&final_response0).unwrap();
-        let recovered_initial_message: CipherTextRefreshmentInitialMessage =
-            deserialize(&initial_message_bytes).unwrap();
-        let recovered_final_response: CipherTextRefreshmentFinalResponse =
-            deserialize(&final_response_bytes).unwrap();
+        let init_bytes = initial_message0.encode();
+        let mut init_slice = &init_bytes[..];
+        let recovered_initial_message =
+            <CipherTextRefreshmentInitialMessage>::decode(&mut init_slice).unwrap();
         assert_eq!(recovered_initial_message, initial_message0);
+
+        let final_bytes = final_response0.encode();
+        let mut final_slice = &final_bytes[..];
+        let recovered_final_response =
+            <CipherTextRefreshmentFinalResponse>::decode(&mut final_slice).unwrap();
         assert_eq!(recovered_final_response, final_response0);
     }
 }

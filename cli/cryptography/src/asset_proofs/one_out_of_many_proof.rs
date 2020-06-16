@@ -978,12 +978,12 @@ mod tests {
 
         // Setup the system parameters for base and exponent.
         // This test enables to create 1-out-of-64 proofs.
-        const BASE: u64 = 4; //n = 3 : COLUMNS
-        const EXPONENT: u64 = 3; //m = 2 : ROWS
+        const BASE: u32 = 4; //n = 3 : COLUMNS
+        const EXPONENT: u32 = 3; //m = 2 : ROWS
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
         let n = 64;
-        let size: u64 = 11;
+        let size = 11u32;
 
         // Computes the secret commitment which will be opening to 0:
         // `C_secret = 0 * pc_gens.B + r_b * pc_gens.B_Blinding`
@@ -1005,7 +1005,7 @@ mod tests {
         // For different indexes `secret_index`, we set the vec[secret_index] to be our secret commitment `C_secret`.
         // We prove the knowledge of `secret_index` and `r_b` so the commitment vec[secret_index] will be opening to 0.
         for secret_index in 5..size {
-            commitments[secret_index] = C_secret;
+            commitments[secret_index as usize] = C_secret;
 
             let prover = OOONProverAwaitingChallenge {
                 secret_index,
@@ -1042,7 +1042,7 @@ mod tests {
         //
         // We are starting from the index `size`, as all elements C[5]..C[size] have been set to Com(0, r_b).
         for l in size..size * 2 {
-            commitments[l] = C_secret;
+            commitments[l as usize] = C_secret;
             let wrong_index = l + 1;
 
             let prover = OOONProverAwaitingChallenge {
@@ -1089,7 +1089,7 @@ mod tests {
             let wrong_random = r_b + r_b;
 
             let prover = OOONProverAwaitingChallenge {
-                secret_index: l,
+                secret_index: l as u32,
                 random: wrong_random,
                 generators: &generators,
                 commitments: commitments.as_slice(),
@@ -1136,8 +1136,8 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED_1);
         let mut transcript = Transcript::new(OOON_PROOF_LABEL);
 
-        const BASE: u64 = 4;
-        const EXPONENT: u64 = 3;
+        const BASE: u32 = 4;
+        const EXPONENT: u32 = 3;
 
         // We use the `gens` object created below only for committing to the the matrix B.
         // This object is not transferred as a parameter to the API functions.
@@ -1149,11 +1149,11 @@ mod tests {
         // For each index `i` we compute the corresponding valid bit-matrix representation.
         // Next commit to the  bit-matrix represenation and prove its well-formedness.
         for i in 10..64 {
-            base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT as u32);
+            base_matrix = convert_to_matrix_rep(i, BASE as usize, EXPONENT);
 
             b = Matrix {
-                rows: EXPONENT,
-                columns: BASE,
+                rows: EXPONENT as usize,
+                columns: BASE as usize,
                 elements: base_matrix.clone(),
             };
             let r = Scalar::from(45728u32);
@@ -1186,7 +1186,7 @@ mod tests {
             assert!(result.is_ok());
         }
         // Negative test: Commit to matrix where each row has more than one 1.
-        let b = Matrix::new(EXPONENT, BASE, Scalar::one());
+        let b = Matrix::new(EXPONENT as usize, BASE as usize, Scalar::one());
         let r = Scalar::from(45728u32);
         let b_comm = gens.vector_commit(&b.elements, r);
         let prover = R1ProverAwaitingChallenge {

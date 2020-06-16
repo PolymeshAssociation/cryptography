@@ -500,8 +500,8 @@ mod tests {
         asset_id: AssetId,
         rng: &mut R,
     ) -> ConfidentialTxMemo {
-        let (_, enc_amount_using_rcvr) = rcvr_pub_key.key.encrypt_value(amount.into(), rng);
-        let (_, enc_asset_id_using_rcvr) = rcvr_pub_key.key.encrypt_value(asset_id.into(), rng);
+        let (_, enc_amount_using_rcvr) = rcvr_pub_key.encrypt_value(amount.into(), rng);
+        let (_, enc_asset_id_using_rcvr) = rcvr_pub_key.encrypt_value(asset_id.into(), rng);
         ConfidentialTxMemo {
             sndr_account_id: 0,
             rcvr_account_id: 0,
@@ -522,10 +522,8 @@ mod tests {
         balance: Balance,
         rng: &mut R,
     ) -> Fallible<PubAccount> {
-        let (_, enc_asset_id) = rcvr_enc_pub_key.key.encrypt_value(asset_id.into(), rng);
-        let (_, enc_balance) = rcvr_enc_pub_key
-            .key
-            .encrypt_value(Scalar::from(balance), rng);
+        let (_, enc_asset_id) = rcvr_enc_pub_key.encrypt_value(asset_id.into(), rng);
+        let (_, enc_balance) = rcvr_enc_pub_key.encrypt_value(Scalar::from(balance), rng);
 
         Ok(PubAccount {
             content: PubAccountContent {

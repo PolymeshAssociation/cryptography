@@ -516,13 +516,12 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED_1);
         let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
 
-        const BASE: u64 = 4;
-        const EXPONENT: u64 = 8;
-        let N: u64 = BASE.pow(EXPONENT as u32);
+        const BASE: u32 = 4;
+        const EXPONENT: u32 = 8;
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
-        let elements_set: Vec<Scalar> = (0..(2000) as u32).map(|m| Scalar::from(m)).collect();
+        let elements_set: Vec<Scalar> = (0..2000u32).map(|m| Scalar::from(m)).collect();
 
         let secret = Scalar::from(8u32);
         let blinding = Scalar::random(&mut rng);
@@ -566,8 +565,8 @@ mod tests {
     fn serialize_deserialize_proof() {
         let mut rng = StdRng::from_seed(SEED_1);
 
-        const BASE: u64 = 4;
-        const EXPONENT: u64 = 3;
+        const BASE: u32 = 4;
+        const EXPONENT: u32 = 3;
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
         let even_elements: Vec<Scalar> = (0..64 as u32).map(|m| Scalar::from(2 * m)).collect();
@@ -587,13 +586,15 @@ mod tests {
             single_property_prover::<StdRng, MembershipProverAwaitingChallenge>(prover, &mut rng)
                 .unwrap();
 
-        let initial_message_bytes: Vec<u8> = serialize(&initial_message0).unwrap();
-        let final_response_bytes: Vec<u8> = serialize(&final_response0).unwrap();
-        let recovered_initial_message: MembershipProofInitialMessage =
-            deserialize(&initial_message_bytes).unwrap();
-        let recovered_final_response: MembershipProofFinalResponse =
-            deserialize(&final_response_bytes).unwrap();
+        let bytes = initial_message0.encode();
+        let mut input = bytes.as_slice();
+        let recovered_initial_message =
+            <MembershipProofInitialMessage>::decode(&mut input).unwrap();
         assert_eq!(recovered_initial_message, initial_message0);
+
+        let bytes = final_response0.encode();
+        let mut input = bytes.as_slice();
+        let recovered_final_response = <MembershipProofFinalResponse>::decode(&mut input).unwrap();
         assert_eq!(recovered_final_response, final_response0);
     }
 }
