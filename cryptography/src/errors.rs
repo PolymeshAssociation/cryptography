@@ -90,7 +90,7 @@ pub enum ErrorKind {
 
     /// The index is out of range.
     #[fail(display = "The index is out of range {}", index)]
-    OOONProofIndexOutofRange { index: u64 },
+    OOONProofIndexOutofRange { index: u32 },
 
     /// Input vector or matrix size does not match to the expected value
     #[fail(display = "The provided matrix or vector size does not match to the expected")]
