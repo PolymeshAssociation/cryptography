@@ -8,8 +8,7 @@ use structopt::StructOpt;
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct AccountGenInfo {
     /// The name of the user. The name can be any valid string that can be used as a file name.
-    /// It is the responsibility of the caller to ensure the uniqueness of the name. The CLI
-    /// will through an error if the files corresponding to that user name already exist.
+    /// It is the responsibility of the caller to ensure the uniqueness of the name.
     #[structopt(short, long, help = "The name of the user. This name must be unique.")]
     pub user: String,
 
@@ -26,13 +25,21 @@ pub struct AccountGenInfo {
     pub db_dir: Option<PathBuf>,
 
     /// Account id. It is the responsibility of the caller to ensure the uniqueness of the id.
-    /// The CLI will not through any error if a duplicate id is passed.
+    /// The CLI will not throw any error if a duplicate id is passed.
     #[structopt(
         short,
         long,
         help = "The id of the account. This value must be unique."
     )]
     pub account_id: u32,
+
+    /// Asset id. An asset ticker name which is a string of at most 12 characters.
+    #[structopt(
+        short,
+        long,
+        help = "The asset ticker id. String of at most 12 characters."
+    )]
+    pub ticker_id: String,
 
     /// An optional seed that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
@@ -54,7 +61,7 @@ pub struct AccountGenInfo {
     /// The path to the config file. This option is mutually exclusive with the rest of the the options.
     #[structopt(
         parse(from_os_str),
-        help = "The path to the toml config file. If this option is used, other input options are ignored.",
+        help = "The path to the config file. If this option is used, other input options are ignored.",
         long
     )]
     pub loag_config: Option<PathBuf>,
@@ -88,9 +95,7 @@ pub enum CLI {
 fn gen_seed() -> String {
     let mut rng = rand::thread_rng();
     let mut seed = [0u8; 32];
-    for i in 0..32 {
-        seed[i] = rng.gen::<u8>();
-    }
+    rng.fill(&mut seed);
     base64::encode(seed)
 }
 
@@ -101,22 +106,19 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
     match args {
         CLI::Create(cfg) => {
             // Read the config from the file if the argument is set
-            match &cfg.loag_config {
-                Some(path) => {
-                    let json_file_content = std::fs::read_to_string(&path).expect(&format!(
-                        "Failed to read the account config from file: {:?}.",
-                        path
-                    ));
+            if let Some(path) = &cfg.loag_config {
+                let json_file_content = std::fs::read_to_string(&path).expect(&format!(
+                    "Failed to read the account config from file: {:?}.",
+                    path
+                ));
 
-                    let cfg = serde_json::from_str(&json_file_content).unwrap_or_else(|error| {
-                        panic!("Failed to deserialize the account config: {}", error)
-                    });
+                let cfg = serde_json::from_str(&json_file_content).unwrap_or_else(|error| {
+                    panic!("Failed to deserialize the account config: {}", error)
+                });
 
-                    info!("Read the following config from {:?}:\n{:#?}", &path, &cfg);
-                    return Ok(CLI::Create(cfg)); // ignore other arguments and return the loaded config
-                }
-                None => {}
-            };
+                info!("Read the following config from {:?}:\n{:#?}", &path, &cfg);
+                return Ok(CLI::Create(cfg)); // ignore other arguments and return the loaded config
+            }
 
             // Otherwise, set the default seed and db_dir if needed
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
@@ -129,6 +131,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 save_config: cfg.save_config.clone(),
                 seed,
                 account_id: cfg.account_id,
+                ticker_id: cfg.ticker_id,
                 db_dir,
                 user: cfg.user.clone(),
             };

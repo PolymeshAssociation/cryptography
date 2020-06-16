@@ -1,4 +1,3 @@
-mod errors;
 mod input;
 
 use cryptography::{
@@ -8,23 +7,26 @@ use cryptography::{
 };
 use curve25519_dalek::scalar::Scalar;
 use env_logger;
-use errors::Error;
 use input::{parse_input, CLI};
 use log::info;
-use mercat_common::{get_asset_ids, init_print_logger};
+use mercat_common::{
+    errors::Error, get_asset_ids, init_print_logger, remove_file, save_to_file, OFF_CHAIN_DIR,
+    ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
+};
 use metrics::timing;
 use rand::{rngs::StdRng, SeedableRng};
 use schnorrkel::{ExpansionMode, MiniSecretKey};
-use std::{convert::TryInto, fs::File, path::PathBuf, time::Instant};
+use std::convert::TryFrom;
+use std::{convert::TryInto, path::PathBuf, time::Instant};
 
 fn main() {
     info!("Starting the program.");
     env_logger::init();
     init_print_logger();
 
-    let start = Instant::now();
+    let parse_arg_timer = Instant::now();
     let args = parse_input().unwrap();
-    timing!("account.argument_parse", start, Instant::now());
+    timing!("account.argument_parse", parse_arg_timer, Instant::now());
 
     match args {
         CLI::Create(cfg) => process_create_account(cfg).unwrap(),
@@ -42,69 +44,54 @@ fn process_create_account(cfg: input::AccountGenInfo) -> Result<(), Error> {
     let mut rng = StdRng::from_seed(seed);
 
     // Generate the account
-    let secret_account = generate_secret_account(&mut rng);
+    let secret_account = generate_secret_account(&mut rng, cfg.ticker_id)?;
     let valid_asset_ids = get_asset_ids();
 
-    let start = Instant::now();
+    let create_account_timer = Instant::now();
     let account = create_account(secret_account, &valid_asset_ids, cfg.account_id, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
-    timing!("account.call_library", start, Instant::now());
+    timing!("account.call_library", create_account_timer, Instant::now());
 
-    let start = Instant::now();
-    // Save the secret account
+    let save_to_file_timer = Instant::now();
+    // Save the secret and public account
     let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
-    let mut secret_file_path = db_dir.clone();
-    secret_file_path.push(format!("off-chain/{}_secret_account.json", cfg.user));
-    let file =
-        File::create(secret_file_path.clone()).map_err(|error| Error::FileCreationError {
-            error,
-            path: secret_file_path.clone(),
-        })?;
-    serde_json::to_writer(file, &account.scrt).map_err(|error| Error::FileWriteError {
-        error,
-        path: secret_file_path,
-    })?;
+    save_to_file(
+        db_dir.clone(),
+        OFF_CHAIN_DIR,
+        &cfg.user,
+        SECRET_ACCOUNT_FILE,
+        &account.scrt,
+    )?;
 
-    // Save the public account
-    let mut public_file_path = db_dir.clone();
-    public_file_path.push(format!("on-chain/{}_public_account.json", cfg.user));
-    let file =
-        File::create(public_file_path.clone()).map_err(|error| Error::FileCreationError {
-            error,
-            path: public_file_path.clone(),
-        })?;
-    serde_json::to_writer(file, &account.scrt).map_err(|error| Error::FileWriteError {
-        error,
-        path: public_file_path,
-    })?;
-    timing!("account.save_output", start, Instant::now());
+    save_to_file(
+        db_dir,
+        ON_CHAIN_DIR,
+        &cfg.user,
+        PUBLIC_ACCOUNT_FILE,
+        &account.scrt,
+    )?;
+
+    timing!("account.save_output", save_to_file_timer, Instant::now());
 
     Ok(())
 }
 
 fn process_destroy_account(user: String, db_dir: Option<PathBuf>) -> Result<(), Error> {
-    let start = Instant::now();
+    let account_removal_timer = Instant::now();
     let db_dir = db_dir.ok_or(Error::EmptyDatabaseDir)?;
 
-    let mut secret_file_path = db_dir.clone();
-    secret_file_path.push(format!("off-chain/{}_secret_account.json", user));
-    std::fs::remove_file(secret_file_path.clone()).map_err(|error| Error::FileRemovalError {
-        error,
-        path: secret_file_path,
-    })?;
+    remove_file(db_dir.clone(), OFF_CHAIN_DIR, &user, SECRET_ACCOUNT_FILE)?;
+    remove_file(db_dir, ON_CHAIN_DIR, &user, PUBLIC_ACCOUNT_FILE)?;
 
-    let mut public_file_path = db_dir.clone();
-    public_file_path.push(format!("on-chain/{}_public_account.json", user));
-    std::fs::remove_file(public_file_path.clone()).map_err(|error| Error::FileRemovalError {
-        error,
-        path: public_file_path,
-    })?;
-
-    timing!("account.remove_account", start, Instant::now());
+    timing!(
+        "account.remove_account",
+        account_removal_timer,
+        Instant::now()
+    );
     Ok(())
 }
 
-fn generate_secret_account(rng: &mut StdRng) -> SecAccount {
+fn generate_secret_account(rng: &mut StdRng, ticker_id: String) -> Result<SecAccount, Error> {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
@@ -114,12 +101,12 @@ fn generate_secret_account(rng: &mut StdRng) -> SecAccount {
     let sign_keys =
         MiniSecretKey::generate_with(rng.clone()).expand_to_keypair(ExpansionMode::Ed25519);
 
-    let asset_id = AssetId::from(1);
+    let asset_id = AssetId::try_from(ticker_id).map_err(|error| Error::LibraryError { error })?;
     let asset_id_witness = CommitmentWitness::from((asset_id.clone().into(), rng));
-    SecAccount {
+    Ok(SecAccount {
         enc_keys,
         sign_keys,
         asset_id,
         asset_id_witness,
-    }
+    })
 }

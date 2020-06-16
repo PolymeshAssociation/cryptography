@@ -7,4 +7,5 @@ members = [
 	"cli/scv",
 	"cli/mercat/account",
 	"cli/mercat/common",
+	"cli/mercat/global",
 ]

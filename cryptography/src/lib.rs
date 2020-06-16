@@ -6,6 +6,7 @@ pub use curve25519_dalek::{
 };
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_512;
+use std::convert::TryFrom;
 use zeroize::Zeroize;
 
 pub mod errors;
@@ -80,6 +81,32 @@ impl From<u32> for AssetId {
 impl From<AssetId> for Scalar {
     fn from(asset_id: AssetId) -> Scalar {
         Scalar::hash_from_bytes::<Sha3_512>(&(asset_id.id))
+    }
+}
+
+impl TryFrom<String> for AssetId {
+    type Error = errors::Error;
+
+    fn try_from(ticker_id: String) -> Result<Self, Self::Error> {
+        ensure!(
+            ticker_id.len() <= ASSET_ID_LEN,
+            errors::ErrorKind::TickerIdLengthError {
+                want: ASSET_ID_LEN,
+                got: ticker_id,
+            }
+        );
+        // TODO: this piece of code fails here but works in RustPlayground
+        //let ticker_id: [u8; ASSET_ID_LEN] = ticker_id
+        //    .as_bytes()
+        //    .try_into()
+        //    .map_err(|_| errors::ErrorKind::TickerToAssetIdError { ticker_id })?;
+
+        let ticker_id: &[u8] = ticker_id.as_bytes();
+        let mut asset_id = [0u8; ASSET_ID_LEN];
+        for i in 0..ticker_id.len() {
+            asset_id[i] = ticker_id[i];
+        }
+        Ok(AssetId { id: asset_id })
     }
 }
 

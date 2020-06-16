@@ -201,6 +201,20 @@ pub enum ErrorKind {
     /// A range proof error occurred.
     #[fail(display = "A range proof error occured: {:?}", source)]
     ProvingError { source: ProofError },
+
+    /// The ticker id can be at most 12 characters long.
+    #[fail(
+        display = "Incorrect ticker length. The length can be at most {:?}, but got {:?}",
+        want, got
+    )]
+    TickerIdLengthError { want: usize, got: String },
+
+    /// Failed to convert the ticker string to assed id.
+    #[fail(
+        display = "An error occured while converting ticker id \"{:?}\" to asset id",
+        ticker_id
+    )]
+    TickerToAssetIdError { ticker_id: String },
 }
 
 pub type Fallible<T, E = Error> = Result<T, E>;
