@@ -71,7 +71,8 @@ type SigningKeys = Keypair;
 pub type Signature = schnorrkel::sign::Signature;
 
 /// New type for Twisted ElGamal ciphertext of asset ids.
-#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Encode, Decode)]
+#[derive(Default, Copy, Clone, Serialize, Deserialize, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptedAssetId {
     pub cipher: CipherText,
 }
@@ -83,7 +84,8 @@ impl From<CipherText> for EncryptedAssetId {
 }
 
 /// New type for Twisted ElGamal ciphertext of account amounts/balances.
-#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Copy, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptedAmount {
     pub cipher: CipherText,
 }
@@ -406,8 +408,7 @@ pub trait AccountCreaterVerifier {
 
 /// Represents the three substates (started, verified, rejected) of a
 /// confidential transaction state.
-#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, Debug)]
 pub enum TxSubstate {
     /// The action on transaction has been taken but is not verified yet.
     Started,
@@ -420,8 +421,7 @@ pub enum TxSubstate {
 
 /// Represents the two states (initialized, justified) of a
 /// confidentional asset issuance transaction.
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, Debug)]
 pub enum AssetTxState {
     Initialization(TxSubstate),
     Justification(TxSubstate),
@@ -429,7 +429,7 @@ pub enum AssetTxState {
 
 /// Represents the four states (initialized, justified, finalized, reversed) of a
 /// confidentional transaction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ConfidentialTxState {
     Initialization(TxSubstate),
     InitilaziationJustification(TxSubstate),
@@ -649,7 +649,7 @@ impl PubFinalConfidentialTxDataContent {
 }
 /// Wrapper for the contents and the signature of the content sent by the
 /// receiver of the transaction.
-#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubFinalConfidentialTxData {
     pub content: PubFinalConfidentialTxDataContent,
     pub sig: Signature,
