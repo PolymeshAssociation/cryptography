@@ -83,7 +83,6 @@ impl From<AssetId> for Scalar {
     }
 }
 
-//pub mod codec_wrappers;
 pub mod asset_proofs;
 pub mod claim_proofs;
 pub mod mercat;
