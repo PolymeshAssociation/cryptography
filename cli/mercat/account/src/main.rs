@@ -15,6 +15,7 @@ use mercat_common::{
 };
 use metrics::timing;
 use rand::{rngs::StdRng, SeedableRng};
+use rand_core::{CryptoRng, RngCore};
 use schnorrkel::{ExpansionMode, MiniSecretKey};
 use std::convert::TryFrom;
 use std::{convert::TryInto, path::PathBuf, time::Instant};
@@ -91,18 +92,22 @@ fn process_destroy_account(user: String, db_dir: Option<PathBuf>) -> Result<(), 
     Ok(())
 }
 
-fn generate_secret_account(rng: &mut StdRng, ticker_id: String) -> Result<SecAccount, Error> {
+fn generate_secret_account<R: RngCore + CryptoRng>(
+    rng: &mut R,
+    ticker_id: String,
+) -> Result<SecAccount, Error> {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
         pblc: elg_pub.into(),
         scrt: elg_secret.into(),
     };
-    let sign_keys =
-        MiniSecretKey::generate_with(rng.clone()).expand_to_keypair(ExpansionMode::Ed25519);
 
     let asset_id = AssetId::try_from(ticker_id).map_err(|error| Error::LibraryError { error })?;
-    let asset_id_witness = CommitmentWitness::from((asset_id.clone().into(), rng));
+    let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));
+
+    let sign_keys = MiniSecretKey::generate_with(rng).expand_to_keypair(ExpansionMode::Ed25519);
+
     Ok(SecAccount {
         enc_keys,
         sign_keys,

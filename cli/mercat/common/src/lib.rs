@@ -57,6 +57,7 @@ pub fn init_print_logger() {
     metrics::set_recorder(&RECORDER).unwrap()
 }
 
+#[inline(always)]
 pub fn save_to_file<T>(
     db_dir: PathBuf,
     on_off_chain: &str,
@@ -90,6 +91,7 @@ where
     Ok(())
 }
 
+#[inline(always)]
 pub fn remove_file(
     db_dir: PathBuf,
     on_off_chain: &str,
@@ -107,6 +109,7 @@ pub fn remove_file(
     Ok(())
 }
 
+#[inline(always)]
 pub fn get_asset_ids() -> Vec<Scalar> {
     let valid_asset_ids = vec!["poly", "acme"]; // TODO make this configurable
     let valid_asset_ids: Vec<AssetId> = valid_asset_ids

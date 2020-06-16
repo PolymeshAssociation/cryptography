@@ -87,24 +87,19 @@ impl From<AssetId> for Scalar {
 impl TryFrom<String> for AssetId {
     type Error = errors::Error;
 
-    fn try_from(ticker_id: String) -> Result<Self, Self::Error> {
+    fn try_from(ticker: String) -> Result<Self, Self::Error> {
         ensure!(
-            ticker_id.len() <= ASSET_ID_LEN,
+            ticker.len() <= ASSET_ID_LEN,
             errors::ErrorKind::TickerIdLengthError {
                 want: ASSET_ID_LEN,
-                got: ticker_id,
+                got: ticker,
             }
         );
-        // TODO: this piece of code fails here but works in RustPlayground
-        //let ticker_id: [u8; ASSET_ID_LEN] = ticker_id
-        //    .as_bytes()
-        //    .try_into()
-        //    .map_err(|_| errors::ErrorKind::TickerToAssetIdError { ticker_id })?;
 
-        let ticker_id: &[u8] = ticker_id.as_bytes();
         let mut asset_id = [0u8; ASSET_ID_LEN];
-        for i in 0..ticker_id.len() {
-            asset_id[i] = ticker_id[i];
+        let ticker = ticker.as_bytes();
+        for i in 0..ticker.len() {
+            asset_id[i] = ticker[i];
         }
         Ok(AssetId { id: asset_id })
     }
