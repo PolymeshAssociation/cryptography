@@ -707,7 +707,7 @@ impl PubFinalConfidentialTxData {
 
 /// Wrapper for the contents and the signature of the justified and finalized
 /// transaction.
-#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct JustifiedPubFinalConfidentialTxData {
     pub conf_tx_final_data: PubFinalConfidentialTxData,
     pub sig: Signature,
