@@ -1,3 +1,4 @@
+mod errors;
 mod input;
 
 use cryptography::{
@@ -7,7 +8,7 @@ use cryptography::{
 };
 use curve25519_dalek::scalar::Scalar;
 use env_logger;
-use failure::Fail;
+use errors::Error;
 use input::{parse_input, CLI};
 use log::info;
 use mercat_common::{get_asset_ids, init_print_logger};
@@ -15,42 +16,6 @@ use metrics::timing;
 use rand::{rngs::StdRng, SeedableRng};
 use schnorrkel::{ExpansionMode, MiniSecretKey};
 use std::{convert::TryInto, fs::File, path::PathBuf, time::Instant};
-
-#[derive(Fail, Debug)]
-enum Error {
-    #[fail(display = "The input seed cannot be empty")]
-    EmptySeed,
-
-    #[fail(display = "Error in decoding the seed value: {:?}", error)]
-    SeedDecodeError { error: base64::DecodeError },
-
-    #[fail(display = "Want seed length 32, got len: {:?}", length)]
-    SeedLengthError { length: usize },
-
-    #[fail(display = "An error occured in the underlying library: {:?}", error)]
-    LibraryError { error: cryptography::errors::Error },
-
-    #[fail(display = "The database directory must be provided")]
-    EmptyDatabaseDir,
-
-    #[fail(display = "Failed to create the file {:?}: {:?}", path, error)]
-    FileCreationError {
-        error: std::io::Error,
-        path: PathBuf,
-    },
-
-    #[fail(display = "Failed to write to the file {:?}: {:?}", path, error)]
-    FileWriteError {
-        error: serde_json::Error,
-        path: PathBuf,
-    },
-
-    #[fail(display = "Failed to remove the file {:?}: {:?}", path, error)]
-    FileRemovalError {
-        error: std::io::Error,
-        path: PathBuf,
-    },
-}
 
 fn main() {
     info!("Starting the program.");
