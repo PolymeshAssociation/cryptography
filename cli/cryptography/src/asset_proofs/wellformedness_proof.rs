@@ -22,7 +22,7 @@ use curve25519_dalek::{
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use sp_std::convert::From;
@@ -119,8 +119,8 @@ impl UpdateTranscript for WellformednessInitialMessage {
     }
 }
 
-#[derive(Clone, Debug, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessProver {
     /// The secret commitment witness.
     w: Zeroizing<CommitmentWitness>,
