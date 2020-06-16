@@ -131,28 +131,4 @@ mod tests {
             prove_within_range(large_secret_value, witness.blinding(), 32, &mut rng).unwrap();
         assert!(!verify_within_range(bad_proof, bad_commitment, 32, &mut rng).is_ok());
     }
-
-    #[test]
-    #[wasm_bindgen_test]
-    fn serialize_deserialize_range_proof() {
-        let mut rng = StdRng::from_seed(SEED_1);
-        let secret_value = 42u32;
-        let rand_blind = Scalar::random(&mut rng);
-
-        let (initial_message, final_response, range) =
-            prove_within_range(secret_value as u64, rand_blind, 32, &mut rng).unwrap();
-        assert_eq!(range, 32);
-
-        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
-        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
-        let recovered_initial_message: RangeProofInitialMessage =
-            deserialize(&initial_message_bytes).unwrap();
-        let recovered_final_response: RangeProofFinalResponse =
-            deserialize(&final_response_bytes).unwrap();
-        assert_eq!(recovered_initial_message, initial_message);
-        assert_eq!(
-            final_response_bytes,
-            serialize(&recovered_final_response).unwrap()
-        );
-    }
 }

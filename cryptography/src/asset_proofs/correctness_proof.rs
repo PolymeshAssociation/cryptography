@@ -226,7 +226,6 @@ mod tests {
     use super::*;
     use crate::asset_proofs::*;
     use rand::{rngs::StdRng, SeedableRng};
-    use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [17u8; 32];
@@ -304,13 +303,14 @@ mod tests {
         >(prover, &mut rng)
         .unwrap();
 
-        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
-        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
-        let recovered_initial_message: CorrectnessInitialMessage =
-            deserialize(&initial_message_bytes).unwrap();
-        let recovered_final_response: CorrectnessFinalResponse =
-            deserialize(&final_response_bytes).unwrap();
+        let bytes = initial_message.encode();
+        let mut input = bytes.as_slice();
+        let recovered_initial_message = <CorrectnessInitialMessage>::decode(&mut input).unwrap();
         assert_eq!(recovered_initial_message, initial_message);
+
+        let bytes = final_response.encode();
+        let mut input = bytes.as_slice();
+        let recovered_final_response = <CorrectnessFinalResponse>::decode(&mut input).unwrap();
         assert_eq!(recovered_final_response, final_response);
     }
 }

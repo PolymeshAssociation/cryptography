@@ -331,7 +331,6 @@ mod tests {
         let pub_account_enc_asset_id = EncryptedAssetId::from(
             issuer_enc_key
                 .pblc
-                .key
                 .encrypt(&issuer_secret_account.asset_id_witness),
         );
 
@@ -442,7 +441,6 @@ mod tests {
         // Check that the issued amount is added to the account balance.
         assert!(issuer_enc_key
             .scrt
-            .key
             .verify(
                 &updated_issuer_account.content.enc_balance.cipher,
                 &Scalar::from(issued_amount)
