@@ -1,13 +1,12 @@
 pub mod errors;
 
-use cryptography::{mercat::account::convert_asset_ids, AssetId};
 use curve25519_dalek::scalar::Scalar;
 use errors::Error;
 use log::info;
 use metrics::Recorder;
 use metrics_core::Key;
+use serde::{Deserialize, Serialize};
 use std::{
-    convert::TryFrom,
     fs::{create_dir_all, File},
     path::PathBuf,
 };
@@ -16,6 +15,8 @@ pub const ON_CHAIN_DIR: &str = "on-chain";
 pub const OFF_CHAIN_DIR: &str = "off-chain";
 pub const PUBLIC_ACCOUNT_FILE: &str = "public_account.json";
 pub const SECRET_ACCOUNT_FILE: &str = "secret_account.json";
+pub const ASSET_ID_LIST_FILE: &str = "valid_asset_ids.json";
+pub const GLOBAL_USER_DIR: &str = "global";
 
 #[allow(dead_code)]
 static RECORDER: PrintRecorder = PrintRecorder;
@@ -48,6 +49,14 @@ impl Recorder for PrintRecorder {
 
 pub fn init_print_logger() {
     metrics::set_recorder(&RECORDER).unwrap()
+}
+
+pub fn construct_path(db_dir: PathBuf, on_off_chain: &str, user: &str, file_name: &str) -> PathBuf {
+    let mut file_path = db_dir;
+    file_path.push(on_off_chain);
+    file_path.push(user);
+    file_path.push(file_name);
+    file_path
 }
 
 #[inline]
@@ -91,10 +100,7 @@ pub fn remove_file(
     user: &str,
     file_name: &str,
 ) -> Result<(), Error> {
-    let mut file_path = db_dir;
-    file_path.push(on_off_chain);
-    file_path.push(user);
-    file_path.push(file_name);
+    let file_path = construct_path(db_dir, on_off_chain, user, file_name);
     std::fs::remove_file(file_path.clone()).map_err(|error| Error::FileRemovalError {
         error,
         path: file_path,
@@ -102,12 +108,21 @@ pub fn remove_file(
     Ok(())
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AssetIdList(pub Vec<Scalar>);
+
 #[inline]
-pub fn get_asset_ids() -> Vec<Scalar> {
-    let valid_asset_ids = vec!["poly", "acme"]; // TODO make this configurable
-    let valid_asset_ids: Vec<AssetId> = valid_asset_ids
-        .into_iter()
-        .map(|asset_id| AssetId::try_from(String::from(asset_id)).unwrap())
-        .collect();
-    convert_asset_ids(valid_asset_ids)
+pub fn get_asset_ids(db_dir: PathBuf) -> Result<Vec<Scalar>, Error> {
+    let file_path = construct_path(db_dir, ON_CHAIN_DIR, GLOBAL_USER_DIR, ASSET_ID_LIST_FILE);
+    let file = File::open(file_path).map_err(|error| Error::FileReadError {
+        error,
+        path: ASSET_ID_LIST_FILE.into(),
+    })?;
+    let mut de = serde_json::Deserializer::from_reader(file);
+
+    let valid_asset_ids =
+        AssetIdList::deserialize(&mut de).map_err(|_| Error::AssetIdListDeserializeError {
+            path: ASSET_ID_LIST_FILE.into(),
+        })?;
+    Ok(valid_asset_ids.0)
 }

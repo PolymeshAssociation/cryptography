@@ -24,6 +24,12 @@ pub enum Error {
         path: PathBuf,
     },
 
+    #[fail(display = "Failed to read the file {:?}: {:?}", path, error)]
+    FileReadError { error: std::io::Error, path: String },
+
+    #[fail(display = "Could not deserialize the asset id list from {:?}", path)]
+    AssetIdListDeserializeError { path: String },
+
     #[fail(display = "Failed to write to the file {:?}: {:?}", path, error)]
     FileWriteError {
         error: serde_json::Error,

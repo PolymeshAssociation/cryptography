@@ -45,8 +45,9 @@ fn process_create_account(cfg: input::AccountGenInfo) -> Result<(), Error> {
     let mut rng = StdRng::from_seed(seed);
 
     // Generate the account
+    let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
     let secret_account = generate_secret_account(&mut rng, cfg.ticker_id)?;
-    let valid_asset_ids = get_asset_ids();
+    let valid_asset_ids = get_asset_ids(db_dir.clone())?;
 
     let create_account_timer = Instant::now();
     let account = create_account(secret_account, &valid_asset_ids, cfg.account_id, &mut rng)
@@ -55,7 +56,6 @@ fn process_create_account(cfg: input::AccountGenInfo) -> Result<(), Error> {
 
     let save_to_file_timer = Instant::now();
     // Save the secret and public account
-    let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
     save_to_file(
         db_dir.clone(),
         OFF_CHAIN_DIR,
