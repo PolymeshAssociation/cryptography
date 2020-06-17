@@ -58,6 +58,9 @@ pub fn init_print_logger() {
     metrics::set_recorder(&RECORDER).unwrap()
 }
 
+/// Utility function to construct the path based user name, file name, and whether the file
+/// should be stored on or off chain.
+#[inline]
 pub fn construct_path(db_dir: PathBuf, on_off_chain: &str, user: &str, file_name: &str) -> PathBuf {
     let mut file_path = db_dir;
     file_path.push(on_off_chain);
@@ -66,6 +69,8 @@ pub fn construct_path(db_dir: PathBuf, on_off_chain: &str, user: &str, file_name
     file_path
 }
 
+/// Utility function to save a serliazable data to a location inside the database directory,
+/// for a particular user.
 #[inline]
 pub fn save_to_file<T>(
     db_dir: PathBuf,
@@ -100,6 +105,7 @@ where
     Ok(())
 }
 
+/// Utility function to remove a file from the database directory for a particular user.
 #[inline]
 pub fn remove_file(
     db_dir: PathBuf,
@@ -115,9 +121,11 @@ pub fn remove_file(
     Ok(())
 }
 
+/// A data structure that various CLIs can share to serialize and deserialize asset ids.
 #[derive(Serialize, Deserialize)]
 pub struct AssetIdList(pub Vec<Scalar>);
 
+/// Utility function to read the asset ids from the database directory.
 #[inline]
 pub fn get_asset_ids(db_dir: PathBuf) -> Result<Vec<Scalar>, Error> {
     let file_path = construct_path(db_dir, ON_CHAIN_DIR, GLOBAL_USER_DIR, ASSET_ID_LIST_FILE);

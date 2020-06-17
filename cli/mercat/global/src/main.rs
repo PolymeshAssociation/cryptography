@@ -21,6 +21,7 @@ fn main() {
     timing!("global.argument_parse", start, Instant::now());
 
     process_asset_id_creation(args.db_dir, args.ticker_names).unwrap();
+    info!("The program finished successfully.");
 }
 
 fn process_asset_id_creation(

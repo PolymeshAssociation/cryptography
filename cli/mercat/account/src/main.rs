@@ -33,6 +33,7 @@ fn main() {
         CLI::Create(cfg) => process_create_account(cfg).unwrap(),
         CLI::Destroy { user, db_dir } => process_destroy_account(user, db_dir).unwrap(),
     };
+    info!("The program finished successfully.");
 }
 
 fn process_create_account(cfg: input::AccountGenInfo) -> Result<(), Error> {

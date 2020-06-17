@@ -1,13 +1,10 @@
 [package]
 name = "mercat-common"
 version = "0.1.0"
-authors = [ "Jesse Lancaster <jesse@polymath.network>",
-            "Arash Afshar    <arash@polymath.network>",
-            "Parnian Alimi   <parnian@polymath.network>",
-          ]
+authors = [ "Polymath Inc" ]
 edition = "2018"
 repository = "https://github.com/PolymathNetwork/cryptography"
-description = "MERCAT CLI common library"
+description = "MERCAT CLI common library."
 
 [dependencies]
 cryptography = { package = "cryptography", path = "../../../cryptography/" }
