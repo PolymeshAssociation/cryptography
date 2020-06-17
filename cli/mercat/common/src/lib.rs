@@ -47,6 +47,13 @@ impl Recorder for PrintRecorder {
     }
 }
 
+#[cfg(feature = "std")]
+pub fn init_print_logger() {
+    let recorder = PrintRecorder::default();
+    metrics::set_boxed_recorder(Box::new(recorder)).unwrap()
+}
+
+#[cfg(not(feature = "std"))]
 pub fn init_print_logger() {
     metrics::set_recorder(&RECORDER).unwrap()
 }
