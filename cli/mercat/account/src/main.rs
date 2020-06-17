@@ -15,7 +15,7 @@ use mercat_common::{
 };
 use metrics::timing;
 use rand::{rngs::StdRng, SeedableRng};
-use rand_core::{CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 use schnorrkel::{ExpansionMode, MiniSecretKey};
 use std::convert::TryFrom;
 use std::{convert::TryInto, path::PathBuf, time::Instant};
