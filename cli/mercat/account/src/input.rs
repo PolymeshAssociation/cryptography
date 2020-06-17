@@ -57,23 +57,21 @@ pub struct AccountGenInfo {
         help = "Whether to save the input command line arguments in the config file."
     )]
     pub save_config: Option<PathBuf>,
-
-    /// The path to the config file. This option is mutually exclusive with the rest of the the options.
-    #[structopt(
-        parse(from_os_str),
-        help = "The path to the config file. If this option is used, other input options are ignored.",
-        long
-    )]
-    pub load_config: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub enum CLI {
-    /// Create a MERCAT account
+    /// Create a MERCAT account using command line arguments.
     Create(AccountGenInfo),
 
+    /// Create a MERCAT account from a config file.
+    CreateFrom {
+        /// The path to the config file. This is a positional argument.
+        config: PathBuf,
+    },
+
     /// Remove a previously generated MERCAT account.
-    Destroy {
+    Cleanup {
         /// The name of the user whose account will be removed.
         #[structopt(short, long, help = "The name of the user.")]
         user: String,
@@ -105,29 +103,12 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
     match args {
         CLI::Create(cfg) => {
-            // Read the config from the file if the argument is set
-            if let Some(path) = &cfg.load_config {
-                let json_file_content = std::fs::read_to_string(&path).expect(&format!(
-                    "Failed to read the account config from file: {:?}.",
-                    path
-                ));
-
-                let cfg = serde_json::from_str(&json_file_content).unwrap_or_else(|error| {
-                    panic!("Failed to deserialize the account config: {}", error)
-                });
-
-                info!("Read the following config from {:?}:\n{:#?}", &path, &cfg);
-                return Ok(CLI::Create(cfg)); // ignore other arguments and return the loaded config
-            }
-
-            // Otherwise, set the default seed and db_dir if needed
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
 
             let seed: Option<String> = cfg.seed.clone().or_else(|| Some(gen_seed()));
             info!("Seed: {:?}", seed.clone().unwrap()); // unwrap won't panic
 
             let cfg = AccountGenInfo {
-                load_config: cfg.load_config.clone(),
                 save_config: cfg.save_config.clone(),
                 seed,
                 account_id: cfg.account_id,
@@ -158,10 +139,24 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
             return Ok(CLI::Create(cfg));
         }
-        CLI::Destroy { user, db_dir } => {
+        CLI::CreateFrom { config } => {
+            // Read the config from the file if the argument is set
+            let json_file_content = std::fs::read_to_string(&config).expect(&format!(
+                "Failed to read the account config from file: {:?}.",
+                config
+            ));
+
+            let cfg = serde_json::from_str(&json_file_content).unwrap_or_else(|error| {
+                panic!("Failed to deserialize the account config: {}", error)
+            });
+
+            info!("Read the following config from {:?}:\n{:#?}", &config, &cfg);
+            return Ok(CLI::Create(cfg)); // ignore other arguments and return the loaded config
+        }
+        CLI::Cleanup { user, db_dir } => {
             // Set the default directory for db_dir
             let db_dir = db_dir.clone().or_else(|| std::env::current_dir().ok());
-            let args = CLI::Destroy {
+            let args = CLI::Cleanup {
                 user: user.clone(),
                 db_dir,
             };

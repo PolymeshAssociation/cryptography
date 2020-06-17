@@ -30,7 +30,8 @@ fn main() {
 
     match args {
         CLI::Create(cfg) => process_create_account(cfg).unwrap(),
-        CLI::Destroy { user, db_dir } => process_destroy_account(user, db_dir).unwrap(),
+        CLI::Cleanup { user, db_dir } => process_destroy_account(user, db_dir).unwrap(),
+        CLI::CreateFrom { config: _ } => panic!("This should not happen!"),
     };
     info!("The program finished successfully.");
 }
