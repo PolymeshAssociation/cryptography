@@ -4,5 +4,8 @@ members = [
 	"cryptography",
 	"cli/common",
 	"cli/scp",
-	"cli/scv"
+	"cli/scv",
+	"cli/mercat/account",
+	"cli/mercat/common",
+	"cli/mercat/chain_setup",
 ]
