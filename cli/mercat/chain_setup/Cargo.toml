@@ -1,5 +1,5 @@
 [package]
-name = "mercat-global"
+name = "mercat-chain-setup"
 version = "0.1.0"
 authors = [ "Polymath Inc" ]
 edition = "2018"

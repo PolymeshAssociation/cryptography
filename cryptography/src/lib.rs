@@ -6,7 +6,6 @@ pub use curve25519_dalek::{
 };
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_512;
-use std::convert::TryFrom;
 use zeroize::Zeroize;
 
 pub mod errors;
@@ -84,23 +83,19 @@ impl From<AssetId> for Scalar {
     }
 }
 
-impl TryFrom<String> for AssetId {
-    type Error = errors::Error;
+pub fn asset_id_from_ticker(ticker: &str) -> Result<AssetId, errors::Error> {
+    ensure!(
+        ticker.len() <= ASSET_ID_LEN,
+        errors::ErrorKind::TickerIdLengthError {
+            want: ASSET_ID_LEN,
+            got: ticker.len(),
+        }
+    );
 
-    fn try_from(ticker: String) -> Result<Self, Self::Error> {
-        ensure!(
-            ticker.len() <= ASSET_ID_LEN,
-            errors::ErrorKind::TickerIdLengthError {
-                want: ASSET_ID_LEN,
-                got: ticker,
-            }
-        );
-
-        let mut asset_id = [0u8; ASSET_ID_LEN];
-        let ticker = ticker.as_bytes();
-        asset_id[..ticker.len()].copy_from_slice(ticker);
-        Ok(AssetId { id: asset_id })
-    }
+    let mut asset_id = [0u8; ASSET_ID_LEN];
+    let ticker = ticker.as_bytes();
+    asset_id[..ticker.len()].copy_from_slice(ticker);
+    Ok(AssetId { id: asset_id })
 }
 
 pub mod asset_proofs;

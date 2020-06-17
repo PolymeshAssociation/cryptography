@@ -1,9 +1,9 @@
 mod input;
 
 use cryptography::{
+    asset_id_from_ticker,
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{account::create_account, EncryptionKeys, SecAccount},
-    AssetId,
 };
 use curve25519_dalek::scalar::Scalar;
 use env_logger;
@@ -17,7 +17,6 @@ use metrics::timing;
 use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, RngCore};
 use schnorrkel::{ExpansionMode, MiniSecretKey};
-use std::convert::TryFrom;
 use std::{convert::TryInto, path::PathBuf, time::Instant};
 
 fn main() {
@@ -104,7 +103,8 @@ fn generate_secret_account<R: RngCore + CryptoRng>(
         scrt: elg_secret.into(),
     };
 
-    let asset_id = AssetId::try_from(ticker_id).map_err(|error| Error::LibraryError { error })?;
+    let asset_id =
+        asset_id_from_ticker(&ticker_id).map_err(|error| Error::LibraryError { error })?;
     let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));
 
     let sign_keys = MiniSecretKey::generate_with(rng).expand_to_keypair(ExpansionMode::Ed25519);
