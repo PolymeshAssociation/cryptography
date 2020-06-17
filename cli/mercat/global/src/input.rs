@@ -6,7 +6,7 @@ use structopt::StructOpt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct CLI {
-    /// Space separated list of a ticker names.
+    /// Space separated list of ticker names.
     #[structopt(short, long, help = "Space separated list of a ticker names.")]
     pub ticker_names: Vec<String>,
 

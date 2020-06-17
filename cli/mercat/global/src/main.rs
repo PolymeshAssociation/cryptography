@@ -6,7 +6,7 @@ use input::parse_input;
 use log::info;
 use mercat_common::{
     errors::Error, init_print_logger, save_to_file, AssetIdList, ASSET_ID_LIST_FILE,
-    GLOBAL_USER_DIR, ON_CHAIN_DIR,
+    COMMON_OBJECTS_DIR, ON_CHAIN_DIR,
 };
 use metrics::timing;
 use std::{convert::TryFrom, path::PathBuf, time::Instant};
@@ -43,7 +43,7 @@ fn process_asset_id_creation(
     save_to_file(
         db_dir,
         ON_CHAIN_DIR,
-        GLOBAL_USER_DIR,
+        COMMON_OBJECTS_DIR,
         ASSET_ID_LIST_FILE,
         &valid_asset_ids,
     )?;

@@ -16,7 +16,7 @@ pub const OFF_CHAIN_DIR: &str = "off-chain";
 pub const PUBLIC_ACCOUNT_FILE: &str = "public_account.json";
 pub const SECRET_ACCOUNT_FILE: &str = "secret_account.json";
 pub const ASSET_ID_LIST_FILE: &str = "valid_asset_ids.json";
-pub const GLOBAL_USER_DIR: &str = "global";
+pub const COMMON_OBJECTS_DIR: &str = "common";
 
 #[allow(dead_code)]
 static RECORDER: PrintRecorder = PrintRecorder;
@@ -69,7 +69,7 @@ pub fn construct_path(db_dir: PathBuf, on_off_chain: &str, user: &str, file_name
     file_path
 }
 
-/// Utility function to save a serliazable data to a location inside the database directory,
+/// Utility function to save a serializable data to a location inside the database directory,
 /// for a particular user.
 #[inline]
 pub fn save_to_file<T>(
@@ -128,7 +128,7 @@ pub struct AssetIdList(pub Vec<Scalar>);
 /// Utility function to read the asset ids from the database directory.
 #[inline]
 pub fn get_asset_ids(db_dir: PathBuf) -> Result<Vec<Scalar>, Error> {
-    let file_path = construct_path(db_dir, ON_CHAIN_DIR, GLOBAL_USER_DIR, ASSET_ID_LIST_FILE);
+    let file_path = construct_path(db_dir, ON_CHAIN_DIR, COMMON_OBJECTS_DIR, ASSET_ID_LIST_FILE);
     let file = File::open(file_path).map_err(|error| Error::FileReadError {
         error,
         path: ASSET_ID_LIST_FILE.into(),
