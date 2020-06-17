@@ -140,7 +140,6 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             return Ok(CLI::Create(cfg));
         }
         CLI::CreateFrom { config } => {
-            // Read the config from the file if the argument is set
             let json_file_content = std::fs::read_to_string(&config).expect(&format!(
                 "Failed to read the account config from file: {:?}.",
                 config
@@ -151,7 +150,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             });
 
             info!("Read the following config from {:?}:\n{:#?}", &config, &cfg);
-            return Ok(CLI::Create(cfg)); // ignore other arguments and return the loaded config
+            return Ok(CLI::Create(cfg));
         }
         CLI::Cleanup { user, db_dir } => {
             // Set the default directory for db_dir
