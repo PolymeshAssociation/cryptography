@@ -98,9 +98,7 @@ impl TryFrom<String> for AssetId {
 
         let mut asset_id = [0u8; ASSET_ID_LEN];
         let ticker = ticker.as_bytes();
-        for i in 0..ticker.len() {
-            asset_id[i] = ticker[i];
-        }
+        asset_id[..ticker.len()].copy_from_slice(ticker);
         Ok(AssetId { id: asset_id })
     }
 }

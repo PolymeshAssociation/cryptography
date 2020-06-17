@@ -46,18 +46,11 @@ impl Recorder for PrintRecorder {
     }
 }
 
-#[cfg(feature = "std")]
-pub fn init_print_logger() {
-    let recorder = PrintRecorder::default();
-    metrics::set_boxed_recorder(Box::new(recorder)).unwrap()
-}
-
-#[cfg(not(feature = "std"))]
 pub fn init_print_logger() {
     metrics::set_recorder(&RECORDER).unwrap()
 }
 
-#[inline(always)]
+#[inline]
 pub fn save_to_file<T>(
     db_dir: PathBuf,
     on_off_chain: &str,
@@ -83,7 +76,7 @@ where
         error,
         path: file_path.clone(),
     })?;
-    serde_json::to_writer(file, &data).map_err(|error| Error::FileWriteError {
+    serde_json::to_writer_pretty(file, &data).map_err(|error| Error::FileWriteError {
         error,
         path: file_path,
     })?;
@@ -91,7 +84,7 @@ where
     Ok(())
 }
 
-#[inline(always)]
+#[inline]
 pub fn remove_file(
     db_dir: PathBuf,
     on_off_chain: &str,
@@ -109,7 +102,7 @@ pub fn remove_file(
     Ok(())
 }
 
-#[inline(always)]
+#[inline]
 pub fn get_asset_ids() -> Vec<Scalar> {
     let valid_asset_ids = vec!["poly", "acme"]; // TODO make this configurable
     let valid_asset_ids: Vec<AssetId> = valid_asset_ids

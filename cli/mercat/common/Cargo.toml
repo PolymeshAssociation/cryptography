@@ -13,8 +13,8 @@ description = "MERCAT CLI common library"
 cryptography = { package = "cryptography", path = "../../../cryptography/" }
 
 serde = { version = "1.0.105", features = ["derive"] }
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]}
+serde_json = { version = "1.0", features = ["alloc"] }
+serde_bytes = { version = "0.11", features = ["alloc"]}
 log = { version = "0.4.8"}
 metrics = { version = "0.12.1" }
 metrics-core = { version = "0.5.2" }
@@ -22,5 +22,5 @@ failure = { version = "0.1.7" }
 base64 = { version = "0.12.1" }
 
 # Crypto
-rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
-curve25519-dalek = { version = "2.0.0", features = ["u64_backend", "alloc", "serde"], default-features = false }
+rand = { version = "0.7.3", features = ["getrandom", "alloc"] }
+curve25519-dalek = { version = "2.0.0", features = ["u64_backend", "alloc", "serde"] }

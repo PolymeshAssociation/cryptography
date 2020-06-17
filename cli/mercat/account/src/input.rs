@@ -64,7 +64,7 @@ pub struct AccountGenInfo {
         help = "The path to the config file. If this option is used, other input options are ignored.",
         long
     )]
-    pub loag_config: Option<PathBuf>,
+    pub load_config: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
@@ -106,7 +106,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
     match args {
         CLI::Create(cfg) => {
             // Read the config from the file if the argument is set
-            if let Some(path) = &cfg.loag_config {
+            if let Some(path) = &cfg.load_config {
                 let json_file_content = std::fs::read_to_string(&path).expect(&format!(
                     "Failed to read the account config from file: {:?}.",
                     path
@@ -127,7 +127,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             info!("Seed: {:?}", seed.clone().unwrap()); // unwrap won't panic
 
             let cfg = AccountGenInfo {
-                loag_config: cfg.loag_config.clone(),
+                load_config: cfg.load_config.clone(),
                 save_config: cfg.save_config.clone(),
                 seed,
                 account_id: cfg.account_id,
@@ -146,7 +146,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 info!("Saving the following config to {:?}:\n{:#?}", &path, &cfg);
                 std::fs::write(
                     path,
-                    serde_json::to_string(&cfg).unwrap_or_else(|error| {
+                    serde_json::to_string_pretty(&cfg).unwrap_or_else(|error| {
                         panic!("Failed to serialize configuration file: {}", error)
                     }),
                 )
