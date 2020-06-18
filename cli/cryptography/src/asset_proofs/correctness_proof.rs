@@ -63,8 +63,6 @@ impl Decode for CorrectnessFinalResponse {
     }
 }
 
-/// # TODO
-/// - Duplicated code, see `WellformednessInitialMessage`.
 #[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
 pub struct CorrectnessInitialMessage {
     a: RistrettoPoint,
