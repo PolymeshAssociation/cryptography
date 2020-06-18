@@ -83,6 +83,21 @@ impl From<AssetId> for Scalar {
     }
 }
 
+pub fn asset_id_from_ticker(ticker: &str) -> Result<AssetId, errors::Error> {
+    ensure!(
+        ticker.len() <= ASSET_ID_LEN,
+        errors::ErrorKind::TickerIdLengthError {
+            want: ASSET_ID_LEN,
+            got: ticker.len(),
+        }
+    );
+
+    let mut asset_id = [0u8; ASSET_ID_LEN];
+    let ticker = ticker.as_bytes();
+    asset_id[..ticker.len()].copy_from_slice(ticker);
+    Ok(AssetId { id: asset_id })
+}
+
 pub mod asset_proofs;
 pub mod claim_proofs;
 pub mod mercat;
