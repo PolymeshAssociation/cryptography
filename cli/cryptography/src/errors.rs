@@ -71,7 +71,7 @@ pub enum ErrorKind {
     CipherTextDecryptionError,
 
     /// A proof verification error occurred.
-    #[fail(display = "A proof verification error occured")]
+    #[fail(display = "A proof verification error occurred")]
     VerificationError,
 
     /// Failed to verify a correctness proof.
@@ -157,7 +157,7 @@ pub enum ErrorKind {
     )]
     InvalidPreviousAssetTransactionState { state: AssetTxState },
 
-    /// The amount in the initial transaction does not match the amount that receiver expacted.
+    /// The amount in the initial transaction does not match the amount that receiver expected.
     #[fail(
         display = "Expected to receive {:?} form the sender, got a different amount.",
         expected_amount
@@ -192,8 +192,15 @@ pub enum ErrorKind {
     SignatureValidationFailure,
 
     /// A range proof error occurred.
-    #[fail(display = "A range proof error occured: {:?}", source)]
+    #[fail(display = "A range proof error occurred: {:?}", source)]
     ProvingError { source: ProofError },
+
+    /// The ticker id can be at most 12 characters long.
+    #[fail(
+        display = "Incorrect ticker length. The length can be at most {:?}, but got {:?}",
+        want, got
+    )]
+    TickerIdLengthError { want: usize, got: usize },
 }
 
 pub type Fallible<T, E = Error> = Result<T, E>;
