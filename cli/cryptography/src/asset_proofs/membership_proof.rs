@@ -16,12 +16,16 @@ use crate::asset_proofs::{
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
 use crate::errors::{ErrorKind, Fallible};
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::{
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
+};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use sp_std::{cmp::min, convert::TryFrom, prelude::*};
 
 pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
@@ -31,6 +35,35 @@ const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallen
 pub struct MembershipProofInitialMessage {
     ooon_proof_initial_message: OOONProofInitialMessage,
     secret_element_comm: RistrettoPoint,
+}
+
+impl Encode for MembershipProofInitialMessage {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        32usize + self.ooon_proof_initial_message.size_hint()
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let secret_element_comm = self.secret_element_comm.compress();
+
+        self.ooon_proof_initial_message.encode_to(dest);
+        secret_element_comm.as_bytes().encode_to(dest);
+    }
+}
+
+impl Decode for MembershipProofInitialMessage {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (ooon_proof_initial_message, secret) =
+            <(OOONProofInitialMessage, [u8; 32])>::decode(input)?;
+        let secret_element_comm = CompressedRistretto(secret).decompress().ok_or_else(|| {
+            CodecError::from("MembershipProofInitialMessage::secret_element_comm is invalid")
+        })?;
+
+        Ok(MembershipProofInitialMessage {
+            ooon_proof_initial_message,
+            secret_element_comm,
+        })
+    }
 }
 
 impl UpdateTranscript for MembershipProofInitialMessage {
@@ -45,7 +78,7 @@ impl UpdateTranscript for MembershipProofInitialMessage {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Encode, Decode)]
 pub struct MembershipProofFinalResponse {
     ooon_proof_final_response: OOONProofFinalResponse,
 }
@@ -67,11 +100,11 @@ pub struct MembershipProverAwaitingChallenge<'a> {
     /// The set of elements which the committed secret element belongs to.
     pub elements_set: &'a [Scalar],
     /// Indicates the index of the secret eleent in the elements set.
-    pub secret_position: usize,
+    pub secret_position: u32,
     /// The element set size is represented as a power of the given base.
-    pub base: usize,
+    pub base: u32,
     /// Used to specify the commitment list size for the underlying one-out-of-many proofs.
-    pub exp: usize,
+    pub exp: u32,
 }
 
 impl<'a> MembershipProverAwaitingChallenge<'a> {
@@ -80,13 +113,14 @@ impl<'a> MembershipProverAwaitingChallenge<'a> {
         random: Scalar,
         generators: &'a OooNProofGenerators,
         elements_set: &'a [Scalar],
-        base: usize,
-        exp: usize,
+        base: u32,
+        exp: u32,
     ) -> Fallible<Self> {
-        let secret_position = elements_set.iter().position(|&r| r == secret_element);
-
-        let secret_position =
-            secret_position.ok_or_else(|| ErrorKind::MembershipProofInvalidAssetError)?;
+        let secret_position: u32 = elements_set
+            .iter()
+            .position(|&r| r == secret_element)
+            .ok_or_else(|| ErrorKind::MembershipProofInvalidAssetError)?
+            as u32;
 
         ensure!(elements_set.len() != 0, ErrorKind::EmptyElementsSet);
 
@@ -130,20 +164,21 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
         &self,
         rng: &mut TranscriptRng,
     ) -> (Self::ZKProver, Self::ZKInitialMessage) {
-        let exp = self.exp as u32;
+        let exp = self.exp;
         let size = self.base.pow(exp);
         let pc_gens = self.generators.com_gens;
 
         let secret_commitment = pc_gens.commit(*self.secret_element, *self.random);
 
-        let initial_size = min(self.elements_set.len(), size);
+        let initial_size = min(self.elements_set.len() as u32, size);
 
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
-        let l_bit_matrix = convert_to_matrix_rep(self.secret_position, self.base, exp);
+        let l_bit_matrix =
+            convert_to_matrix_rep(self.secret_position as usize, self.base as usize, exp);
 
         let b_matrix_rep = Matrix {
-            rows: self.exp,
-            columns: self.base,
+            rows: self.exp as usize,
+            columns: self.base as usize,
             elements: l_bit_matrix.clone(),
         };
 
@@ -157,31 +192,32 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
 
         let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(rng);
 
-        let one = Polynomial::new(self.exp);
-        let mut polynomials: Vec<Polynomial> = Vec::with_capacity(size);
+        let one = Polynomial::new(self.exp as usize);
+        let mut polynomials: Vec<Polynomial> = Vec::with_capacity(size as usize);
 
-        for i in 0..size {
+        for i in 0..size as usize {
             polynomials.push(one.clone());
-            let i_rep = convert_to_base(i, self.base, exp);
-            for k in 0..self.exp {
-                let t = k * self.base + i_rep[k];
+            let i_rep = convert_to_base(i, self.base as usize, exp);
+            for k in 0..self.exp as usize {
+                let t: usize = k * self.base as usize + i_rep[k];
                 polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
             }
         }
 
-        let mut g_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp);
-        for k in 0..self.exp {
+        let mut g_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp as usize);
+        for k in 0..self.exp as usize {
             g_values.push(rho[k] * pc_gens.B_blinding);
             let mut sum1 = Scalar::zero();
             let mut sum2 = Scalar::zero();
-            for i in 0..initial_size {
+            for i in 0..initial_size as usize {
                 sum1 += polynomials[i].coeffs[k];
                 sum2 += polynomials[i].coeffs[k] * self.elements_set[i];
             }
             if size > initial_size {
-                for i in initial_size..size {
+                for i in (initial_size as usize)..size as usize {
                     sum1 += polynomials[i].coeffs[k];
-                    sum2 += polynomials[i].coeffs[k] * self.elements_set[initial_size - 1];
+                    sum2 +=
+                        polynomials[i].coeffs[k] * self.elements_set[(initial_size - 1) as usize];
                 }
             }
             g_values[k] += (sum1 * secret_commitment) - (sum2 * pc_gens.B);
@@ -236,10 +272,10 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Fallible<()> {
-        let m = initial_message.ooon_proof_initial_message.m;
-        let n = initial_message.ooon_proof_initial_message.n;
+        let m = initial_message.ooon_proof_initial_message.m as usize;
+        let n = initial_message.ooon_proof_initial_message.n as usize;
         let exp = u32::try_from(m).map_err(|_| ErrorKind::InvalidExponentParameter)?;
-        let size = initial_message.ooon_proof_initial_message.n.pow(exp);
+        let size = initial_message.ooon_proof_initial_message.n.pow(exp) as usize;
 
         let initial_size = min(self.elements_set.len(), size);
         ensure!(initial_size != 0, ErrorKind::EmptyElementsSet);
@@ -272,8 +308,9 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
 
         for i in 0..m {
             for j in 1..n {
-                f_values[(i * n + j)] = proof_f_elements[(i * (n - 1) + (j - 1))];
-                f_values[(i * n)] -= proof_f_elements[(i * (n - 1) + (j - 1))];
+                let proof_f_idx = i * (n - 1) + (j - 1);
+                f_values[(i * n + j)] = proof_f_elements[proof_f_idx];
+                f_values[(i * n)] -= proof_f_elements[proof_f_idx];
             }
         }
 
@@ -290,8 +327,8 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         for i in 0..initial_size {
             p_i = Scalar::one();
             let i_rep = convert_to_base(i, n, m as u32);
-            for j in 0..m {
-                p_i *= f_values[j * n + i_rep[j]];
+            for j in 0..m as usize {
+                p_i *= f_values[j * n as usize + i_rep[j]];
             }
             sum1 += p_i;
             sum2 += self.elements_set[i] * p_i;
@@ -309,10 +346,10 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
 
         if size > initial_size {
             let last = self.elements_set[initial_size - 1];
-            for i in initial_size..size {
+            for i in initial_size..size as usize {
                 p_i = Scalar::one();
                 let i_rep = convert_to_base(i, n, m as u32);
-                for j in 0..m {
+                for j in 0..m as usize {
                     p_i *= f_values[j * n + i_rep[j]];
                 }
                 sum1 += p_i;
@@ -341,7 +378,6 @@ mod tests {
 
     extern crate wasm_bindgen_test;
     use super::*;
-    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
 
@@ -357,8 +393,8 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED_1);
         let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
 
-        const BASE: usize = 4;
-        const EXPONENT: usize = 3;
+        const BASE: u32 = 4;
+        const EXPONENT: u32 = 3;
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
@@ -480,12 +516,12 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED_1);
         let mut transcript = Transcript::new(MEMBERSHIP_PROOF_LABEL);
 
-        const BASE: usize = 4;
-        const EXPONENT: usize = 8;
+        const BASE: u32 = 4;
+        const EXPONENT: u32 = 8;
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
-        let elements_set: Vec<Scalar> = (0..(2000) as u32).map(|m| Scalar::from(m)).collect();
+        let elements_set: Vec<Scalar> = (0..2000u32).map(|m| Scalar::from(m)).collect();
 
         let secret = Scalar::from(8u32);
         let blinding = Scalar::random(&mut rng);
@@ -529,8 +565,8 @@ mod tests {
     fn serialize_deserialize_proof() {
         let mut rng = StdRng::from_seed(SEED_1);
 
-        const BASE: usize = 4;
-        const EXPONENT: usize = 3;
+        const BASE: u32 = 4;
+        const EXPONENT: u32 = 3;
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
         let even_elements: Vec<Scalar> = (0..64 as u32).map(|m| Scalar::from(2 * m)).collect();
@@ -550,13 +586,15 @@ mod tests {
             single_property_prover::<StdRng, MembershipProverAwaitingChallenge>(prover, &mut rng)
                 .unwrap();
 
-        let initial_message_bytes: Vec<u8> = serialize(&initial_message0).unwrap();
-        let final_response_bytes: Vec<u8> = serialize(&final_response0).unwrap();
-        let recovered_initial_message: MembershipProofInitialMessage =
-            deserialize(&initial_message_bytes).unwrap();
-        let recovered_final_response: MembershipProofFinalResponse =
-            deserialize(&final_response_bytes).unwrap();
+        let bytes = initial_message0.encode();
+        let mut input = bytes.as_slice();
+        let recovered_initial_message =
+            <MembershipProofInitialMessage>::decode(&mut input).unwrap();
         assert_eq!(recovered_initial_message, initial_message0);
+
+        let bytes = final_response0.encode();
+        let mut input = bytes.as_slice();
+        let recovered_final_response = <MembershipProofFinalResponse>::decode(&mut input).unwrap();
         assert_eq!(recovered_final_response, final_response0);
     }
 }

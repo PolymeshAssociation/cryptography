@@ -50,11 +50,11 @@ pub fn create_account<T: RngCore + CryptoRng>(
     let gens = &PedersenGens::default();
 
     // Encrypt asset id and prove that the encrypted asset is wellformed
-    let enc_asset_id = scrt.enc_keys.pblc.key.encrypt(&scrt.asset_id_witness);
+    let enc_asset_id = scrt.enc_keys.pblc.encrypt(&scrt.asset_id_witness);
 
     let asset_wellformedness_proof = WellformednessProof::from(single_property_prover(
         WellformednessProverAwaitingChallenge {
-            pub_key: scrt.enc_keys.pblc.key,
+            pub_key: scrt.enc_keys.pblc,
             w: Zeroizing::new(scrt.asset_id_witness.clone()),
             pc_gens: &gens,
         },
@@ -64,11 +64,11 @@ pub fn create_account<T: RngCore + CryptoRng>(
     // Encrypt the balance and prove that the encrypted balance is correct
     let balance: Balance = 0;
     let balance_witness = CommitmentWitness::new(balance.into(), balance_blinding);
-    let enc_balance = EncryptedAmount::from(scrt.enc_keys.pblc.key.encrypt(&balance_witness));
+    let enc_balance = EncryptedAmount::from(scrt.enc_keys.pblc.encrypt(&balance_witness));
 
     let initial_balance_correctness_proof = CorrectnessProof::from(single_property_prover(
         CorrectnessProverAwaitingChallenge {
-            pub_key: scrt.enc_keys.pblc.key,
+            pub_key: scrt.enc_keys.pblc,
             w: balance_witness,
             pc_gens: &gens,
         },
@@ -108,7 +108,7 @@ pub fn create_account<T: RngCore + CryptoRng>(
         memo: AccountMemo::new(scrt.enc_keys.pblc, scrt.sign_keys.public),
     };
 
-    let message = content.to_bytes()?;
+    let message = content.to_bytes();
     let initial_sig = scrt.sign_keys.sign(SIG_CTXT.bytes(&message));
 
     Ok(Account {
@@ -156,7 +156,7 @@ impl AccountCreaterVerifier for AccountValidator {
     fn verify(&self, account: &PubAccount, valid_asset_ids: &Vec<Scalar>) -> Fallible<()> {
         let gens = &PedersenGens::default();
 
-        let message = account.content.to_bytes()?;
+        let message = account.content.to_bytes();
         let _ = account
             .content
             .memo
@@ -166,7 +166,7 @@ impl AccountCreaterVerifier for AccountValidator {
         // Verify that the encrypted asset id is wellformed
         single_property_verifier(
             &WellformednessVerifier {
-                pub_key: account.content.memo.owner_enc_pub_key.key,
+                pub_key: account.content.memo.owner_enc_pub_key,
                 cipher: account.content.enc_asset_id.cipher,
                 pc_gens: &gens,
             },
@@ -179,7 +179,7 @@ impl AccountCreaterVerifier for AccountValidator {
         single_property_verifier(
             &CorrectnessVerifier {
                 value: balance.into(),
-                pub_key: account.content.memo.owner_enc_pub_key.key,
+                pub_key: account.content.memo.owner_enc_pub_key,
                 cipher: account.content.enc_balance.cipher,
                 pc_gens: &gens,
             },
@@ -299,11 +299,11 @@ mod tests {
         assert_eq!(balance, 0);
 
         let ten: Balance = 10;
-        let ten = EncryptedAmount::from(account.scrt.enc_keys.pblc.key.encrypt(
+        let ten = EncryptedAmount::from(account.scrt.enc_keys.pblc.encrypt(
             &CommitmentWitness::new(ten.into(), Scalar::random(&mut rng)),
         ));
         let five: Balance = 5;
-        let five = EncryptedAmount::from(account.scrt.enc_keys.pblc.key.encrypt(
+        let five = EncryptedAmount::from(account.scrt.enc_keys.pblc.encrypt(
             &CommitmentWitness::new(five.into(), Scalar::random(&mut rng)),
         ));
         let account = Account {
