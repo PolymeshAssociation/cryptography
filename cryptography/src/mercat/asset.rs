@@ -40,7 +40,7 @@ fn asset_issuance_init_verify(
     let gens = PedersenGens::default();
 
     // Verify the signature on the transaction.
-    let message = asset_tx.content.to_bytes()?;
+    let message = asset_tx.content.to_bytes();
     issr_pub_account
         .content
         .memo
@@ -50,8 +50,8 @@ fn asset_issuance_init_verify(
     // Verify the proof of encrypting the same asset type as the account type.
     single_property_verifier(
         &EncryptingSameValueVerifier {
-            pub_key1: issr_pub_account.content.memo.owner_enc_pub_key.key,
-            pub_key2: mdtr_enc_pub_key.key,
+            pub_key1: issr_pub_account.content.memo.owner_enc_pub_key,
+            pub_key2: mdtr_enc_pub_key.clone(),
             cipher1: issr_pub_account.content.enc_asset_id.cipher,
             cipher2: asset_tx.content.enc_asset_id.cipher,
             pc_gens: &gens,
@@ -63,7 +63,7 @@ fn asset_issuance_init_verify(
     // Verify the proof of memo's wellformedness.
     single_property_verifier(
         &WellformednessVerifier {
-            pub_key: issr_pub_account.content.memo.owner_enc_pub_key.key,
+            pub_key: issr_pub_account.content.memo.owner_enc_pub_key,
             cipher: asset_tx.content.memo.cipher,
             pc_gens: &gens,
         },
@@ -94,25 +94,22 @@ impl AssetTransactionIssuer for CtxIssuer {
         let gens = PedersenGens::default();
 
         // Encrypt the asset_id with mediator's public key.
-        let mdtr_enc_asset_id = mdtr_pub_key.key.encrypt(&issr_account.asset_id_witness);
+        let mdtr_enc_asset_id = mdtr_pub_key.encrypt(&issr_account.asset_id_witness);
 
         // Encrypt the balance issued to mediator's public key.
-        let (_, mdtr_enc_amount) = mdtr_pub_key.key.encrypt_value(amount.into(), rng);
+        let (_, mdtr_enc_amount) = mdtr_pub_key.encrypt_value(amount.into(), rng);
 
         // Encrypt the balance to issuer's public key (memo).
-        let (issr_amount_witness, issr_enc_amount) = issr_account
-            .enc_keys
-            .pblc
-            .key
-            .encrypt_value(amount.into(), rng);
+        let (issr_amount_witness, issr_enc_amount) =
+            issr_account.enc_keys.pblc.encrypt_value(amount.into(), rng);
         let memo = AssetMemo::from(issr_enc_amount);
 
         // Proof of encrypting the same asset type as the account type.
         let same_asset_id_cipher_proof =
             CipherEqualDifferentPubKeyProof::from(single_property_prover(
                 EncryptingSameValueProverAwaitingChallenge {
-                    pub_key1: issr_account.enc_keys.pblc.key,
-                    pub_key2: mdtr_pub_key.key,
+                    pub_key1: issr_account.enc_keys.pblc,
+                    pub_key2: mdtr_pub_key.clone(),
                     w: Zeroizing::new(issr_account.asset_id_witness.clone()),
                     pc_gens: &gens,
                 },
@@ -122,7 +119,7 @@ impl AssetTransactionIssuer for CtxIssuer {
         // Proof of memo's wellformedness.
         let memo_wellformedness_proof = WellformednessProof::from(single_property_prover(
             WellformednessProverAwaitingChallenge {
-                pub_key: issr_account.enc_keys.pblc.key,
+                pub_key: issr_account.enc_keys.pblc,
                 w: Zeroizing::new(issr_amount_witness.clone()),
                 pc_gens: &gens,
             },
@@ -132,7 +129,7 @@ impl AssetTransactionIssuer for CtxIssuer {
         // Proof of memo's correctness.
         let memo_correctness_proof = CorrectnessProof::from(single_property_prover(
             CorrectnessProverAwaitingChallenge {
-                pub_key: issr_account.enc_keys.pblc.key,
+                pub_key: issr_account.enc_keys.pblc,
                 w: issr_amount_witness,
                 pc_gens: &gens,
             },
@@ -151,7 +148,7 @@ impl AssetTransactionIssuer for CtxIssuer {
         };
 
         // Sign the issuance content.
-        let message = content.to_bytes()?;
+        let message = content.to_bytes();
         let sig = issr_account.sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
@@ -205,12 +202,12 @@ impl AssetTransactionFinalizeAndProcessVerifier for AssetTxIssueValidator {
         );
 
         // Verify mediator's signature on the transaction.
-        let message = asset_tx.content.to_bytes()?;
+        let message = asset_tx.content.to_bytes();
         let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &asset_tx.sig)?;
 
         // Verify issuer's signature on the transaction.
         // Note that this check is redundant as it was also performed by verify_initialization().
-        let message = asset_tx.content.tx_content.content.to_bytes()?;
+        let message = asset_tx.content.tx_content.content.to_bytes();
         let _ = issr_account
             .content
             .memo
@@ -253,13 +250,12 @@ impl AssetTransactionMediator for AssetTxIssueMediator {
         // Mediator decrypts the encrypted amount and uses it to verify the correctness proof.
         let amount = mdtr_enc_keys
             .scrt
-            .key
             .decrypt(&asset_tx.content.enc_amount.cipher)?;
 
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),
-                pub_key: issr_pub_account.content.memo.owner_enc_pub_key.key,
+                pub_key: issr_pub_account.content.memo.owner_enc_pub_key,
                 cipher: asset_tx.content.memo.cipher,
                 pc_gens: &gens,
             },
@@ -278,7 +274,7 @@ impl AssetTransactionMediator for AssetTxIssueMediator {
             tx_content: asset_tx,
             state: new_state,
         };
-        let message = content.to_bytes()?;
+        let message = content.to_bytes();
         let sig = mdtr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
@@ -336,7 +332,6 @@ mod tests {
         let pub_account_enc_asset_id = EncryptedAssetId::from(
             issuer_enc_key
                 .pblc
-                .key
                 .encrypt(&issuer_secret_account.asset_id_witness),
         );
 
@@ -447,7 +442,6 @@ mod tests {
         // Check that the issued amount is added to the account balance.
         assert!(issuer_enc_key
             .scrt
-            .key
             .verify(
                 &updated_issuer_account.content.enc_balance.cipher,
                 &Scalar::from(issued_amount)

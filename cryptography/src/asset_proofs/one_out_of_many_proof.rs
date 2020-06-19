@@ -16,8 +16,11 @@ use crate::errors::{ErrorKind, Fallible};
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_COMPRESSED, constants::RISTRETTO_BASEPOINT_POINT,
-    ristretto::RistrettoPoint, scalar::Scalar, traits::MultiscalarMul,
+    constants::RISTRETTO_BASEPOINT_COMPRESSED,
+    constants::RISTRETTO_BASEPOINT_POINT,
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
+    traits::MultiscalarMul,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
@@ -25,7 +28,9 @@ use serde::{Deserialize, Serialize};
 use sha3::Sha3_512;
 use zeroize::{Zeroize, Zeroizing};
 
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use sp_std::{
+    mem,
     ops::{Add, Neg, Sub},
     prelude::*,
 };
@@ -84,8 +89,9 @@ pub struct OooNProofGenerators {
 }
 
 impl OooNProofGenerators {
-    pub fn new(base: usize, exp: usize) -> Self {
-        let mut generators: Vec<RistrettoPoint> = Vec::with_capacity(exp * base);
+    pub fn new(base: u32, exp: u32) -> Self {
+        let gen_size = (exp * base) as usize;
+        let mut generators: Vec<RistrettoPoint> = Vec::with_capacity(gen_size);
 
         let mut ristretto_base_bytes = Vec::with_capacity(
             OOON_PROOF_LABEL.len() + RISTRETTO_BASEPOINT_COMPRESSED.as_bytes().len(),
@@ -94,7 +100,7 @@ impl OooNProofGenerators {
         ristretto_base_bytes.extend_from_slice(&OOON_PROOF_LABEL.to_vec());
         ristretto_base_bytes.extend_from_slice(RISTRETTO_BASEPOINT_COMPRESSED.as_bytes());
 
-        for i in 0..exp * base {
+        for i in 0..gen_size {
             generators.push(RistrettoPoint::hash_from_bytes::<Sha3_512>(
                 ristretto_base_bytes.as_slice(),
             ));
@@ -147,8 +153,9 @@ impl Matrix {
 
         let mut entrywise_product: Matrix = Matrix::new(self.rows, right.columns, Scalar::zero());
         for i in 0..self.rows {
+            let kb = i * self.columns;
             for j in 0..self.columns {
-                let k: usize = i * self.columns + j;
+                let k = kb + j;
                 entrywise_product.elements[k] = self.elements[k] * right.elements[k];
             }
         }
@@ -162,9 +169,9 @@ impl Neg for Matrix {
 
     fn neg(self) -> Matrix {
         let mut negated: Matrix = Matrix::new(self.rows, self.columns, Scalar::zero());
-        for i in 0..self.rows {
-            for j in 0..self.columns {
-                let k: usize = i * self.columns + j;
+        for i in 0..self.rows as usize {
+            for j in 0..self.columns as usize {
+                let k: usize = i * self.columns as usize + j;
                 negated.elements[k] = -self.elements[k];
             }
         }
@@ -176,9 +183,10 @@ impl<'a, 'b> Add<&'b Matrix> for &'a Matrix {
     type Output = Matrix;
     fn add(self, right: &'b Matrix) -> Matrix {
         let mut sum: Matrix = Matrix::new(self.rows, self.columns, Scalar::zero());
-        for i in 0..self.rows {
-            for j in 0..self.columns {
-                let k = i * self.columns + j;
+        for i in 0..self.rows as usize {
+            let kb = i * self.columns as usize;
+            for j in 0..self.columns as usize {
+                let k = kb + j;
                 sum.elements[k] = &self.elements[k] + &right.elements[k];
             }
         }
@@ -191,9 +199,10 @@ impl<'a, 'b> Sub<&'b Matrix> for &'a Matrix {
     type Output = Matrix;
     fn sub(self, right: &'b Matrix) -> Matrix {
         let mut sub: Matrix = Matrix::new(self.rows, self.columns, Scalar::zero());
-        for i in 0..self.rows {
-            for j in 0..self.columns {
-                let k = i * self.columns + j;
+        for i in 0..self.rows as usize {
+            let kb = i * self.columns as usize;
+            for j in 0..self.columns as usize {
+                let k = kb + j;
                 sub.elements[k] = &self.elements[k] - &right.elements[k];
             }
         }
@@ -277,6 +286,43 @@ impl R1ProofInitialMessage {
     }
 }
 
+impl Encode for R1ProofInitialMessage {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        128
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let a = self.a.compress();
+        let b = self.b.compress();
+        let c = self.c.compress();
+        let d = self.d.compress();
+
+        (a.as_bytes(), b.as_bytes(), c.as_bytes(), d.as_bytes()).encode_to(dest)
+    }
+}
+
+impl Decode for R1ProofInitialMessage {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (a, b, c, d) = <([u8; 32], [u8; 32], [u8; 32], [u8; 32])>::decode(input)?;
+        let points = [a, b, c, d]
+            .iter()
+            .map(|compressed| {
+                CompressedRistretto(*compressed)
+                    .decompress()
+                    .ok_or_else(|| CodecError::from("R1ProofInitialMessage is invalid"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(R1ProofInitialMessage {
+            a: points[0],
+            b: points[1],
+            c: points[2],
+            d: points[3],
+        })
+    }
+}
+
 impl Default for R1ProofInitialMessage {
     fn default() -> Self {
         R1ProofInitialMessage {
@@ -304,8 +350,65 @@ pub struct R1ProofFinalResponse {
     f_elements: Vec<Scalar>,
     z_a: Scalar,
     z_c: Scalar,
-    m: usize,
-    n: usize,
+    m: u32,
+    n: u32,
+}
+
+impl Encode for R1ProofFinalResponse {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        mem::size_of::<u32>() + 32 * self.f_elements.len() // f_elements
+            + 64    // z_a + z_c
+            + mem::size_of_val(&self.m)
+            + mem::size_of_val(&self.n)
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let z_a = self.z_a.as_bytes();
+        let z_c = self.z_c.as_bytes();
+        let f_elements = self
+            .f_elements
+            .iter()
+            .map(|s| s.as_bytes())
+            .collect::<Vec<_>>();
+
+        f_elements.encode_to(dest);
+        z_a.encode_to(dest);
+        z_c.encode_to(dest);
+        self.m.encode_to(dest);
+        self.n.encode_to(dest);
+    }
+}
+
+impl Decode for R1ProofFinalResponse {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let f_elements = <Vec<[u8; 32]>>::decode(input)?
+            .into_iter()
+            .map(|s| {
+                Scalar::from_canonical_bytes(s)
+                    .ok_or_else(|| CodecError::from("R1ProofFinalResponse `f_elements` is invalid"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let z_a = <[u8; 32]>::decode(input)?;
+        let z_a = Scalar::from_canonical_bytes(z_a)
+            .ok_or_else(|| CodecError::from("R1ProofFinalResponse `z_a` is invalid"))?;
+
+        let z_c = <[u8; 32]>::decode(input)?;
+        let z_c = Scalar::from_canonical_bytes(z_c)
+            .ok_or_else(|| CodecError::from("R1ProofFinalResponse `z_c` is invalid"))?;
+
+        let m = <u32>::decode(input)?;
+        let n = <u32>::decode(input)?;
+
+        Ok(R1ProofFinalResponse {
+            f_elements,
+            z_a,
+            z_c,
+            m,
+            n,
+        })
+    }
 }
 
 impl R1ProofFinalResponse {
@@ -323,8 +426,8 @@ pub struct R1Prover {
     pub r_b: Scalar,
     pub r_c: Scalar,
     pub r_d: Scalar,
-    pub m: usize,
-    pub n: usize,
+    pub m: u32,
+    pub n: u32,
 }
 #[derive(Clone)]
 pub struct R1ProverAwaitingChallenge<'a> {
@@ -338,10 +441,10 @@ pub struct R1ProverAwaitingChallenge<'a> {
     pub generators: &'a OooNProofGenerators,
 
     /// Specifies the matrix rows.
-    pub m: usize,
+    pub m: u32,
 
     /// Specifies the matrix columns.
-    pub n: usize,
+    pub n: u32,
 }
 
 impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
@@ -384,10 +487,12 @@ impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
 
         for r in 0..a_matrix.rows {
             // The first element of each row is the negated sum of the row's other elements.
-            let sum = a_matrix.elements[r * a_matrix.columns + 1..(r + 1) * a_matrix.columns]
+            let begin = r * a_matrix.columns;
+            let end = begin + a_matrix.columns;
+            let sum = a_matrix.elements[begin + 1..end]
                 .iter()
                 .fold(Scalar::zero(), |s, x| s + x);
-            a_matrix.elements[r * a_matrix.columns] = -sum;
+            a_matrix.elements[begin] = -sum;
         }
 
         let c_matrix: Matrix = a_matrix
@@ -403,8 +508,8 @@ impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
                 r_a: random_a,
                 r_c: random_c,
                 r_d: random_d,
-                m: rows,
-                n: columns,
+                m: rows as u32,
+                n: columns as u32,
             },
             R1ProofInitialMessage {
                 a: generators.vector_commit(&a_matrix.elements, random_a),
@@ -419,13 +524,15 @@ impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
 impl AssetProofProver<R1ProofFinalResponse> for R1Prover {
     fn apply_challenge(&self, c: &ZKPChallenge) -> R1ProofFinalResponse {
         let mut f_values: Vec<Scalar> = Vec::with_capacity((self.m * (self.n - 1)) as usize);
-        for i in 0..self.m {
-            for j in 0..(self.n - 1) {
+        let mut row_idx = 0;
+        for _i in 0..self.m as usize {
+            for j in 0..(self.n - 1) as usize {
                 f_values.push(
-                    self.b_matrix.elements[i * self.n + j + 1] * c.x()
-                        + self.a_values[i * self.n + j + 1],
+                    self.b_matrix.elements[row_idx + j + 1] * c.x()
+                        + self.a_values[row_idx + j + 1],
                 );
             }
+            row_idx += self.n as usize;
         }
 
         R1ProofFinalResponse {
@@ -453,8 +560,8 @@ impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Fallible<()> {
-        let rows = final_response.m;
-        let columns = final_response.n;
+        let rows = final_response.m as usize;
+        let columns = final_response.n as usize;
 
         let mut f_matrix = Matrix::new(rows, columns, *c.x());
         let x_matrix = Matrix::new(rows, columns, *c.x());
@@ -498,20 +605,67 @@ impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
 pub struct OOONProofInitialMessage {
     pub(crate) r1_proof_initial_message: R1ProofInitialMessage,
     pub(crate) g_vec: Vec<RistrettoPoint>,
-    pub(crate) n: usize,
-    pub(crate) m: usize,
+    pub(crate) n: u32,
+    pub(crate) m: u32,
 }
 
 impl OOONProofInitialMessage {
-    fn new(base: usize, exp: usize) -> Self {
+    fn new(base: u32, exp: u32) -> Self {
         OOONProofInitialMessage {
             r1_proof_initial_message: R1ProofInitialMessage::default(),
-            g_vec: Vec::with_capacity(exp),
+            g_vec: Vec::with_capacity(exp as usize),
             n: base,
             m: exp,
         }
     }
 }
+
+impl Encode for OOONProofInitialMessage {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.r1_proof_initial_message.size_hint()
+            + mem::size_of::<u32>() + 32 * self.g_vec.len() // g_vec
+            + mem::size_of_val(&self.n)
+            + mem::size_of_val(&self.m)
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let g_vec_compressed = self.g_vec.iter().map(|p| p.compress()).collect::<Vec<_>>();
+        let g_vec = g_vec_compressed
+            .iter()
+            .map(|gc| gc.to_bytes())
+            .collect::<Vec<_>>();
+
+        self.r1_proof_initial_message.encode_to(dest);
+        g_vec.encode_to(dest);
+        self.n.encode_to(dest);
+        self.m.encode_to(dest);
+    }
+}
+
+impl Decode for OOONProofInitialMessage {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let r1_proof_initial_message = R1ProofInitialMessage::decode(input)?;
+        let g_vec = <Vec<[u8; 32]>>::decode(input)?
+            .into_iter()
+            .map(|g| {
+                CompressedRistretto(g).decompress().ok_or_else(|| {
+                    CodecError::from("OOONProofInitialMessage has a invalid `g` point")
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let n = <u32>::decode(input)?;
+        let m = <u32>::decode(input)?;
+
+        Ok(OOONProofInitialMessage {
+            r1_proof_initial_message,
+            g_vec,
+            n,
+            m,
+        })
+    }
+}
+
 /// A `default` implementation used for testing.
 impl Default for OOONProofInitialMessage {
     fn default() -> Self {
@@ -524,7 +678,7 @@ impl UpdateTranscript for OOONProofInitialMessage {
         transcript.append_domain_separator(OOON_PROOF_CHALLENGE_LABEL);
         self.r1_proof_initial_message
             .update_transcript(transcript)?;
-        for k in 0..self.m {
+        for k in 0..self.m as usize {
             transcript.append_validated_point(b"Gk", &self.g_vec[k].compress())?;
         }
 
@@ -536,8 +690,8 @@ impl UpdateTranscript for OOONProofInitialMessage {
 pub struct OOONProofFinalResponse {
     r1_proof_final_response: R1ProofFinalResponse,
     z: Scalar,
-    m: usize,
-    n: usize,
+    m: u32,
+    n: u32,
 }
 
 impl OOONProofFinalResponse {
@@ -547,19 +701,55 @@ impl OOONProofFinalResponse {
     pub fn z(&self) -> Scalar {
         return self.z;
     }
-    pub fn n(&self) -> usize {
+    pub fn n(&self) -> u32 {
         return self.n;
     }
-    pub fn m(&self) -> usize {
+    pub fn m(&self) -> u32 {
         return self.m;
     }
 }
+
+impl Encode for OOONProofFinalResponse {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.r1_proof_final_response.size_hint()
+            + 32                    // z
+            + mem::size_of_val(&self.m)
+            + mem::size_of_val(&self.n)
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let z = self.z.as_bytes();
+
+        self.r1_proof_final_response.encode_to(dest);
+        z.encode_to(dest);
+        self.m.encode_to(dest);
+        self.n.encode_to(dest);
+    }
+}
+
+impl Decode for OOONProofFinalResponse {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (r1_proof_final_response, z, m, n) =
+            <(R1ProofFinalResponse, [u8; 32], u32, u32)>::decode(input)?;
+        let z = Scalar::from_canonical_bytes(z)
+            .ok_or_else(|| CodecError::from("OOONProofFinalResponse has a invalid `z` point"))?;
+
+        Ok(OOONProofFinalResponse {
+            r1_proof_final_response,
+            z,
+            m,
+            n,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Zeroize)]
 pub struct OOONProver {
     pub(crate) rho_values: Vec<Scalar>,
     pub(crate) r1_prover: Zeroizing<R1Prover>,
-    pub(crate) m: usize,
-    pub(crate) n: usize,
+    pub(crate) m: u32,
+    pub(crate) n: u32,
 }
 
 /// Given the public list of commitments `C_0, C_1, ..., C_{N-1} where N = base^exp, the prover wants to
@@ -567,14 +757,14 @@ pub struct OOONProver {
 /// The prover witness is comprised of the secret_index `l` and the commitment's random factor `random`
 pub struct OOONProverAwaitingChallenge<'a> {
     /// The index of the secret commitment in the given list, which is opening to zero and is blinded by "random"
-    pub secret_index: usize,
+    pub secret_index: u32,
     /// The randomness used in the commitment C_{secret_index}
     pub random: Scalar,
     // The list of N commitments where one commitment is opening to 0. (#TODO Find a way to avoid of cloning this huge data set)
     pub generators: &'a OooNProofGenerators,
     pub commitments: &'a [RistrettoPoint],
-    pub base: usize,
-    pub exp: usize,
+    pub base: u32,
+    pub exp: u32,
 }
 
 impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
@@ -605,18 +795,19 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
         let columns = self.base;
         let rows = self.exp;
         let exp = self.exp as u32;
-        let n = self.base.pow(exp);
+        let n = self.base.pow(exp) as usize;
         let generators = self.generators;
 
         assert_eq!(n, self.commitments.len());
 
         let rho: Vec<Scalar> = (0..self.exp).map(|_| Scalar::random(rng)).collect();
 
-        let l_bit_matrix = convert_to_matrix_rep(self.secret_index, self.base, exp);
+        let l_bit_matrix =
+            convert_to_matrix_rep(self.secret_index as usize, self.base as usize, exp);
 
         let b_matrix_rep = Matrix {
-            rows: rows,
-            columns: columns,
+            rows: rows as usize,
+            columns: columns as usize,
             elements: l_bit_matrix.clone(),
         };
 
@@ -630,20 +821,20 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
 
         let (r1_prover, r1_initial_message) = r1_prover.generate_initial_message(rng);
 
-        let one = Polynomial::new(self.exp);
+        let one = Polynomial::new(self.exp as usize);
         let mut polynomials: Vec<Polynomial> = Vec::with_capacity(n);
 
         for i in 0..n {
             polynomials.push(one.clone());
-            let i_rep = convert_to_base(i, self.base, exp);
-            for k in 0..self.exp {
-                let t = k * self.base + i_rep[k];
+            let i_rep = convert_to_base(i, self.base as usize, exp);
+            for k in 0..self.exp as usize {
+                let t = k * self.base as usize + i_rep[k];
                 polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
             }
         }
 
-        let mut G_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp);
-        for k in 0..self.exp {
+        let mut G_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp as usize);
+        for k in 0..self.exp as usize {
             G_values.push(rho[k] * generators.com_gens.B_blinding); // #TODO: Double check if this matches the El-Gamal generators.
             for i in 0..n {
                 G_values[k] += (polynomials[i].coeffs[k]) * self.commitments[i];
@@ -674,7 +865,7 @@ impl AssetProofProver<OOONProofFinalResponse> for OOONProver {
         let mut y = Scalar::one();
         let mut z = Scalar::zero();
 
-        for k in 0..self.m {
+        for k in 0..self.m as usize {
             z -= y * self.rho_values[k];
             y *= c.x();
         }
@@ -705,9 +896,9 @@ impl<'a> AssetProofVerifier for OOONProofVerifier<'a> {
         initial_message: &Self::ZKInitialMessage,
         final_response: &Self::ZKFinalResponse,
     ) -> Fallible<()> {
-        let size = final_response.n.pow(final_response.m as u32);
-        let m = final_response.m;
-        let n = final_response.n;
+        let size = final_response.n.pow(final_response.m as u32) as usize;
+        let m = final_response.m as usize;
+        let n = final_response.n as usize;
 
         let b_comm = initial_message.r1_proof_initial_message.b;
         let r1_verifier = R1ProofVerifier {
@@ -785,12 +976,12 @@ mod tests {
 
         // Setup the system parameters for base and exponent.
         // This test enables to create 1-out-of-64 proofs.
-        const BASE: usize = 4; //n = 3 : COLUMNS
-        const EXPONENT: usize = 3; //m = 2 : ROWS
+        const BASE: u32 = 4; //n = 3 : COLUMNS
+        const EXPONENT: u32 = 3; //m = 2 : ROWS
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
         let n = 64;
-        let size: usize = 11;
+        let size = 11u32;
 
         // Computes the secret commitment which will be opening to 0:
         // `C_secret = 0 * pc_gens.B + r_b * pc_gens.B_Blinding`
@@ -812,7 +1003,7 @@ mod tests {
         // For different indexes `secret_index`, we set the vec[secret_index] to be our secret commitment `C_secret`.
         // We prove the knowledge of `secret_index` and `r_b` so the commitment vec[secret_index] will be opening to 0.
         for secret_index in 5..size {
-            commitments[secret_index] = C_secret;
+            commitments[secret_index as usize] = C_secret;
 
             let prover = OOONProverAwaitingChallenge {
                 secret_index,
@@ -849,7 +1040,7 @@ mod tests {
         //
         // We are starting from the index `size`, as all elements C[5]..C[size] have been set to Com(0, r_b).
         for l in size..size * 2 {
-            commitments[l] = C_secret;
+            commitments[l as usize] = C_secret;
             let wrong_index = l + 1;
 
             let prover = OOONProverAwaitingChallenge {
@@ -896,7 +1087,7 @@ mod tests {
             let wrong_random = r_b + r_b;
 
             let prover = OOONProverAwaitingChallenge {
-                secret_index: l,
+                secret_index: l as u32,
                 random: wrong_random,
                 generators: &generators,
                 commitments: commitments.as_slice(),
@@ -943,8 +1134,8 @@ mod tests {
         let mut rng = StdRng::from_seed(SEED_1);
         let mut transcript = Transcript::new(OOON_PROOF_LABEL);
 
-        const BASE: usize = 4;
-        const EXPONENT: usize = 3;
+        const BASE: u32 = 4;
+        const EXPONENT: u32 = 3;
 
         // We use the `gens` object created below only for committing to the the matrix B.
         // This object is not transferred as a parameter to the API functions.
@@ -956,11 +1147,11 @@ mod tests {
         // For each index `i` we compute the corresponding valid bit-matrix representation.
         // Next commit to the  bit-matrix represenation and prove its well-formedness.
         for i in 10..64 {
-            base_matrix = convert_to_matrix_rep(i, BASE, EXPONENT as u32);
+            base_matrix = convert_to_matrix_rep(i, BASE as usize, EXPONENT);
 
             b = Matrix {
-                rows: EXPONENT,
-                columns: BASE,
+                rows: EXPONENT as usize,
+                columns: BASE as usize,
                 elements: base_matrix.clone(),
             };
             let r = Scalar::from(45728u32);
@@ -993,7 +1184,7 @@ mod tests {
             assert!(result.is_ok());
         }
         // Negative test: Commit to matrix where each row has more than one 1.
-        let b = Matrix::new(EXPONENT, BASE, Scalar::one());
+        let b = Matrix::new(EXPONENT as usize, BASE as usize, Scalar::one());
         let r = Scalar::from(45728u32);
         let b_comm = gens.vector_commit(&b.elements, r);
         let prover = R1ProverAwaitingChallenge {

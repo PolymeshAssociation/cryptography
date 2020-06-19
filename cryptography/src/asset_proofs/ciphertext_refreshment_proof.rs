@@ -18,12 +18,16 @@ use crate::{
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+    constants::RISTRETTO_BASEPOINT_POINT,
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
+
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
 
 /// The domain label for the ciphertext refreshment proof.
 pub const CIPHERTEXT_REFRESHMENT_FINAL_RESPONSE_LABEL: &[u8] =
@@ -37,10 +41,35 @@ pub const CIPHERTEXT_REFRESHMENT_PROOF_CHALLENGE_LABEL: &[u8] =
 // public key
 // ------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherTextRefreshmentFinalResponse(Scalar);
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
+impl Encode for CipherTextRefreshmentFinalResponse {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        32
+    }
+
+    #[inline]
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.0.as_bytes().encode_to(dest)
+    }
+}
+
+impl Decode for CipherTextRefreshmentFinalResponse {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let inner = <[u8; 32]>::decode(input)?;
+        let inner = Scalar::from_canonical_bytes(inner).ok_or_else(|| {
+            CodecError::from("CipherTextRefreshmentFinalResponse scalar is invalid")
+        })?;
+
+        Ok(CipherTextRefreshmentFinalResponse(inner))
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherTextRefreshmentInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -53,6 +82,34 @@ impl Default for CipherTextRefreshmentInitialMessage {
             a: RISTRETTO_BASEPOINT_POINT,
             b: RISTRETTO_BASEPOINT_POINT,
         }
+    }
+}
+
+impl Encode for CipherTextRefreshmentInitialMessage {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        64
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let a = self.a.compress();
+        let b = self.b.compress();
+
+        (a.as_bytes(), b.as_bytes()).encode_to(dest)
+    }
+}
+
+impl Decode for CipherTextRefreshmentInitialMessage {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (a, b) = <([u8; 32], [u8; 32])>::decode(input)?;
+        let a = CompressedRistretto(a).decompress().ok_or_else(|| {
+            CodecError::from("CipherTextRefreshmentInitialMessage::a point is invalid")
+        })?;
+        let b = CompressedRistretto(b).decompress().ok_or_else(|| {
+            CodecError::from("CipherTextRefreshmentInitialMessage::b point is invalid")
+        })?;
+
+        Ok(CipherTextRefreshmentInitialMessage { a, b })
     }
 }
 
@@ -203,7 +260,6 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
-    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use sp_std::prelude::*;
     use wasm_bindgen_test::*;
@@ -310,13 +366,16 @@ mod tests {
         >(prover, &mut rng)
         .unwrap();
 
-        let initial_message_bytes: Vec<u8> = serialize(&initial_message0).unwrap();
-        let final_response_bytes: Vec<u8> = serialize(&final_response0).unwrap();
-        let recovered_initial_message: CipherTextRefreshmentInitialMessage =
-            deserialize(&initial_message_bytes).unwrap();
-        let recovered_final_response: CipherTextRefreshmentFinalResponse =
-            deserialize(&final_response_bytes).unwrap();
+        let init_bytes = initial_message0.encode();
+        let mut init_slice = &init_bytes[..];
+        let recovered_initial_message =
+            <CipherTextRefreshmentInitialMessage>::decode(&mut init_slice).unwrap();
         assert_eq!(recovered_initial_message, initial_message0);
+
+        let final_bytes = final_response0.encode();
+        let mut final_slice = &final_bytes[..];
+        let recovered_final_response =
+            <CipherTextRefreshmentFinalResponse>::decode(&mut final_slice).unwrap();
         assert_eq!(recovered_final_response, final_response0);
     }
 }

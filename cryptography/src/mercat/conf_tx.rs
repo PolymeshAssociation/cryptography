@@ -65,7 +65,6 @@ impl ConfidentialTransactionSender for CtxSender {
 
         let balance = sndr_enc_keys
             .scrt
-            .key
             .decrypt(&sndr_pub_account.enc_balance.cipher)?;
         ensure!(
             balance >= amount,
@@ -88,13 +87,13 @@ impl ConfidentialTransactionSender for CtxSender {
 
         // Prove that the amount encrypted under different public keys are the same
         let (sndr_new_enc_amount, rcvr_new_enc_amount) =
-            encrypt_using_two_pub_keys(&witness, sndr_enc_keys.pblc.key, rcvr_pub_key.key);
+            encrypt_using_two_pub_keys(&witness, sndr_enc_keys.pblc, rcvr_pub_key);
 
         let amount_equal_cipher_proof =
             CipherEqualDifferentPubKeyProof::from(single_property_prover(
                 EncryptingSameValueProverAwaitingChallenge {
-                    pub_key1: sndr_enc_keys.pblc.key,
-                    pub_key2: rcvr_pub_key.key,
+                    pub_key1: sndr_enc_keys.pblc,
+                    pub_key2: rcvr_pub_key,
                     w: Zeroizing::new(witness.clone()),
                     pc_gens: &gens,
                 },
@@ -107,11 +106,11 @@ impl ConfidentialTransactionSender for CtxSender {
         let refreshed_enc_balance = sndr_pub_account
             .enc_balance
             .cipher
-            .refresh(&sndr_enc_keys.scrt.key, balance_refresh_enc_blinding)?;
+            .refresh(&sndr_enc_keys.scrt, balance_refresh_enc_blinding)?;
         let balance_refreshed_same_proof =
             CipherEqualSamePubKeyProof::from(single_property_prover(
                 CipherTextRefreshmentProverAwaitingChallenge::new(
-                    sndr_enc_keys.scrt.key.clone(),
+                    sndr_enc_keys.scrt.clone(),
                     sndr_pub_account.enc_balance.cipher,
                     refreshed_enc_balance,
                     &gens,
@@ -132,7 +131,7 @@ impl ConfidentialTransactionSender for CtxSender {
         // refreshment was done correctly
         let asset_id_refresh_enc_blinding = Scalar::random(rng);
         let refreshed_enc_asset_id = sndr_pub_account.enc_asset_id.cipher.refresh_with_hint(
-            &sndr_enc_keys.scrt.key,
+            &sndr_enc_keys.scrt,
             asset_id_refresh_enc_blinding,
             &asset_id.clone().into(),
         )?;
@@ -140,7 +139,7 @@ impl ConfidentialTransactionSender for CtxSender {
         let asset_id_refreshed_same_proof =
             CipherEqualSamePubKeyProof::from(single_property_prover(
                 CipherTextRefreshmentProverAwaitingChallenge::new(
-                    sndr_enc_keys.scrt.key.clone(),
+                    sndr_enc_keys.scrt.clone(),
                     sndr_pub_account.enc_asset_id.cipher,
                     refreshed_enc_asset_id,
                     &gens,
@@ -152,12 +151,12 @@ impl ConfidentialTransactionSender for CtxSender {
         // encrypted by the receiver's pub key
         let asset_id_witness =
             CommitmentWitness::new(asset_id.clone().into(), asset_id_refresh_enc_blinding);
-        let enc_asset_id_using_rcvr = rcvr_pub_key.key.encrypt(&asset_id_witness);
+        let enc_asset_id_using_rcvr = rcvr_pub_key.encrypt(&asset_id_witness);
         let asset_id_equal_cipher_with_sndr_rcvr_keys_proof =
             CipherEqualDifferentPubKeyProof::from(single_property_prover(
                 EncryptingSameValueProverAwaitingChallenge {
-                    pub_key1: sndr_enc_keys.pblc.key,
-                    pub_key2: rcvr_pub_key.key,
+                    pub_key1: sndr_enc_keys.pblc,
+                    pub_key2: rcvr_pub_key,
                     w: Zeroizing::new(asset_id_witness),
                     pc_gens: &gens,
                 },
@@ -168,16 +167,16 @@ impl ConfidentialTransactionSender for CtxSender {
         let asset_id_witness_blinding_for_mdtr = Scalar::random(rng);
         let asset_id_witness_for_mdtr =
             CommitmentWitness::new(asset_id.into(), asset_id_witness_blinding_for_mdtr);
-        let enc_asset_id_for_mdtr = mdtr_pub_key.key.encrypt(&asset_id_witness_for_mdtr);
+        let enc_asset_id_for_mdtr = mdtr_pub_key.encrypt(&asset_id_witness_for_mdtr);
 
         let amount_witness_blinding_for_mdtr = Scalar::random(rng);
         let amount_witness_for_mdtr =
             CommitmentWitness::new(amount.into(), amount_witness_blinding_for_mdtr);
-        let enc_amount_for_mdtr = mdtr_pub_key.key.encrypt(&amount_witness_for_mdtr);
+        let enc_amount_for_mdtr = mdtr_pub_key.encrypt(&amount_witness_for_mdtr);
 
         let asset_id_correctness_proof = CorrectnessProof::from(single_property_prover(
             CorrectnessProverAwaitingChallenge {
-                pub_key: mdtr_pub_key.key,
+                pub_key: mdtr_pub_key.clone(),
                 w: asset_id_witness_for_mdtr,
                 pc_gens: &gens,
             },
@@ -186,7 +185,7 @@ impl ConfidentialTransactionSender for CtxSender {
 
         let amount_correctness_proof = CorrectnessProof::from(single_property_prover(
             CorrectnessProverAwaitingChallenge {
-                pub_key: mdtr_pub_key.key,
+                pub_key: mdtr_pub_key.clone(),
                 w: amount_witness_for_mdtr,
                 pc_gens: &gens,
             },
@@ -218,7 +217,7 @@ impl ConfidentialTransactionSender for CtxSender {
             },
         };
 
-        let message = content.to_bytes()?;
+        let message = content.to_bytes();
         let sig = sndr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
@@ -275,7 +274,6 @@ impl CtxReceiver {
 
         // Check that the amount is correct
         rcvr_enc_sec
-            .key
             .verify(
                 &conf_tx_init_data.content.memo.enc_amount_using_rcvr.cipher,
                 &expected_amount.into(),
@@ -283,8 +281,8 @@ impl CtxReceiver {
             .map_err(|_| ErrorKind::TransactionAmountMismatch { expected_amount })?;
 
         // Check that the received public keys match
-        let acc_key = conf_tx_init_data.content.memo.rcvr_pub_key.key;
-        let memo_key = rcvr_pub_account.memo.owner_enc_pub_key.key;
+        let acc_key = conf_tx_init_data.content.memo.rcvr_pub_key;
+        let memo_key = rcvr_pub_account.memo.owner_enc_pub_key;
         ensure!(acc_key == memo_key, ErrorKind::InputPubKeyMismatch);
 
         // Generate proof of equality of asset ids
@@ -292,7 +290,7 @@ impl CtxReceiver {
         let enc_asset_id_from_rcvr_acc = rcvr_pub_account.enc_asset_id;
         let gens = PedersenGens::default();
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
-            rcvr_enc_sec.key.clone(),
+            rcvr_enc_sec.clone(),
             enc_asset_id_from_rcvr_acc.cipher,
             enc_asset_id_from_sndr.cipher,
             &gens,
@@ -306,7 +304,7 @@ impl CtxReceiver {
             asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof { init, response },
         };
 
-        let message = content.to_bytes()?;
+        let message = content.to_bytes();
         let sig = rcvr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
@@ -343,12 +341,11 @@ impl ConfidentialTransactionMediator for CtxMediator {
         let amount = mdtr_sec_account
             .enc_keys
             .scrt
-            .key
             .decrypt(&tx_data.memo.enc_amount_for_mdtr.cipher)?;
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),
-                pub_key: mdtr_sec_account.enc_keys.pblc.key,
+                pub_key: mdtr_sec_account.enc_keys.pblc,
                 cipher: tx_data.memo.enc_amount_for_mdtr.cipher,
                 pc_gens: &gens,
             },
@@ -357,7 +354,7 @@ impl ConfidentialTransactionMediator for CtxMediator {
         )?;
 
         // Verify that the encrypted asset_id is correct
-        mdtr_sec_account.enc_keys.scrt.key.verify(
+        mdtr_sec_account.enc_keys.scrt.verify(
             &tx_data.memo.enc_asset_id_for_mdtr.cipher,
             &asset_id_hint.clone().into(),
         )?;
@@ -366,7 +363,7 @@ impl ConfidentialTransactionMediator for CtxMediator {
         single_property_verifier(
             &CorrectnessVerifier {
                 value: asset_id.into(),
-                pub_key: mdtr_sec_account.enc_keys.pblc.key,
+                pub_key: mdtr_sec_account.enc_keys.pblc,
                 cipher: tx_data.memo.enc_asset_id_for_mdtr.cipher,
                 pc_gens: &gens,
             },
@@ -374,7 +371,7 @@ impl ConfidentialTransactionMediator for CtxMediator {
             tx_data.asset_id_correctness_proof.response,
         )?;
 
-        let message = conf_tx_final_data.to_bytes()?;
+        let message = conf_tx_final_data.to_bytes();
         let sig = mdtr_sec_account.sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
@@ -419,8 +416,8 @@ fn verify_initital_transaction_proofs(
     // Verify that the encrypted amounts are equal
     single_property_verifier(
         &EncryptingSameValueVerifier {
-            pub_key1: memo.sndr_pub_key.key,
-            pub_key2: memo.rcvr_pub_key.key,
+            pub_key1: memo.sndr_pub_key,
+            pub_key2: memo.rcvr_pub_key,
             cipher1: memo.enc_amount_using_sndr.cipher,
             cipher2: memo.enc_amount_using_rcvr.cipher,
             pc_gens: &gens,
@@ -442,7 +439,7 @@ fn verify_initital_transaction_proofs(
     // verify that the balance refreshment was done correctly
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
-            memo.sndr_pub_key.key,
+            memo.sndr_pub_key,
             sndr_account.enc_balance.cipher,
             memo.refreshed_enc_balance.cipher,
             &gens,
@@ -462,7 +459,7 @@ fn verify_initital_transaction_proofs(
     // Verify that the asset id refreshment was done correctly
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
-            memo.sndr_pub_key.key,
+            memo.sndr_pub_key,
             sndr_account.enc_asset_id.cipher,
             memo.refreshed_enc_asset_id.cipher,
             &gens,
@@ -476,8 +473,8 @@ fn verify_initital_transaction_proofs(
     // is the same as the one in the sender account.
     single_property_verifier(
         &EncryptingSameValueVerifier {
-            pub_key1: memo.sndr_pub_key.key,
-            pub_key2: memo.rcvr_pub_key.key,
+            pub_key1: memo.sndr_pub_key,
+            pub_key2: memo.rcvr_pub_key,
             cipher1: memo.refreshed_enc_asset_id.cipher,
             cipher2: memo.enc_asset_id_using_rcvr.cipher,
             pc_gens: &gens,
@@ -505,7 +502,7 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
             ErrorKind::InvalidPreviousState { state }
         );
 
-        let message = transaction.content.to_bytes()?;
+        let message = transaction.content.to_bytes();
         let _ = sndr_account
             .content
             .memo
@@ -531,7 +528,7 @@ impl CtxReceiverValidator {
             ErrorKind::InvalidPreviousState { state }
         );
 
-        let message = conf_tx_final_data.content.to_bytes()?;
+        let message = conf_tx_final_data.content.to_bytes();
         let _ = rcvr_account
             .content
             .memo
@@ -549,7 +546,7 @@ impl CtxReceiverValidator {
         // is the same as the one in the receiver account
         single_property_verifier(
             &CipherTextRefreshmentVerifier::new(
-                memo.rcvr_pub_key.key,
+                memo.rcvr_pub_key,
                 rcvr_account.content.enc_asset_id.cipher,
                 memo.enc_asset_id_using_rcvr.cipher,
                 &PedersenGens::default(),
@@ -577,7 +574,7 @@ impl ConfidentialTransactionMediatorVerifier for CtxMediatorValidator {
         );
 
         let ctx_data = &conf_tx_justified_final_data;
-        let message = ctx_data.conf_tx_final_data.to_bytes()?;
+        let message = ctx_data.conf_tx_final_data.to_bytes();
         let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &ctx_data.sig)?;
 
         Ok(ConfidentialTxState::FinalizationJustification(
@@ -632,8 +629,8 @@ mod tests {
         asset_id: AssetId,
         rng: &mut R,
     ) -> ConfidentialTxMemo {
-        let (_, enc_amount_using_rcvr) = rcvr_pub_key.key.encrypt_value(amount.into(), rng);
-        let (_, enc_asset_id_using_rcvr) = rcvr_pub_key.key.encrypt_value(asset_id.into(), rng);
+        let (_, enc_amount_using_rcvr) = rcvr_pub_key.encrypt_value(amount.into(), rng);
+        let (_, enc_asset_id_using_rcvr) = rcvr_pub_key.encrypt_value(asset_id.into(), rng);
         ConfidentialTxMemo {
             sndr_account_id: 0,
             rcvr_account_id: 0,
@@ -656,10 +653,8 @@ mod tests {
         balance: Balance,
         rng: &mut R,
     ) -> Fallible<PubAccount> {
-        let (_, enc_asset_id) = rcvr_enc_pub_key.key.encrypt_value(asset_id.into(), rng);
-        let (_, enc_balance) = rcvr_enc_pub_key
-            .key
-            .encrypt_value(Scalar::from(balance), rng);
+        let (_, enc_asset_id) = rcvr_enc_pub_key.encrypt_value(asset_id.into(), rng);
+        let (_, enc_balance) = rcvr_enc_pub_key.encrypt_value(Scalar::from(balance), rng);
 
         Ok(PubAccount {
             content: PubAccountContent {

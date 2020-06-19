@@ -50,7 +50,7 @@ macro_rules! assert_err {
 ///    We can recommend that applications use a different faster
 ///    encryption mechanism to store the confidentional values on disk.
 pub type Balance = u32;
-pub const BALANCE_RANGE: usize = 32;
+pub const BALANCE_RANGE: u32 = 32;
 
 /// Asset ID length.
 /// Note that MERCAT's asset id corresponds to PolyMesh's asset ticker.
