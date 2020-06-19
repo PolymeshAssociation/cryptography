@@ -8,4 +8,5 @@ members = [
 	"cli/mercat/account",
 	"cli/mercat/common",
 	"cli/mercat/chain_setup",
+	"cli/mercat/test_runner",
 ]

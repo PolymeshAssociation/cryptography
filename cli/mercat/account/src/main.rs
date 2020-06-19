@@ -47,7 +47,7 @@ fn process_create_account(cfg: input::AccountGenInfo) -> Result<(), Error> {
 
     // Generate the account
     let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
-    let secret_account = generate_secret_account(&mut rng, cfg.ticker_id)?;
+    let secret_account = generate_secret_account(&mut rng, cfg.ticker)?;
     let valid_asset_ids = get_asset_ids(db_dir.clone())?;
 
     let create_account_timer = Instant::now();
@@ -95,7 +95,7 @@ fn process_destroy_account(user: String, db_dir: Option<PathBuf>) -> Result<(), 
 
 fn generate_secret_account<R: RngCore + CryptoRng>(
     rng: &mut R,
-    ticker_id: String,
+    ticker: String,
 ) -> Result<SecAccount, Error> {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
@@ -104,8 +104,7 @@ fn generate_secret_account<R: RngCore + CryptoRng>(
         scrt: elg_secret.into(),
     };
 
-    let asset_id =
-        asset_id_from_ticker(&ticker_id).map_err(|error| Error::LibraryError { error })?;
+    let asset_id = asset_id_from_ticker(&ticker).map_err(|error| Error::LibraryError { error })?;
     let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));
 
     let sign_keys = MiniSecretKey::generate_with(rng).expand_to_keypair(ExpansionMode::Ed25519);

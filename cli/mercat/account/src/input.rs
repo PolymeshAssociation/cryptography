@@ -37,9 +37,9 @@ pub struct AccountGenInfo {
     #[structopt(
         short,
         long,
-        help = "The asset ticker id. String of at most 12 characters."
+        help = "The asset ticker name. String of at most 12 characters."
     )]
-    pub ticker_id: String,
+    pub ticker: String,
 
     /// An optional seed that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
@@ -112,7 +112,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 save_config: cfg.save_config.clone(),
                 seed,
                 account_id: cfg.account_id,
-                ticker_id: cfg.ticker_id,
+                ticker: cfg.ticker,
                 db_dir,
                 user: cfg.user.clone(),
             };
