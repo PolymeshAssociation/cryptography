@@ -56,29 +56,29 @@ fn cheater_flag(is_cheater: bool) -> String {
     }
 }
 
-type StepFunc = &dyn Fn() -> String;
-
-impl Create {
-    pub fn create_account(&self) -> StepFunc {
-        &|| {
-            format!(
-                "mercat-account create --account-id {} --ticker {} --user {} {}",
-                self.account_id,
-                self.ticker,
-                self.owner.name,
-                cheater_flag(self.owner.cheater)
-            )
-        }
-    }
-
-    pub fn validate(&self) -> StepFunc {
-        &|| String::from("list of arguments")
-    }
-
-    pub fn order(&self) -> Vec<StepFunc> {
-        vec![self.create_account(), self.validate()]
-    }
-}
+//type StepFunc = &dyn Fn() -> String;
+//
+//impl Create {
+//    pub fn create_account(&self) -> StepFunc {
+//        &|| {
+//            format!(
+//                "mercat-account create --account-id {} --ticker {} --user {} {}",
+//                self.account_id,
+//                self.ticker,
+//                self.owner.name,
+//                cheater_flag(self.owner.cheater)
+//            )
+//        }
+//    }
+//
+//    pub fn validate(&self) -> StepFunc {
+//        &|| String::from("list of arguments")
+//    }
+//
+//    pub fn order(&self) -> Vec<StepFunc> {
+//        vec![self.create_account(), self.validate()]
+//    }
+//}
 
 pub struct Fund {
     pub id: u32,
