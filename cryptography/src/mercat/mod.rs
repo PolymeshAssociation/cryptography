@@ -79,8 +79,8 @@ pub struct EncryptionKeys {
 }
 
 /// Holds the SR25519 signature scheme public key.
-type SigningPubKey = PublicKey;
-type SigningKeys = Keypair;
+pub type SigningPubKey = PublicKey;
+pub type SigningKeys = Keypair;
 
 pub type Signature = schnorrkel::sign::Signature;
 
@@ -111,7 +111,7 @@ impl From<CipherText> for EncryptedAmount {
 // TODO: move all these XXXProof to the proper file. CRYP-113
 
 /// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct WellformednessProof {
     init: WellformednessInitialMessage,
     response: WellformednessFinalResponse,
@@ -143,7 +143,7 @@ impl From<(CorrectnessInitialMessage, CorrectnessFinalResponse)> for Correctness
 }
 
 /// Holds the non-interactive proofs of membership, equivalent of L_member of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct MembershipProof {
     init: MembershipProofInitialMessage,
     response: MembershipProofFinalResponse,
@@ -241,7 +241,7 @@ pub type AssetMemo = EncryptedAmount;
 // -------------------------------------------------------------------------------------
 
 /// Holds the owner public keys and the creation date of an account.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
     pub owner_sign_pub_key: SigningPubKey,
@@ -260,7 +260,7 @@ impl AccountMemo {
 }
 
 /// Holds contents of the public portion of an account which can be safely put on the chain.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PubAccountContent {
     pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
@@ -278,7 +278,7 @@ impl PubAccountContent {
 }
 
 /// Wrapper for the account content and signature.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PubAccount {
     pub content: PubAccountContent,
     pub initial_sig: Signature,
@@ -374,7 +374,7 @@ pub enum ConfidentialTxState {
 
 /// Holds the public portion of an asset issuance transaction after initialization.
 /// This can be placed on the chain.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PubAssetTxDataContent {
     account_id: u32,
     enc_asset_id: EncryptedAssetId,
@@ -391,7 +391,7 @@ impl PubAssetTxDataContent {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PubAssetTxData {
     pub content: PubAssetTxDataContent,
     pub sig: Signature,
