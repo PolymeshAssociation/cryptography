@@ -480,16 +480,6 @@ impl Decode for SecAccount {
     }
 }
 
-// impl SecAccount {
-//     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-//         bincode::serialize(self).map_err(Error::from)
-//     }
-
-//     pub fn from_bytes(bytes: &[u8]) -> Fallible<SecAccount> {
-//         bincode::deserialize(bytes).map_err(Error::from)
-//     }
-// }
-
 /// Wrapper for both the secret and public account info
 #[derive(Clone)]
 pub struct Account {
@@ -568,11 +558,10 @@ pub enum AssetTxState {
 
 impl fmt::Display for AssetTxState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let str = match self {
-            AssetTxState::Initialization(substate) => format!("initialization_{}", substate),
-            AssetTxState::Justification(substate) => format!("justification_{}", substate),
-        };
-        write!(f, "{}", str)
+        match self {
+            AssetTxState::Initialization(substate) => write!(f, "initialization_{}", substate),
+            AssetTxState::Justification(substate) => write!(f, "justification_{}", substate),
+        }
     }
 }
 
