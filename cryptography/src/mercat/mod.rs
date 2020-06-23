@@ -58,7 +58,8 @@ pub type EncryptionPubKey = ElgamalPublicKey;
 pub type EncryptionSecKey = ElgamalSecretKey;
 
 /// Holds ElGamal encryption keys.
-#[derive(Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptionKeys {
     pub pblc: EncryptionPubKey,
     pub scrt: EncryptionSecKey,
@@ -99,7 +100,8 @@ impl From<CipherText> for EncryptedAmount {
 // TODO: move all these XXXProof to the proper file. CRYP-113
 
 /// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode, Debug)]
+#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessProof {
     init: WellformednessInitialMessage,
     response: WellformednessFinalResponse,
@@ -287,7 +289,8 @@ pub type AssetMemo = EncryptedAmount;
 // -                                    Account                                        -
 // -------------------------------------------------------------------------------------
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct MediatorAccount {
     pub encryption_key: EncryptionKeys,
     pub signing_key: SigningKeys,
@@ -322,7 +325,8 @@ impl Decode for MediatorAccount {
 }
 
 /// Holds the owner public keys and the creation date of an account.
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
     pub owner_sign_pub_key: SigningPubKey,
@@ -345,7 +349,7 @@ impl Encode for AccountMemo {
     fn size_hint(&self) -> usize {
         self.owner_enc_pub_key.size_hint()
             + schnorrkel::PUBLIC_KEY_LENGTH  // owner_sign_pub_key
-            + mem::size_of::<i64>()  // timestamp
+            + mem::size_of::<i64>() // timestamp
     }
 
     #[inline]
@@ -431,7 +435,8 @@ impl Decode for PubAccount {
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
     pub sign_keys: SigningKeys,
@@ -531,7 +536,8 @@ pub trait AccountCreatorVerifier {
 
 /// Represents the three substates (started, verified, rejected) of a
 /// confidential transaction state.
-#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum TxSubstate {
     /// The action on transaction has been taken but is not verified yet.
     Started,
@@ -553,7 +559,8 @@ impl fmt::Display for TxSubstate {
 }
 /// Represents the two states (initialized, justified) of a
 /// confidentional asset issuance transaction.
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum AssetTxState {
     Initialization(TxSubstate),
     Justification(TxSubstate),
@@ -571,7 +578,8 @@ impl fmt::Display for AssetTxState {
 
 /// Represents the four states (initialized, justified, finalized, reversed) of a
 /// confidentional transaction.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum ConfidentialTxState {
     Initialization(TxSubstate),
     Finalization(TxSubstate),
@@ -585,7 +593,8 @@ pub enum ConfidentialTxState {
 
 /// Holds the public portion of an asset issuance transaction after initialization.
 /// This can be placed on the chain.
-#[derive(Clone, Serialize, Deserialize, Encode, Decode, Debug)]
+#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAssetTxDataContent {
     account_id: u32,
     enc_asset_id: EncryptedAssetId,
@@ -603,7 +612,8 @@ impl PubAssetTxDataContent {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAssetTxData {
     pub content: PubAssetTxDataContent,
     pub sig: Signature,
