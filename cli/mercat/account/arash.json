@@ -1,8 +1,0 @@
-{
-  "user": "arash",
-  "db_dir": "../chain_setup",
-  "account_id": 1,
-  "ticker_id": "poly",
-  "seed": "kcqPyy4pKNiCPgH+ZQczAPsxp32YZJHj2Y2bbeuLJq4=",
-  "save_config": "arash.json"
-}
