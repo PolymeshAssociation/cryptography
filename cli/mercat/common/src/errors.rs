@@ -53,14 +53,28 @@ pub enum Error {
     },
 
     /// An error occurred while writing to a file.
-    #[fail(display = "Failed to write to the file {:?}: {:?}", path, error)]
+    #[fail(display = "Failed to write to file {:?}: {:?}", path, error)]
     FileWriteError {
         error: serde_json::Error,
         path: PathBuf,
     },
 
+    /// An error occurred while decoding an object.
+    #[fail(
+        display = "Failed to decode an object read from file {:?}: {:?}",
+        path, error
+    )]
+    ObjectLoadError { error: codec::Error, path: PathBuf },
+
+    /// An error occurred while writing to a file.
+    #[fail(display = "Failed to save an object to file {:?}: {:?}", path, error)]
+    ObjectSaveError {
+        error: std::io::Error,
+        path: PathBuf,
+    },
+
     /// An error occurred while removing a file.
-    #[fail(display = "Failed to remove the file {:?}: {:?}", path, error)]
+    #[fail(display = "Failed to remove file {:?}: {:?}", path, error)]
     FileRemovalError {
         error: std::io::Error,
         path: PathBuf,

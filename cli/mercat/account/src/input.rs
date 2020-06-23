@@ -25,7 +25,7 @@ pub struct CreateAccountInfo {
     pub db_dir: Option<PathBuf>,
 
     /// Account id. It is the responsibility of the caller to ensure the uniqueness of the id.
-    /// The CLI will not throw any error if a duplicate id is passed.
+    /// The CLI will not throw any errors if a duplicate id is passed.
     #[structopt(
         short,
         long,
@@ -61,21 +61,29 @@ pub struct CreateAccountInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct IssueAssetInfo {
-    /// Account id of the issuer. It is the responsibility of the caller to ensure the uniqueness of the id.
-    /// The CLI will not throw any error if a duplicate id is passed.
-    #[structopt(long, help = "The id of the account. This value must be unique.")]
+    /// Account ID of the issuer.
+    /// The CLI will not throw any errors if a duplicate id is passed.
+    #[structopt(long, help = "The account ID.")]
     pub account_id: u32,
 
-    #[structopt(long, help = "The id of the transaction. This value must be unique.")]
+    /// A transaction ID for the asset issuance transaction.
+    /// The CLI will not throw any errors if a duplicate id is passed.
+    /// It will silently overwrite the transaction.
+    #[structopt(long, help = "The transaction ID.")]
     pub tx_id: u32,
 
-    /// The name of the user. The name can be any valid string that can be used as a file name.
-    /// It is the responsibility of the caller to ensure the uniqueness of the name.
-    #[structopt(short, long, help = "The name of the user. This name must be unique.")]
-    pub issuer: String,
+    /// An optional seed that can be passed to reproduce a previous run of this CLI.
+    /// The seed can be found inside the logs.
+    #[structopt(
+        short,
+        long,
+        help = "Base64 encoding of an initial seed. If not provided, the seed will be chosen at random."
+    )]
+    pub seed: Option<String>,
 
-    #[structopt(short, long, help = "The name of the user. This name must be unique.")]
-    pub mediator: String,
+    /// Amount to issue.
+    #[structopt(short, long, help = "The amount of assets to issue.")]
+    pub amount: u32,
 
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
@@ -89,18 +97,14 @@ pub struct IssueAssetInfo {
     )]
     pub db_dir: Option<PathBuf>,
 
-    /// An optional seed that can be passed to reproduce a previous run of this CLI.
-    /// The seed can be found inside the logs.
-    #[structopt(
-        short,
-        long,
-        help = "Base64 encoding of an initial seed. If not provided, the seed will be chosen at random."
-    )]
-    pub seed: Option<String>,
+    /// The issuer's name. An account must have already been created for this user.
+    #[structopt(short, long, help = "The name of the issuer.")]
+    pub issuer: String,
 
-    /// Amount to issue.
-    #[structopt(short, long, default_value = "0u32")]
-    pub amount: u32,
+    /// The transaction mediator's name. Used to retrieve mediator's public keys.
+    /// Use `mercat-mediator` CLI to create the credentials needed for this role.
+    #[structopt(short, long, help = "The name of the mediator.")]
+    pub mediator: String,
 
     /// An optional flag that determines if the input arguments should be saved in a config file.
     #[structopt(
@@ -141,7 +145,7 @@ pub enum CLI {
         db_dir: Option<PathBuf>,
     },
 
-    /// Issue an asset.
+    /// Issue an asset to a MERCAT account.
     Issue(IssueAssetInfo),
 }
 
@@ -209,6 +213,20 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             return Ok(CLI::Create(cfg));
         }
 
+        CLI::Cleanup { user, db_dir } => {
+            // Set the default directory for db_dir
+            let db_dir = db_dir.clone().or_else(|| std::env::current_dir().ok());
+            let args = CLI::Cleanup {
+                user: user.clone(),
+                db_dir,
+            };
+            info!(
+                "Parsed the following config from the command line:\n{:#?}",
+                args
+            );
+            return Ok(args);
+        }
+
         CLI::Issue(cfg) => {
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
 
@@ -218,11 +236,11 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             let cfg = IssueAssetInfo {
                 account_id: cfg.account_id,
                 tx_id: cfg.tx_id,
-                issuer: cfg.issuer,
-                mediator: cfg.mediator,
-                db_dir,
                 seed,
                 amount: cfg.amount,
+                db_dir,
+                issuer: cfg.issuer,
+                mediator: cfg.mediator,
                 save_config: cfg.save_config.clone(),
             };
 
@@ -231,7 +249,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 cfg
             );
 
-            // Save the config if the argument is passed
+            // Save the config if the argument is passed.
             if let Some(path) = &cfg.save_config {
                 info!("Saving the following config to {:?}:\n{:#?}", &path, &cfg);
                 std::fs::write(
@@ -247,20 +265,6 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             }
 
             return Ok(CLI::Issue(cfg));
-        }
-
-        CLI::Cleanup { user, db_dir } => {
-            // Set the default directory for db_dir
-            let db_dir = db_dir.clone().or_else(|| std::env::current_dir().ok());
-            let args = CLI::Cleanup {
-                user: user.clone(),
-                db_dir,
-            };
-            info!(
-                "Parsed the following config from the command line:\n{:#?}",
-                args
-            );
-            return Ok(args);
         }
     }
 }

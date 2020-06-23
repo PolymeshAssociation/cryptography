@@ -140,11 +140,7 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         PUBLIC_ACCOUNT_FILE,
     )?;
 
-    timing!(
-        "account.issue_asset",
-        load_from_file_timer,
-        Instant::now()
-    );
+    timing!("account.issue_asset", load_from_file_timer, Instant::now());
 
     // Initialize the asset issuance process.
     let issuance_init_timer = Instant::now();
@@ -157,13 +153,9 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
             cfg.amount,
             &mut rng,
         )
-        .expect("Failed to initialize the asset issuance.");
+        .map_err(|error| Error::LibraryError { error })?;
 
-    timing!(
-        "account.issue_asset",
-        issuance_init_timer,
-        Instant::now()
-    );
+    timing!("account.issue_asset", issuance_init_timer, Instant::now());
 
     // Save the artifacts to file.
     let save_to_file_timer = Instant::now();
@@ -180,11 +172,7 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         &instruction,
     )?;
 
-    timing!(
-        "account.issue_asset",
-        save_to_file_timer,
-        Instant::now()
-    );
+    timing!("account.issue_asset", save_to_file_timer, Instant::now());
 
     Ok(())
 }

@@ -205,8 +205,10 @@ pub fn save_object<T: Encode>(
 
     file_path.push(file_name);
 
-    std::fs::write(file_path, data.encode())
-        .expect("Failed to write the issuer_public_account to file.");
+    std::fs::write(file_path.clone(), data.encode()).map_err(|error| Error::ObjectSaveError {
+        error,
+        path: file_path,
+    })?;
 
     Ok(())
 }
@@ -219,15 +221,22 @@ pub fn load_object<T: Decode>(
     file_name: &str,
 ) -> Result<T, Error> {
     let file_path = construct_path(db_dir, on_off_chain, user, file_name);
-    let data = std::fs::read(file_path).expect("Failed to read the issuer account");
-    Ok(T::decode(&mut &data[..])
-        .unwrap_or_else(|error| panic!("Failed to deserialize the an object: {}", error)))
+
+    let data = std::fs::read(file_path.clone()).map_err(|error| Error::FileReadError {
+        error,
+        path: file_path.clone(),
+    })?;
+
+    T::decode(&mut &data[..]).map_err(|error| Error::ObjectLoadError {
+        error,
+        path: file_path,
+    })
 }
 
 #[inline]
 pub fn create_rng_from_seed(seed: Option<String>) -> Result<StdRng, Error> {
     let seed = seed.ok_or(Error::EmptySeed)?;
-    let seed: &[u8] = &base64::decode(seed).map_err(|e| Error::SeedDecodeError { error: e })?;
+    let seed: &[u8] = &base64::decode(seed).map_err(|error| Error::SeedDecodeError { error })?;
     let seed = seed
         .try_into()
         .map_err(|_| Error::SeedLengthError { length: seed.len() })?;

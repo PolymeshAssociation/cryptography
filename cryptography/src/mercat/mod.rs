@@ -321,16 +321,6 @@ impl Decode for MediatorAccount {
     }
 }
 
-// impl MediatorAccount {
-//     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-//         bincode::serialize(self).map_err(Error::from)
-//     }
-
-//     pub fn from_bytes(bytes: &[u8]) -> Fallible<MediatorAccount> {
-//         bincode::deserialize(bytes).map_err(Error::from)
-//     }
-// }
-
 /// Holds the owner public keys and the creation date of an account.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AccountMemo {
@@ -348,22 +338,14 @@ impl AccountMemo {
             timestamp,
         }
     }
-
-    // pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-    //     bincode::serialize(self).map_err(Error::from)
-    // }
-
-    // pub fn from_bytes(bytes: &[u8]) -> Fallible<AccountMemo> {
-    //     bincode::deserialize(bytes).map_err(Error::from)
-    // }
 }
 
 impl Encode for AccountMemo {
     #[inline]
     fn size_hint(&self) -> usize {
         self.owner_enc_pub_key.size_hint()
-            + schnorrkel::PUBLIC_KEY_LENGTH                    // owner_sign_pub_key
-            + mem::size_of::<i64>() // timestamp
+            + schnorrkel::PUBLIC_KEY_LENGTH  // owner_sign_pub_key
+            + mem::size_of::<i64>()  // timestamp
     }
 
     #[inline]
@@ -447,16 +429,6 @@ impl Decode for PubAccount {
         })
     }
 }
-
-// impl PubAccount {
-//     pub fn to_bytes(&self) -> Fallible<Vec<u8>> {
-//         bincode::serialize(self).map_err(Error::from)
-//     }
-
-//     pub fn from_bytes(bytes: &[u8]) -> Fallible<PubAccount> {
-//         bincode::deserialize(bytes).map_err(Error::from)
-//     }
-// }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
 #[derive(Clone, Serialize, Deserialize, Debug)]
