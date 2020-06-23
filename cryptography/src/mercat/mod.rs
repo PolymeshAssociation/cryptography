@@ -549,8 +549,7 @@ impl fmt::Display for TxSubstate {
 }
 /// Represents the two states (initialized, justified) of a
 /// confidentional asset issuance transaction.
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, Debug)]
 pub enum AssetTxState {
     Initialization(TxSubstate),
     Justification(TxSubstate),
@@ -567,13 +566,27 @@ impl fmt::Display for AssetTxState {
 
 /// Represents the four states (initialized, justified, finalized, reversed) of a
 /// confidentional transaction.
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ConfidentialTxState {
     Initialization(TxSubstate),
     Finalization(TxSubstate),
     FinalizationJustification(TxSubstate),
     Reversal(TxSubstate),
+}
+
+impl fmt::Display for ConfidentialTxState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConfidentialTxState::Initialization(substate) => {
+                write!(f, "initialization_{}", substate)
+            }
+            ConfidentialTxState::Finalization(substate) => write!(f, "finalization_{}", substate),
+            ConfidentialTxState::FinalizationJustification(substate) => {
+                write!(f, "finalization_justification_{}", substate)
+            }
+            ConfidentialTxState::Reversal(substate) => write!(f, "reversal_{}", substate),
+        }
+    }
 }
 
 // -------------------------------------------------------------------------------------
