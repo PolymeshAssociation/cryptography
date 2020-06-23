@@ -24,5 +24,3 @@ failure = { version = "0.1.7" }
 
 # Crypto
 rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
-curve25519-dalek = { version = "2.0.0", features = ["u64_backend", "alloc", "serde"], default-features = false }
-schnorrkel = { version = "0.9.1", default-features = false }

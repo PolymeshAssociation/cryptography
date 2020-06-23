@@ -21,3 +21,4 @@ base64 = { version = "0.12.1" }
 # Crypto
 rand = { version = "0.7.3", features = ["getrandom", "alloc"] }
 curve25519-dalek = { version = "2.0.0", features = ["u64_backend", "alloc", "serde"] }
+schnorrkel = { version = "0.9.1", default-features = false }

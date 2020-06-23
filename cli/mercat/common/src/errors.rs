@@ -37,7 +37,16 @@ pub enum Error {
 
     /// An error occurred while reading from a file.
     #[fail(display = "Failed to read the file {:?}: {:?}", path, error)]
-    FileReadError { error: std::io::Error, path: String },
+    FileReadError {
+        error: std::io::Error,
+        path: PathBuf,
+    },
+
+    #[fail(display = "Failed to deserialize the file {:?}: {:?}", path, error)]
+    ObjectDeserializationError {
+        error: serde_json::error::Error,
+        path: PathBuf,
+    },
 
     /// An error occurred while writing to a file.
     #[fail(display = "Failed to write to the file {:?}: {:?}", path, error)]
@@ -52,4 +61,15 @@ pub enum Error {
         error: std::io::Error,
         path: PathBuf,
     },
+
+    /// Error in parsing the test harness config file.
+    #[fail(display = "Error in parsing the test harness config file.")]
+    ErrorParsingTestHarnessConfig,
+
+    /// The test case took longer than expected to run.
+    #[fail(
+        display = "Time limit exceeded. Expected a max of {}, got {} ms.",
+        want, got
+    )]
+    TimeLimitExceeded { want: u128, got: u128 },
 }

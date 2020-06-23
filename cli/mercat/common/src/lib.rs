@@ -1,4 +1,7 @@
+pub mod chain_setup;
+pub mod create_account;
 pub mod errors;
+mod harness;
 
 use curve25519_dalek::scalar::Scalar;
 use errors::Error;
@@ -8,6 +11,7 @@ use metrics_core::Key;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{create_dir_all, File},
+    io::BufReader,
     path::PathBuf,
 };
 
@@ -140,4 +144,24 @@ pub fn get_asset_ids(db_dir: PathBuf) -> Result<Vec<Scalar>, Error> {
             path: ASSET_ID_LIST_FILE.into(),
         })?;
     Ok(valid_asset_ids.0)
+}
+
+// temp, use the one from upstream
+#[inline]
+pub fn load_from_file<T: serde::de::DeserializeOwned>(
+    db_dir: PathBuf,
+    on_off_chain: &str,
+    user: &str,
+    file_name: &str,
+) -> Result<T, Error> {
+    let file_path = construct_path(db_dir, on_off_chain, user, file_name);
+    let file = File::open(file_path.clone()).map_err(|error| Error::FileReadError {
+        error,
+        path: file_path.clone(),
+    })?;
+    let data = BufReader::new(file);
+    serde_json::from_reader(data).map_err(|error| Error::ObjectDeserializationError {
+        error,
+        path: file_path.clone(),
+    })
 }

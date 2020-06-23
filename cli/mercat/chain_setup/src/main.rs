@@ -1,15 +1,11 @@
 mod input;
 
-use cryptography::{asset_id_from_ticker, mercat::account::convert_asset_ids, AssetId};
 use env_logger;
 use input::parse_input;
 use log::info;
-use mercat_common::{
-    errors::Error, init_print_logger, save_to_file, AssetIdList, ASSET_ID_LIST_FILE,
-    COMMON_OBJECTS_DIR, ON_CHAIN_DIR,
-};
+use mercat_common::{chain_setup::process_asset_id_creation, errors::Error, init_print_logger};
 use metrics::timing;
-use std::{path::PathBuf, time::Instant};
+use std::time::Instant;
 
 fn main() {
     info!("Starting the program.");
@@ -20,39 +16,7 @@ fn main() {
     let args = parse_input().unwrap();
     timing!("chain_setup.argument_parse", start, Instant::now());
 
-    process_asset_id_creation(args.db_dir, args.ticker_names).unwrap();
+    let db_dir = args.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap();
+    process_asset_id_creation(db_dir, args.ticker_names).unwrap();
     info!("The program finished successfully.");
-}
-
-fn process_asset_id_creation(
-    db_dir: Option<PathBuf>,
-    ticker_names: Vec<String>,
-) -> Result<(), Error> {
-    let start = Instant::now();
-
-    let valid_asset_ids: Vec<AssetId> = ticker_names
-        .into_iter()
-        .map(|ticker_name| {
-            asset_id_from_ticker(&ticker_name).map_err(|error| Error::LibraryError { error })
-        })
-        .collect::<Result<Vec<AssetId>, Error>>()?;
-
-    let valid_asset_ids = AssetIdList(convert_asset_ids(valid_asset_ids));
-
-    let db_dir = db_dir.ok_or(Error::EmptyDatabaseDir)?;
-    save_to_file(
-        db_dir,
-        ON_CHAIN_DIR,
-        COMMON_OBJECTS_DIR,
-        ASSET_ID_LIST_FILE,
-        &valid_asset_ids,
-    )?;
-
-    timing!(
-        "chain_setup.gen_and_save_asset_id_list",
-        start,
-        Instant::now()
-    );
-
-    Ok(())
 }
