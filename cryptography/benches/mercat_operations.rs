@@ -486,7 +486,7 @@ criterion_group! {
     // long so we're not microbenchmarking anyways.
     // 10 is the minimum allowed sample size in Criterion.
     config = Criterion::default().sample_size(10).measurement_time(Duration::new(600, 0));
-    targets = bench_mercat_confidential_tx_operations,//bench_mercat_account_generation_and_validation,bench_mercat_asset_issuance_tx_operations, 
+    targets = bench_mercat_confidential_tx_operations,//bench_mercat_account_generation_and_validation,bench_mercat_asset_issuance_tx_operations,
 }
 
 criterion_main!(bench_account_validation);
