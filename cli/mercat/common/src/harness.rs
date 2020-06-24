@@ -1,12 +1,13 @@
 use crate::{
     chain_setup::process_asset_id_creation, create_account::process_create_account, errors::Error,
-    load_object, COMMON_OBJECTS_DIR, ON_CHAIN_DIR,
+    load_object, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
+    SECRET_ACCOUNT_FILE,
 };
 use cryptography::mercat::{PubAccount, SecAccount};
 use log::info;
 use rand::Rng;
 use std::path::PathBuf;
-use std::{collections::HashSet, fs, io, time::Instant};
+use std::{collections::HashSet, fs, io, path::Path, time::Instant};
 
 pub enum Transaction {
     Transfer(Transfer),
@@ -141,7 +142,7 @@ fn all_dirs_in_dir(dir: PathBuf) -> Result<Vec<PathBuf>, Error> {
     Ok(files)
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub struct Account {
     owner: String,
     ticker: String,
@@ -202,8 +203,9 @@ impl TestCase {
         Ok(())
     }
 
+    /// Reads the contents of all the accounts from the on-chain directory and decrypts
+    /// the balance with the secret account from the off-chain directory.
     fn resulting_accounts(&self) -> Result<HashSet<Account>, Error> {
-        // read all the accounts on the chain
         let mut accounts: HashSet<Account> = HashSet::new();
         let mut path = self.chain_db_dir.clone();
         path.push(ON_CHAIN_DIR);
@@ -211,22 +213,38 @@ impl TestCase {
         for dir in all_dirs_in_dir(path)? {
             if let Some(user) = dir.file_name().and_then(|user| user.to_str()) {
                 if user != COMMON_OBJECTS_DIR {
-                    let ticker = String::from("ACME");
-                    // TODO find all TICKER_public_account.json files and deserialize and decrypt them to get the balance out of them.
-                    let pub_account: PubAccount =
-                        load_object(self.chain_db_dir.clone(), ON_CHAIN_DIR, user, "TODO")?;
-                    let sec_account: SecAccount =
-                        load_object(self.chain_db_dir.clone(), ON_CHAIN_DIR, user, "TODO")?;
-                    let account = cryptography::mercat::Account {
-                        pblc: pub_account,
-                        scrt: sec_account,
-                    };
-                    let balance = account.decrypt_balance().unwrap();
-                    accounts.insert(Account {
-                        owner: String::from(user),
-                        ticker,
-                        balance,
-                    });
+                    for ticker in self.ticker_names.clone() {
+                        let pub_file_name = format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE);
+                        let sec_file_name = format!("{}_{}", ticker, SECRET_ACCOUNT_FILE);
+
+                        let mut path = dir.clone();
+                        path.push(pub_file_name.clone());
+                        if !path.exists() {
+                            continue;
+                        }
+                        let pub_account: PubAccount = load_object(
+                            self.chain_db_dir.clone(),
+                            ON_CHAIN_DIR,
+                            user,
+                            &pub_file_name,
+                        )?;
+                        let sec_account: SecAccount = load_object(
+                            self.chain_db_dir.clone(),
+                            OFF_CHAIN_DIR,
+                            user,
+                            &sec_file_name,
+                        )?;
+                        let account = cryptography::mercat::Account {
+                            pblc: pub_account,
+                            scrt: sec_account,
+                        };
+                        let balance = account.decrypt_balance().unwrap();
+                        accounts.insert(Account {
+                            owner: String::from(user),
+                            ticker,
+                            balance,
+                        });
+                    }
                 }
             }
         }
@@ -323,7 +341,7 @@ fn accounts_are_equal(want: &HashSet<Account>, got: &HashSet<Account>) -> bool {
     intersection.len() == want.len() && want.len() == got.len()
 }
 
-// this is called from the test and benchmark. Allowing it be unused to silence compiler warnings.
+// This is called from the test and benchmark. Allowing it be unused to silence compiler warnings.
 #[allow(unused)]
 fn run_from(relative: &str) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -333,10 +351,12 @@ fn run_from(relative: &str) {
         let testcase = &parse_config(config).unwrap();
         // TODO configure the logger and metric to go to a file
         info!("Running test case: {}.", testcase.title);
-        assert!(accounts_are_equal(
-            &testcase.accounts_outcome,
-            &testcase.run().unwrap()
-        ));
+        let want = &testcase.accounts_outcome;
+        let got = &testcase.run().unwrap();
+        assert!(
+            accounts_are_equal(want, got),
+            format!("want: {:#?}, got: {:#?}", want, got)
+        );
     }
 }
 
@@ -351,16 +371,16 @@ mod tests {
 
     #[test]
     fn test_on_slow_pc() {
-        run_from("scenarios/unittest/pc"); // TODO make this a constant
+        run_from("scenarios/unittest/pc");
     }
 
     #[test]
     fn test_on_fast_node() {
-        run_from("scenarios/unittest/node"); // TODO make this a constant
+        run_from("scenarios/unittest/node");
     }
 
     #[test] // TODO change this to wasm-test
     fn test_on_wasm() {
-        run_from("scenarios/unittest/wasm"); // TODO make this a constant
+        run_from("scenarios/unittest/wasm");
     }
 }

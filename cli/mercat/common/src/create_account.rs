@@ -39,7 +39,7 @@ pub fn process_create_account(
         db_dir.clone(),
         OFF_CHAIN_DIR,
         &user,
-        SECRET_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, SECRET_ACCOUNT_FILE),
         &account.scrt,
     )?;
 
@@ -47,7 +47,7 @@ pub fn process_create_account(
         db_dir,
         ON_CHAIN_DIR,
         &user,
-        PUBLIC_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
         &account.pblc,
     )?;
 
