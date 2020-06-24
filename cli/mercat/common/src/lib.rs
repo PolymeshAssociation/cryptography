@@ -1,3 +1,6 @@
+//! A common library for utility functions.
+//!
+
 pub mod errors;
 
 use codec::{Decode, Encode};

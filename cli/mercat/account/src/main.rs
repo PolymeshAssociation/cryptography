@@ -1,3 +1,7 @@
+//! A simple commandline application to act as a MERCAT account.
+//! Use `mercat_account --help` to see the usage.
+//!
+
 mod input;
 
 use codec::Encode;

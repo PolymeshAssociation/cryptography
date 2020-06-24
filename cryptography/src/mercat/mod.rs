@@ -393,13 +393,6 @@ pub struct PubAccountContent {
     pub memo: AccountMemo,
 }
 
-impl PubAccountContent {
-    #[inline]
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
-    }
-}
-
 /// Wrapper for the account content and signature.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PubAccount {
@@ -631,13 +624,6 @@ pub struct PubAssetTxDataContent {
     balance_correctness_proof: CorrectnessProof,
 }
 
-impl PubAssetTxDataContent {
-    #[inline]
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
-    }
-}
-
 #[derive(Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAssetTxData {
@@ -674,12 +660,6 @@ impl Decode for PubAssetTxData {
 pub struct PubJustifiedAssetTxDataContent {
     pub tx_content: PubAssetTxData,
     pub state: AssetTxState,
-}
-
-impl PubJustifiedAssetTxDataContent {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -799,13 +779,6 @@ pub struct PubInitConfidentialTxDataContent {
     pub amount_correctness_proof: CorrectnessProof,
 }
 
-impl PubInitConfidentialTxDataContent {
-    #[inline]
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
-    }
-}
-
 /// Wrapper for the initial transaction data and its signature.
 #[derive(Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -846,13 +819,6 @@ pub struct PubFinalConfidentialTxDataContent {
     pub asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof,
 }
 
-impl PubFinalConfidentialTxDataContent {
-    #[inline]
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
-    }
-}
-
 /// Wrapper for the contents and the signature of the content sent by the
 /// receiver of the transaction.
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -881,13 +847,6 @@ impl Decode for PubFinalConfidentialTxData {
             .map_err(|_| CodecError::from("PubFinalConfidentialTxData::sig is invalid"))?;
 
         Ok(PubFinalConfidentialTxData { content, sig })
-    }
-}
-
-impl PubFinalConfidentialTxData {
-    #[inline]
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
     }
 }
 
