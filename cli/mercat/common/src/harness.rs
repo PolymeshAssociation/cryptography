@@ -60,8 +60,6 @@ pub struct Create {
     pub chain_db_dir: PathBuf,
     pub account_id: u32,
     pub owner: Party,
-    pub mediator: Party,
-    pub mediator_approves: bool,
     pub ticker: String,
 }
 
@@ -134,24 +132,24 @@ impl TransactionOrder for Transaction {
 
 impl Transfer {
     pub fn send(&self) -> StepFunc {
-        let value = format!("todo {}", self.id);
+        let value = format!("todo-send-transaction {}", self.id);
         // TODO: run the initialize transfer function, and return its CLI + args
         //       sea "create_account" function for an example of how it will look like.
         return Box::new(move || value.clone());
     }
 
     pub fn receive(&self) -> StepFunc {
-        let value = format!("todo {}", self.id);
+        let value = format!("todo-receive-transaction {}", self.id);
         return Box::new(move || value.clone());
     }
 
     pub fn mediate(&self) -> StepFunc {
-        let value = format!("todo {}", self.id);
+        let value = format!("todo-mediate-transaction {}", self.id);
         return Box::new(move || value.clone());
     }
 
     pub fn validate(&self) -> StepFunc {
-        let value = format!("todo {}", self.id);
+        let value = format!("todo-validate-transaction {}", self.id);
         return Box::new(move || value.clone());
     }
 
@@ -169,22 +167,26 @@ impl Create {
             self.owner.name,
             cheater_flag(self.owner.cheater)
         );
+        let seed = self.seed.clone();
+        let chain_db_dir = self.chain_db_dir.clone();
+        let ticker = self.ticker.clone();
+        let account_id = self.account_id;
+        let owner = self.owner.name.clone();
         return Box::new(move || {
-            // TODO: this does not pass the lifetime checks :(
-            //process_create_account(
-            //    Some(self.seed),
-            //    self.chain_db_dir,
-            //    self.ticker,
-            //    self.account_id,
-            //    self.owner.name,
-            //)
-            //.unwrap();
+            process_create_account(
+                Some(seed.clone()),
+                chain_db_dir.clone(),
+                ticker.clone(),
+                account_id,
+                owner.clone(),
+            )
+            .unwrap();
             value.clone()
         });
     }
 
     pub fn validate(&self) -> StepFunc {
-        let value = format!("todo --account-id={}", self.account_id);
+        let value = format!("todo-validate-account --account-id={}", self.account_id);
         return Box::new(move || value.clone());
     }
 
@@ -195,17 +197,17 @@ impl Create {
 
 impl Issue {
     pub fn issue(&self) -> StepFunc {
-        let value = format!("todo {}", self.id);
+        let value = format!("todo-issue-transaction {}", self.id);
         return Box::new(move || value.clone());
     }
 
     pub fn mediate(&self) -> StepFunc {
-        let value = format!("todo {}", self.id);
+        let value = format!("todo-mediate-issue-transaction {}", self.id);
         return Box::new(move || value.clone());
     }
 
     pub fn validate(&self) -> StepFunc {
-        let value = format!("todo {}", self.id);
+        let value = format!("todo-validate-issue-transaction {}", self.id);
         return Box::new(move || value.clone());
     }
 
@@ -228,10 +230,8 @@ impl TransactionMode {
                 seq
             }
             TransactionMode::Concurrent { repeat, steps } => {
-                let mut seqs: &Vec<Vec<StepFunc>> = vec![];
-                let mut indices: Vec<usize> = vec![];
+                let mut seqs: Vec<Vec<StepFunc>> = vec![];
                 for _ in 0..*repeat {
-                    indices.push(0);
                     for transaction in steps {
                         seqs.push(transaction.sequence());
                     }
@@ -248,17 +248,13 @@ impl TransactionMode {
                 let mut rng = StdRng::from_seed(seed);
                 let mut seq: Vec<StepFunc> = vec![];
 
-                while indices.len() != 0 {
-                    let next = rng.gen_range(0, indices.len());
-                    let index = indices[next];
-                    if index >= seqs[next].len() {
+                while seqs.len() != 0 {
+                    let next = rng.gen_range(0, seqs.len());
+                    if seqs[next].len() == 0 {
                         seqs.remove(next);
-                        indices.remove(next);
                         continue;
                     }
-                    let next_step: StepFunc = seqs[next][index];
-                    seq.push(next_step);
-                    indices[next] += 1;
+                    seq.push(seqs[next].remove(0));
                 }
                 seq
             }
@@ -269,10 +265,9 @@ impl TransactionMode {
 impl TestCase {
     fn run(&self) -> Result<HashSet<Account>, Error> {
         self.chain_setup()?;
-        self.make_empty_accounts()?;
         let start = Instant::now();
         for transaction in self.transactions.sequence() {
-            transaction();
+            info!("Running {}", transaction());
         }
         let duration = Instant::now() - start;
         if duration.as_millis() > self.timing_limit {
@@ -286,26 +281,6 @@ impl TestCase {
 
     fn chain_setup(&self) -> Result<(), Error> {
         process_asset_id_creation(self.chain_db_dir.clone(), self.ticker_names.clone())
-    }
-
-    fn make_empty_accounts(&self) -> Result<(), Error> {
-        let mut account_id = 0;
-        for account in &self.accounts {
-            let mut rng = rand::thread_rng();
-            let mut seed = [0u8; 32];
-            rng.fill(&mut seed);
-            let seed = base64::encode(seed);
-            // TODO: change this into a transaction so that it also logs the CLI and its args.
-            process_create_account(
-                Some(seed),
-                self.chain_db_dir.clone(),
-                account.ticker.clone(),
-                account_id,
-                account.owner.clone(),
-            )?;
-            account_id += 1;
-        }
-        Ok(())
     }
 
     /// Reads the contents of all the accounts from the on-chain directory and decrypts
@@ -397,8 +372,42 @@ fn all_dirs_in_dir(dir: PathBuf) -> Result<Vec<PathBuf>, Error> {
     }
     Ok(files)
 }
+fn make_empty_accounts(
+    accounts: &Vec<Account>,
+    chain_db_dir: PathBuf,
+) -> Result<(u32, TransactionMode), Error> {
+    let mut account_id = 0;
+    let mut transaction_counter = 0;
+    let mut seq: Vec<TransactionMode> = vec![];
+    for account in accounts {
+        let mut rng = rand::thread_rng();
+        let mut seed = [0u8; 32];
+        rng.fill(&mut seed);
+        let seed = base64::encode(seed); // TODO consolidate all the rngs and seeds into one place instead of littering the code
+        seq.push(TransactionMode::Transaction(Transaction::Create(Create {
+            id: transaction_counter,
+            seed: seed,
+            chain_db_dir: chain_db_dir.clone(),
+            account_id: account_id,
+            owner: Party {
+                name: account.owner.clone(),
+                cheater: false, // TODO: test harness does not support cheating for account creation yet.
+            },
+            ticker: account.ticker.clone(),
+        })));
+        account_id += 1;
+        transaction_counter += 1;
+    }
+    Ok((
+        transaction_counter,
+        TransactionMode::Sequence {
+            repeat: 1,
+            steps: seq,
+        },
+    ))
+}
 
-fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
+fn parse_config(_path: PathBuf) -> Result<TestCase, Error> {
     // TODO read the file and produce a TestCase. Will do once the input format is finalized.
     let mut accounts_outcome: HashSet<Account> = HashSet::new();
     accounts_outcome.insert(Account {
@@ -429,53 +438,89 @@ fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
 
     let mut chain_db_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     chain_db_dir.push("chain_dir/unittest/node/simple");
-    Ok(TestCase {
-        title: String::from("Mix of concurrent and sequential test"),
-        ticker_names: vec![String::from("AAPL"), String::from("ACME")],
-        accounts: vec![
-            Account {
-                owner: String::from("alice"),
-                ticker: String::from("ACME"),
-                balance: 0,
+    let accounts: Vec<Account> = vec![
+        Account {
+            owner: String::from("alice"),
+            ticker: String::from("ACME"),
+            balance: 0,
+        },
+        Account {
+            owner: String::from("alice"),
+            ticker: String::from("AAPL"),
+            balance: 0,
+        },
+        Account {
+            owner: String::from("bob"),
+            ticker: String::from("ACME"),
+            balance: 0,
+        },
+        Account {
+            owner: String::from("bob"),
+            ticker: String::from("AAPL"),
+            balance: 0,
+        },
+        Account {
+            owner: String::from("carol"),
+            ticker: String::from("ACME"),
+            balance: 0,
+        },
+    ];
+    let (next_transaction_counter, create_account_transactions) =
+        make_empty_accounts(&accounts, chain_db_dir.clone())?;
+
+    let other_transactions = TransactionMode::Sequence {
+        repeat: 1,
+        steps: vec![
+            // issue tokens to the accounts
+            TransactionMode::Concurrent {
+                repeat: next_transaction_counter + 1,
+                steps: vec![TransactionMode::Transaction(Transaction::Issue(Issue {
+                    id: 1,
+                    owner: Party {
+                        name: String::from("alice"),
+                        cheater: false,
+                    },
+                    mediator: Party {
+                        name: String::from("mike"),
+                        cheater: false,
+                    },
+                    mediator_approves: true,
+                    ticker: String::from("ACME"),
+                    amount: 50,
+                }))],
             },
-            Account {
-                owner: String::from("alice"),
-                ticker: String::from("AAPL"),
-                balance: 0,
-            },
-            Account {
-                owner: String::from("bob"),
-                ticker: String::from("ACME"),
-                balance: 0,
-            },
-            Account {
-                owner: String::from("bob"),
-                ticker: String::from("AAPL"),
-                balance: 0,
-            },
-            Account {
-                owner: String::from("carol"),
-                ticker: String::from("ACME"),
-                balance: 0,
-            },
-        ],
-        transactions: TransactionMode::Concurrent {
-            repeat: 1,
-            steps: vec![TransactionMode::Transaction(Transaction::Issue(Issue {
-                id: 1,
-                owner: Party {
+            // transfer from alice to bob
+            TransactionMode::Transaction(Transaction::Transfer(Transfer {
+                id: next_transaction_counter + 2,
+                sender: Party {
                     name: String::from("alice"),
                     cheater: false,
                 },
+                receiver: Party {
+                    name: String::from("bob"),
+                    cheater: false,
+                },
+                receiver_approves: true,
                 mediator: Party {
                     name: String::from("mike"),
                     cheater: false,
                 },
                 mediator_approves: true,
+                amount: 10,
                 ticker: String::from("ACME"),
-                amount: 50,
-            }))],
-        },
+            })),
+        ],
+    };
+
+    let transactions = TransactionMode::Sequence {
+        repeat: 1,
+        steps: vec![create_account_transactions, other_transactions],
+    };
+    Ok(TestCase {
+        title: String::from("Mix of concurrent and sequential test"),
+        ticker_names: vec![String::from("AAPL"), String::from("ACME")],
+        accounts,
+        transactions,
         accounts_outcome,
         timing_limit: 100,
         chain_db_dir,
@@ -495,13 +540,12 @@ fn run_from(relative: &str) {
     let configs = all_files_in_dir(path).unwrap();
     for config in configs {
         let testcase = &parse_config(config).unwrap();
-        // TODO configure the logger and metric to go to a file
         info!("Running test case: {}.", testcase.title);
         let want = &testcase.accounts_outcome;
         let got = &testcase.run().unwrap();
         assert!(
             accounts_are_equal(want, got),
-            format!("want: {:#?}, got: {:#?}", want, got)
+            format!("want: {:?}, got: {:?}", want, got)
         );
     }
 }
@@ -513,10 +557,12 @@ fn run_from(relative: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use env_logger;
     //use sp_std::prelude::*;
 
     #[test]
     fn test_on_slow_pc() {
+        env_logger::init();
         run_from("scenarios/unittest/pc");
     }
 
