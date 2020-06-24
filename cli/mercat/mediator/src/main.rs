@@ -22,9 +22,9 @@ use mercat_common::{
 };
 
 use env_logger;
-use metrics::timing;
 use input::{parse_input, CreateMediatorAccountInfo, CLI};
 use log::info;
+use metrics::timing;
 use std::time::Instant;
 
 fn generate_mediator_keys<R: RngCore + CryptoRng>(rng: &mut R) -> (AccountMemo, MediatorAccount) {
