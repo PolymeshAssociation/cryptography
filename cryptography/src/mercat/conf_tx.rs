@@ -42,6 +42,7 @@ lazy_static! {
 
 /// The sender of a confidential transaction. Sender creates a transaction
 /// and performs initial proofs.
+#[derive(Clone, Debug)]
 pub struct CtxSender {}
 
 impl ConfidentialTransactionSender for CtxSender {
@@ -234,6 +235,7 @@ impl ConfidentialTransactionSender for CtxSender {
 
 /// The receiver of a confidential transaction. Receiver finalizes and processes
 /// transaction.
+#[derive(Clone, Debug)]
 pub struct CtxReceiver {}
 
 impl ConfidentialTransactionReceiver for CtxReceiver {
@@ -319,7 +321,7 @@ impl CtxReceiver {
 // ------------------------------------------------------------------------------------------------
 // -                                           Mediator                                           -
 // ------------------------------------------------------------------------------------------------
-
+#[derive(Clone, Debug)]
 pub struct CtxMediator {}
 
 impl ConfidentialTransactionMediator for CtxMediator {
@@ -392,10 +394,12 @@ impl ConfidentialTransactionMediator for CtxMediator {
 // ------------------------------------------------------------------------------------------------
 
 /// Verifies the initial transaction.
+#[derive(Clone, Debug)]
 pub struct CtxSenderValidator {}
 
 /// Verifies the proofs that are performed by both the Sender and the Receiver of a
 /// confidential transaction.
+#[derive(Clone, Debug)]
 pub struct CtxReceiverValidator {}
 
 /// Verifies the signature and the state of the justification phase of a

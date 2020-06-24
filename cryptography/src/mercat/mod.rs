@@ -60,7 +60,7 @@ impl From<ElgamalPublicKey> for EncryptionPubKey {
 }
 
 /// Holds ElGamal encryption secret key.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EncryptionSecKey {
     pub key: ElgamalSecretKey,
 }
@@ -72,7 +72,7 @@ impl From<ElgamalSecretKey> for EncryptionSecKey {
 }
 
 /// Holds ElGamal encryption keys.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EncryptionKeys {
     pub pblc: EncryptionPubKey,
     pub scrt: EncryptionSecKey,
@@ -285,7 +285,7 @@ pub struct PubAccount {
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
     pub sign_keys: SigningKeys,
@@ -294,7 +294,7 @@ pub struct SecAccount {
 }
 
 /// Wrapper for both the secret and public account info
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Account {
     pub pblc: PubAccount,
     pub scrt: SecAccount,

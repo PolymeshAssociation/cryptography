@@ -201,32 +201,66 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
         state,
         ConfidentialTxState::Initialization(TxSubstate::Started)
     );
+    // Benchmarking the creation of initialized transaction
+    // We clone all input parameters below for passing it to the criterion.
+    let sndr_clone = sndr.clone();
+    let label_ctx_init = "Generation of Initialized Transaction";
+    let sndr_account_clone = sndr_account.clone();
+    let rcvr_account_pblc_clone = rcvr_account.pblc.clone();
+    let mdtr_enc_keys_pblc_clone = mdtr_enc_keys.pblc.clone();
+    let mut rng_clone = rng.clone();
+    let amount_clone = amount.clone();
+
+    c.bench_function_over_inputs(
+        &label_ctx_init,
+        move |b, sndr_account| {
+            b.iter(|| {
+                sndr_clone
+                    .create_transaction(
+                        &sndr_account_clone.clone(),
+                        &rcvr_account_pblc_clone.clone(),
+                        &mdtr_enc_keys_pblc_clone.clone(),
+                        amount_clone.clone(),
+                        &mut rng_clone.clone(),
+                    )
+                    .unwrap()
+            })
+        },
+        vec![sndr_account.clone()],
+    );
+
+    // Benchmarking the verification of initialized transaction
+    // We clone all input parameters below for passing it to the criterion.
 
     let label_ctx_init_ver = "Initialized Transaction Verification";
+    let sndr_vldtr_clone = sndr_vldtr.clone();
+    let ctx_init_data_clone = ctx_init_data.clone();
     let sndr_acc_pbc_clone = sndr_account.pblc.clone();
+    let state_clone = state.clone();
 
     c.bench_function_over_inputs(
         &label_ctx_init_ver,
         move |b, ctx_init_data| {
             b.iter(|| {
-                sndr_vldtr
+                sndr_vldtr_clone
                     .verify(
-                        &ctx_init_data.clone(),
+                        &ctx_init_data_clone.clone(),
                         &sndr_acc_pbc_clone.clone(),
-                        state.clone(),
+                        state_clone.clone(),
                     )
                     .unwrap()
             })
         },
         vec![ctx_init_data.clone()],
     );
+
     // Verify the initialization step
-    //let result = sndr_vldtr.verify(&ctx_init_data, &sndr_account.pblc, state);
-    //let state = result.unwrap();
-    //assert_eq!(
-    //    state,
-    //    ConfidentialTxState::Initialization(TxSubstate::Validated)
-    //);
+    let result = sndr_vldtr.verify(&ctx_init_data, &sndr_account.pblc, state);
+    let state = result.unwrap();
+    assert_eq!(
+        state,
+        ConfidentialTxState::Initialization(TxSubstate::Validated)
+    );
 
     // Finalize the transaction and check its state
     let result =
@@ -452,7 +486,7 @@ criterion_group! {
     // long so we're not microbenchmarking anyways.
     // 10 is the minimum allowed sample size in Criterion.
     config = Criterion::default().sample_size(10).measurement_time(Duration::new(600, 0));
-    targets = bench_mercat_asset_issuance_tx_operations, bench_mercat_confidential_tx_operations,//bench_mercat_account_generation_and_validation,
+    targets = bench_mercat_confidential_tx_operations,//bench_mercat_account_generation_and_validation,bench_mercat_asset_issuance_tx_operations, 
 }
 
 criterion_main!(bench_account_validation);
