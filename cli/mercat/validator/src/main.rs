@@ -20,6 +20,23 @@ use mercat_common::{
 use metrics::timing;
 use std::time::Instant;
 
+fn main() {
+    info!("Starting the program.");
+    env_logger::init();
+    init_print_logger();
+
+    let parse_arg_timer = Instant::now();
+    let args = parse_input().unwrap();
+    timing!("validator.argument_parse", parse_arg_timer, Instant::now());
+
+    match args {
+        CLI::ValidateIssuance(cfg) => validate_asset_issuance(cfg).unwrap(),
+        CLI::ValidateAccount(cfg) => validate_account(cfg).unwrap(),
+    };
+
+    info!("The program finished successfully.");
+}
+
 fn process_asset_issuance_init(
     instruction: Instruction,
     mdtr_account: &AccountMemo,
@@ -144,21 +161,4 @@ fn validate_account(cfg: input::AccountCreationInfo) -> Result<(), Error> {
     )?;
 
     Ok(())
-}
-
-fn main() {
-    info!("Starting the program.");
-    env_logger::init();
-    init_print_logger();
-
-    let parse_arg_timer = Instant::now();
-    let args = parse_input().unwrap();
-    timing!("validator.argument_parse", parse_arg_timer, Instant::now());
-
-    match args {
-        CLI::ValidateIssuance(cfg) => validate_asset_issuance(cfg).unwrap(),
-        CLI::ValidateAccount(cfg) => validate_account(cfg).unwrap(),
-    };
-
-    info!("The program finished successfully.");
 }

@@ -27,6 +27,23 @@ use log::info;
 use metrics::timing;
 use std::time::Instant;
 
+fn main() {
+    info!("Starting the program.");
+    env_logger::init();
+    init_print_logger();
+
+    let parse_arg_timer = Instant::now();
+    let args = parse_input().unwrap();
+    timing!("mediator.argument_parse", parse_arg_timer, Instant::now());
+
+    match args {
+        CLI::Create(cfg) => process_create_mediator(cfg).unwrap(),
+        CLI::JustifyIssuance(cfg) => justify_asset_issuance(cfg).unwrap(),
+    };
+
+    info!("The program finished successfully.");
+}
+
 fn generate_mediator_keys<R: RngCore + CryptoRng>(rng: &mut R) -> (AccountMemo, MediatorAccount) {
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
     let mediator_enc_key = EncryptionKeys {
@@ -47,7 +64,7 @@ fn generate_mediator_keys<R: RngCore + CryptoRng>(rng: &mut R) -> (AccountMemo, 
 }
 
 fn process_create_mediator(cfg: CreateMediatorAccountInfo) -> Result<(), Error> {
-    // Setup the rng
+    // Setup the rng.
     let mut rng = create_rng_from_seed(cfg.seed)?;
 
     let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
@@ -114,7 +131,7 @@ fn justify_asset_issuance(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         PUBLIC_ACCOUNT_FILE,
     )?;
 
-    // Justification
+    // Justification.
     let mediator = AssetTxIssueMediator {};
     let (justified_tx, updated_issuer_account) = mediator
         .justify_and_process(
@@ -149,21 +166,4 @@ fn justify_asset_issuance(cfg: input::IssueAssetInfo) -> Result<(), Error> {
     )?;
 
     Ok(())
-}
-
-fn main() {
-    info!("Starting the program.");
-    env_logger::init();
-    init_print_logger();
-
-    let parse_arg_timer = Instant::now();
-    let args = parse_input().unwrap();
-    timing!("mediator.argument_parse", parse_arg_timer, Instant::now());
-
-    match args {
-        CLI::Create(cfg) => process_create_mediator(cfg).unwrap(),
-        CLI::JustifyIssuance(cfg) => justify_asset_issuance(cfg).unwrap(),
-    };
-
-    info!("The program finished successfully.");
 }

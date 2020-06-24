@@ -183,7 +183,7 @@ pub struct InRangeProof {
 
 impl Encode for InRangeProof {
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.init.to_bytes().encode_to(dest);
+        self.init.as_bytes().encode_to(dest);
         self.response.to_bytes().encode_to(dest);
         self.range.encode_to(dest);
     }

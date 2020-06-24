@@ -46,10 +46,10 @@ fn main() {
 }
 
 fn process_create_account(cfg: input::CreateAccountInfo) -> Result<(), Error> {
-    // Setup the rng
+    // Setup the rng.
     let mut rng = create_rng_from_seed(cfg.seed)?;
 
-    // Create the account
+    // Create the account.
     let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
     let secret_account = create_secret_account(&mut rng, cfg.ticker_id)?;
     let valid_asset_ids = get_asset_ids(db_dir.clone())?;

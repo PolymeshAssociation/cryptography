@@ -136,7 +136,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 cfg
             );
 
-            // Save the config is the argument is passed.
+            // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
             return Ok(CLI::Create(cfg));
@@ -162,7 +162,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 cfg.clone()
             );
 
-            // Save the config is the argument is passed.
+            // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
             return Ok(CLI::JustifyIssuance(cfg));
