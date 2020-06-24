@@ -1,11 +1,10 @@
 use crate::{
     chain_setup::process_asset_id_creation, create_account::process_create_account, errors::Error,
-    load_from_file, COMMON_OBJECTS_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
+    load_object, COMMON_OBJECTS_DIR, ON_CHAIN_DIR,
 };
 use cryptography::mercat::{PubAccount, SecAccount};
 use log::info;
 use rand::Rng;
-use serde::{de::DeserializeOwned, Deserialize};
 use std::path::PathBuf;
 use std::{collections::HashSet, fs, io, time::Instant};
 
@@ -212,7 +211,22 @@ impl TestCase {
         for dir in all_dirs_in_dir(path)? {
             if let Some(user) = dir.file_name().and_then(|user| user.to_str()) {
                 if user != COMMON_OBJECTS_DIR {
+                    let ticker = String::from("ACME");
                     // TODO find all TICKER_public_account.json files and deserialize and decrypt them to get the balance out of them.
+                    let pub_account: PubAccount =
+                        load_object(self.chain_db_dir.clone(), ON_CHAIN_DIR, user, "TODO")?;
+                    let sec_account: SecAccount =
+                        load_object(self.chain_db_dir.clone(), ON_CHAIN_DIR, user, "TODO")?;
+                    let account = cryptography::mercat::Account {
+                        pblc: pub_account,
+                        scrt: sec_account,
+                    };
+                    let balance = account.decrypt_balance().unwrap();
+                    accounts.insert(Account {
+                        owner: String::from(user),
+                        ticker,
+                        balance,
+                    });
                 }
             }
         }

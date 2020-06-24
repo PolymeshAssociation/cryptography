@@ -5,14 +5,7 @@
 mod input;
 
 use codec::Encode;
-use cryptography::{
-    asset_id_from_ticker,
-    asset_proofs::{CommitmentWitness, ElgamalSecretKey},
-    mercat::{
-        account::create_account, asset::CtxIssuer, AccountMemo, AssetTransactionIssuer,
-        EncryptionKeys, SecAccount,
-    },
-};
+use cryptography::mercat::{asset::CtxIssuer, AccountMemo, AssetTransactionIssuer, SecAccount};
 use env_logger;
 use input::{parse_input, CLI};
 use log::info;

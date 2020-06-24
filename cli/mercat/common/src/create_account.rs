@@ -1,24 +1,18 @@
 use crate::{
-    create_rng_from_seed, errors::Error, get_asset_ids, init_print_logger, load_object,
-    remove_file, save_object, save_to_file, transaction_file, Instruction, OFF_CHAIN_DIR,
-    ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
+    create_rng_from_seed, errors::Error, get_asset_ids, save_object, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
 };
 use cryptography::{
     asset_id_from_ticker,
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
-    mercat::{
-        account::create_account, asset::CtxIssuer, AccountMemo, AssetTransactionIssuer,
-        EncryptionKeys, SecAccount,
-    },
+    mercat::{account::create_account, EncryptionKeys, SecAccount},
 };
 use metrics::timing;
-use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, RngCore};
 use schnorrkel::{ExpansionMode, MiniSecretKey};
 
-use codec::Encode;
 use curve25519_dalek::scalar::Scalar;
-use std::{convert::TryInto, path::PathBuf, time::Instant};
+use std::{path::PathBuf, time::Instant};
 
 pub fn process_create_account(
     seed: Option<String>,
