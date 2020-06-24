@@ -42,9 +42,9 @@ pub enum Error {
         path: PathBuf,
     },
 
-    /// An error occurred while reading from a file.
+    /// An error occurred while deserializing an object from a file.
     #[fail(
-        display = "Failed to deserialize an object read from file {:?}: {:?}",
+        display = "Failed to deserialize an object, read from file {:?}: {:?}",
         path, error
     )]
     ObjectDeserializationError {
@@ -61,13 +61,13 @@ pub enum Error {
 
     /// An error occurred while decoding an object.
     #[fail(
-        display = "Failed to decode an object read from file {:?}: {:?}",
+        display = "Failed to decode an object, read from file {:?}: {:?}",
         path, error
     )]
     ObjectLoadError { error: codec::Error, path: PathBuf },
 
     /// An error occurred while writing to a file.
-    #[fail(display = "Failed to save an object to file {:?}: {:?}", path, error)]
+    #[fail(display = "Failed to save data to file {:?}: {:?}", path, error)]
     ObjectSaveError {
         error: std::io::Error,
         path: PathBuf,

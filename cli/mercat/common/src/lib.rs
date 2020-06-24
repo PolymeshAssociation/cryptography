@@ -9,10 +9,10 @@ use metrics::Recorder;
 use metrics_core::Key;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
-use std::io::BufReader;
 use std::{
     convert::TryInto,
     fs::{create_dir_all, File},
+    io::BufReader,
     path::PathBuf,
 };
 
@@ -185,6 +185,7 @@ pub fn get_asset_ids(db_dir: PathBuf) -> Result<Vec<Scalar>, Error> {
     Ok(valid_asset_ids.0)
 }
 
+/// Utility function to save an object that implements the Decode trait to file.
 #[inline]
 pub fn save_object<T: Encode>(
     db_dir: PathBuf,
@@ -213,6 +214,7 @@ pub fn save_object<T: Encode>(
     Ok(())
 }
 
+/// Utility function to read an object that implements the Encode trait from file.
 #[inline]
 pub fn load_object<T: Decode>(
     db_dir: PathBuf,
@@ -233,6 +235,7 @@ pub fn load_object<T: Decode>(
     })
 }
 
+/// Utitlity function to create an RNG from seed.
 #[inline]
 pub fn create_rng_from_seed(seed: Option<String>) -> Result<StdRng, Error> {
     let seed = seed.ok_or(Error::EmptySeed)?;

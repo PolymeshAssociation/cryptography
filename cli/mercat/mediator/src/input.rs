@@ -6,10 +6,15 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
-pub struct AccountMemoInfo {
-    /// The name of the user. The name can be any valid string that can be used as a file name.
+pub struct CreateMediatorAccountInfo {
+    /// The name of the mediator.
     /// It is the responsibility of the caller to ensure the uniqueness of the name.
-    #[structopt(short, long, help = "The name of the user. This name must be unique.")]
+    /// If it is not unique the artifacts will be overwritten.
+    #[structopt(
+        short,
+        long,
+        help = "The name of the mediator. This name must be unique."
+    )]
     pub user: String,
 
     /// The directory that will serve as the database of the on/off-chain data and will be used
@@ -43,15 +48,7 @@ pub struct AccountMemoInfo {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
-pub struct AssetIssuanceArgs {
-    /// The name of the user. The name can be any valid string that can be used as a file name.
-    /// It is the responsibility of the caller to ensure the uniqueness of the name.
-    #[structopt(short, long, help = "The name of the user. This name must be unique.")]
-    pub issuer: String,
-
-    #[structopt(short, long, help = "The name of the user. This name must be unique.")]
-    pub mediator: String,
-
+pub struct IssueAssetInfo {
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
     /// blockchain. Defaults to the current directory. This directory will have two main
@@ -64,6 +61,22 @@ pub struct AssetIssuanceArgs {
     )]
     pub db_dir: Option<PathBuf>,
 
+    /// The transaction ID for the asset issuance transaction.
+    /// This ID must be the same as the one used to initialize the asset issuance,
+    /// using the `mercat-account` CLI.
+    #[structopt(long, help = "The id of the transaction. This value must be unique.")]
+    pub tx_id: u32,
+
+    /// The name of the issuer.
+    /// An account must have already been created for this user, using `mercat-account`
+    /// CLI.
+    #[structopt(short, long, help = "The name of the user. This name must be unique.")]
+    pub issuer: String,
+
+    /// The name of the mediator.
+    #[structopt(short, long, help = "The name of the user. This name must be unique.")]
+    pub mediator: String,
+
     /// An optional seed that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
     #[structopt(
@@ -72,9 +85,6 @@ pub struct AssetIssuanceArgs {
         help = "Base64 encoding of an initial seed. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
-
-    #[structopt(long, help = "The id of the transaction. This value must be unique.")]
-    pub tx_id: u32,
 
     /// An optional flag that determines if the input arguments should be saved in a config file.
     #[structopt(
@@ -87,9 +97,11 @@ pub struct AssetIssuanceArgs {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub enum CLI {
-    /// Create a MERCAT account memo
-    Create(AccountMemoInfo),
-    JustifyIssuance(AssetIssuanceArgs),
+    /// Create a MERCAT mediator account.
+    Create(CreateMediatorAccountInfo),
+
+    /// Justify a MERCAT asset issuance transaction.
+    JustifyIssuance(IssueAssetInfo),
 }
 
 fn gen_seed() -> String {
@@ -111,7 +123,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             let seed: Option<String> = cfg.seed.clone().or_else(|| Some(gen_seed()));
             info!("Seed: {:?}", seed.clone().unwrap()); // unwrap won't panic
 
-            let cfg = AccountMemoInfo {
+            let cfg = CreateMediatorAccountInfo {
                 save_config: cfg.save_config.clone(),
                 seed,
                 db_dir,
@@ -141,20 +153,19 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             return Ok(CLI::Create(cfg));
         }
         CLI::JustifyIssuance(cfg) => {
-            // todo this could be refactored.
             // Otherwise, set the default seed and db_dir if needed
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
 
             let seed: Option<String> = cfg.seed.clone().or_else(|| Some(gen_seed()));
             info!("Seed: {:?}", seed.clone().unwrap()); // unwrap won't panic
 
-            let cfg = AssetIssuanceArgs {
-                save_config: cfg.save_config.clone(),
+            let cfg = IssueAssetInfo {
+                db_dir,
                 tx_id: cfg.tx_id,
+                issuer: cfg.issuer,
                 mediator: cfg.mediator,
                 seed,
-                db_dir,
-                issuer: cfg.issuer,
+                save_config: cfg.save_config.clone(),
             };
 
             info!(
