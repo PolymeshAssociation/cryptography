@@ -6,13 +6,28 @@ use crate::{
 use cryptography::mercat::{PubAccount, SecAccount};
 use log::info;
 use rand::Rng;
+use rand::{rngs::StdRng, SeedableRng};
 use std::path::PathBuf;
 use std::{collections::HashSet, fs, io, path::Path, time::Instant};
+
+trait TransactionOrder {
+    fn order(&self) -> Vec<StepFunc>;
+}
 
 pub enum Transaction {
     Transfer(Transfer),
     Fund(Fund),
     Create(Create),
+}
+
+impl TransactionOrder for Transaction {
+    fn order(&self) -> Vec<StepFunc> {
+        match self {
+            Transaction::Fund(fund) => fund.order(),
+            Transaction::Transfer(transfer) => transfer.order(),
+            Transaction::Create(create) => create.order(),
+        }
+    }
 }
 
 pub struct Party {
@@ -32,21 +47,28 @@ pub struct Transfer {
 }
 
 impl Transfer {
-    pub fn send(&self) -> String {
-        String::from("list of arguments")
+    pub fn send(&self) -> StepFunc {
+        let value = format!("todo {}", self.id);
+        return Box::new(move || value.clone());
     }
 
-    pub fn receive(&self) -> String {
-        String::from("list of arguments")
+    pub fn receive(&self) -> StepFunc {
+        let value = format!("todo {}", self.id);
+        return Box::new(move || value.clone());
     }
 
-    pub fn mediate(&self) -> Option<String> {
-        // since based  on cheating, the transaction might not get to the mediator
-        Some(String::from("list of arguments"))
+    pub fn mediate(&self) -> StepFunc {
+        let value = format!("todo {}", self.id);
+        return Box::new(move || value.clone());
     }
 
-    pub fn validate(&self) -> String {
-        String::from("list of arguments")
+    pub fn validate(&self) -> StepFunc {
+        let value = format!("todo {}", self.id);
+        return Box::new(move || value.clone());
+    }
+
+    pub fn order(&self) -> Vec<StepFunc> {
+        vec![self.send(), self.receive(), self.mediate(), self.validate()]
     }
 }
 
@@ -100,6 +122,27 @@ pub struct Fund {
     pub amount: u32,
 }
 
+impl Fund {
+    pub fn issue(&self) -> StepFunc {
+        let value = format!("todo {}", self.id);
+        return Box::new(move || value.clone());
+    }
+
+    pub fn mediate(&self) -> StepFunc {
+        let value = format!("todo {}", self.id);
+        return Box::new(move || value.clone());
+    }
+
+    pub fn validate(&self) -> StepFunc {
+        let value = format!("todo {}", self.id);
+        return Box::new(move || value.clone());
+    }
+
+    pub fn order(&self) -> Vec<StepFunc> {
+        vec![self.issue(), self.mediate(), self.validate()]
+    }
+}
+
 pub enum TransactionMode {
     Sequence {
         repeat: u32,
@@ -110,6 +153,58 @@ pub enum TransactionMode {
         steps: Vec<TransactionMode>,
     },
     Transaction(Transaction),
+}
+
+impl TransactionMode {
+    fn sequence(&self) -> Vec<StepFunc> {
+        match self {
+            TransactionMode::Transaction(transaction) => transaction.order(),
+            TransactionMode::Sequence { repeat, steps } => {
+                let mut seq: Vec<StepFunc> = vec![];
+                for _ in 0..*repeat {
+                    for transaction in steps {
+                        seq.extend(transaction.sequence());
+                    }
+                }
+                seq
+            }
+            TransactionMode::Concurrent { repeat, steps } => {
+                let mut seqs: &Vec<Vec<StepFunc>> = vec![];
+                let mut indices: Vec<usize> = vec![];
+                for _ in 0..*repeat {
+                    indices.push(0);
+                    for transaction in steps {
+                        seqs.push(transaction.sequence());
+                    }
+                }
+                // TODO Tie this rng to a global rng whose seed can be set for reproduceablity
+                let mut rng = rand::thread_rng();
+                let mut seed = [0u8; 32];
+                rng.fill(&mut seed);
+                info!(
+                    "Using seed {:?} for interleaving the transactions.",
+                    base64::encode(seed)
+                );
+
+                let mut rng = StdRng::from_seed(seed);
+                let mut seq: Vec<StepFunc> = vec![];
+
+                while indices.len() != 0 {
+                    let next = rng.gen_range(0, indices.len());
+                    let index = indices[next];
+                    if index >= seqs[next].len() {
+                        seqs.remove(next);
+                        indices.remove(next);
+                        continue;
+                    }
+                    let next_step: StepFunc = seqs[next][index];
+                    seq.push(next_step);
+                    indices[next] += 1;
+                }
+                seq
+            }
+        }
+    }
 }
 
 fn all_files_in_dir(dir: PathBuf) -> io::Result<Vec<PathBuf>> {
@@ -166,9 +261,9 @@ impl TestCase {
         self.chain_setup()?;
         self.make_empty_accounts()?;
         let start = Instant::now();
-        //for transaction in self.transaction_sequence() {
-        //    transaction.run()?;
-        //}
+        for transaction in self.transactions.sequence() {
+            transaction();
+        }
         let duration = Instant::now() - start;
         if duration.as_millis() > self.timing_limit {
             return Err(Error::TimeLimitExceeded {
