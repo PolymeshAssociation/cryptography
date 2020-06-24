@@ -192,7 +192,7 @@ impl TestCase {
             rng.fill(&mut seed);
             let seed = base64::encode(seed);
             process_create_account(
-                seed,
+                Some(seed),
                 self.chain_db_dir.clone(),
                 account.ticker.clone(),
                 account_id,
