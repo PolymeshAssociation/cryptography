@@ -4,8 +4,12 @@ use std::path::PathBuf;
 /// Common errors for all mercat clis
 #[derive(Fail, Debug)]
 pub enum Error {
+    /// Instruction is not valid.
+    #[fail(display = "Instruction is not valid.")]
+    InvalidInstructionError,
+
     /// The create account has been called with an empty seed.
-    #[fail(display = "The input seed cannot be empty")]
+    #[fail(display = "The input seed cannot be empty.")]
     EmptySeed,
 
     /// There was an error in converting the seed from base64 to byte array.
@@ -25,7 +29,7 @@ pub enum Error {
     LibraryError { error: cryptography::errors::Error },
 
     /// No database directory path was passed.
-    #[fail(display = "The database directory must be provided")]
+    #[fail(display = "The database directory must be provided.")]
     EmptyDatabaseDir,
 
     /// An error occurred while creating an empty file.

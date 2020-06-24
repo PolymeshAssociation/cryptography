@@ -1,3 +1,7 @@
+//! A simple commandline application to act as a MERCAT Validator.
+//! Use `mercat_validator --help` to see the usage.
+//!
+
 mod input;
 use codec::Decode;
 use cryptography::mercat::{
@@ -16,11 +20,11 @@ use mercat_common::{
 use metrics::timing;
 use std::time::Instant;
 
-fn asset_issuance_init_started(
+fn process_asset_issuance_init(
     instruction: Instruction,
     mdtr_account: &AccountMemo,
     issr_pub_account: &PubAccount,
-) -> AssetTxState {
+) -> Result<AssetTxState, Error> {
     let tx = PubAssetTxData::decode(&mut &instruction.data[..]).unwrap();
     let validator = AssetTxIssueValidator {};
     let state = validator
@@ -30,106 +34,109 @@ fn asset_issuance_init_started(
             &issr_pub_account,
             &mdtr_account.owner_enc_pub_key,
         )
-        .expect("Failed to validate a transaction"); // todo add the transaction id maybe?
-                                                     // assert_eq!(state, AssetTxState::Initialization(TxSubstate::Validated));
-    state
+        .map_err(|error| Error::LibraryError { error })?;
+
+    Ok(state)
 }
 
-fn asset_issuance_justification_started(
+fn process_asset_issuance_justification(
     instruction: Instruction,
     mdtr_account: &AccountMemo,
     issr_pub_account: &PubAccount,
-) -> AssetTxState {
+) -> Result<AssetTxState, Error> {
     let tx = PubJustifiedAssetTxData::decode(&mut &instruction.data[..]).unwrap();
     let validator = AssetTxIssueValidator {};
     let state = validator
         .verify_justification(&tx, issr_pub_account, &mdtr_account.owner_sign_pub_key)
-        .expect("Failed to validate a transaction"); // todo add the transaction id maybe?
-                                                     // assert_eq!(state, AssetTxState::Initialization(TxSubstate::Validated));
-    state
+        .map_err(|error| Error::LibraryError { error })?;
+
+    Ok(state)
 }
 
-fn validate_asset_issuance(cfg: input::AssetIssuanceInfo) {
-    // println!("state: {} vs {:?}", AssetTxState::Initialization(TxSubstate::Started), cfg.state);
-    // let state = AssetTxState::decode(&mut &cfg.state.as_bytes()[..]).unwrap();
+fn validate_asset_issuance(cfg: input::ValidateAssetIssuanceInfo) -> Result<(), Error> {
+    // Load the transaction, mediator's account, and issuer's public account.
+    let db_dir = cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir)?;
+
     let state = match cfg.state.as_str() {
-        // move this string literal to common.
         INIT_STATE => AssetTxState::Initialization(TxSubstate::Started),
         JUSTIFY_STATE => AssetTxState::Justification(TxSubstate::Started),
-        _ => panic!("Invalid state"),
+        _ => panic!(Error::InvalidInstructionError),
     };
 
     let mut instruction: Instruction = load_object(
-        cfg.db_dir.clone(),
+        db_dir.clone(),
         ON_CHAIN_DIR,
         &cfg.issuer,
         &transaction_file(cfg.tx_id, state),
-    )
-    .unwrap_or_else(|error| panic!("Failed to deserialize the instruction: {}", error));
+    )?;
 
     let mediator_account: AccountMemo = load_object(
-        cfg.db_dir.clone(),
+        db_dir.clone(),
         ON_CHAIN_DIR,
         &cfg.mediator,
         PUBLIC_ACCOUNT_FILE,
-    )
-    .unwrap_or_else(|error| panic!("Failed to deserialize the instruction: {}", error));
+    )?;
 
     let issuer_account: PubAccount = load_object(
-        cfg.db_dir.clone(),
+        db_dir.clone(),
         ON_CHAIN_DIR,
         &cfg.issuer,
         VALIDATED_PUBLIC_ACCOUNT_FILE,
-    )
-    .unwrap_or_else(|error| panic!("Failed to load the validated public account: {}", error));
+    )?;
 
+    let validate_issuance_transaction_timer = Instant::now();
     let result = match instruction.state {
         AssetTxState::Initialization(TxSubstate::Started) => {
-            println!("Asset issuance initialization instruction.");
-            asset_issuance_init_started(instruction.clone(), &mediator_account, &issuer_account)
+            process_asset_issuance_init(instruction.clone(), &mediator_account, &issuer_account)?
         }
-        AssetTxState::Justification(TxSubstate::Started) => {
-            println!("Asset issuance justification instruction.");
-            asset_issuance_justification_started(
-                instruction.clone(),
-                &mediator_account,
-                &issuer_account,
-            )
-        }
-        _ => {
-            panic!("Instruction not supported!");
-        }
+        AssetTxState::Justification(TxSubstate::Started) => process_asset_issuance_justification(
+            instruction.clone(),
+            &mediator_account,
+            &issuer_account,
+        )?,
+        _ => panic!(Error::InvalidInstructionError),
     };
-    // todo: this should have happened inside the library. the wierdness...
+
+    timing!(
+        "validator.issuance_transaction",
+        validate_issuance_transaction_timer,
+        Instant::now()
+    );
+
+    // Save the transaction under the new state.
     instruction.state = result;
     save_object(
-        cfg.db_dir.clone(),
+        db_dir,
         ON_CHAIN_DIR,
         &cfg.issuer,
         &transaction_file(cfg.tx_id, result),
         &instruction,
-    )
-    .unwrap();
+    )?;
+
+    Ok(())
 }
 
 fn validate_account(cfg: input::AccountCreationInfo) -> Result<(), Error> {
-    let user_account: PubAccount = load_object(
-        cfg.db_dir.clone(),
-        ON_CHAIN_DIR,
-        &cfg.user,
-        PUBLIC_ACCOUNT_FILE,
-    )?;
+    // Load the user's public account.
+    let db_dir = cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir)?;
 
-    let valid_asset_ids = get_asset_ids(cfg.db_dir.clone())?;
+    let user_account: PubAccount =
+        load_object(db_dir.clone(), ON_CHAIN_DIR, &cfg.user, PUBLIC_ACCOUNT_FILE)?;
 
-    let account_vldtr = AccountValidator {};
-    account_vldtr
+    let valid_asset_ids = get_asset_ids(db_dir.clone())?;
+
+    // Validate the account.
+    let validate_account_timer = Instant::now();
+    let account_validator = AccountValidator {};
+    account_validator
         .verify(&user_account, &valid_asset_ids)
-        .unwrap_or_else(|error| panic!("Failed to deserialize the instruction: {}", error));
+        .map_err(|error| Error::LibraryError { error })?;
+
+    timing!("validator.account", validate_account_timer, Instant::now());
 
     // On success save the public account as validated.
     save_object(
-        cfg.db_dir,
+        db_dir,
         ON_CHAIN_DIR,
         &cfg.user,
         &VALIDATED_PUBLIC_ACCOUNT_FILE,
@@ -146,11 +153,12 @@ fn main() {
 
     let parse_arg_timer = Instant::now();
     let args = parse_input().unwrap();
-    timing!("account.argument_parse", parse_arg_timer, Instant::now());
+    timing!("validator.argument_parse", parse_arg_timer, Instant::now());
 
     match args {
-        CLI::ValidateIssuance(cfg) => validate_asset_issuance(cfg),
+        CLI::ValidateIssuance(cfg) => validate_asset_issuance(cfg).unwrap(),
         CLI::ValidateAccount(cfg) => validate_account(cfg).unwrap(),
     };
+
     info!("The program finished successfully.");
 }

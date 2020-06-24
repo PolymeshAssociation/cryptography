@@ -1,5 +1,6 @@
 use confy;
 use log::info;
+use mercat_common::save_config;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -8,7 +9,7 @@ use structopt::StructOpt;
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct CreateMediatorAccountInfo {
     /// The name of the mediator.
-    /// It is the responsibility of the caller to ensure the uniqueness of the name.
+    /// It is the responsibility of the caller to ensure this name is unique.
     /// If it is not unique the artifacts will be overwritten.
     #[structopt(
         short,
@@ -20,7 +21,7 @@ pub struct CreateMediatorAccountInfo {
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
     /// blockchain. Defaults to the current directory. This directory will have two main
-    /// sub-directories: `on-chain` and `off-chain`
+    /// sub-directories: `on-chain` and `off-chain`.
     #[structopt(
         parse(from_os_str),
         help = "The directory to load and save the input and output files. Defaults to current directory.",
@@ -38,11 +39,11 @@ pub struct CreateMediatorAccountInfo {
     )]
     pub seed: Option<String>,
 
-    /// An optional flag that determines if the input arguments should be saved in a config file.
+    /// An optional path to save the config used for this experiment.
     #[structopt(
         parse(from_os_str),
         long,
-        help = "Whether to save the input command line arguments in the config file."
+        help = "Path to save the input command line arguments as a config file."
     )]
     pub save_config: Option<PathBuf>,
 }
@@ -52,7 +53,7 @@ pub struct IssueAssetInfo {
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
     /// blockchain. Defaults to the current directory. This directory will have two main
-    /// sub-directories: `on-chain` and `off-chain`
+    /// sub-directories: `on-chain` and `off-chain`.
     #[structopt(
         parse(from_os_str),
         help = "The directory to load and save the input and output files. Defaults to current directory.",
@@ -70,11 +71,11 @@ pub struct IssueAssetInfo {
     /// The name of the issuer.
     /// An account must have already been created for this user, using `mercat-account`
     /// CLI.
-    #[structopt(short, long, help = "The name of the user. This name must be unique.")]
+    #[structopt(short, long, help = "The name of the user.")]
     pub issuer: String,
 
     /// The name of the mediator.
-    #[structopt(short, long, help = "The name of the user. This name must be unique.")]
+    #[structopt(short, long, help = "The name of the user.")]
     pub mediator: String,
 
     /// An optional seed that can be passed to reproduce a previous run of this CLI.
@@ -86,11 +87,11 @@ pub struct IssueAssetInfo {
     )]
     pub seed: Option<String>,
 
-    /// An optional flag that determines if the input arguments should be saved in a config file.
+    /// An optional path to save the config used for this experiment.
     #[structopt(
         parse(from_os_str),
         long,
-        help = "Whether to save the input command line arguments in the config file."
+        help = "Path to save the input command line arguments as a config file."
     )]
     pub save_config: Option<PathBuf>,
 }
@@ -117,11 +118,11 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
     match args {
         CLI::Create(cfg) => {
-            // Otherwise, set the default seed and db_dir if needed
+            // Set the default seed and db_dir if needed.
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
 
             let seed: Option<String> = cfg.seed.clone().or_else(|| Some(gen_seed()));
-            info!("Seed: {:?}", seed.clone().unwrap()); // unwrap won't panic
+            info!("Seed: {:?}", seed.clone().unwrap());
 
             let cfg = CreateMediatorAccountInfo {
                 save_config: cfg.save_config.clone(),
@@ -135,30 +136,18 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 cfg
             );
 
-            // Save the config is the argument is passed
-            if let Some(path) = &cfg.save_config {
-                info!("Saving the following config to {:?}:\n{:#?}", &path, &cfg);
-                std::fs::write(
-                    path,
-                    serde_json::to_string_pretty(&cfg).unwrap_or_else(|error| {
-                        panic!("Failed to serialize configuration file: {}", error)
-                    }),
-                )
-                .expect(&format!(
-                    "Failed to write the configuration to the file {:?}.",
-                    path
-                ));
-            }
+            // Save the config is the argument is passed.
+            save_config(cfg.save_config.clone(), &cfg);
 
             return Ok(CLI::Create(cfg));
         }
+
         CLI::JustifyIssuance(cfg) => {
-            // Otherwise, set the default seed and db_dir if needed
+            // Set the default seed and db_dir if needed.
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
 
             let seed: Option<String> = cfg.seed.clone().or_else(|| Some(gen_seed()));
-            info!("Seed: {:?}", seed.clone().unwrap()); // unwrap won't panic
-
+            info!("Seed: {:?}", seed.clone().unwrap());
             let cfg = IssueAssetInfo {
                 db_dir,
                 tx_id: cfg.tx_id,
@@ -170,23 +159,11 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg
+                cfg.clone()
             );
 
-            // Save the config is the argument is passed
-            if let Some(path) = &cfg.save_config {
-                info!("Saving the following config to {:?}:\n{:#?}", &path, &cfg);
-                std::fs::write(
-                    path,
-                    serde_json::to_string_pretty(&cfg).unwrap_or_else(|error| {
-                        panic!("Failed to serialize configuration file: {}", error)
-                    }),
-                )
-                .expect(&format!(
-                    "Failed to write the configuration to the file {:?}.",
-                    path
-                ));
-            }
+            // Save the config is the argument is passed.
+            save_config(cfg.save_config.clone(), &cfg);
 
             return Ok(CLI::JustifyIssuance(cfg));
         }

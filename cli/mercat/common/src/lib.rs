@@ -238,7 +238,26 @@ pub fn load_object<T: Decode>(
     })
 }
 
-/// Utitlity function to create an RNG from seed.
+/// Helper function to save a config file to `cfg_path`.
+pub fn save_config<T>(cfg_path: Option<PathBuf>, cfg: &T)
+where
+    T: ?Sized + serde::Serialize,
+{
+    if let Some(path) = &cfg_path {
+        std::fs::write(
+            path,
+            serde_json::to_string_pretty(cfg).unwrap_or_else(|error| {
+                panic!("Failed to serialize configuration file: {}", error)
+            }),
+        )
+        .expect(&format!(
+            "Failed to write the configuration to the file {:?}.",
+            path
+        ));
+    }
+}
+
+/// Helper function to create an RNG from seed.
 #[inline]
 pub fn create_rng_from_seed(seed: Option<String>) -> Result<StdRng, Error> {
     let seed = seed.ok_or(Error::EmptySeed)?;

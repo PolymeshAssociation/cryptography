@@ -74,7 +74,6 @@ fn process_create_mediator(cfg: CreateMediatorAccountInfo) -> Result<(), Error> 
     Ok(())
 }
 
-// todo get rid of all unwraps... timing
 fn justify_asset_issuance(cfg: input::IssueAssetInfo) -> Result<(), Error> {
     // Load the transaction, mediator's credentials, and issuer's public account.
     let db_dir = cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir)?;
@@ -126,11 +125,6 @@ fn justify_asset_issuance(cfg: input::IssueAssetInfo) -> Result<(), Error> {
             &mediator_account.signing_key,
         )
         .map_err(|error| Error::LibraryError { error })?;
-
-    assert_eq!(
-        justified_tx.content.state,
-        AssetTxState::Justification(TxSubstate::Started)
-    );
 
     // Save the updated_issuer_account, and the justified transaction.
     let next_instruction = Instruction {
