@@ -29,7 +29,6 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-use rand_core::OsRng;
 use rand_core::{CryptoRng, RngCore};
 use schnorrkel::keys::{Keypair, PublicKey};
 use serde::{Deserialize, Serialize};
@@ -203,12 +202,12 @@ impl Decode for InRangeProof {
     }
 }
 
-impl Default for InRangeProof {
-    fn default() -> Self {
-        let mut rng = OsRng::default();
+impl InRangeProof {
+    #[allow(dead_code)]
+    fn build<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let range = 32;
         InRangeProof::from(
-            range_proof::prove_within_range(0, Scalar::one(), range, &mut rng)
+            range_proof::prove_within_range(0, Scalar::one(), range, rng)
                 .expect("This shouldn't happen."),
         )
     }
@@ -599,7 +598,7 @@ pub struct ConfidentialTxMemo {
 }
 
 /// Holds the proofs and memo of the confidential transaction sent by the sender.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubInitConfidentialTxDataContent {
     pub amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
@@ -731,11 +730,12 @@ pub trait ConfidentialTransactionSender {
 pub trait ConfidentialTransactionInitVerifier {
     /// This is called by the validators to verify the signature and some of the
     /// proofs of the initialized transaction.
-    fn verify(
+    fn verify<R: RngCore + CryptoRng>(
         &self,
         transaction: &PubInitConfidentialTxData,
         sndr_account: &PubAccount,
         state: ConfidentialTxState,
+        rng: &mut R,
     ) -> Fallible<ConfidentialTxState>;
 }
 

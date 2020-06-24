@@ -41,7 +41,7 @@ merlin = { version = "2.0.0", default-features = false }
 bulletproofs = { git = "https://github.com/fmiguelgarcia/bulletproofs.git", branch = "CRYP-92/integration_test", default-features = false }
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3.10"
+wasm-bindgen-test = { version = "0.3.10"}
 
 [features]
 default = ["std"] 
@@ -70,13 +70,8 @@ no_std = [
 	"serde_all",
 	"alloc",
 	# Other
-	"rand_core/getrandom",
-	"rand/wasm-bindgen",
 	"chrono/clock", 
-	"chrono/wasmbind", 
-	# "getrandom/wasm-bindgen",
 	"curve25519-dalek/nightly",
-	"schnorrkel/wasm-bindgen",
 	"bulletproofs/no_std"
 ]
 
@@ -96,7 +91,7 @@ std = [
 	"chrono/std",
 	"chrono/serde",
 	"codec/std",
-	"sp-std/std"
+	"sp-std/std",
 ]
 
 [[bench]]
