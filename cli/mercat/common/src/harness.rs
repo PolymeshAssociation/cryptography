@@ -8,33 +8,40 @@ use log::info;
 use rand::Rng;
 use rand::{rngs::StdRng, SeedableRng};
 use std::path::PathBuf;
-use std::{collections::HashSet, fs, io, path::Path, time::Instant};
+use std::{collections::HashSet, fs, io, time::Instant};
 
+// --------------------------------------------------------------------------------------------------
+// -                                       data types                                                -
+// ---------------------------------------------------------------------------------------------------
+
+/// The signature fo the function for a generic step in a transaction. This function performs
+/// the action (e.g., initializing a transaction, finalizing a transaction, or creating an account),
+/// and returns the corresponding CLI command that can be run to reproduce this step manually.
+type StepFunc = Box<dyn Fn() -> String + 'static>;
+
+/// The trait which prescribes the order of functions needed for a transaction. For example, for a
+/// confidential transaction, the order is initiate, finalize, mediate, and finally validate.
 trait TransactionOrder {
     fn order(&self) -> Vec<StepFunc>;
 }
 
+/// Represents the three types of mercat transactions.
 pub enum Transaction {
+    /// Transfer a balance from Alice to Bob, with some mediator and validator.
     Transfer(Transfer),
-    Fund(Fund),
+    /// Create an account for Alice for a ticker, with balance of zero.
     Create(Create),
+    /// Issue tokens for an account (effectively funding an account).
+    Issue(Issue),
 }
 
-impl TransactionOrder for Transaction {
-    fn order(&self) -> Vec<StepFunc> {
-        match self {
-            Transaction::Fund(fund) => fund.order(),
-            Transaction::Transfer(transfer) => transfer.order(),
-            Transaction::Create(create) => create.order(),
-        }
-    }
-}
-
+/// A generic party, can be sender, receiver, or mediator.
 pub struct Party {
     pub name: String,
     pub cheater: bool,
 }
 
+/// Data type of the transaction of transferring balance.
 pub struct Transfer {
     pub id: u32,
     pub sender: Party,
@@ -46,9 +53,90 @@ pub struct Transfer {
     pub ticker: String,
 }
 
+/// Data type of the transaction of creating empty account.
+pub struct Create {
+    pub id: u32,
+    pub seed: String,
+    pub chain_db_dir: PathBuf,
+    pub account_id: u32,
+    pub owner: Party,
+    pub mediator: Party,
+    pub mediator_approves: bool,
+    pub ticker: String,
+}
+
+/// Data type of the transaction of funding an account by issuer.
+pub struct Issue {
+    pub id: u32,
+    pub owner: Party,
+    pub mediator: Party,
+    pub mediator_approves: bool,
+    pub ticker: String,
+    pub amount: u32,
+}
+
+/// Human readable form of a mercat account.
+#[derive(PartialEq, Eq, Hash, Debug)]
+pub struct Account {
+    owner: String,
+    ticker: String,
+    balance: u32,
+}
+
+/// Represents the various combinations of the transactions.
+pub enum TransactionMode {
+    /// The transactions are run `repeat` number of times, and in each iteration, the
+    /// steps of one transaction are done before the steps of the next transaction.
+    Sequence {
+        repeat: u32,
+        steps: Vec<TransactionMode>,
+    },
+    /// The transactions are run `repeat` number of times, and in each iteration, the
+    /// steps of the transactions are interleaved randomly.
+    Concurrent {
+        repeat: u32,
+        steps: Vec<TransactionMode>,
+    },
+    Transaction(Transaction),
+}
+
+/// Represents a testcase that is read from the config file.
+pub struct TestCase {
+    /// Human readable description of the testcase. Will be printed to the log.
+    title: String,
+    /// The list of valid ticker names. This names will be converted to asset ids for meract.
+    ticker_names: Vec<String>,
+    /// The initial list of accounts for each party.
+    accounts: Vec<Account>,
+    /// The transactions of this testcase.
+    transactions: TransactionMode,
+    /// The expected value of the accounts at the end of the scenario.
+    accounts_outcome: HashSet<Account>,
+    /// Maximum allowable time in Milliseconds
+    timing_limit: u128,
+    /// the directory that will act as the chain datastore.
+    chain_db_dir: PathBuf,
+}
+
+// --------------------------------------------------------------------------------------------------
+// -                                  data type methods                                             -
+// --------------------------------------------------------------------------------------------------
+
+impl TransactionOrder for Transaction {
+    fn order(&self) -> Vec<StepFunc> {
+        match self {
+            Transaction::Issue(fund) => fund.order(),
+            Transaction::Transfer(transfer) => transfer.order(),
+            Transaction::Create(create) => create.order(),
+        }
+    }
+}
+
 impl Transfer {
     pub fn send(&self) -> StepFunc {
         let value = format!("todo {}", self.id);
+        // TODO: run the initialize transfer function, and return its CLI + args
+        //       sea "create_account" function for an example of how it will look like.
         return Box::new(move || value.clone());
     }
 
@@ -72,25 +160,6 @@ impl Transfer {
     }
 }
 
-pub struct Create {
-    pub id: u32,
-    pub account_id: u32,
-    pub owner: Party,
-    pub mediator: Party,
-    pub mediator_approves: bool,
-    pub ticker: String,
-}
-
-fn cheater_flag(is_cheater: bool) -> String {
-    if is_cheater {
-        String::from("--cheater")
-    } else {
-        String::from("")
-    }
-}
-
-type StepFunc = Box<dyn Fn() -> String>;
-
 impl Create {
     pub fn create_account(&self) -> StepFunc {
         let value = format!(
@@ -100,11 +169,22 @@ impl Create {
             self.owner.name,
             cheater_flag(self.owner.cheater)
         );
-        return Box::new(move || value.clone());
+        return Box::new(move || {
+            // TODO: this does not pass the lifetime checks :(
+            //process_create_account(
+            //    Some(self.seed),
+            //    self.chain_db_dir,
+            //    self.ticker,
+            //    self.account_id,
+            //    self.owner.name,
+            //)
+            //.unwrap();
+            value.clone()
+        });
     }
 
     pub fn validate(&self) -> StepFunc {
-        let value = format!("run-validate-function-on --account-id={}", self.account_id);
+        let value = format!("todo --account-id={}", self.account_id);
         return Box::new(move || value.clone());
     }
 
@@ -113,16 +193,7 @@ impl Create {
     }
 }
 
-pub struct Fund {
-    pub id: u32,
-    pub owner: Party,
-    pub mediator: Party,
-    pub mediator_approves: bool,
-    pub ticker: String,
-    pub amount: u32,
-}
-
-impl Fund {
+impl Issue {
     pub fn issue(&self) -> StepFunc {
         let value = format!("todo {}", self.id);
         return Box::new(move || value.clone());
@@ -141,18 +212,6 @@ impl Fund {
     pub fn order(&self) -> Vec<StepFunc> {
         vec![self.issue(), self.mediate(), self.validate()]
     }
-}
-
-pub enum TransactionMode {
-    Sequence {
-        repeat: u32,
-        steps: Vec<TransactionMode>,
-    },
-    Concurrent {
-        repeat: u32,
-        steps: Vec<TransactionMode>,
-    },
-    Transaction(Transaction),
 }
 
 impl TransactionMode {
@@ -207,55 +266,6 @@ impl TransactionMode {
     }
 }
 
-fn all_files_in_dir(dir: PathBuf) -> io::Result<Vec<PathBuf>> {
-    let mut files = vec![];
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if !path.is_dir() {
-            files.push(path);
-        }
-    }
-    Ok(files)
-}
-
-fn all_dirs_in_dir(dir: PathBuf) -> Result<Vec<PathBuf>, Error> {
-    let mut files = vec![];
-    for entry in fs::read_dir(dir.clone()).map_err(|error| Error::FileReadError {
-        error,
-        path: dir.clone(),
-    })? {
-        let entry = entry.map_err(|error| Error::FileReadError {
-            error,
-            path: dir.clone(),
-        })?;
-        let path = entry.path();
-        if path.is_dir() {
-            files.push(path);
-        }
-    }
-    Ok(files)
-}
-
-#[derive(PartialEq, Eq, Hash, Debug)]
-pub struct Account {
-    owner: String,
-    ticker: String,
-    balance: u32,
-}
-
-pub struct TestCase {
-    title: String,
-    ticker_names: Vec<String>,
-    accounts: Vec<Account>,
-    /// NOTE: top level transaction is NOT a vector
-    transactions: TransactionMode,
-    accounts_outcome: HashSet<Account>,
-    /// Maximum allowable time in Milliseconds
-    timing_limit: u128,
-    chain_db_dir: PathBuf,
-}
-
 impl TestCase {
     fn run(&self) -> Result<HashSet<Account>, Error> {
         self.chain_setup()?;
@@ -278,7 +288,6 @@ impl TestCase {
         process_asset_id_creation(self.chain_db_dir.clone(), self.ticker_names.clone())
     }
 
-    // TODO also generate and log the corresponding commands, in case we need to run them for debugging
     fn make_empty_accounts(&self) -> Result<(), Error> {
         let mut account_id = 0;
         for account in &self.accounts {
@@ -286,6 +295,7 @@ impl TestCase {
             let mut seed = [0u8; 32];
             rng.fill(&mut seed);
             let seed = base64::encode(seed);
+            // TODO: change this into a transaction so that it also logs the CLI and its args.
             process_create_account(
                 Some(seed),
                 self.chain_db_dir.clone(),
@@ -345,6 +355,47 @@ impl TestCase {
         }
         Ok(accounts)
     }
+}
+
+// ------------------------------------------------------------------------------------------
+// -                                  Utility functions                                     -
+// ------------------------------------------------------------------------------------------
+fn cheater_flag(is_cheater: bool) -> String {
+    if is_cheater {
+        String::from("--cheater")
+    } else {
+        String::from("")
+    }
+}
+
+fn all_files_in_dir(dir: PathBuf) -> io::Result<Vec<PathBuf>> {
+    let mut files = vec![];
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_dir() {
+            files.push(path);
+        }
+    }
+    Ok(files)
+}
+
+fn all_dirs_in_dir(dir: PathBuf) -> Result<Vec<PathBuf>, Error> {
+    let mut files = vec![];
+    for entry in fs::read_dir(dir.clone()).map_err(|error| Error::FileReadError {
+        error,
+        path: dir.clone(),
+    })? {
+        let entry = entry.map_err(|error| Error::FileReadError {
+            error,
+            path: dir.clone(),
+        })?;
+        let path = entry.path();
+        if path.is_dir() {
+            files.push(path);
+        }
+    }
+    Ok(files)
 }
 
 fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
@@ -410,7 +461,7 @@ fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
         ],
         transactions: TransactionMode::Concurrent {
             repeat: 1,
-            steps: vec![TransactionMode::Transaction(Transaction::Fund(Fund {
+            steps: vec![TransactionMode::Transaction(Transaction::Issue(Issue {
                 id: 1,
                 owner: Party {
                     name: String::from("alice"),
