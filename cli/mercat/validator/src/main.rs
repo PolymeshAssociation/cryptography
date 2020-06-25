@@ -21,8 +21,8 @@ use metrics::timing;
 use std::time::Instant;
 
 fn main() {
-    info!("Starting the program.");
     env_logger::init();
+    info!("Starting the program.");
     init_print_logger();
 
     let parse_arg_timer = Instant::now();
@@ -71,13 +71,14 @@ fn process_asset_issuance_justification(
 }
 
 fn validate_asset_issuance(cfg: input::ValidateAssetIssuanceInfo) -> Result<(), Error> {
+    let load_objects_timer = Instant::now();
     // Load the transaction, mediator's account, and issuer's public account.
     let db_dir = cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir)?;
 
     let state = match cfg.state.as_str() {
         INIT_STATE => AssetTxState::Initialization(TxSubstate::Started),
         JUSTIFY_STATE => AssetTxState::Justification(TxSubstate::Started),
-        _ => panic!(Error::InvalidInstructionError),
+        _ => return Err(Error::InvalidInstructionError),
     };
 
     let mut instruction: Instruction = load_object(
@@ -100,6 +101,11 @@ fn validate_asset_issuance(cfg: input::ValidateAssetIssuanceInfo) -> Result<(), 
         &cfg.issuer,
         VALIDATED_PUBLIC_ACCOUNT_FILE,
     )?;
+    timing!(
+        "validator.issuance.load_objects",
+        load_objects_timer,
+        Instant::now()
+    );
 
     let validate_issuance_transaction_timer = Instant::now();
     let result = match instruction.state {
@@ -111,15 +117,16 @@ fn validate_asset_issuance(cfg: input::ValidateAssetIssuanceInfo) -> Result<(), 
             &mediator_account,
             &issuer_account,
         )?,
-        _ => panic!(Error::InvalidInstructionError),
+        _ => return Err(Error::InvalidInstructionError),
     };
 
     timing!(
-        "validator.issuance_transaction",
+        "validator.issuance.transaction",
         validate_issuance_transaction_timer,
         Instant::now()
     );
 
+    let save_objects_timer = Instant::now();
     // Save the transaction under the new state.
     instruction.state = result;
     save_object(
@@ -129,18 +136,29 @@ fn validate_asset_issuance(cfg: input::ValidateAssetIssuanceInfo) -> Result<(), 
         &transaction_file(cfg.tx_id, result),
         &instruction,
     )?;
+    timing!(
+        "validator.issuance.save_objects",
+        save_objects_timer,
+        Instant::now()
+    );
 
     Ok(())
 }
 
 fn validate_account(cfg: input::AccountCreationInfo) -> Result<(), Error> {
     // Load the user's public account.
+    let load_objects_timer = Instant::now();
     let db_dir = cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir)?;
 
     let user_account: PubAccount =
         load_object(db_dir.clone(), ON_CHAIN_DIR, &cfg.user, PUBLIC_ACCOUNT_FILE)?;
 
     let valid_asset_ids = get_asset_ids(db_dir.clone())?;
+    timing!(
+        "validator.account.load_objects",
+        load_objects_timer,
+        Instant::now()
+    );
 
     // Validate the account.
     let validate_account_timer = Instant::now();
@@ -152,6 +170,7 @@ fn validate_account(cfg: input::AccountCreationInfo) -> Result<(), Error> {
     timing!("validator.account", validate_account_timer, Instant::now());
 
     // On success save the public account as validated.
+    let save_objects_timer = Instant::now();
     save_object(
         db_dir,
         ON_CHAIN_DIR,
@@ -159,6 +178,11 @@ fn validate_account(cfg: input::AccountCreationInfo) -> Result<(), Error> {
         &VALIDATED_PUBLIC_ACCOUNT_FILE,
         &user_account,
     )?;
+    timing!(
+        "validator.account.save_objects",
+        save_objects_timer,
+        Instant::now()
+    );
 
     Ok(())
 }

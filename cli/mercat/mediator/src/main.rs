@@ -28,8 +28,8 @@ use metrics::timing;
 use std::time::Instant;
 
 fn main() {
-    info!("Starting the program.");
     env_logger::init();
+    info!("Starting the program.");
     init_print_logger();
 
     let parse_arg_timer = Instant::now();
@@ -70,8 +70,11 @@ fn process_create_mediator(cfg: CreateMediatorAccountInfo) -> Result<(), Error> 
     let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
 
     // Generate keys for the mediator.
+    let mediator_key_gen_timer = Instant::now();
     let (public_account, private_account) = generate_mediator_keys(&mut rng);
+    timing!("mediator.key_gen", mediator_key_gen_timer, Instant::now());
 
+    let mediator_save_keys_timer = Instant::now();
     save_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
@@ -87,12 +90,18 @@ fn process_create_mediator(cfg: CreateMediatorAccountInfo) -> Result<(), Error> 
         SECRET_ACCOUNT_FILE,
         &private_account,
     )?;
+    timing!(
+        "mediator.save_keys",
+        mediator_save_keys_timer,
+        Instant::now()
+    );
 
     Ok(())
 }
 
 fn justify_asset_issuance(cfg: input::IssueAssetInfo) -> Result<(), Error> {
     // Load the transaction, mediator's credentials, and issuer's public account.
+    let justify_load_objects_timer = Instant::now();
     let db_dir = cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir)?;
 
     let instruction: Instruction = load_object(
@@ -131,31 +140,62 @@ fn justify_asset_issuance(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         PUBLIC_ACCOUNT_FILE,
     )?;
 
+    timing!(
+        "mediator.justify_load_objects",
+        justify_load_objects_timer,
+        Instant::now()
+    );
+
     // Justification.
+    let justify_library_timer = Instant::now();
     let mediator = AssetTxIssueMediator {};
     let (justified_tx, updated_issuer_account) = mediator
         .justify_and_process(
-            asset_tx,
+            asset_tx.clone(),
             &issuer_account,
             instruction.state,
             &mediator_account.encryption_key,
             &mediator_account.signing_key,
         )
         .map_err(|error| Error::LibraryError { error })?;
+    timing!(
+        "mediator.justify_library",
+        justify_library_timer,
+        Instant::now()
+    );
 
-    // Save the updated_issuer_account, and the justified transaction.
-    let next_instruction = Instruction {
-        data: justified_tx.encode().to_vec(),
-        state: justified_tx.content.state,
-    };
+    let next_instruction;
+    let justify_save_objects_timer = Instant::now();
+    // If the `reject` flag is set, save the transaction as rejected.
+    if cfg.reject {
+        let rejected_state = AssetTxState::Justification(TxSubstate::Rejected);
+        next_instruction = Instruction {
+            data: asset_tx.encode().to_vec(),
+            state: rejected_state,
+        };
 
-    save_object(
-        db_dir.clone(),
-        ON_CHAIN_DIR,
-        &cfg.issuer,
-        PUBLIC_ACCOUNT_FILE,
-        &updated_issuer_account,
-    )?;
+        save_object(
+            db_dir.clone(),
+            ON_CHAIN_DIR,
+            &cfg.issuer,
+            &transaction_file(cfg.tx_id, rejected_state),
+            &next_instruction,
+        )?;
+    } else {
+        // Save the updated_issuer_account, and the justified transaction.
+        next_instruction = Instruction {
+            data: justified_tx.encode().to_vec(),
+            state: justified_tx.content.state,
+        };
+
+        save_object(
+            db_dir.clone(),
+            ON_CHAIN_DIR,
+            &cfg.issuer,
+            PUBLIC_ACCOUNT_FILE,
+            &updated_issuer_account,
+        )?;
+    }
 
     save_object(
         db_dir,
@@ -164,6 +204,12 @@ fn justify_asset_issuance(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         &transaction_file(cfg.tx_id, justified_tx.content.state),
         &next_instruction,
     )?;
+
+    timing!(
+        "mediator.justify_save_objects",
+        justify_save_objects_timer,
+        Instant::now()
+    );
 
     Ok(())
 }

@@ -10,7 +10,7 @@ use errors::Error;
 use log::info;
 use metrics::Recorder;
 use metrics_core::Key;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::TryInto,
@@ -255,6 +255,14 @@ where
             path
         ));
     }
+}
+
+/// Helper function to generate a random seed using the thread RNG.
+pub fn gen_seed() -> String {
+    let mut rng = rand::thread_rng();
+    let mut seed = [0u8; 32];
+    rng.fill(&mut seed);
+    base64::encode(seed)
 }
 
 /// Helper function to create an RNG from seed.

@@ -28,8 +28,8 @@ use schnorrkel::{ExpansionMode, MiniSecretKey};
 use std::{path::PathBuf, time::Instant};
 
 fn main() {
-    info!("Starting the program.");
     env_logger::init();
+    info!("Starting the program.");
     init_print_logger();
 
     let parse_arg_timer = Instant::now();
@@ -144,7 +144,11 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         PUBLIC_ACCOUNT_FILE,
     )?;
 
-    timing!("account.issue_asset", load_from_file_timer, Instant::now());
+    timing!(
+        "account.issue_asset.load_from_file",
+        load_from_file_timer,
+        Instant::now()
+    );
 
     // Initialize the asset issuance process.
     let issuance_init_timer = Instant::now();
@@ -159,7 +163,11 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         )
         .map_err(|error| Error::LibraryError { error })?;
 
-    timing!("account.issue_asset", issuance_init_timer, Instant::now());
+    timing!(
+        "account.issue_asset.init",
+        issuance_init_timer,
+        Instant::now()
+    );
 
     // Save the artifacts to file.
     let save_to_file_timer = Instant::now();
@@ -176,7 +184,11 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         &instruction,
     )?;
 
-    timing!("account.issue_asset", save_to_file_timer, Instant::now());
+    timing!(
+        "account.issue_asset.save_to_file",
+        save_to_file_timer,
+        Instant::now()
+    );
 
     Ok(())
 }

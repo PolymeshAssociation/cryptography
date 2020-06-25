@@ -1,7 +1,6 @@
 use confy;
 use log::info;
-use mercat_common::save_config;
-use rand::Rng;
+use mercat_common::{gen_seed, save_config};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -42,12 +41,12 @@ pub struct CreateAccountInfo {
     )]
     pub ticker_id: String,
 
-    /// An optional seed that can be passed to reproduce a previous run of this CLI.
+    /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
     #[structopt(
         short,
         long,
-        help = "Base64 encoding of an initial seed. If not provided, the seed will be chosen at random."
+        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 
@@ -73,12 +72,12 @@ pub struct IssueAssetInfo {
     #[structopt(long, help = "The transaction ID.")]
     pub tx_id: u32,
 
-    /// An optional seed that can be passed to reproduce a previous run of this CLI.
+    /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
     #[structopt(
         short,
         long,
-        help = "Base64 encoding of an initial seed. If not provided, the seed will be chosen at random."
+        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 
@@ -148,13 +147,6 @@ pub enum CLI {
 
     /// Issue an asset to a MERCAT account.
     Issue(IssueAssetInfo),
-}
-
-fn gen_seed() -> String {
-    let mut rng = rand::thread_rng();
-    let mut seed = [0u8; 32];
-    rng.fill(&mut seed);
-    base64::encode(seed)
 }
 
 pub fn parse_input() -> Result<CLI, confy::ConfyError> {

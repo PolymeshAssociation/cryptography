@@ -79,8 +79,10 @@ pub struct AccountCreationInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub enum CLI {
-    /// Create a MERCAT account memo
+    /// Validate an asset issuance transaction.
     ValidateIssuance(ValidateAssetIssuanceInfo),
+
+    /// Validate an account creation transaction.
     ValidateAccount(AccountCreationInfo),
 }
 
@@ -90,7 +92,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
     match args {
         CLI::ValidateIssuance(cfg) => {
-            // Set the default seed and db_dir if needed.
+            // Set the default db_dir if needed.
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
 
             let cfg = ValidateAssetIssuanceInfo {
