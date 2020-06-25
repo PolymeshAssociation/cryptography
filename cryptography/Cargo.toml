@@ -17,9 +17,9 @@ sp-std = { git = "https://github.com/paritytech/substrate", default-features = f
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 
 # Common
-serde = { version = "1.0.105", features = ["derive"] }
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-serde_bytes = { version = "0.11", default-features = false, features = ["alloc"] }
+serde = { version = "1.0.105", default-features = false, features = ["derive"], optional = true }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
+serde_bytes = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
 zeroize = { version = "1.1", default-features = false }
 criterion = { version = "0.3", optional = true }
 lazy_static = "1.4.0"
@@ -27,8 +27,6 @@ failure = "0.1.7"
 
 # Crypto
 sha3 = { version = "0.8", default-features = false }
-# Force the dependency graph to use an older version of clear_on_drop.
-clear_on_drop = { version = "= 0.2.3", default-features = false }
 
 rand_core = { version = "0.5", default-features = false}
 rand = { version = "0.7", default-features = false }
@@ -52,6 +50,8 @@ u64_backend = [ "curve25519-dalek/u64_backend", "schnorrkel/u64_backend" ]
 u32_backend = [ "curve25519-dalek/u32_backend", "schnorrkel/u32_backend" ]
 
 serde_all = [
+	"serde",
+	"serde_json",
 	"chrono/serde", 
 	"curve25519-dalek/serde", 
 	"schnorrkel/serde",
@@ -67,8 +67,6 @@ alloc = [
 no_std = [
 	# General
 	"u32_backend",
-	"serde_all",
-	"alloc",
 	# Other
 	"chrono/clock", 
 	"curve25519-dalek/nightly",

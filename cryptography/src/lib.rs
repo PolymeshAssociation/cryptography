@@ -4,6 +4,8 @@ pub use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_512;
 use zeroize::Zeroize;
@@ -63,7 +65,8 @@ const ASSET_ID_LEN: usize = 12;
 /// decrypting an encrypted asset id we have a guess as what the
 /// asset id should be, use `ElgamalSecretKey`'s `verify()`
 /// to verify that the encrypted value is the same as the hinted value.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Zeroize)]
+#[derive(Default, Debug, Clone, PartialEq, Zeroize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[zeroize(drop)]
 pub struct AssetId {
     pub id: [u8; ASSET_ID_LEN],

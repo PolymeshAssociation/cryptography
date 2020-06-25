@@ -24,6 +24,7 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
@@ -41,7 +42,8 @@ pub const CIPHERTEXT_REFRESHMENT_PROOF_CHALLENGE_LABEL: &[u8] =
 // public key
 // ------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Default)]
+#[derive(PartialEq, Copy, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherTextRefreshmentFinalResponse(Scalar);
 
@@ -68,7 +70,8 @@ impl Decode for CipherTextRefreshmentFinalResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherTextRefreshmentInitialMessage {
     a: RistrettoPoint,

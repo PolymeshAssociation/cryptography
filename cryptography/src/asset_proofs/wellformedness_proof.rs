@@ -21,6 +21,7 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
@@ -32,7 +33,8 @@ pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathWellforme
 /// The domain label for the challenge.
 pub const WELLFORMEDNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathWellformednessProofChallenge";
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Default)]
+#[derive(PartialEq, Copy, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessFinalResponse {
     z1: Scalar,
@@ -65,7 +67,8 @@ impl Decode for WellformednessFinalResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessInitialMessage {
     a: RistrettoPoint,
