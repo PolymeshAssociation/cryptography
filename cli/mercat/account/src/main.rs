@@ -23,7 +23,7 @@ fn main() {
     init_print_logger();
 
     let parse_arg_timer = Instant::now();
-    let args = parse_input().unwrap();
+    let args = parse_input();
     timing!("account.argument_parse", parse_arg_timer, Instant::now());
 
     match args {

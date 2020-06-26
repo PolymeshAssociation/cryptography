@@ -1,4 +1,3 @@
-use confy;
 use log::info;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -156,7 +155,7 @@ fn gen_seed() -> String {
     base64::encode(seed)
 }
 
-pub fn parse_input() -> Result<CLI, confy::ConfyError> {
+pub fn parse_input() -> CLI {
     info!("Parsing input configuration.");
     let args: CLI = CLI::from_args();
 
@@ -196,7 +195,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 ));
             }
 
-            return Ok(CLI::Create(cfg));
+            return CLI::Create(cfg);
         }
 
         CLI::CreateFrom { config } => {
@@ -210,7 +209,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             });
 
             info!("Read the following config from {:?}:\n{:#?}", &config, &cfg);
-            return Ok(CLI::Create(cfg));
+            return CLI::Create(cfg);
         }
 
         CLI::Cleanup { user, db_dir } => {
@@ -224,7 +223,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 "Parsed the following config from the command line:\n{:#?}",
                 args
             );
-            return Ok(args);
+            return args;
         }
 
         CLI::Issue(cfg) => {
@@ -264,7 +263,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 ));
             }
 
-            return Ok(CLI::Issue(cfg));
+            return CLI::Issue(cfg);
         }
     }
 }
