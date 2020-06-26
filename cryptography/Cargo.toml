@@ -22,8 +22,8 @@ serde_json = { version = "1.0", default-features = false, features = ["alloc"], 
 serde_bytes = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
 zeroize = { version = "1.1", default-features = false }
 criterion = { version = "0.3", optional = true }
-lazy_static = "1.4.0"
-failure = "0.1.7"
+lazy_static = { version = "1.4.0", default-features = false, features = ["spin_no_std"] }
+failure = { version = "0.1.7", default-features = false, features = ["derive"] }
 
 # Crypto
 sha3 = { version = "0.8", default-features = false }
@@ -31,9 +31,8 @@ sha3 = { version = "0.8", default-features = false }
 rand_core = { version = "0.5", default-features = false}
 rand = { version = "0.7", default-features = false }
 getrandom = { version = "0.1.14", default-features = false, optional = true} 
-chrono = { version = "0.4",  default-features = false }
 
-curve25519-dalek = { version = "2", default-features = false }
+curve25519-dalek = { version = "2", default-features = false, features = ["nightly"] }
 schnorrkel = { version = "0.9.1", default-features = false }
 merlin = { version = "2.0.0", default-features = false }
 bulletproofs = { git = "https://github.com/fmiguelgarcia/bulletproofs.git", branch = "CRYP-92/integration_test", default-features = false }
@@ -42,54 +41,53 @@ bulletproofs = { git = "https://github.com/fmiguelgarcia/bulletproofs.git", bran
 wasm-bindgen-test = { version = "0.3.10"}
 
 [features]
-default = ["std"] 
+default = ["std", "avx2_backend"] 
 
 # Backends
-u64_backend = [ "curve25519-dalek/u64_backend", "schnorrkel/u64_backend" ]
-# avx2_backend = [ "curve25519-dalek/avx2_backend", "schnorrkel/avx2_backend" ]
-u32_backend = [ "curve25519-dalek/u32_backend", "schnorrkel/u32_backend" ]
+u32_backend = [ 
+	"curve25519-dalek/u32_backend", 
+	"schnorrkel/u32_backend",
+	"bulletproofs/u32_backend"
+]
+u64_backend = [ 
+	"curve25519-dalek/u64_backend", 
+	"schnorrkel/u64_backend",
+	"bulletproofs/u64_backend"
+]
+avx2_backend = [ 
+	"curve25519-dalek/avx2_backend", 
+	"schnorrkel/avx2_backend",
+	"bulletproofs/avx2_backend" 
+]
 
 serde_all = [
 	"serde",
 	"serde_json",
-	"chrono/serde", 
 	"curve25519-dalek/serde", 
 	"schnorrkel/serde",
+	"bulletproofs/serde",
 ]
 
 alloc = [
 	"rand_core/alloc", 
 	"rand/alloc",
-	"chrono/alloc",
 	"curve25519-dalek/alloc", 
 ]
 
-no_std = [
-	# General
-	"u32_backend",
-	# Other
-	"chrono/clock", 
-	"curve25519-dalek/nightly",
-	"bulletproofs/no_std"
-]
-
+no_std = [ ]
 std = [ 
 	# General and optional
-	"u64_backend",
 	"serde_all",
 	"criterion",
 	# Crypto 
-	"curve25519-dalek/nightly", 
 	"schnorrkel/std",
 	"rand_core/std",
 	"rand/std",
 	"bulletproofs/std",
 	# Other
-	"chrono/clock",
-	"chrono/std",
-	"chrono/serde",
 	"codec/std",
 	"sp-std/std",
+	"failure/std",
 ]
 
 [[bench]]

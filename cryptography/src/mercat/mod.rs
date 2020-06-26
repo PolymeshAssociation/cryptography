@@ -24,7 +24,6 @@ use crate::{
     AssetId, Balance,
 };
 
-use chrono::{DateTime, NaiveDateTime, Utc};
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
@@ -302,16 +301,15 @@ pub type AssetMemo = EncryptedAmount;
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
     pub owner_sign_pub_key: SigningPubKey,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: u64,
 }
 
 impl AccountMemo {
     pub fn new(owner_enc_pub_key: EncryptionPubKey, owner_sign_pub_key: SigningPubKey) -> Self {
-        let timestamp = Utc::now();
         AccountMemo {
             owner_enc_pub_key,
             owner_sign_pub_key,
-            timestamp,
+            timestamp: 0,
         }
     }
 }
@@ -328,7 +326,7 @@ impl Encode for AccountMemo {
     fn encode_to<W: Output>(&self, dest: &mut W) {
         self.owner_enc_pub_key.encode_to(dest);
         self.owner_sign_pub_key.to_bytes().encode_to(dest);
-        self.timestamp.timestamp().encode_to(dest);
+        self.timestamp.encode_to(dest);
     }
 }
 
@@ -340,10 +338,7 @@ impl Decode for AccountMemo {
         let owner_sign_pub_key = SigningPubKey::from_bytes(&owner_sign_pub_key)
             .map_err(|_| CodecError::from("AccountMemo.owner_sign_pub_key is invalid"))?;
 
-        let secs_from_epoc = <i64>::decode(input)?;
-        let naive_timestamp = NaiveDateTime::from_timestamp_opt(secs_from_epoc, 0)
-            .ok_or_else(|| CodecError::from("AccountMemo.timestamp is invalid"))?;
-        let timestamp = DateTime::<Utc>::from_utc(naive_timestamp, Utc);
+        let timestamp = <u64>::decode(input)?;
 
         Ok(AccountMemo {
             owner_enc_pub_key,
