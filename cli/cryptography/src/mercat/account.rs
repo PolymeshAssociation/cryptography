@@ -10,7 +10,7 @@ use crate::{
     },
     errors::Fallible,
     mercat::{
-        Account, AccountCreaterVerifier, AccountMemo, CorrectnessProof, EncryptedAmount,
+        Account, AccountCreatorVerifier, AccountMemo, CorrectnessProof, EncryptedAmount,
         MembershipProof, PubAccount, PubAccountContent, SecAccount, WellformednessProof, BASE,
         EXPONENT,
     },
@@ -18,6 +18,7 @@ use crate::{
 };
 
 use bulletproofs::PedersenGens;
+use codec::Encode;
 use curve25519_dalek::scalar::Scalar;
 use lazy_static::lazy_static;
 use rand_core::{CryptoRng, RngCore};
@@ -108,7 +109,7 @@ pub fn create_account<T: RngCore + CryptoRng>(
         memo: AccountMemo::new(scrt.enc_keys.pblc, scrt.sign_keys.public),
     };
 
-    let message = content.to_bytes();
+    let message = content.encode();
     let initial_sig = scrt.sign_keys.sign(SIG_CTXT.bytes(&message));
 
     Ok(Account {
@@ -152,11 +153,11 @@ pub fn withdraw(account: PubAccount, enc_amount: EncryptedAmount) -> PubAccount 
 
 pub struct AccountValidator {}
 
-impl AccountCreaterVerifier for AccountValidator {
+impl AccountCreatorVerifier for AccountValidator {
     fn verify(&self, account: &PubAccount, valid_asset_ids: &Vec<Scalar>) -> Fallible<()> {
         let gens = &PedersenGens::default();
 
-        let message = account.content.to_bytes();
+        let message = account.content.encode();
         let _ = account
             .content
             .memo

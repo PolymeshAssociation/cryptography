@@ -22,6 +22,7 @@ use crate::{
 };
 
 use bulletproofs::PedersenGens;
+use codec::Encode;
 use lazy_static::lazy_static;
 use rand_core::{CryptoRng, RngCore};
 use schnorrkel::{context::SigningContext, signing_context};
@@ -40,7 +41,7 @@ fn asset_issuance_init_verify(
     let gens = PedersenGens::default();
 
     // Verify the signature on the transaction.
-    let message = asset_tx.content.to_bytes();
+    let message = asset_tx.content.encode();
     issr_pub_account
         .content
         .memo
@@ -148,7 +149,7 @@ impl AssetTransactionIssuer for CtxIssuer {
         };
 
         // Sign the issuance content.
-        let message = content.to_bytes();
+        let message = content.encode();
         let sig = issr_account.sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
@@ -202,12 +203,12 @@ impl AssetTransactionFinalizeAndProcessVerifier for AssetTxIssueValidator {
         );
 
         // Verify mediator's signature on the transaction.
-        let message = asset_tx.content.to_bytes();
+        let message = asset_tx.content.encode();
         let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &asset_tx.sig)?;
 
         // Verify issuer's signature on the transaction.
         // Note that this check is redundant as it was also performed by verify_initialization().
-        let message = asset_tx.content.tx_content.content.to_bytes();
+        let message = asset_tx.content.tx_content.content.encode();
         let _ = issr_account
             .content
             .memo
@@ -274,7 +275,7 @@ impl AssetTransactionMediator for AssetTxIssueMediator {
             tx_content: asset_tx,
             state: new_state,
         };
-        let message = content.to_bytes();
+        let message = content.encode();
         let sig = mdtr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
@@ -357,7 +358,8 @@ mod tests {
             scrt: mediator_elg_secret_key.into(),
         };
 
-        let seed = [12u8; 32];
+        let mut seed = [0u8; 32];
+        rng.fill_bytes(&mut seed);
         let mediator_signing_pair = MiniSecretKey::from_bytes(&seed)
             .expect("Invalid seed")
             .expand_to_keypair(ExpansionMode::Ed25519);
