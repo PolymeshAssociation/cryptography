@@ -568,7 +568,7 @@ impl core::fmt::Debug for AssetTxState {
 
 /// Represents the four states (initialized, justified, finalized, reversed) of a
 /// confidentional transaction.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
 pub enum ConfidentialTxState {
     Initialization(TxSubstate),
     Finalization(TxSubstate),

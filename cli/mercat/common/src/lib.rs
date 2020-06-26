@@ -4,7 +4,7 @@
 pub mod errors;
 
 use codec::{Decode, Encode};
-use cryptography::mercat::AssetTxState;
+use cryptography::mercat::{AssetTxState, ConfidentialTxState};
 use curve25519_dalek::scalar::Scalar;
 use errors::Error;
 use log::info;
@@ -30,13 +30,25 @@ pub const INIT_STATE: &str = "initialization_started";
 pub const JUSTIFY_STATE: &str = "justification_started";
 
 #[inline]
-pub fn transaction_file(tx_id: u32, state: AssetTxState) -> String {
+pub fn asset_transaction_file(tx_id: u32, state: AssetTxState) -> String {
     format!("tx_{}_{}.json", tx_id, state)
 }
 
 #[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
 pub struct Instruction {
     pub state: AssetTxState,
+    #[serde(with = "serde_bytes")]
+    pub data: Vec<u8>,
+}
+
+#[inline]
+pub fn confidential_transaction_file(tx_id: u32, state: ConfidentialTxState) -> String {
+    format!("tx_{}_{}.json", tx_id, state)
+}
+
+#[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
+pub struct CTXInstruction {
+    pub state: ConfidentialTxState,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }

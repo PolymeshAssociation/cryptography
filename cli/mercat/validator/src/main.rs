@@ -13,8 +13,8 @@ use env_logger;
 use input::{parse_input, CLI};
 use log::info;
 use mercat_common::{
-    errors::Error, get_asset_ids, init_print_logger, load_object, save_object, transaction_file,
-    Instruction, INIT_STATE, JUSTIFY_STATE, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
+    asset_transaction_file, errors::Error, get_asset_ids, init_print_logger, load_object,
+    save_object, Instruction, INIT_STATE, JUSTIFY_STATE, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
     VALIDATED_PUBLIC_ACCOUNT_FILE,
 };
 use metrics::timing;
@@ -85,7 +85,7 @@ fn validate_asset_issuance(cfg: input::ValidateAssetIssuanceInfo) -> Result<(), 
         db_dir.clone(),
         ON_CHAIN_DIR,
         &cfg.issuer,
-        &transaction_file(cfg.tx_id, state),
+        &asset_transaction_file(cfg.tx_id, state),
     )?;
 
     let mediator_account: AccountMemo = load_object(
@@ -133,7 +133,7 @@ fn validate_asset_issuance(cfg: input::ValidateAssetIssuanceInfo) -> Result<(), 
         db_dir,
         ON_CHAIN_DIR,
         &cfg.issuer,
-        &transaction_file(cfg.tx_id, result),
+        &asset_transaction_file(cfg.tx_id, result),
         &instruction,
     )?;
     timing!(

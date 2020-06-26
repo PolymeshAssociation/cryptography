@@ -16,8 +16,8 @@ use rand_core::{CryptoRng, RngCore};
 use schnorrkel::{ExpansionMode, MiniSecretKey};
 
 use mercat_common::{
-    construct_path, create_rng_from_seed, errors::Error, init_print_logger, load_object,
-    save_object, transaction_file, Instruction, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
+    asset_transaction_file, construct_path, create_rng_from_seed, errors::Error, init_print_logger,
+    load_object, save_object, Instruction, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
     SECRET_ACCOUNT_FILE,
 };
 
@@ -108,7 +108,7 @@ fn justify_asset_issuance(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         db_dir.clone(),
         ON_CHAIN_DIR,
         &cfg.issuer,
-        &transaction_file(
+        &asset_transaction_file(
             cfg.tx_id,
             AssetTxState::Initialization(TxSubstate::Validated),
         ),
@@ -178,7 +178,7 @@ fn justify_asset_issuance(cfg: input::IssueAssetInfo) -> Result<(), Error> {
             db_dir.clone(),
             ON_CHAIN_DIR,
             &cfg.issuer,
-            &transaction_file(cfg.tx_id, rejected_state),
+            &asset_transaction_file(cfg.tx_id, rejected_state),
             &next_instruction,
         )?;
     } else {
@@ -201,7 +201,7 @@ fn justify_asset_issuance(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         db_dir,
         ON_CHAIN_DIR,
         &cfg.issuer,
-        &transaction_file(cfg.tx_id, justified_tx.content.state),
+        &asset_transaction_file(cfg.tx_id, justified_tx.content.state),
         &next_instruction,
     )?;
 

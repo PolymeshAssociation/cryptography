@@ -4,13 +4,15 @@
 
 mod input;
 
-use codec::Encode;
+use codec::{Decode, Encode};
 use cryptography::{
     asset_id_from_ticker,
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
-        account::create_account, asset::CtxIssuer, AccountMemo, AssetTransactionIssuer,
-        EncryptionKeys, SecAccount,
+        account::create_account, asset::CtxIssuer, conf_tx::CtxReceiver, conf_tx::CtxSender,
+        Account, AccountMemo, AssetTransactionIssuer, ConfidentialTransactionSender,
+        ConfidentialTxState, EncryptionKeys, PubAccount, PubInitConfidentialTxData, SecAccount,
+        TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -18,9 +20,10 @@ use env_logger;
 use input::{parse_input, CLI};
 use log::info;
 use mercat_common::{
-    create_rng_from_seed, errors::Error, get_asset_ids, init_print_logger, load_object,
-    remove_file, save_object, transaction_file, Instruction, OFF_CHAIN_DIR, ON_CHAIN_DIR,
-    PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
+    asset_transaction_file, confidential_transaction_file, construct_path, create_rng_from_seed,
+    errors::Error, get_asset_ids, init_print_logger, load_object, remove_file, save_object,
+    CTXInstruction, Instruction, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
+    SECRET_ACCOUNT_FILE,
 };
 use metrics::timing;
 use rand::{CryptoRng, RngCore};
@@ -41,6 +44,8 @@ fn main() {
         CLI::Cleanup { user, db_dir } => process_destroy_account(user, db_dir).unwrap(),
         CLI::CreateFrom { config: _ } => panic!("This should not happen!"),
         CLI::Issue(cfg) => process_issue_asset(cfg).unwrap(),
+        CLI::CreateTransaction(cfg) => process_create_tx(cfg).unwrap(),
+        CLI::FinalizeTransaction(cfg) => process_finalize_tx(cfg).unwrap(),
     };
     info!("The program finished successfully.");
 }
@@ -180,12 +185,190 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
         db_dir,
         ON_CHAIN_DIR,
         &cfg.issuer,
-        &transaction_file(cfg.tx_id, state),
+        &asset_transaction_file(cfg.tx_id, state),
         &instruction,
     )?;
 
     timing!(
         "account.issue_asset.save_to_file",
+        save_to_file_timer,
+        Instant::now()
+    );
+
+    Ok(())
+}
+
+fn process_create_tx(cfg: input::CreateTransactionInfo) -> Result<(), Error> {
+    // Setup the rng.
+    let mut rng = create_rng_from_seed(cfg.seed)?;
+
+    // Load issuer's secret account and mediator's public credentials from file.
+    let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
+    let load_from_file_timer = Instant::now();
+
+    let sender_account = Account {
+        scrt: load_object(
+            db_dir.clone(),
+            OFF_CHAIN_DIR,
+            &cfg.sender,
+            SECRET_ACCOUNT_FILE,
+        )?,
+        pblc: load_object(
+            db_dir.clone(),
+            ON_CHAIN_DIR,
+            &cfg.sender,
+            PUBLIC_ACCOUNT_FILE,
+        )?,
+    };
+
+    let receiver_account: PubAccount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &cfg.receiver,
+        PUBLIC_ACCOUNT_FILE,
+    )?;
+
+    let mediator_account: AccountMemo = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &cfg.mediator,
+        PUBLIC_ACCOUNT_FILE,
+    )?;
+
+    timing!(
+        "account.create_tx.load_from_file",
+        load_from_file_timer,
+        Instant::now()
+    );
+
+    // Initialize the transaction.
+    let create_tx_timer = Instant::now();
+    let sender = CtxSender {};
+    let (asset_tx, state) = sender
+        .create_transaction(
+            &sender_account,
+            &receiver_account,
+            &mediator_account.owner_enc_pub_key,
+            cfg.amount,
+            &mut rng,
+        )
+        .map_err(|error| Error::LibraryError { error })?;
+
+    timing!("account.create_tx.create", create_tx_timer, Instant::now());
+
+    // Save the artifacts to file.
+    let save_to_file_timer = Instant::now();
+    let instruction = CTXInstruction {
+        state,
+        data: asset_tx.encode().to_vec(),
+    };
+
+    // todo where should I save these?
+    save_object(
+        db_dir,
+        ON_CHAIN_DIR,
+        &cfg.sender,
+        &confidential_transaction_file(cfg.tx_id, state),
+        &instruction,
+    )?;
+
+    timing!(
+        "account.create_tx.save_to_file",
+        save_to_file_timer,
+        Instant::now()
+    );
+
+    Ok(())
+}
+
+fn process_finalize_tx(cfg: input::FinalizeTransactionInfo) -> Result<(), Error> {
+    // Setup the rng.
+    let mut rng = create_rng_from_seed(cfg.clone().seed)?;
+
+    // Load issuer's secret account and mediator's public credentials from file.
+    let db_dir = cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir)?;
+    let load_from_file_timer = Instant::now();
+
+    let receiver_account = Account {
+        scrt: load_object(
+            db_dir.clone(),
+            OFF_CHAIN_DIR,
+            &cfg.receiver,
+            SECRET_ACCOUNT_FILE,
+        )?,
+        pblc: load_object(
+            db_dir.clone(),
+            ON_CHAIN_DIR,
+            &cfg.receiver,
+            PUBLIC_ACCOUNT_FILE,
+        )?,
+    };
+
+    let instruction: Instruction = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &cfg.sender,
+        &confidential_transaction_file(
+            cfg.tx_id.clone(),
+            ConfidentialTxState::Initialization(TxSubstate::Validated),
+        ),
+    )?;
+
+    let tx = PubInitConfidentialTxData::decode(&mut &instruction.data[..]).map_err(|error| {
+        Error::ObjectLoadError {
+            error,
+            path: construct_path(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                &cfg.sender.clone(),
+                PUBLIC_ACCOUNT_FILE,
+            ),
+        }
+    })?;
+
+    timing!(
+        "account.finalize_tx.load_from_file",
+        load_from_file_timer,
+        Instant::now()
+    );
+
+    // Initialize the transaction.
+    let finalize_by_receiver_timer = Instant::now();
+    let receiver = CtxReceiver {};
+    let (asset_tx, state) = receiver
+        .finalize_by_receiver(
+            tx,
+            receiver_account,
+            ConfidentialTxState::Initialization(TxSubstate::Validated),
+            cfg.amount,
+            &mut rng,
+        )
+        .map_err(|error| Error::LibraryError { error })?;
+
+    timing!(
+        "account.finalize_tx.finalize_by_receiver",
+        finalize_by_receiver_timer,
+        Instant::now()
+    );
+
+    // Save the artifacts to file.
+    let save_to_file_timer = Instant::now();
+    let instruction = CTXInstruction {
+        state,
+        data: asset_tx.encode().to_vec(),
+    };
+
+    // todo where should I save these?
+    save_object(
+        db_dir,
+        ON_CHAIN_DIR,
+        &cfg.sender,
+        &confidential_transaction_file(cfg.tx_id, state),
+        &instruction,
+    )?;
+
+    timing!(
+        "account.finalize_tx.save_to_file",
         save_to_file_timer,
         Instant::now()
     );
