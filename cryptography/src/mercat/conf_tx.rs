@@ -26,6 +26,7 @@ use crate::{
 };
 
 use bulletproofs::PedersenGens;
+use codec::Encode;
 use curve25519_dalek::scalar::Scalar;
 use lazy_static::lazy_static;
 use rand_core::{CryptoRng, OsRng, RngCore};
@@ -217,7 +218,7 @@ impl ConfidentialTransactionSender for CtxSender {
             },
         };
 
-        let message = content.to_bytes();
+        let message = content.encode();
         let sig = sndr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
@@ -304,7 +305,7 @@ impl CtxReceiver {
             asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof { init, response },
         };
 
-        let message = content.to_bytes();
+        let message = content.encode();
         let sig = rcvr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
@@ -371,7 +372,7 @@ impl ConfidentialTransactionMediator for CtxMediator {
             tx_data.asset_id_correctness_proof.response,
         )?;
 
-        let message = conf_tx_final_data.to_bytes();
+        let message = conf_tx_final_data.encode();
         let sig = mdtr_sec_account.sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
@@ -502,7 +503,7 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
             ErrorKind::InvalidPreviousState { state }
         );
 
-        let message = transaction.content.to_bytes();
+        let message = transaction.content.encode();
         let _ = sndr_account
             .content
             .memo
@@ -528,7 +529,7 @@ impl CtxReceiverValidator {
             ErrorKind::InvalidPreviousState { state }
         );
 
-        let message = conf_tx_final_data.content.to_bytes();
+        let message = conf_tx_final_data.content.encode();
         let _ = rcvr_account
             .content
             .memo
@@ -574,7 +575,7 @@ impl ConfidentialTransactionMediatorVerifier for CtxMediatorValidator {
         );
 
         let ctx_data = &conf_tx_justified_final_data;
-        let message = ctx_data.conf_tx_final_data.to_bytes();
+        let message = ctx_data.conf_tx_final_data.encode();
         let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &ctx_data.sig)?;
 
         Ok(ConfidentialTxState::FinalizationJustification(

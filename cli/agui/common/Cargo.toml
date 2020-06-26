@@ -1,15 +1,13 @@
 [package]
 name = "cli-common"
 version = "0.1.0"
-authors = [ "Jesse Lancaster <jesse@polymath.network>",
-            "Parnian Alimi   <parnian@polymath.network>",
-          ]
+authors = [ "Polymath Inc" ]
 edition = "2018"
 repository = "https://github.com/PolymathNetwork/cryptography"
-description = "Cryptography CLI common library"
+description = "Asset Granularity Unique Identity: CLI common library"
 
 [dependencies]
-cryptography = { package = "cryptography", path = "../../cryptography/" }
+cryptography = { package = "cryptography", path = "../../../cryptography/" }
 
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

@@ -147,12 +147,12 @@ pub enum ErrorKind {
     InvalidExponentParameter,
 
     /// The incoming transaction state does not match the expectation.
-    #[fail(display = "Received an invalid previous state: {:?}", state)]
+    #[fail(display = "Received an invalid previous state: {}", state)]
     InvalidPreviousState { state: ConfidentialTxState },
 
     /// The incoming asset transaction state does not match the expectation.
     #[fail(
-        display = "Received an invalid previous asset transaction state: {:?}",
+        display = "Received an invalid previous asset transaction state: {}",
         state
     )]
     InvalidPreviousAssetTransactionState { state: AssetTxState },

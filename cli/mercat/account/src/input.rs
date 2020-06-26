@@ -1,12 +1,12 @@
 use confy;
 use log::info;
-use rand::Rng;
+use mercat_common::{gen_seed, save_config};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
-pub struct AccountGenInfo {
+pub struct CreateAccountInfo {
     /// The name of the user. The name can be any valid string that can be used as a file name.
     /// It is the responsibility of the caller to ensure the uniqueness of the name.
     #[structopt(short, long, help = "The name of the user. This name must be unique.")]
@@ -15,7 +15,7 @@ pub struct AccountGenInfo {
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
     /// blockchain. Defaults to the current directory. This directory will have two main
-    /// sub-directories: `on-chain` and `off-chain`
+    /// sub-directories: `on-chain` and `off-chain`.
     #[structopt(
         parse(from_os_str),
         help = "The directory to load and save the input and output files. Defaults to current directory.",
@@ -25,7 +25,7 @@ pub struct AccountGenInfo {
     pub db_dir: Option<PathBuf>,
 
     /// Account id. It is the responsibility of the caller to ensure the uniqueness of the id.
-    /// The CLI will not throw any error if a duplicate id is passed.
+    /// The CLI will not throw any errors if a duplicate id is passed.
     #[structopt(
         short,
         long,
@@ -41,20 +41,76 @@ pub struct AccountGenInfo {
     )]
     pub ticker_id: String,
 
-    /// An optional seed that can be passed to reproduce a previous run of this CLI.
+    /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
     #[structopt(
         short,
         long,
-        help = "Base64 encoding of an initial seed. If not provided, the seed will be chosen at random."
+        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 
-    /// An optional flag that determines if the input arguments should be saved in a config file.
+    /// An optional path to save the config used for this experiment.
     #[structopt(
         parse(from_os_str),
         long,
-        help = "Whether to save the input command line arguments in the config file."
+        help = "Path to save the input command line arguments as a config file."
+    )]
+    pub save_config: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
+pub struct IssueAssetInfo {
+    /// Account ID of the issuer.
+    /// The CLI will not throw any errors if a duplicate id is passed.
+    #[structopt(long, help = "The account ID.")]
+    pub account_id: u32,
+
+    /// A transaction ID for the asset issuance transaction.
+    /// The CLI will not throw any errors if a duplicate id is passed.
+    /// It will silently overwrite the transaction.
+    #[structopt(long, help = "The transaction ID.")]
+    pub tx_id: u32,
+
+    /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
+    /// The seed can be found inside the logs.
+    #[structopt(
+        short,
+        long,
+        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+    )]
+    pub seed: Option<String>,
+
+    /// Amount to issue.
+    #[structopt(short, long, help = "The amount of assets to issue.")]
+    pub amount: u32,
+
+    /// The directory that will serve as the database of the on/off-chain data and will be used
+    /// to save and load the data that in a real execution would be written to the on/off the
+    /// blockchain. Defaults to the current directory. This directory will have two main
+    /// sub-directories: `on-chain` and `off-chain`.
+    #[structopt(
+        parse(from_os_str),
+        help = "The directory to load and save the input and output files. Defaults to current directory.",
+        short,
+        long
+    )]
+    pub db_dir: Option<PathBuf>,
+
+    /// The issuer's name. An account must have already been created for this user.
+    #[structopt(short, long, help = "The name of the issuer.")]
+    pub issuer: String,
+
+    /// The transaction mediator's name. Used to retrieve mediator's public keys.
+    /// Use `mercat-mediator` CLI to create the credentials needed for this role.
+    #[structopt(short, long, help = "The name of the mediator.")]
+    pub mediator: String,
+
+    /// An optional path to save the config used for this experiment.
+    #[structopt(
+        parse(from_os_str),
+        long,
+        help = "Path to save the input command line arguments as a config file."
     )]
     pub save_config: Option<PathBuf>,
 }
@@ -62,7 +118,7 @@ pub struct AccountGenInfo {
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub enum CLI {
     /// Create a MERCAT account using command line arguments.
-    Create(AccountGenInfo),
+    Create(CreateAccountInfo),
 
     /// Create a MERCAT account from a config file.
     CreateFrom {
@@ -79,7 +135,7 @@ pub enum CLI {
         /// The directory that will serve as the database of the on/off-chain data and will be used
         /// to save and load the data that in a real execution would be written to the on/off the
         /// blockchain. Defaults to the current directory. This directory will have two main
-        /// sub-directories: `on-chain` and `off-chain`
+        /// sub-directories: `on-chain` and `off-chain`.
         #[structopt(
             parse(from_os_str),
             help = "The directory to load and save the input and output files. Defaults to current directory.",
@@ -88,13 +144,9 @@ pub enum CLI {
         )]
         db_dir: Option<PathBuf>,
     },
-}
 
-fn gen_seed() -> String {
-    let mut rng = rand::thread_rng();
-    let mut seed = [0u8; 32];
-    rng.fill(&mut seed);
-    base64::encode(seed)
+    /// Issue an asset to a MERCAT account.
+    Issue(IssueAssetInfo),
 }
 
 pub fn parse_input() -> Result<CLI, confy::ConfyError> {
@@ -108,7 +160,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             let seed: Option<String> = cfg.seed.clone().or_else(|| Some(gen_seed()));
             info!("Seed: {:?}", seed.clone().unwrap()); // unwrap won't panic
 
-            let cfg = AccountGenInfo {
+            let cfg = CreateAccountInfo {
                 save_config: cfg.save_config.clone(),
                 seed,
                 account_id: cfg.account_id,
@@ -119,26 +171,15 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg
+                cfg.clone()
             );
 
-            // Save the config is the argument is passed
-            if let Some(path) = &cfg.save_config {
-                info!("Saving the following config to {:?}:\n{:#?}", &path, &cfg);
-                std::fs::write(
-                    path,
-                    serde_json::to_string_pretty(&cfg).unwrap_or_else(|error| {
-                        panic!("Failed to serialize configuration file: {}", error)
-                    }),
-                )
-                .expect(&format!(
-                    "Failed to write the configuration to the file {:?}.",
-                    path
-                ));
-            }
+            // Save the config if the argument is passed.
+            save_config(cfg.save_config.clone(), &cfg);
 
             return Ok(CLI::Create(cfg));
         }
+
         CLI::CreateFrom { config } => {
             let json_file_content = std::fs::read_to_string(&config).expect(&format!(
                 "Failed to read the account config from file: {:?}.",
@@ -152,6 +193,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             info!("Read the following config from {:?}:\n{:#?}", &config, &cfg);
             return Ok(CLI::Create(cfg));
         }
+
         CLI::Cleanup { user, db_dir } => {
             // Set the default directory for db_dir
             let db_dir = db_dir.clone().or_else(|| std::env::current_dir().ok());
@@ -164,6 +206,34 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 args
             );
             return Ok(args);
+        }
+
+        CLI::Issue(cfg) => {
+            let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
+
+            let seed: Option<String> = cfg.seed.clone().or_else(|| Some(gen_seed()));
+            info!("Seed: {:?}", seed.clone().unwrap()); // unwrap won't panic
+
+            let cfg = IssueAssetInfo {
+                account_id: cfg.account_id,
+                tx_id: cfg.tx_id,
+                seed,
+                amount: cfg.amount,
+                db_dir,
+                issuer: cfg.issuer,
+                mediator: cfg.mediator,
+                save_config: cfg.save_config.clone(),
+            };
+
+            info!(
+                "Parsed the following config from the command line:\n{:#?}",
+                cfg.clone()
+            );
+
+            // Save the config if the argument is passed.
+            save_config(cfg.save_config.clone(), &cfg);
+
+            return Ok(CLI::Issue(cfg));
         }
     }
 }

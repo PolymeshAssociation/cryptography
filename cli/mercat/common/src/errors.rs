@@ -4,8 +4,12 @@ use std::path::PathBuf;
 /// Common errors for all mercat clis
 #[derive(Fail, Debug)]
 pub enum Error {
+    /// Instruction is not valid.
+    #[fail(display = "Instruction is not valid.")]
+    InvalidInstructionError,
+
     /// The create account has been called with an empty seed.
-    #[fail(display = "The input seed cannot be empty")]
+    #[fail(display = "The input seed cannot be empty.")]
     EmptySeed,
 
     /// There was an error in converting the seed from base64 to byte array.
@@ -25,7 +29,7 @@ pub enum Error {
     LibraryError { error: cryptography::errors::Error },
 
     /// No database directory path was passed.
-    #[fail(display = "The database directory must be provided")]
+    #[fail(display = "The database directory must be provided.")]
     EmptyDatabaseDir,
 
     /// An error occurred while creating an empty file.
@@ -37,17 +41,44 @@ pub enum Error {
 
     /// An error occurred while reading from a file.
     #[fail(display = "Failed to read the file {:?}: {:?}", path, error)]
-    FileReadError { error: std::io::Error, path: String },
+    FileReadError {
+        error: std::io::Error,
+        path: PathBuf,
+    },
+
+    /// An error occurred while deserializing an object from a file.
+    #[fail(
+        display = "Failed to deserialize an object, read from file {:?}: {:?}",
+        path, error
+    )]
+    ObjectDeserializationError {
+        error: serde_json::Error,
+        path: PathBuf,
+    },
 
     /// An error occurred while writing to a file.
-    #[fail(display = "Failed to write to the file {:?}: {:?}", path, error)]
+    #[fail(display = "Failed to write to file {:?}: {:?}", path, error)]
     FileWriteError {
         error: serde_json::Error,
         path: PathBuf,
     },
 
+    /// An error occurred while decoding an object.
+    #[fail(
+        display = "Failed to decode an object, read from file {:?}: {:?}",
+        path, error
+    )]
+    ObjectLoadError { error: codec::Error, path: PathBuf },
+
+    /// An error occurred while writing to a file.
+    #[fail(display = "Failed to save data to file {:?}: {:?}", path, error)]
+    ObjectSaveError {
+        error: std::io::Error,
+        path: PathBuf,
+    },
+
     /// An error occurred while removing a file.
-    #[fail(display = "Failed to remove the file {:?}: {:?}", path, error)]
+    #[fail(display = "Failed to remove file {:?}: {:?}", path, error)]
     FileRemovalError {
         error: std::io::Error,
         path: PathBuf,
