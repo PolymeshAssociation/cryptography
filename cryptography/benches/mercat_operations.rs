@@ -338,7 +338,6 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
         )
         .unwrap();
 
-    
     // Bencharking the transaction justification
     // We clone all parameters before passing them to the criterion.
     let label_ctx_justify = "Justify the Finalized Transaction";
@@ -360,7 +359,14 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
         &label_ctx_justify,
         move |b, ctx_finalized_data_clone| {
             b.iter(|| {
-                let (justified_finalized_ctx_data, state) = mdtr_clone.justify(ctx_finalized_data_clone.clone(), result_state.clone(), &mdtr_sec_account.clone(), asset_id_clone.clone()).unwrap();
+                let (justified_finalized_ctx_data, state) = mdtr_clone
+                    .justify(
+                        ctx_finalized_data_clone.clone(),
+                        result_state.clone(),
+                        &mdtr_sec_account.clone(),
+                        asset_id_clone.clone(),
+                    )
+                    .unwrap();
                 assert_eq!(
                     state,
                     ConfidentialTxState::FinalizationJustification(TxSubstate::Started)

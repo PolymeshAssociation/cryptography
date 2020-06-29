@@ -521,7 +521,7 @@ mod tests {
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
-        let elements_set: Vec<Scalar> = (0..2000u32).map(|m| Scalar::from(m)).collect();
+        let elements_set: Vec<Scalar> = (0..20000u32).map(|m| Scalar::from(m)).collect();
 
         let secret = Scalar::from(8760u32);
         let blinding = Scalar::random(&mut rng);

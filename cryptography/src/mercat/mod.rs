@@ -394,7 +394,7 @@ pub struct PubAccountContent {
 }
 
 /// Wrapper for the account content and signature.
-#[derive(Clone, Debug,Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PubAccount {
     pub content: PubAccountContent,
     pub initial_sig: Signature,
