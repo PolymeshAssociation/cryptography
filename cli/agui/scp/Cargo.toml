@@ -1,16 +1,14 @@
 [package]
 name = "scp"
 version = "0.1.0"
-authors = [ "Jesse Lancaster <jesse@polymath.network>",
-            "Parnian Alimi   <parnian@polymath.network>",
-          ]
+authors = [ "Polymath Inc" ]
 repository = "https://github.com/PolymathNetwork/cryptography"
-description = "Simple Claim Prover"
+description = "Asset Granularity Unique Identity: Simple Claim Prover"
 edition = "2018"
 
 [dependencies]
 cli_common = { package = "cli-common", path = "../common/" }
-cryptography = { package = "cryptography", path = "../../cryptography/" }
+cryptography = { package = "cryptography", path = "../../../cryptography/" }
 
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

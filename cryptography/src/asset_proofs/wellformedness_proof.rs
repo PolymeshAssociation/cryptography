@@ -15,25 +15,58 @@ use crate::{
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
+    constants::RISTRETTO_BASEPOINT_POINT,
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
+
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
+use sp_std::convert::From;
 
 /// The domain label for the wellformedness proof.
 pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathWellformednessFinalResponse";
 /// The domain label for the challenge.
 pub const WELLFORMEDNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathWellformednessProofChallenge";
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Default)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessFinalResponse {
     z1: Scalar,
     z2: Scalar,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
+impl Encode for WellformednessFinalResponse {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        64
+    }
+
+    #[inline]
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        (self.z1.as_bytes(), self.z2.as_bytes()).encode_to(dest)
+    }
+}
+
+impl Decode for WellformednessFinalResponse {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (z1, z2) = <([u8; 32], [u8; 32])>::decode(input)?;
+        let z1 = Scalar::from_canonical_bytes(z1).ok_or_else(|| {
+            CodecError::from("WellformednessFinalResponse `z1` scalar is invalid")
+        })?;
+        let z2 = Scalar::from_canonical_bytes(z2).ok_or_else(|| {
+            CodecError::from("WellformednessFinalResponse `z2` scalar is invalid")
+        })?;
+
+        Ok(WellformednessFinalResponse { z1, z2 })
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Copy, Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -49,6 +82,34 @@ impl Default for WellformednessInitialMessage {
     }
 }
 
+impl Encode for WellformednessInitialMessage {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        64
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let a = self.a.compress();
+        let b = self.b.compress();
+
+        (a.as_bytes(), b.as_bytes()).encode_to(dest)
+    }
+}
+
+impl Decode for WellformednessInitialMessage {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (a, b) = <([u8; 32], [u8; 32])>::decode(input)?;
+        let a = CompressedRistretto(a)
+            .decompress()
+            .ok_or_else(|| CodecError::from("WellformednessInitialMessage 'a' point is invalid"))?;
+        let b = CompressedRistretto(b)
+            .decompress()
+            .ok_or_else(|| CodecError::from("WellformednessInitialMessage 'b' point is invalid"))?;
+
+        Ok(WellformednessInitialMessage { a, b })
+    }
+}
+
 impl UpdateTranscript for WellformednessInitialMessage {
     fn update_transcript(&self, transcript: &mut Transcript) -> Fallible<()> {
         transcript.append_domain_separator(WELLFORMEDNESS_PROOF_CHALLENGE_LABEL);
@@ -58,8 +119,8 @@ impl UpdateTranscript for WellformednessInitialMessage {
     }
 }
 
-#[derive(Clone, Debug, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessProver {
     /// The secret commitment witness.
     w: Zeroizing<CommitmentWitness>,
@@ -160,7 +221,6 @@ mod tests {
         single_property_prover, single_property_verifier,
     };
     use crate::asset_proofs::*;
-    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use sp_std::prelude::*;
     use wasm_bindgen_test::*;
@@ -293,13 +353,14 @@ mod tests {
         >(prover, &mut rng)
         .unwrap();
 
-        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
-        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
-        let recovered_initial_message: WellformednessInitialMessage =
-            deserialize(&initial_message_bytes).unwrap();
-        let recovered_final_response: WellformednessFinalResponse =
-            deserialize(&final_response_bytes).unwrap();
+        let bytes = initial_message.encode();
+        let mut input = bytes.as_slice();
+        let recovered_initial_message = <WellformednessInitialMessage>::decode(&mut input).unwrap();
         assert_eq!(recovered_initial_message, initial_message);
+
+        let bytes = final_response.encode();
+        let mut input = bytes.as_slice();
+        let recovered_final_response = <WellformednessFinalResponse>::decode(&mut input).unwrap();
         assert_eq!(recovered_final_response, final_response);
     }
 }

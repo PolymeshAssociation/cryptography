@@ -26,9 +26,9 @@ pub type RangeProofFinalResponse = RangeProof;
 pub fn prove_within_range<Rng: RngCore + CryptoRng>(
     secret_value: u64,
     rand_blind: Scalar,
-    range: usize,
+    range: u32,
     rng: &mut Rng,
-) -> Fallible<(RangeProofInitialMessage, RangeProofFinalResponse, usize)> {
+) -> Fallible<(RangeProofInitialMessage, RangeProofFinalResponse, u32)> {
     // Generators for Pedersen commitments.
     let pc_gens = PedersenGens::default();
 
@@ -48,7 +48,7 @@ pub fn prove_within_range<Rng: RngCore + CryptoRng>(
         &mut prover_transcript,
         secret_value,
         &rand_blind,
-        range,
+        range as usize,
         rng,
     )
     .map_err(|source| ErrorKind::ProvingError { source })?;
@@ -60,7 +60,7 @@ pub fn prove_within_range<Rng: RngCore + CryptoRng>(
 pub fn verify_within_range<Rng: RngCore + CryptoRng>(
     init: RangeProofInitialMessage,
     response: RangeProofFinalResponse,
-    range: usize,
+    range: u32,
     rng: &mut Rng,
 ) -> Fallible<()> {
     // Generators for Pedersen commitments.
@@ -80,7 +80,7 @@ pub fn verify_within_range<Rng: RngCore + CryptoRng>(
             &pc_gens,
             &mut verifier_transcript,
             &init,
-            range,
+            range as usize,
             rng,
         )
         .map_err(|_| ErrorKind::VerificationError.into())
@@ -95,7 +95,6 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::asset_proofs::*;
-    use bincode::{deserialize, serialize};
     use rand::{rngs::StdRng, SeedableRng};
     use sp_std::prelude::*;
     use wasm_bindgen_test::*;
@@ -131,29 +130,5 @@ mod tests {
         let (bad_proof, bad_commitment, _) =
             prove_within_range(large_secret_value, witness.blinding(), 32, &mut rng).unwrap();
         assert!(!verify_within_range(bad_proof, bad_commitment, 32, &mut rng).is_ok());
-    }
-
-    #[test]
-    #[wasm_bindgen_test]
-    fn serialize_deserialize_range_proof() {
-        let mut rng = StdRng::from_seed(SEED_1);
-        let secret_value = 42u32;
-        let rand_blind = Scalar::random(&mut rng);
-
-        let (initial_message, final_response, range) =
-            prove_within_range(secret_value as u64, rand_blind, 32, &mut rng).unwrap();
-        assert_eq!(range, 32);
-
-        let initial_message_bytes: Vec<u8> = serialize(&initial_message).unwrap();
-        let final_response_bytes: Vec<u8> = serialize(&final_response).unwrap();
-        let recovered_initial_message: RangeProofInitialMessage =
-            deserialize(&initial_message_bytes).unwrap();
-        let recovered_final_response: RangeProofFinalResponse =
-            deserialize(&final_response_bytes).unwrap();
-        assert_eq!(recovered_initial_message, initial_message);
-        assert_eq!(
-            final_response_bytes,
-            serialize(&recovered_final_response).unwrap()
-        );
     }
 }

@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode};
 pub use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
@@ -50,7 +51,7 @@ macro_rules! assert_err {
 ///    We can recommend that applications use a different faster
 ///    encryption mechanism to store the confidentional values on disk.
 pub type Balance = u32;
-pub const BALANCE_RANGE: usize = 32;
+pub const BALANCE_RANGE: u32 = 32;
 
 /// Asset ID length.
 /// Note that MERCAT's asset id corresponds to PolyMesh's asset ticker.
@@ -63,7 +64,7 @@ const ASSET_ID_LEN: usize = 12;
 /// decrypting an encrypted asset id we have a guess as what the
 /// asset id should be, use `ElgamalSecretKey`'s `verify()`
 /// to verify that the encrypted value is the same as the hinted value.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Zeroize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Zeroize, Encode, Decode)]
 #[zeroize(drop)]
 pub struct AssetId {
     pub id: [u8; ASSET_ID_LEN],
@@ -81,6 +82,21 @@ impl From<AssetId> for Scalar {
     fn from(asset_id: AssetId) -> Scalar {
         Scalar::hash_from_bytes::<Sha3_512>(&(asset_id.id))
     }
+}
+
+pub fn asset_id_from_ticker(ticker: &str) -> Result<AssetId, errors::Error> {
+    ensure!(
+        ticker.len() <= ASSET_ID_LEN,
+        errors::ErrorKind::TickerIdLengthError {
+            want: ASSET_ID_LEN,
+            got: ticker.len(),
+        }
+    );
+
+    let mut asset_id = [0u8; ASSET_ID_LEN];
+    let ticker = ticker.as_bytes();
+    asset_id[..ticker.len()].copy_from_slice(ticker);
+    Ok(AssetId { id: asset_id })
 }
 
 pub mod asset_proofs;

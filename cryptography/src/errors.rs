@@ -43,13 +43,6 @@ impl From<schnorrkel::errors::SignatureError> for Error {
     }
 }
 
-impl From<bincode::Error> for Error {
-    #[inline]
-    fn from(_inner: bincode::Error) -> Error {
-        Error::from(ErrorKind::SerializationError)
-    }
-}
-
 impl Fail for Error {
     fn cause(&self) -> Option<&dyn Fail> {
         self.inner.cause()
@@ -78,7 +71,7 @@ pub enum ErrorKind {
     CipherTextDecryptionError,
 
     /// A proof verification error occurred.
-    #[fail(display = "A proof verification error occured")]
+    #[fail(display = "A proof verification error occurred")]
     VerificationError,
 
     /// Failed to verify a correctness proof.
@@ -97,7 +90,7 @@ pub enum ErrorKind {
 
     /// The index is out of range.
     #[fail(display = "The index is out of range {}", index)]
-    OOONProofIndexOutofRange { index: usize },
+    OOONProofIndexOutofRange { index: u32 },
 
     /// Input vector or matrix size does not match to the expected value
     #[fail(display = "The provided matrix or vector size does not match to the expected")]
@@ -154,17 +147,17 @@ pub enum ErrorKind {
     InvalidExponentParameter,
 
     /// The incoming transaction state does not match the expectation.
-    #[fail(display = "Received an invalid previous state: {:?}", state)]
+    #[fail(display = "Received an invalid previous state: {}", state)]
     InvalidPreviousState { state: ConfidentialTxState },
 
     /// The incoming asset transaction state does not match the expectation.
     #[fail(
-        display = "Received an invalid previous asset transaction state: {:?}",
+        display = "Received an invalid previous asset transaction state: {}",
         state
     )]
     InvalidPreviousAssetTransactionState { state: AssetTxState },
 
-    /// The amount in the initial transaction does not match the amount that receiver expacted.
+    /// The amount in the initial transaction does not match the amount that receiver expected.
     #[fail(
         display = "Expected to receive {:?} form the sender, got a different amount.",
         expected_amount
@@ -199,8 +192,15 @@ pub enum ErrorKind {
     SignatureValidationFailure,
 
     /// A range proof error occurred.
-    #[fail(display = "A range proof error occured: {:?}", source)]
+    #[fail(display = "A range proof error occurred: {:?}", source)]
     ProvingError { source: ProofError },
+
+    /// The ticker id can be at most 12 characters long.
+    #[fail(
+        display = "Incorrect ticker length. The length can be at most {:?}, but got {:?}",
+        want, got
+    )]
+    TickerIdLengthError { want: usize, got: usize },
 }
 
 pub type Fallible<T, E = Error> = Result<T, E>;
