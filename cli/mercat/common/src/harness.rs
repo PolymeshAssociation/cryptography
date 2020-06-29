@@ -4,11 +4,14 @@ use crate::{
     SECRET_ACCOUNT_FILE,
 };
 use cryptography::mercat::{PubAccount, SecAccount};
+use linked_hash_map::LinkedHashMap;
 use log::info;
 use rand::Rng;
 use rand::{rngs::StdRng, SeedableRng};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::{collections::HashSet, fs, io, time::Instant};
+use std::{collections::HashSet, convert::From, fs, io, time::Instant};
+use yaml_rust::{Yaml, YamlEmitter, YamlLoader};
 
 // --------------------------------------------------------------------------------------------------
 // -                                       data types                                                -
@@ -26,6 +29,7 @@ trait TransactionOrder {
 }
 
 /// Represents the three types of mercat transactions.
+#[derive(Debug)]
 pub enum Transaction {
     /// Transfer a balance from Alice to Bob, with some mediator and validator.
     Transfer(Transfer),
@@ -36,12 +40,14 @@ pub enum Transaction {
 }
 
 /// A generic party, can be sender, receiver, or mediator.
+#[derive(Debug)]
 pub struct Party {
     pub name: String,
     pub cheater: bool,
 }
 
 /// Data type of the transaction of transferring balance.
+#[derive(Debug)]
 pub struct Transfer {
     pub id: u32,
     pub sender: Party,
@@ -53,7 +59,33 @@ pub struct Transfer {
     pub ticker: String,
 }
 
+impl From<(u32, Vec<&str>)> for Transfer {
+    fn from(pair: (u32, Vec<&str>)) -> Self {
+        let (id, segments) = pair;
+        Self {
+            id,
+            sender: Party {
+                name: String::from(""),
+                cheater: true,
+            },
+            receiver: Party {
+                name: String::from(""),
+                cheater: true,
+            },
+            receiver_approves: true,
+            mediator: Party {
+                name: String::from(""),
+                cheater: true,
+            },
+            mediator_approves: true,
+            amount: 0,
+            ticker: String::from(""),
+        }
+    }
+}
+
 /// Data type of the transaction of creating empty account.
+#[derive(Debug)]
 pub struct Create {
     pub id: u32,
     pub seed: String,
@@ -64,6 +96,7 @@ pub struct Create {
 }
 
 /// Data type of the transaction of funding an account by issuer.
+#[derive(Debug)]
 pub struct Issue {
     pub id: u32,
     pub owner: Party,
@@ -71,6 +104,26 @@ pub struct Issue {
     pub mediator_approves: bool,
     pub ticker: String,
     pub amount: u32,
+}
+
+impl From<(u32, Vec<&str>)> for Issue {
+    fn from(pair: (u32, Vec<&str>)) -> Self {
+        let (id, segments) = pair;
+        Self {
+            id,
+            owner: Party {
+                name: String::from(""),
+                cheater: true,
+            },
+            mediator: Party {
+                name: String::from(""),
+                cheater: true,
+            },
+            mediator_approves: true,
+            ticker: String::from(""),
+            amount: 0,
+        }
+    }
 }
 
 /// Human readable form of a mercat account.
@@ -82,6 +135,7 @@ pub struct Account {
 }
 
 /// Represents the various combinations of the transactions.
+#[derive(Debug)]
 pub enum TransactionMode {
     /// The transactions are run `repeat` number of times, and in each iteration, the
     /// steps of one transaction are done before the steps of the next transaction.
@@ -407,7 +461,184 @@ fn make_empty_accounts(
     ))
 }
 
-fn parse_config(_path: PathBuf) -> Result<TestCase, Error> {
+//#[derive(Default, Debug, Serialize, Deserialize)]
+//struct Outcome {
+//    time: u32,
+//    accounts: HashMap<String, HashMap<String, u32>>,
+//}
+//
+//#[derive(Debug, Serialize, Deserialize)]
+//enum AA {
+//    Sequential(Vec<AA>),
+//    Concurrent(Vec<AA>),
+//    Normal(Vec<String>),
+//}
+//
+//impl Default for AA {
+//    fn default() -> Self {
+//        AA::Normal(vec![])
+//    }
+//}
+//
+//#[derive(Default, Debug, Serialize, Deserialize)]
+//struct HarnessConfig {
+//    title: String,
+//    tickers: Vec<String>,
+//    accounts: HashMap<String, Vec<String>>,
+//    outcomes: Outcome,
+//    transactions: AA,
+//}
+
+fn to_string(value: &Yaml, path: PathBuf, attribute: &str) -> Result<String, Error> {
+    Ok(value
+        .as_str()
+        .ok_or(Error::ErrorParsingTestHarnessConfig {
+            path: path,
+            reason: format!("Failed to read {}", attribute),
+        })?
+        .to_string())
+}
+
+fn to_hash<'a>(
+    value: &'a Yaml,
+    path: PathBuf,
+    attribute: &str,
+) -> Result<&'a LinkedHashMap<Yaml, Yaml>, Error> {
+    if let Yaml::Hash(hash) = value {
+        Ok(hash)
+    } else {
+        Err(Error::ErrorParsingTestHarnessConfig {
+            path,
+            reason: format!("Failed to parse {} as hash", attribute),
+        })
+    }
+}
+
+fn to_array<'a>(value: &'a Yaml, path: PathBuf, attribute: &str) -> Result<&'a Vec<Yaml>, Error> {
+    if let Yaml::Array(array) = value {
+        Ok(array)
+    } else {
+        Err(Error::ErrorParsingTestHarnessConfig {
+            path,
+            reason: format!("Failed to parse {} as array", attribute),
+        })
+    }
+}
+
+fn parse_transactions(
+    value: &Yaml,
+    path: PathBuf,
+    attribute: &str,
+    transaction_id: u32,
+) -> Result<(u32, Vec<TransactionMode>), Error> {
+    let mut transaction_list: Vec<TransactionMode> = vec![];
+    let mut transaction_id = transaction_id;
+    let transactions = to_array(value, path.clone(), attribute)?;
+    for transaction in transactions.into_iter() {
+        match &transaction {
+            Yaml::Hash(transaction) => {
+                println!("found hash");
+                for (key, value) in transaction {
+                    let key = to_string(key, path.clone(), "todo")?;
+                    let (new_transaction_id, steps) =
+                        parse_transactions(value, path.clone(), "todo", transaction_id)?;
+                    println!("---> inside hash, found key {}", key);
+                    transaction_id = new_transaction_id;
+                    if key == "sequence" {
+                        // TODO add repeat to the config. Create new story for it.
+                        transaction_list.push(TransactionMode::Sequence { repeat: 1, steps });
+                    } else if key == "concurrent" {
+                        transaction_list.push(TransactionMode::Concurrent { repeat: 1, steps });
+                    } else {
+                        // raise key error
+                    }
+                }
+            }
+            Yaml::String(transaction) => {
+                println!("found string: {}", transaction);
+                let segments: Vec<&str> = transaction.split_whitespace().collect();
+                // TODO set the condition it on a general pattern, instead of hard coding the length
+                if segments.len() == 5 {
+                    println!("---> It is an issue transaction");
+                    let issue = Issue::from((transaction_id, segments));
+                    transaction_id += 1;
+                    transaction_list.push(TransactionMode::Transaction(Transaction::Issue(issue)));
+                } else if segments.len() == 7 {
+                    println!("---> It is a transfer transaction");
+                    let transfer = Transfer::from((transaction_id, segments));
+                    transaction_id += 1;
+                    transaction_list.push(TransactionMode::Transaction(Transaction::Transfer(
+                        transfer,
+                    )));
+                }
+            }
+            _ => {
+
+                // raise error
+            }
+        }
+    }
+
+    Ok((transaction_id, transaction_list))
+}
+
+fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
+    //let config: HarnessConfig = confy::load_path(path).unwrap();
+    //println!("{:#?}", config);
+
+    let config = fs::read_to_string(path.clone()).map_err(|error| Error::FileReadError {
+        error,
+        path: path.clone(),
+    })?;
+    let config = YamlLoader::load_from_str(&config).unwrap();
+    let config = &config[0];
+    let transaction_id = 0;
+
+    let title: String = to_string(&config["title"], path.clone(), "title")?;
+    let mut tickers: Vec<String> = vec![];
+    if let Yaml::Array(tickers_yaml) = &config["tickers"] {
+        for ticker in tickers_yaml {
+            tickers.push(to_string(&ticker, path.clone(), "ticker")?)
+        }
+    }
+
+    let mut all_accounts: Vec<Account> = vec![];
+    let accounts = to_array(&config["accounts"], path.clone(), "accounts")?;
+    for user in accounts {
+        let user = to_hash(&user, path.clone(), "accounts.user")?;
+        for (user, tickers) in user {
+            let user = to_string(&user, path.clone(), "accounts.user")?;
+            let tickers = to_array(&tickers, path.clone(), "accounts.tickers")?;
+            for ticker in tickers {
+                let ticker = to_string(
+                    &ticker,
+                    path.clone(),
+                    &format!("accounts.{}.ticker", user.clone()),
+                )?;
+                all_accounts.push(Account {
+                    balance: 0,
+                    owner: user.clone(),
+                    ticker,
+                });
+            }
+        }
+    }
+
+    //let mut all_transactions: Vec<Account> = vec![];
+    //let transactions = &to_array(&config["transactions"], path.clone(), "transactions")?[0];
+    //let transactions = to_hash(transactions, path.clone(), "transactions")?;
+
+    let aa = parse_transactions(
+        &config["transactions"],
+        path.clone(),
+        "transactions",
+        transaction_id,
+    )?;
+    println!("{:?}", aa);
+
+    println!("----------> {:?} {:?} {:#?}", title, tickers, all_accounts);
+    //.ok_or(Error::ConfigParseError { path })?
+
     // TODO read the file and produce a TestCase. Will do once the input format is finalized.
     let mut accounts_outcome: HashSet<Account> = HashSet::new();
     accounts_outcome.insert(Account {

@@ -19,6 +19,11 @@ failure = { version = "0.1.7" }
 base64 = { version = "0.12.1" }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 env_logger = { version = "0.7.1" }
+#confy = { version = "0.4.0", default-features = false } #, features = ["yaml_conf"] }
+yaml-rust = { version = "0.4" }
+linked-hash-map= { version = "0.5.3" }
+
+
 
 # Crypto
 rand = { version = "0.7.3", features = ["getrandom", "alloc"] }

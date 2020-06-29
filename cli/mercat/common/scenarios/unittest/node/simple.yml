@@ -5,7 +5,7 @@ tickers:
   - AAPL
   - ACME
 
-Accounts:
+accounts:
   - alice:
     - ACME
     - AAPL
@@ -16,14 +16,14 @@ Accounts:
     - ACME
     
 transactions:
-  - Concurrent:
-    - Sequential:
-      - Concurrent:
+  - concurrent:
+    - sequence:
+      - concurrent:
         - Alice 50 ACME Mike approve
         - Carol 10 ACME Mike approve
       - Alice 50 ACME Bob approve Marry approve
       - Bob 40 ACME Carol approve Marry approve
-    - Sequential:
+    - sequence[2]:
       - Bob 10 AAPL Moe approve
       - Bob 5 AAPL Alice approve Moe approve
 
