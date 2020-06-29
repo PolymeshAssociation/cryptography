@@ -185,8 +185,8 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
     };
 
     // Create the trasaction and check its result and state
-    // We create a transaction for using it in the subsequent steps
-    // and use the same tx input parameters for benchmarking tx initialization phase.
+    // We first create a transaction for using it in the subsequent steps of our workflow, and after
+    // use the same tx input parameters for benchmarking tx initialization phase.
     let result = sndr.create_transaction(
         &sndr_account,
         &rcvr_account.pblc,
@@ -525,8 +525,8 @@ fn bench_mercat_account_generation_and_validation(c: &mut Criterion) {
         &mut rng,
     )
     .unwrap();
-    let account_vldtr = AccountValidator {};
     println!("Account creation takes {:?}", account_gen_time.elapsed());
+    let account_vldtr = AccountValidator {};
 
     let label_acc_gen = format!("Mercat New Account Generation");
 
@@ -567,7 +567,7 @@ criterion_group! {
     // long so we're not microbenchmarking anyways.
     // 10 is the minimum allowed sample size in Criterion.
     config = Criterion::default().sample_size(10).measurement_time(Duration::new(600, 0));
-    targets = bench_mercat_confidential_tx_operations,bench_mercat_account_generation_and_validation, bench_mercat_asset_issuance_tx_operations,
+    targets = bench_mercat_account_generation_and_validation, //bench_mercat_confidential_tx_operations, bench_mercat_asset_issuance_tx_operations,
 }
 
 criterion_main!(bench_account_validation);

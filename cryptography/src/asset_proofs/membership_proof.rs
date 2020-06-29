@@ -194,7 +194,7 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
 
         let one = Polynomial::new(self.exp as usize);
         let mut polynomials: Vec<Polynomial> = Vec::with_capacity(size as usize);
-
+        
         for i in 0..size as usize {
             polynomials.push(one.clone());
             let i_rep = convert_to_base(i, self.base as usize, exp);
