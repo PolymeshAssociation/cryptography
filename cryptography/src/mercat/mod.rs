@@ -41,8 +41,8 @@ use sp_std::{convert::From, fmt, mem, vec::Vec};
 // -                                  Constants                                        -
 // -------------------------------------------------------------------------------------
 
-const EXPONENT: usize = 8; // TODO: change to 8. CRYP-112
-const BASE: usize = 4;
+const EXPONENT: u32 = 8; // TODO: change to 8. CRYP-112
+const BASE: u32 = 4;
 
 // -------------------------------------------------------------------------------------
 // -                                 New Type Def                                      -
@@ -58,7 +58,7 @@ pub type EncryptionPubKey = ElgamalPublicKey;
 pub type EncryptionSecKey = ElgamalSecretKey;
 
 /// Holds ElGamal encryption keys.
-#[derive(Clone, Debug, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptionKeys {
     pub pblc: EncryptionPubKey,
@@ -100,7 +100,7 @@ impl From<CipherText> for EncryptedAmount {
 // TODO: move all these XXXProof to the proper file. CRYP-113
 
 /// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
-#[derive(Default, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessProof {
     init: WellformednessInitialMessage,
@@ -117,7 +117,7 @@ impl From<(WellformednessInitialMessage, WellformednessFinalResponse)> for Wellf
 }
 
 /// Holds the non-interactive proofs of correctness, equivalent of L_correct of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CorrectnessProof {
     init: CorrectnessInitialMessage,
@@ -228,7 +228,7 @@ impl From<(RangeProofInitialMessage, RangeProofFinalResponse, u32)> for InRangeP
 
 /// Holds the non-interactive proofs of equality using different public keys, equivalent
 /// of L_cipher of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherEqualDifferentPubKeyProof {
     pub init: EncryptingSameValueInitialMessage,
@@ -256,7 +256,7 @@ impl
 
 /// Holds the non-interactive proofs of equality using different public keys, equivalent
 /// of L_equal of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherEqualSamePubKeyProof {
     pub init: CipherTextRefreshmentInitialMessage,
@@ -325,7 +325,7 @@ impl Decode for MediatorAccount {
 }
 
 /// Holds the owner public keys and the creation date of an account.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
@@ -428,7 +428,7 @@ impl Decode for PubAccount {
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
@@ -612,7 +612,7 @@ impl core::fmt::Debug for ConfidentialTxState {
 
 /// Holds the public portion of an asset issuance transaction after initialization.
 /// This can be placed on the chain.
-#[derive(Clone, Debug, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAssetTxDataContent {
     account_id: u32,
@@ -624,7 +624,7 @@ pub struct PubAssetTxDataContent {
     balance_correctness_proof: CorrectnessProof,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAssetTxData {
     pub content: PubAssetTxDataContent,
@@ -748,7 +748,7 @@ pub trait AssetTransactionFinalizeAndProcessVerifier {
 // -------------------------------------------------------------------------------------
 
 /// Holds the memo for confidential transaction sent by the sender.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Clone, Copy, Serialize, Deserialize, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ConfidentialTxMemo {
     pub sndr_account_id: u32,
@@ -812,7 +812,7 @@ impl Decode for PubInitConfidentialTxData {
 
 /// Holds the initial transaction data and the proof of equality of asset ids
 /// prepared by the receiver.
-#[derive(Serialize, Deserialize, Debug, Encode, Decode)]
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubFinalConfidentialTxDataContent {
     pub init_data: PubInitConfidentialTxData,
@@ -821,7 +821,7 @@ pub struct PubFinalConfidentialTxDataContent {
 
 /// Wrapper for the contents and the signature of the content sent by the
 /// receiver of the transaction.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubFinalConfidentialTxData {
     pub content: PubFinalConfidentialTxDataContent,

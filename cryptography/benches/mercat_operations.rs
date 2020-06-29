@@ -18,7 +18,7 @@ use cryptography::{
             CtxMediator, CtxMediatorValidator, CtxReceiver, CtxReceiverValidator, CtxSender,
             CtxSenderValidator,
         },
-        Account, AccountCreaterVerifier, AccountMemo, AssetTransactionInitializeVerifier,
+        Account, AccountCreatorVerifier, AccountMemo, AssetTransactionInitializeVerifier,
         AssetTransactionIssuer, AssetTransactionMediator, AssetTxState,
         CipherEqualDifferentPubKeyProof, CipherEqualSamePubKeyProof,
         ConfidentialTransactionInitVerifier, ConfidentialTransactionMediator,
@@ -62,8 +62,8 @@ fn mock_ctx_init_memo<R: RngCore + CryptoRng>(
     asset_id: AssetId,
     rng: &mut R,
 ) -> ConfidentialTxMemo {
-    let (_, enc_amount_using_rcvr) = rcvr_pub_key.key.encrypt_value(amount.into(), rng);
-    let (_, enc_asset_id_using_rcvr) = rcvr_pub_key.key.encrypt_value(asset_id.into(), rng);
+    let (_, enc_amount_using_rcvr) = rcvr_pub_key.encrypt_value(amount.into(), rng);
+    let (_, enc_asset_id_using_rcvr) = rcvr_pub_key.encrypt_value(asset_id.into(), rng);
     ConfidentialTxMemo {
         sndr_account_id: 0,
         rcvr_account_id: 0,
@@ -86,10 +86,8 @@ fn mock_gen_account<R: RngCore + CryptoRng>(
     balance: Balance,
     rng: &mut R,
 ) -> Fallible<PubAccount> {
-    let (_, enc_asset_id) = rcvr_enc_pub_key.key.encrypt_value(asset_id.into(), rng);
-    let (_, enc_balance) = rcvr_enc_pub_key
-        .key
-        .encrypt_value(Scalar::from(balance), rng);
+    let (_, enc_asset_id) = rcvr_enc_pub_key.encrypt_value(asset_id.into(), rng);
+    let (_, enc_balance) = rcvr_enc_pub_key.encrypt_value(Scalar::from(balance), rng);
 
     Ok(PubAccount {
         content: PubAccountContent {
@@ -360,7 +358,7 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
 
     c.bench_function_over_inputs(
         &label_ctx_justify,
-        move |b, ctx_finalized_data| {
+        move |b, ctx_finalized_data_clone| {
             b.iter(|| {
                 let (justified_finalized_ctx_data, state) = mdtr_clone.justify(ctx_finalized_data_clone.clone(), result_state.clone(), &mdtr_sec_account.clone(), asset_id_clone.clone()).unwrap();
                 assert_eq!(
@@ -396,7 +394,6 @@ fn bench_mercat_asset_issuance_tx_operations(c: &mut Criterion) {
     let pub_account_enc_asset_id = EncryptedAssetId::from(
         issuer_enc_key
             .pblc
-            .key
             .encrypt(&issuer_secret_account.asset_id_witness),
     );
 
