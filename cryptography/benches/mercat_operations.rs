@@ -340,7 +340,17 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
         )
         .unwrap();
 
-    // justify the transaction
+    
+    // Bencharking the transaction justification
+    // We clone all parameters before passing them to the criterion.
+    let label_ctx_justify = "Justify the Finalized Transaction";
+    let mdtr_clone = mdtr.clone();
+    let ctx_finalized_data_clone = ctx_finalized_data.clone();
+    let sndr_acc_pbc_clone = sndr_account.pblc.clone();
+    let rcvr_account_pbc_clone = rcvr_account.pblc.clone();
+    let state_clone = result_state.clone();
+    let asset_id_clone = asset_id.clone();
+
     let mdtr_sec_account = SecAccount {
         enc_keys: mdtr_enc_keys,
         sign_keys: mdtr_sign_keys.clone(),
@@ -348,18 +358,18 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
         asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
     };
 
-    let result = mdtr.justify(ctx_finalized_data, result_state, &mdtr_sec_account, asset_id);
-    let (justified_finalized_ctx_data, state) = result.unwrap();
-    assert_eq!(
-        state,
-        ConfidentialTxState::FinalizationJustification(TxSubstate::Started)
-    );
-
-    let result = mdtr_vldtr.verify(&justified_finalized_ctx_data, &mdtr_sign_keys.public, state);
-    let state = result.unwrap();
-    assert_eq!(
-        state,
-        ConfidentialTxState::FinalizationJustification(TxSubstate::Validated)
+    c.bench_function_over_inputs(
+        &label_ctx_justify,
+        move |b, ctx_finalized_data| {
+            b.iter(|| {
+                let (justified_finalized_ctx_data, state) = mdtr_clone.justify(ctx_finalized_data_clone.clone(), result_state.clone(), &mdtr_sec_account.clone(), asset_id_clone.clone()).unwrap();
+                assert_eq!(
+                    state,
+                    ConfidentialTxState::FinalizationJustification(TxSubstate::Started)
+                );
+            })
+        },
+        vec![ctx_finalized_data_clone.clone()],
     );
 }
 
@@ -554,7 +564,7 @@ criterion_group! {
     // long so we're not microbenchmarking anyways.
     // 10 is the minimum allowed sample size in Criterion.
     config = Criterion::default().sample_size(10).measurement_time(Duration::new(600, 0));
-    targets = bench_mercat_confidential_tx_operations,//bench_mercat_account_generation_and_validation, bench_mercat_asset_issuance_tx_operations,
+    targets = bench_mercat_confidential_tx_operations,bench_mercat_account_generation_and_validation, bench_mercat_asset_issuance_tx_operations,
 }
 
 criterion_main!(bench_account_validation);
