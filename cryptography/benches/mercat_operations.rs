@@ -310,7 +310,7 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
     let state_clone = state.clone();
 
     c.bench_function_over_inputs(
-        &label_ctx_init_ver,
+        &label_ctx_final_ver,
         move |b, ctx_finalized_data| {
             b.iter(|| {
                 let state = rcvr_vldtr_clone
@@ -348,7 +348,7 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
         asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
     };
 
-    let result = mdtr.justify(ctx_finalized_data, state, &mdtr_sec_account, asset_id);
+    let result = mdtr.justify(ctx_finalized_data, result_state, &mdtr_sec_account, asset_id);
     let (justified_finalized_ctx_data, state) = result.unwrap();
     assert_eq!(
         state,
