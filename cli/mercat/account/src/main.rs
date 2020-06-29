@@ -23,7 +23,7 @@ use mercat_common::{
     asset_transaction_file, confidential_transaction_file, construct_path, create_rng_from_seed,
     errors::Error, get_asset_ids, init_print_logger, load_object, remove_file, save_object,
     CTXInstruction, Instruction, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
-    SECRET_ACCOUNT_FILE,
+    SECRET_ACCOUNT_FILE, VALIDATED_PUBLIC_ACCOUNT_FILE,
 };
 use metrics::timing;
 use rand::{CryptoRng, RngCore};
@@ -56,12 +56,13 @@ fn process_create_account(cfg: input::CreateAccountInfo) -> Result<(), Error> {
 
     // Create the account.
     let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
-    let secret_account = create_secret_account(&mut rng, cfg.ticker_id)?;
+    let secret_account = create_secret_account(&mut rng, cfg.ticker_id.clone())?;
     let valid_asset_ids = get_asset_ids(db_dir.clone())?;
 
     let create_account_timer = Instant::now();
     let account = create_account(secret_account, &valid_asset_ids, cfg.account_id, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
+
     timing!("account.call_library", create_account_timer, Instant::now());
 
     // Save the artifacts to file.
@@ -202,7 +203,7 @@ fn process_create_tx(cfg: input::CreateTransactionInfo) -> Result<(), Error> {
     // Setup the rng.
     let mut rng = create_rng_from_seed(cfg.seed)?;
 
-    // Load issuer's secret account and mediator's public credentials from file.
+    // Load sender's secret account and mediator's public credentials from file.
     let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
     let load_from_file_timer = Instant::now();
 
@@ -217,7 +218,7 @@ fn process_create_tx(cfg: input::CreateTransactionInfo) -> Result<(), Error> {
             db_dir.clone(),
             ON_CHAIN_DIR,
             &cfg.sender,
-            PUBLIC_ACCOUNT_FILE,
+            VALIDATED_PUBLIC_ACCOUNT_FILE,
         )?,
     };
 
@@ -253,7 +254,6 @@ fn process_create_tx(cfg: input::CreateTransactionInfo) -> Result<(), Error> {
             &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })?;
-
     timing!("account.create_tx.create", create_tx_timer, Instant::now());
 
     // Save the artifacts to file.
@@ -285,7 +285,7 @@ fn process_finalize_tx(cfg: input::FinalizeTransactionInfo) -> Result<(), Error>
     // Setup the rng.
     let mut rng = create_rng_from_seed(cfg.clone().seed)?;
 
-    // Load issuer's secret account and mediator's public credentials from file.
+    // Load receiver's secret account and mediator's public credentials from file.
     let db_dir = cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir)?;
     let load_from_file_timer = Instant::now();
 
@@ -332,7 +332,7 @@ fn process_finalize_tx(cfg: input::FinalizeTransactionInfo) -> Result<(), Error>
         Instant::now()
     );
 
-    // Initialize the transaction.
+    // Finalize the transaction.
     let finalize_by_receiver_timer = Instant::now();
     let receiver = CtxReceiver {};
     let (asset_tx, state) = receiver

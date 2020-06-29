@@ -44,7 +44,6 @@ pub struct CreateAccountInfo {
     /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
     #[structopt(
-        short,
         long,
         help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
@@ -75,7 +74,6 @@ pub struct IssueAssetInfo {
     /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
     #[structopt(
-        short,
         long,
         help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
@@ -131,7 +129,6 @@ pub struct CreateTransactionInfo {
     /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
     #[structopt(
-        short,
         long,
         help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
@@ -154,7 +151,7 @@ pub struct CreateTransactionInfo {
     pub db_dir: Option<PathBuf>,
 
     /// The sender's name. An account must have already been created for this user.
-    #[structopt(short, long, help = "The sender's name.")]
+    #[structopt(long, help = "The sender's name.")]
     pub sender: String,
 
     /// The receiver's name. An account must have already been created for this user.
@@ -186,7 +183,6 @@ pub struct FinalizeTransactionInfo {
     /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
     #[structopt(
-        short,
         long,
         help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
@@ -210,7 +206,7 @@ pub struct FinalizeTransactionInfo {
 
     // todo if we put the tx on chain, we won't need sender here.
     /// The sender's name. An account must have already been created for this user.
-    #[structopt(short, long, help = "The sender's name.")]
+    #[structopt(long, help = "The sender's name.")]
     pub sender: String,
 
     /// The receiver's name. An account must have already been created for this user.

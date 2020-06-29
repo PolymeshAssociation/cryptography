@@ -5,16 +5,22 @@
 mod input;
 use codec::Decode;
 use cryptography::mercat::{
-    account::AccountValidator, asset::AssetTxIssueValidator, AccountCreatorVerifier, AccountMemo,
-    AssetTransactionFinalizeAndProcessVerifier, AssetTransactionInitializeVerifier, AssetTxState,
-    PubAccount, PubAssetTxData, PubJustifiedAssetTxData, TxSubstate,
+    account::AccountValidator,
+    asset::AssetTxIssueValidator,
+    conf_tx::{CtxMediatorValidator, CtxReceiverValidator, CtxSenderValidator},
+    AccountCreatorVerifier, AccountMemo, AssetTransactionFinalizeAndProcessVerifier,
+    AssetTransactionInitializeVerifier, AssetTxState, ConfidentialTransactionFinalizationVerifier,
+    ConfidentialTransactionInitVerifier, ConfidentialTransactionMediatorVerifier,
+    ConfidentialTxState, JustifiedPubFinalConfidentialTxData, PubAccount, PubAssetTxData,
+    PubFinalConfidentialTxData, PubInitConfidentialTxData, PubJustifiedAssetTxData, TxSubstate,
 };
 use env_logger;
 use input::{parse_input, CLI};
 use log::info;
 use mercat_common::{
-    asset_transaction_file, errors::Error, get_asset_ids, init_print_logger, load_object,
-    save_object, Instruction, INIT_STATE, JUSTIFY_STATE, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
+    asset_transaction_file, confidential_transaction_file, errors::Error, get_asset_ids,
+    init_print_logger, load_object, save_object, CTXInstruction, Instruction, FINISHED_STATE,
+    INIT_STATE, JUSTIFICATION_STATE, JUSTIFY_STATE, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
     VALIDATED_PUBLIC_ACCOUNT_FILE,
 };
 use metrics::timing;
@@ -32,6 +38,7 @@ fn main() {
     match args {
         CLI::ValidateIssuance(cfg) => validate_asset_issuance(cfg).unwrap(),
         CLI::ValidateAccount(cfg) => validate_account(cfg).unwrap(),
+        CLI::ValidateTransaction(cfg) => validate_transaction(cfg).unwrap(),
     };
 
     info!("The program finished successfully.");
@@ -180,6 +187,138 @@ fn validate_account(cfg: input::AccountCreationInfo) -> Result<(), Error> {
     )?;
     timing!(
         "validator.account.save_objects",
+        save_objects_timer,
+        Instant::now()
+    );
+
+    Ok(())
+}
+
+fn process_transaction_initialization(
+    instruction: CTXInstruction,
+    sender_pub_account: &PubAccount,
+) -> Result<ConfidentialTxState, Error> {
+    let tx = PubInitConfidentialTxData::decode(&mut &instruction.data[..]).unwrap();
+    let validator = CtxSenderValidator {};
+    let state = validator
+        .verify(&tx, sender_pub_account, instruction.state)
+        .map_err(|error| Error::LibraryError { error })?;
+
+    Ok(state)
+}
+
+fn process_transaction_finalization(
+    instruction: CTXInstruction,
+    sender_pub_account: &PubAccount,
+    receiver_pub_account: &PubAccount,
+) -> Result<ConfidentialTxState, Error> {
+    let tx = PubFinalConfidentialTxData::decode(&mut &instruction.data[..]).unwrap();
+    let validator = CtxReceiverValidator {};
+    let state = validator
+        .verify_finalize_by_receiver(
+            sender_pub_account,
+            receiver_pub_account,
+            &tx,
+            instruction.state,
+        )
+        .map_err(|error| Error::LibraryError { error })?;
+
+    Ok(state)
+}
+
+fn process_transaction_finalization_justification(
+    instruction: CTXInstruction,
+    mdtr_account: &AccountMemo,
+) -> Result<ConfidentialTxState, Error> {
+    let tx = JustifiedPubFinalConfidentialTxData::decode(&mut &instruction.data[..]).unwrap();
+    let validator = CtxMediatorValidator {};
+    let state = validator
+        .verify(&tx, &mdtr_account.owner_sign_pub_key, instruction.state)
+        .map_err(|error| Error::LibraryError { error })?;
+
+    Ok(state)
+}
+
+fn validate_transaction(cfg: input::ValidateTransactionInfo) -> Result<(), Error> {
+    let load_objects_timer = Instant::now();
+    // Load the transaction, mediator's account, and issuer's public account.
+    let db_dir = cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir)?;
+
+    let state = match cfg.state.as_str() {
+        INIT_STATE => ConfidentialTxState::Initialization(TxSubstate::Started),
+        FINISHED_STATE => ConfidentialTxState::Finalization(TxSubstate::Started),
+        JUSTIFICATION_STATE => ConfidentialTxState::FinalizationJustification(TxSubstate::Started),
+        _ => return Err(Error::InvalidInstructionError),
+    };
+
+    let mut instruction: CTXInstruction = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &cfg.sender,
+        &confidential_transaction_file(cfg.tx_id, state),
+    )?;
+
+    let mediator_account: AccountMemo = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &cfg.mediator,
+        PUBLIC_ACCOUNT_FILE,
+    )?;
+
+    let sender_account: PubAccount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &cfg.sender,
+        VALIDATED_PUBLIC_ACCOUNT_FILE,
+    )?;
+
+    let receiver_account: PubAccount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &cfg.receiver,
+        VALIDATED_PUBLIC_ACCOUNT_FILE,
+    )?;
+
+    timing!(
+        "validator.issuance.load_objects",
+        load_objects_timer,
+        Instant::now()
+    );
+
+    let validate_transaction_timer = Instant::now();
+    let result = match instruction.state {
+        ConfidentialTxState::Initialization(TxSubstate::Started) => {
+            process_transaction_initialization(instruction.clone(), &sender_account)?
+        }
+        ConfidentialTxState::Finalization(TxSubstate::Started) => process_transaction_finalization(
+            instruction.clone(),
+            &sender_account,
+            &receiver_account,
+        )?,
+        ConfidentialTxState::FinalizationJustification(TxSubstate::Started) => {
+            process_transaction_finalization_justification(instruction.clone(), &mediator_account)?
+        }
+        _ => return Err(Error::InvalidInstructionError),
+    };
+
+    timing!(
+        "validator.transaction",
+        validate_transaction_timer,
+        Instant::now()
+    );
+
+    let save_objects_timer = Instant::now();
+    // Save the transaction under the new state.
+    instruction.state = result;
+    save_object(
+        db_dir,
+        ON_CHAIN_DIR,
+        &cfg.sender,
+        &confidential_transaction_file(cfg.tx_id, result),
+        &instruction,
+    )?;
+    timing!(
+        "validator.issuance.save_objects",
         save_objects_timer,
         Instant::now()
     );
