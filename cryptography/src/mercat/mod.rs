@@ -37,7 +37,7 @@ use sp_std::{convert::From, vec::Vec};
 // -                                  Constants                                        -
 // -------------------------------------------------------------------------------------
 
-const EXPONENT: usize = 3; // TODO: change to 8. CRYP-112
+const EXPONENT: usize = 8; // TODO: change to 8. CRYP-112
 const BASE: usize = 4;
 
 // -------------------------------------------------------------------------------------
@@ -518,7 +518,7 @@ pub struct PubInitConfidentialTxData {
 
 /// Holds the initial transaction data and the proof of equality of asset ids
 /// prepared by the receiver.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PubFinalConfidentialTxDataContent {
     pub init_data: PubInitConfidentialTxData,
     pub asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof,
@@ -532,7 +532,7 @@ impl PubFinalConfidentialTxDataContent {
 
 /// Wrapper for the contents and the signature of the content sent by the
 /// receiver of the transaction.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PubFinalConfidentialTxData {
     pub content: PubFinalConfidentialTxDataContent,
     pub sig: Signature,

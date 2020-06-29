@@ -78,10 +78,7 @@ pub fn create_account<T: RngCore + CryptoRng>(
     // Prove that the asset id is among the list of publicly known asset ids
     let generators = &OooNProofGenerators::new(EXPONENT, BASE);
     let asset_id = Scalar::from(scrt.asset_id.clone());
-
-    //println!("The secret asset id is {:?}", asset_id);
     let secret_element_com = enc_asset_id.y;
-    //println!("The corresponding asset id in the provided list of assets is {:?}", valid_asset_ids[20]);
     let (init, response) = single_property_prover(
         MembershipProverAwaitingChallenge::new(
             asset_id,
