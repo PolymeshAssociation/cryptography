@@ -93,4 +93,16 @@ pub enum Error {
         path, reason
     )]
     ErrorParsingTestHarnessConfig { path: PathBuf, reason: String },
+
+    /// An error occurred while parsing regex.
+    #[fail(display = "Failed to parse the regex: {:?}", reason)]
+    RegexError { reason: String },
+
+    /// Balance great than u32
+    #[fail(display = "balance does not fit u32")]
+    BalanceTooBig,
+
+    /// There can be only one top level transaction
+    #[fail(display = "There can be only one top level transaction")]
+    TopLevelTransaction,
 }

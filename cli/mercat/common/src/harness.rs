@@ -8,10 +8,15 @@ use linked_hash_map::LinkedHashMap;
 use log::info;
 use rand::Rng;
 use rand::{rngs::StdRng, SeedableRng};
-use serde::{Deserialize, Serialize};
+use regex::Regex;
 use std::path::PathBuf;
-use std::{collections::HashSet, convert::From, fs, io, time::Instant};
-use yaml_rust::{Yaml, YamlEmitter, YamlLoader};
+use std::{
+    collections::HashSet,
+    convert::{From, TryFrom},
+    fs, io,
+    time::Instant,
+};
+use yaml_rust::{Yaml, YamlLoader};
 
 // --------------------------------------------------------------------------------------------------
 // -                                       data types                                                -
@@ -46,6 +51,17 @@ pub struct Party {
     pub cheater: bool,
 }
 
+impl From<&str> for Party {
+    fn from(segment: &str) -> Self {
+        // Example: alice or alice(cheat)
+        let re = Regex::new(r"([a-zA-Z0-9]+)(\(cheat\))?").unwrap();
+        let caps = re.captures(segment).unwrap(); // TODO: convert to try_from
+        let name = String::from(caps.get(1).unwrap().as_str());
+        let cheater = caps.get(2).is_some();
+        Self { name, cheater }
+    }
+}
+
 /// Data type of the transaction of transferring balance.
 #[derive(Debug)]
 pub struct Transfer {
@@ -59,28 +75,30 @@ pub struct Transfer {
     pub ticker: String,
 }
 
-impl From<(u32, Vec<&str>)> for Transfer {
-    fn from(pair: (u32, Vec<&str>)) -> Self {
-        let (id, segments) = pair;
-        Self {
+impl TryFrom<(u32, String)> for Transfer {
+    type Error = Error;
+    fn try_from(pair: (u32, String)) -> Result<Self, Error> {
+        let (id, segment) = pair;
+        // Example: Bob(cheat) 40 ACME Carol approve Marry reject
+        let re = Regex::new(
+            r"^([a-zA-Z0-9()]+) ([0-9]+) ([a-zA-Z0-9]+) ([a-zA-Z0-9()]+) (approve|reject) ([a-zA-Z0-9()]+) (approve|reject)$",
+        )
+        .map_err(|_| Error::RegexError {
+            reason: String::from("Failed to compile the Transfer regex"),
+        })?;
+        let caps = re.captures(&segment).ok_or(Error::RegexError {
+            reason: format!("Pattern did not match {}", segment),
+        })?;
+        Ok(Self {
             id,
-            sender: Party {
-                name: String::from(""),
-                cheater: true,
-            },
-            receiver: Party {
-                name: String::from(""),
-                cheater: true,
-            },
-            receiver_approves: true,
-            mediator: Party {
-                name: String::from(""),
-                cheater: true,
-            },
-            mediator_approves: true,
-            amount: 0,
-            ticker: String::from(""),
-        }
+            sender: Party::from(caps.get(1).unwrap().as_str()),
+            receiver: Party::from(caps.get(4).unwrap().as_str()),
+            receiver_approves: caps.get(5).unwrap().as_str() == "approve",
+            mediator: Party::from(caps.get(6).unwrap().as_str()),
+            mediator_approves: caps.get(7).unwrap().as_str() == "approve",
+            amount: caps.get(2).unwrap().as_str().parse::<u32>().unwrap(),
+            ticker: String::from(caps.get(3).unwrap().as_str()),
+        })
     }
 }
 
@@ -106,26 +124,30 @@ pub struct Issue {
     pub amount: u32,
 }
 
-impl From<(u32, Vec<&str>)> for Issue {
-    fn from(pair: (u32, Vec<&str>)) -> Self {
-        let (id, segments) = pair;
-        Self {
+impl TryFrom<(u32, String)> for Issue {
+    type Error = Error;
+    fn try_from(pair: (u32, String)) -> Result<Self, Error> {
+        let (id, segment) = pair;
+        // Example: Bob(cheat) 40 ACME Carol approve Marry reject
+        let re = Regex::new(
+            r"^([a-zA-Z0-9()]+) ([0-9]+) ([a-zA-Z0-9]+) ([a-zA-Z0-9()]+) (approve|reject)$",
+        )
+        .map_err(|_| Error::RegexError {
+            reason: String::from("Failed to compile the Issue regex"),
+        })?;
+        let caps = re.captures(&segment).ok_or(Error::RegexError {
+            reason: format!("Pattern did not match {}", segment),
+        })?;
+        Ok(Self {
             id,
-            owner: Party {
-                name: String::from(""),
-                cheater: true,
-            },
-            mediator: Party {
-                name: String::from(""),
-                cheater: true,
-            },
-            mediator_approves: true,
-            ticker: String::from(""),
-            amount: 0,
-        }
+            owner: Party::from(caps.get(1).unwrap().as_str()),
+            mediator: Party::from(caps.get(4).unwrap().as_str()),
+            mediator_approves: caps.get(5).unwrap().as_str() == "approve",
+            ticker: String::from(caps.get(3).unwrap().as_str()),
+            amount: caps.get(2).unwrap().as_str().parse::<u32>().unwrap(),
+        })
     }
 }
-
 /// Human readable form of a mercat account.
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub struct Account {
@@ -158,8 +180,8 @@ pub struct TestCase {
     title: String,
     /// The list of valid ticker names. This names will be converted to asset ids for meract.
     ticker_names: Vec<String>,
-    /// The initial list of accounts for each party.
-    accounts: Vec<Account>,
+    ///// The initial list of accounts for each party.
+    //accounts: Vec<Account>,
     /// The transactions of this testcase.
     transactions: TransactionMode,
     /// The expected value of the accounts at the end of the scenario.
@@ -461,34 +483,6 @@ fn make_empty_accounts(
     ))
 }
 
-//#[derive(Default, Debug, Serialize, Deserialize)]
-//struct Outcome {
-//    time: u32,
-//    accounts: HashMap<String, HashMap<String, u32>>,
-//}
-//
-//#[derive(Debug, Serialize, Deserialize)]
-//enum AA {
-//    Sequential(Vec<AA>),
-//    Concurrent(Vec<AA>),
-//    Normal(Vec<String>),
-//}
-//
-//impl Default for AA {
-//    fn default() -> Self {
-//        AA::Normal(vec![])
-//    }
-//}
-//
-//#[derive(Default, Debug, Serialize, Deserialize)]
-//struct HarnessConfig {
-//    title: String,
-//    tickers: Vec<String>,
-//    accounts: HashMap<String, Vec<String>>,
-//    outcomes: Outcome,
-//    transactions: AA,
-//}
-
 fn to_string(value: &Yaml, path: PathBuf, attribute: &str) -> Result<String, Error> {
     Ok(value
         .as_str()
@@ -537,12 +531,10 @@ fn parse_transactions(
     for transaction in transactions.into_iter() {
         match &transaction {
             Yaml::Hash(transaction) => {
-                println!("found hash");
                 for (key, value) in transaction {
                     let key = to_string(key, path.clone(), "todo")?;
                     let (new_transaction_id, steps) =
                         parse_transactions(value, path.clone(), "todo", transaction_id)?;
-                    println!("---> inside hash, found key {}", key);
                     transaction_id = new_transaction_id;
                     if key == "sequence" {
                         // TODO add repeat to the config. Create new story for it.
@@ -555,17 +547,23 @@ fn parse_transactions(
                 }
             }
             Yaml::String(transaction) => {
-                println!("found string: {}", transaction);
-                let segments: Vec<&str> = transaction.split_whitespace().collect();
-                // TODO set the condition it on a general pattern, instead of hard coding the length
-                if segments.len() == 5 {
-                    println!("---> It is an issue transaction");
-                    let issue = Issue::from((transaction_id, segments));
+                if let Some(issue) = Issue::try_from((transaction_id, transaction.to_string()))
+                    .map_err(|_| Error::ErrorParsingTestHarnessConfig {
+                        path: path.clone(),
+                        reason: String::from("todo"),
+                    })
+                    .ok()
+                {
                     transaction_id += 1;
                     transaction_list.push(TransactionMode::Transaction(Transaction::Issue(issue)));
-                } else if segments.len() == 7 {
-                    println!("---> It is a transfer transaction");
-                    let transfer = Transfer::from((transaction_id, segments));
+                } else if let Some(transfer) =
+                    Transfer::try_from((transaction_id, transaction.to_string()))
+                        .map_err(|_| Error::ErrorParsingTestHarnessConfig {
+                            path: path.clone(),
+                            reason: String::from("todo"),
+                        })
+                        .ok()
+                {
                     transaction_id += 1;
                     transaction_list.push(TransactionMode::Transaction(Transaction::Transfer(
                         transfer,
@@ -574,7 +572,7 @@ fn parse_transactions(
             }
             _ => {
 
-                // raise error
+                // TODO raise error
             }
         }
     }
@@ -583,22 +581,18 @@ fn parse_transactions(
 }
 
 fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
-    //let config: HarnessConfig = confy::load_path(path).unwrap();
-    //println!("{:#?}", config);
-
     let config = fs::read_to_string(path.clone()).map_err(|error| Error::FileReadError {
         error,
         path: path.clone(),
     })?;
     let config = YamlLoader::load_from_str(&config).unwrap();
     let config = &config[0];
-    let transaction_id = 0;
 
     let title: String = to_string(&config["title"], path.clone(), "title")?;
-    let mut tickers: Vec<String> = vec![];
+    let mut ticker_names: Vec<String> = vec![];
     if let Yaml::Array(tickers_yaml) = &config["tickers"] {
         for ticker in tickers_yaml {
-            tickers.push(to_string(&ticker, path.clone(), "ticker")?)
+            ticker_names.push(to_string(&ticker, path.clone(), "ticker")?)
         }
     }
 
@@ -624,136 +618,81 @@ fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
         }
     }
 
-    //let mut all_transactions: Vec<Account> = vec![];
-    //let transactions = &to_array(&config["transactions"], path.clone(), "transactions")?[0];
-    //let transactions = to_hash(transactions, path.clone(), "transactions")?;
+    let mut accounts_outcome: HashSet<Account> = HashSet::new();
+    let outcomes = to_array(&config["outcome"], path.clone(), "outcome")?;
+    let mut timing_limit: u128 = 0;
+    for outcome in outcomes {
+        let outcome_type = to_hash(&outcome, path.clone(), "outcome.key")?;
+        for (key, value) in outcome_type {
+            let key = to_string(key, path.clone(), "outcome.key")?;
+            if key == "time-limit" {
+                if let Some(expected_time_limit) = value.as_i64() {
+                    // TODO generalize error
+                    timing_limit =
+                        u128::try_from(expected_time_limit).map_err(|_| Error::BalanceTooBig)?;
+                }
+            } else {
+                let accounts_for_user =
+                    to_array(&value, path.clone(), &format!("outcome.{}.ticker", key))?;
+                let owner = key.clone();
+                for accounts in accounts_for_user {
+                    let accounts =
+                        to_hash(&accounts, path.clone(), &format!("outcome.{}.ticker", key))?;
+                    for (ticker, amount) in accounts {
+                        let ticker = to_string(
+                            &ticker,
+                            path.clone(),
+                            &format!("outcome.{}.ticker", owner.clone()),
+                        )?;
+                        let balance =
+                            amount
+                                .as_i64()
+                                .ok_or(Error::ErrorParsingTestHarnessConfig {
+                                    path: path.clone(),
+                                    reason: format!(
+                                        "failed to convert expect amount for outcome.{}.{}",
+                                        owner.clone(),
+                                        ticker.clone()
+                                    ),
+                                })?;
+                        let balance = u32::try_from(balance).map_err(|_| Error::BalanceTooBig)?;
+                        accounts_outcome.insert(Account {
+                            owner: owner.clone(),
+                            ticker: ticker.clone(),
+                            balance,
+                        });
+                    }
+                }
+            }
+        }
+    }
 
-    let aa = parse_transactions(
+    let mut chain_db_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chain_db_dir.push("chain_dir/unittest/node/simple"); // TODO change
+    let (next_transaction_id, create_account_transactions) =
+        make_empty_accounts(&all_accounts, chain_db_dir.clone())?;
+
+    // TODO declared mutable since later I want to consume a single element of it
+    let (_, mut transactions) = parse_transactions(
         &config["transactions"],
         path.clone(),
         "transactions",
-        transaction_id,
+        next_transaction_id,
     )?;
-    println!("{:?}", aa);
 
-    println!("----------> {:?} {:?} {:#?}", title, tickers, all_accounts);
-    //.ok_or(Error::ConfigParseError { path })?
-
-    // TODO read the file and produce a TestCase. Will do once the input format is finalized.
-    let mut accounts_outcome: HashSet<Account> = HashSet::new();
-    accounts_outcome.insert(Account {
-        owner: String::from("alice"),
-        ticker: String::from("ACME"),
-        balance: 0,
-    });
-    accounts_outcome.insert(Account {
-        owner: String::from("alice"),
-        ticker: String::from("AAPL"),
-        balance: 50,
-    });
-    accounts_outcome.insert(Account {
-        owner: String::from("bob"),
-        ticker: String::from("ACME"),
-        balance: 10,
-    });
-    accounts_outcome.insert(Account {
-        owner: String::from("bob"),
-        ticker: String::from("AAPL"),
-        balance: 5,
-    });
-    accounts_outcome.insert(Account {
-        owner: String::from("carol"),
-        ticker: String::from("ACME"),
-        balance: 40,
-    });
-
-    let mut chain_db_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    chain_db_dir.push("chain_dir/unittest/node/simple");
-    let accounts: Vec<Account> = vec![
-        Account {
-            owner: String::from("alice"),
-            ticker: String::from("ACME"),
-            balance: 0,
-        },
-        Account {
-            owner: String::from("alice"),
-            ticker: String::from("AAPL"),
-            balance: 0,
-        },
-        Account {
-            owner: String::from("bob"),
-            ticker: String::from("ACME"),
-            balance: 0,
-        },
-        Account {
-            owner: String::from("bob"),
-            ticker: String::from("AAPL"),
-            balance: 0,
-        },
-        Account {
-            owner: String::from("carol"),
-            ticker: String::from("ACME"),
-            balance: 0,
-        },
-    ];
-    let (next_transaction_counter, create_account_transactions) =
-        make_empty_accounts(&accounts, chain_db_dir.clone())?;
-
-    let other_transactions = TransactionMode::Sequence {
-        repeat: 1,
-        steps: vec![
-            // issue tokens to the accounts
-            TransactionMode::Concurrent {
-                repeat: next_transaction_counter + 1,
-                steps: vec![TransactionMode::Transaction(Transaction::Issue(Issue {
-                    id: 1,
-                    owner: Party {
-                        name: String::from("alice"),
-                        cheater: false,
-                    },
-                    mediator: Party {
-                        name: String::from("mike"),
-                        cheater: false,
-                    },
-                    mediator_approves: true,
-                    ticker: String::from("ACME"),
-                    amount: 50,
-                }))],
-            },
-            // transfer from alice to bob
-            TransactionMode::Transaction(Transaction::Transfer(Transfer {
-                id: next_transaction_counter + 2,
-                sender: Party {
-                    name: String::from("alice"),
-                    cheater: false,
-                },
-                receiver: Party {
-                    name: String::from("bob"),
-                    cheater: false,
-                },
-                receiver_approves: true,
-                mediator: Party {
-                    name: String::from("mike"),
-                    cheater: false,
-                },
-                mediator_approves: true,
-                amount: 10,
-                ticker: String::from("ACME"),
-            })),
-        ],
-    };
-
+    if transactions.len() != 1 {
+        return Err(Error::TopLevelTransaction);
+    }
     let transactions = TransactionMode::Sequence {
         repeat: 1,
-        steps: vec![create_account_transactions, other_transactions],
+        steps: vec![create_account_transactions, transactions.remove(0)],
     };
     Ok(TestCase {
-        title: String::from("Mix of concurrent and sequential test"),
-        ticker_names: vec![String::from("AAPL"), String::from("ACME")],
-        accounts,
+        title,
+        ticker_names,
         transactions,
         accounts_outcome,
-        timing_limit: 100,
+        timing_limit,
         chain_db_dir,
     })
 }

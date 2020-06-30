@@ -19,11 +19,11 @@ transactions:
   - concurrent:
     - sequence:
       - concurrent:
-        - Alice 50 ACME Mike approve
+        - Alice(cheat) 50 ACME Mike approve
         - Carol 10 ACME Mike approve
       - Alice 50 ACME Bob approve Marry approve
       - Bob 40 ACME Carol approve Marry approve
-    - sequence[2]:
+    - sequence:
       - Bob 10 AAPL Moe approve
       - Bob 5 AAPL Alice approve Moe approve
 

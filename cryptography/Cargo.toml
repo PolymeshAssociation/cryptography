@@ -35,7 +35,7 @@ chrono = { version = "0.4",  default-features = false }
 curve25519-dalek = { version = "2", default-features = false }
 schnorrkel = { version = "0.9.1", default-features = false }
 merlin = { version = "2.0.0", default-features = false }
-bulletproofs = { git = "https://github.com/fmiguelgarcia/bulletproofs.git", branch = "CRYP-92/integration_test", default-features = false }
+bulletproofs = { git = "https://github.com/fmiguelgarcia/bulletproofs.git", rev = "51968918180986e7a6fe59657522e8f88d82ea29", default-features = false }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.10"
