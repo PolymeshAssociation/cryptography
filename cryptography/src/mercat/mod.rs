@@ -34,7 +34,7 @@ use schnorrkel::keys::{Keypair, PublicKey};
 use serde::{Deserialize, Serialize};
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
-use sp_std::{convert::From, mem, vec::Vec};
+use sp_std::{convert::From, fmt, mem, vec::Vec};
 
 // -------------------------------------------------------------------------------------
 // -                                  Constants                                        -
@@ -57,16 +57,17 @@ pub type EncryptionPubKey = ElgamalPublicKey;
 pub type EncryptionSecKey = ElgamalSecretKey;
 
 /// Holds ElGamal encryption keys.
-#[derive(Clone)]
+#[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptionKeys {
     pub pblc: EncryptionPubKey,
     pub scrt: EncryptionSecKey,
 }
 
 /// Holds the SR25519 signature scheme public key.
-type SigningPubKey = PublicKey;
-type SigningKeys = Keypair;
+pub type SigningPubKey = PublicKey;
+pub type SigningKeys = Keypair;
 
 pub type Signature = schnorrkel::sign::Signature;
 
@@ -295,6 +296,41 @@ pub type AssetMemo = EncryptedAmount;
 // -                                    Account                                        -
 // -------------------------------------------------------------------------------------
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct MediatorAccount {
+    pub encryption_key: EncryptionKeys,
+    pub signing_key: SigningKeys,
+}
+
+impl Encode for MediatorAccount {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.encryption_key.size_hint() + schnorrkel::KEYPAIR_LENGTH // signing_key
+    }
+
+    #[inline]
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.encryption_key.encode_to(dest);
+        self.signing_key.to_bytes().encode_to(dest);
+    }
+}
+
+impl Decode for MediatorAccount {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let encryption_key = <EncryptionKeys>::decode(input)?;
+
+        let signing_key = <[u8; schnorrkel::KEYPAIR_LENGTH]>::decode(input)?;
+        let signing_key = SigningKeys::from_bytes(&signing_key).unwrap();
+        // .map_err(|_| CodecError::from("MediatorAccount.signing_key is invalid"))?;
+
+        Ok(MediatorAccount {
+            encryption_key,
+            signing_key,
+        })
+    }
+}
+
 /// Holds the owner public keys and the creation date of an account.
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -318,7 +354,7 @@ impl Encode for AccountMemo {
     #[inline]
     fn size_hint(&self) -> usize {
         self.owner_enc_pub_key.size_hint()
-            + 64                    // owner_sign_pub_key
+            + schnorrkel::PUBLIC_KEY_LENGTH  // owner_sign_pub_key
             + mem::size_of::<i64>() // timestamp
     }
 
@@ -334,7 +370,7 @@ impl Decode for AccountMemo {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let owner_enc_pub_key = <EncryptionPubKey>::decode(input)?;
 
-        let owner_sign_pub_key = <[u8; 64]>::decode(input)?;
+        let owner_sign_pub_key = <[u8; schnorrkel::PUBLIC_KEY_LENGTH]>::decode(input)?;
         let owner_sign_pub_key = SigningPubKey::from_bytes(&owner_sign_pub_key)
             .map_err(|_| CodecError::from("AccountMemo.owner_sign_pub_key is invalid"))?;
 
@@ -361,19 +397,39 @@ pub struct PubAccountContent {
     pub memo: AccountMemo,
 }
 
-impl PubAccountContent {
-    #[inline]
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
-    }
-}
-
 /// Wrapper for the account content and signature.
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAccount {
     pub content: PubAccountContent,
     pub initial_sig: Signature,
+}
+
+impl Encode for PubAccount {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH // initial_sig
+    }
+
+    #[inline]
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.content.encode_to(dest);
+        self.initial_sig.to_bytes().encode_to(dest);
+    }
+}
+
+impl Decode for PubAccount {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let content = PubAccountContent::decode(input)?;
+        let initial_sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
+        let initial_sig = Signature::from_bytes(&initial_sig)
+            .map_err(|_| CodecError::from("PubAccount.initial_sig is invalid"))?;
+
+        Ok(PubAccount {
+            content,
+            initial_sig,
+        })
+    }
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
@@ -384,6 +440,42 @@ pub struct SecAccount {
     pub sign_keys: SigningKeys,
     pub asset_id: AssetId,
     pub asset_id_witness: CommitmentWitness,
+}
+
+impl Encode for SecAccount {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.enc_keys.size_hint()
+            + schnorrkel::KEYPAIR_LENGTH                    // sign_keys
+            + self.asset_id.size_hint()
+            + self.asset_id_witness.size_hint()
+    }
+
+    #[inline]
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.enc_keys.encode_to(dest);
+        self.sign_keys.to_bytes().encode_to(dest);
+        self.asset_id.encode_to(dest);
+        self.asset_id_witness.encode_to(dest);
+    }
+}
+
+impl Decode for SecAccount {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let enc_keys = EncryptionKeys::decode(input)?;
+        let sign_keys = <[u8; schnorrkel::KEYPAIR_LENGTH]>::decode(input)?;
+        let sign_keys = SigningKeys::from_bytes(&sign_keys)
+            .map_err(|_| CodecError::from("SecAccount.sign_keys is invalid"))?;
+        let asset_id = AssetId::decode(input)?;
+        let asset_id_witness = CommitmentWitness::decode(input)?;
+
+        Ok(SecAccount {
+            enc_keys,
+            sign_keys,
+            asset_id,
+            asset_id_witness,
+        })
+    }
 }
 
 /// Wrapper for both the secret and public account info
@@ -407,7 +499,7 @@ impl Account {
 }
 
 /// The interface for the account creation.
-pub trait AccountCreater {
+pub trait AccountCreator {
     /// Creates a public account for a user and initializes the balance to zero.
     /// Corresponds to `CreateAccount` method of the MERCAT paper.
     /// This function assumes that the given input `account_id` is unique.
@@ -421,7 +513,7 @@ pub trait AccountCreater {
 }
 
 /// The interface for the verifying the account creation.
-pub trait AccountCreaterVerifier {
+pub trait AccountCreatorVerifier {
     /// Called by the validators to ensure that the account was created correctly.
     fn verify(&self, account: &PubAccount, valid_asset_ids: &Vec<Scalar>) -> Fallible<()>;
 }
@@ -443,23 +535,81 @@ pub enum TxSubstate {
     Rejected,
 }
 
+impl fmt::Display for TxSubstate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let str = match self {
+            TxSubstate::Started => "started",
+            TxSubstate::Validated => "validated",
+            TxSubstate::Rejected => "rejected",
+        };
+        write!(f, "{}", str)
+    }
+}
 /// Represents the two states (initialized, justified) of a
 /// confidentional asset issuance transaction.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AssetTxState {
     Initialization(TxSubstate),
     Justification(TxSubstate),
 }
 
+impl fmt::Display for AssetTxState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssetTxState::Initialization(substate) => write!(f, "initialization_{}", substate),
+            AssetTxState::Justification(substate) => write!(f, "justification_{}", substate),
+        }
+    }
+}
+
+impl core::fmt::Debug for AssetTxState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssetTxState::Initialization(substate) => write!(f, "initialization_{}", substate),
+            AssetTxState::Justification(substate) => write!(f, "justification_{}", substate),
+        }
+    }
+}
+
 /// Represents the four states (initialized, justified, finalized, reversed) of a
 /// confidentional transaction.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ConfidentialTxState {
     Initialization(TxSubstate),
     Finalization(TxSubstate),
     FinalizationJustification(TxSubstate),
     Reversal(TxSubstate),
+}
+
+impl fmt::Display for ConfidentialTxState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConfidentialTxState::Initialization(substate) => {
+                write!(f, "initialization_{}", substate)
+            }
+            ConfidentialTxState::Finalization(substate) => write!(f, "finalization_{}", substate),
+            ConfidentialTxState::FinalizationJustification(substate) => {
+                write!(f, "finalization_justification_{}", substate)
+            }
+            ConfidentialTxState::Reversal(substate) => write!(f, "reversal_{}", substate),
+        }
+    }
+}
+
+impl core::fmt::Debug for ConfidentialTxState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConfidentialTxState::Initialization(substate) => {
+                write!(f, "initialization_{}", substate)
+            }
+            ConfidentialTxState::Finalization(substate) => write!(f, "finalization_{}", substate),
+            ConfidentialTxState::FinalizationJustification(substate) => {
+                write!(f, "finalization_justification_{}", substate)
+            }
+            ConfidentialTxState::Reversal(substate) => write!(f, "reversal_{}", substate),
+        }
+    }
 }
 
 // -------------------------------------------------------------------------------------
@@ -480,13 +630,6 @@ pub struct PubAssetTxDataContent {
     balance_correctness_proof: CorrectnessProof,
 }
 
-impl PubAssetTxDataContent {
-    #[inline]
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
-    }
-}
-
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAssetTxData {
@@ -497,7 +640,7 @@ pub struct PubAssetTxData {
 impl Encode for PubAssetTxData {
     #[inline]
     fn size_hint(&self) -> usize {
-        self.content.size_hint() + 64
+        self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -509,7 +652,7 @@ impl Encode for PubAssetTxData {
 impl Decode for PubAssetTxData {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let content = <PubAssetTxDataContent>::decode(input)?;
-        let sig = <[u8; 64]>::decode(input)?;
+        let sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
         let sig = Signature::from_bytes(&sig)
             .map_err(|_| CodecError::from("PubAssetTxData.sig is invalid"))?;
 
@@ -526,17 +669,34 @@ pub struct PubJustifiedAssetTxDataContent {
     pub state: AssetTxState,
 }
 
-impl PubJustifiedAssetTxDataContent {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
-    }
-}
-
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubJustifiedAssetTxData {
     pub content: PubJustifiedAssetTxDataContent,
     pub sig: Signature,
+}
+
+impl Encode for PubJustifiedAssetTxData {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.content.encode_to(dest);
+        self.sig.to_bytes().encode_to(dest);
+    }
+}
+
+impl Decode for PubJustifiedAssetTxData {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let content = <PubJustifiedAssetTxDataContent>::decode(input)?;
+        let sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
+        let sig = Signature::from_bytes(&sig)
+            .map_err(|_| CodecError::from("PubJustifiedAssetTxData.sig is invalid"))?;
+
+        Ok(PubJustifiedAssetTxData { content, sig })
+    }
 }
 
 /// The interface for the confidential asset issuance transaction.
@@ -629,13 +789,6 @@ pub struct PubInitConfidentialTxDataContent {
     pub amount_correctness_proof: CorrectnessProof,
 }
 
-impl PubInitConfidentialTxDataContent {
-    #[inline]
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
-    }
-}
-
 /// Wrapper for the initial transaction data and its signature.
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -648,7 +801,7 @@ pub struct PubInitConfidentialTxData {
 impl Encode for PubInitConfidentialTxData {
     #[inline]
     fn size_hint(&self) -> usize {
-        self.content.size_hint() + 64
+        self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -660,7 +813,7 @@ impl Encode for PubInitConfidentialTxData {
 impl Decode for PubInitConfidentialTxData {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let content = <PubInitConfidentialTxDataContent>::decode(input)?;
-        let sig = <[u8; 64]>::decode(input)?;
+        let sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
         let sig = Signature::from_bytes(&sig)
             .map_err(|_| CodecError::from("PubInitConfidentialTxData .sig is invalid"))?;
 
@@ -678,13 +831,6 @@ pub struct PubFinalConfidentialTxDataContent {
     pub asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof,
 }
 
-impl PubFinalConfidentialTxDataContent {
-    #[inline]
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
-    }
-}
-
 /// Wrapper for the contents and the signature of the content sent by the
 /// receiver of the transaction.
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -696,7 +842,7 @@ pub struct PubFinalConfidentialTxData {
 impl Encode for PubFinalConfidentialTxData {
     #[inline]
     fn size_hint(&self) -> usize {
-        self.content.size_hint() + 64
+        self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -708,18 +854,11 @@ impl Encode for PubFinalConfidentialTxData {
 impl Decode for PubFinalConfidentialTxData {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let content = <PubFinalConfidentialTxDataContent>::decode(input)?;
-        let sig = <[u8; 64]>::decode(input)?;
+        let sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
         let sig = Signature::from_bytes(&sig)
             .map_err(|_| CodecError::from("PubFinalConfidentialTxData::sig is invalid"))?;
 
         Ok(PubFinalConfidentialTxData { content, sig })
-    }
-}
-
-impl PubFinalConfidentialTxData {
-    #[inline]
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.encode()
     }
 }
 

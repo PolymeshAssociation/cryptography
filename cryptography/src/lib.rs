@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate alloc;
 
+use codec::{Decode, Encode};
 pub use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
@@ -69,7 +70,7 @@ const ASSET_ID_LEN: usize = 12;
 /// decrypting an encrypted asset id we have a guess as what the
 /// asset id should be, use `ElgamalSecretKey`'s `verify()`
 /// to verify that the encrypted value is the same as the hinted value.
-#[derive(Default, Debug, Clone, PartialEq, Zeroize)]
+#[derive(Default, Debug, Clone, PartialEq, Zeroize, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[zeroize(drop)]
 pub struct AssetId {
@@ -106,6 +107,5 @@ pub fn asset_id_from_ticker(ticker: &str) -> Result<AssetId, errors::Error> {
 }
 
 pub mod asset_proofs;
-
 pub mod claim_proofs;
 pub mod mercat;

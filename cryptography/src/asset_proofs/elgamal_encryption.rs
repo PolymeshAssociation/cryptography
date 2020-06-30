@@ -60,6 +60,33 @@ impl From<(Scalar, &mut StdRng)> for CommitmentWitness {
     }
 }
 
+impl Encode for CommitmentWitness {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        64
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let value = self.value.to_bytes();
+        let blinding = self.blinding.to_bytes();
+
+        value.encode_to(dest);
+        blinding.encode_to(dest);
+    }
+}
+
+impl Decode for CommitmentWitness {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (value, blinding) = <([u8; 32], [u8; 32])>::decode(input)?;
+        let value = Scalar::from_canonical_bytes(value)
+            .ok_or_else(|| CodecError::from("CommitmentWitness value point is invalid"))?;
+        let blinding = Scalar::from_canonical_bytes(blinding)
+            .ok_or_else(|| CodecError::from("CommitmentWitness blinding point is invalid"))?;
+
+        Ok(CommitmentWitness { value, blinding })
+    }
+}
+
 /// Prover's representation of the encrypted secret.
 #[derive(PartialEq, Copy, Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
