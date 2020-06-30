@@ -135,6 +135,7 @@ impl From<(CorrectnessInitialMessage, CorrectnessFinalResponse)> for Correctness
 
 /// Holds the non-interactive proofs of membership, equivalent of L_member of MERCAT paper.
 #[derive(Default, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct MembershipProof {
     init: MembershipProofInitialMessage,
     response: MembershipProofFinalResponse,
@@ -289,7 +290,7 @@ pub type AssetMemo = EncryptedAmount;
 // -                                    Account                                        -
 // -------------------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct MediatorAccount {
     pub encryption_key: EncryptionKeys,
@@ -383,6 +384,7 @@ impl Decode for AccountMemo {
 
 /// Holds contents of the public portion of an account which can be safely put on the chain.
 #[derive(Clone, Serialize, Deserialize, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccountContent {
     pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
@@ -395,6 +397,7 @@ pub struct PubAccountContent {
 
 /// Wrapper for the account content and signature.
 #[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccount {
     pub content: PubAccountContent,
     pub initial_sig: Signature,
@@ -475,6 +478,7 @@ impl Decode for SecAccount {
 
 /// Wrapper for both the secret and public account info
 #[derive(Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Account {
     pub pblc: PubAccount,
     pub scrt: SecAccount,

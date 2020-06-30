@@ -103,3 +103,7 @@ harness = false
 [[bench]]
 name = "membership_verification"
 harness = false
+
+[[bench]]
+name = "mercat_transaction"
+harness = false
