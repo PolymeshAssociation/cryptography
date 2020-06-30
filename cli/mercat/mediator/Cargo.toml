@@ -3,7 +3,7 @@ name = "mercat-mediator"
 version = "0.1.0"
 authors = [ "Polymath Inc" ]
 repository = "https://github.com/PolymathNetwork/cryptography"
-description = "MERCAT Asset Issuer"
+description = "MERCAT Asset Mediator"
 edition = "2018"
 
 [dependencies]

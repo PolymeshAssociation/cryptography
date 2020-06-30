@@ -7,13 +7,13 @@ pub mod errors;
 mod harness;
 
 use codec::{Decode, Encode};
-use cryptography::mercat::AssetTxState;
+use cryptography::mercat::{AssetTxState, ConfidentialTxState};
 use curve25519_dalek::scalar::Scalar;
 use errors::Error;
 use log::info;
 use metrics::Recorder;
 use metrics_core::Key;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::TryInto,
@@ -31,15 +31,29 @@ pub const ASSET_ID_LIST_FILE: &str = "valid_asset_ids.json";
 pub const COMMON_OBJECTS_DIR: &str = "common";
 pub const INIT_STATE: &str = "initialization_started";
 pub const JUSTIFY_STATE: &str = "justification_started";
+pub const FINISHED_STATE: &str = "finalization_started";
+pub const JUSTIFICATION_STATE: &str = "finalization_justification_started";
 
 #[inline]
-pub fn transaction_file(tx_id: u32, state: AssetTxState) -> String {
+pub fn asset_transaction_file(tx_id: u32, state: AssetTxState) -> String {
     format!("tx_{}_{}.json", tx_id, state)
 }
 
 #[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
 pub struct Instruction {
     pub state: AssetTxState,
+    #[serde(with = "serde_bytes")]
+    pub data: Vec<u8>,
+}
+
+#[inline]
+pub fn confidential_transaction_file(tx_id: u32, state: ConfidentialTxState) -> String {
+    format!("tx_{}_{}.json", tx_id, state)
+}
+
+#[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
+pub struct CTXInstruction {
+    pub state: ConfidentialTxState,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
@@ -241,7 +255,34 @@ pub fn load_object<T: Decode>(
     })
 }
 
-/// Utitlity function to create an RNG from seed.
+/// Helper function to save a config file to `cfg_path`.
+pub fn save_config<T>(cfg_path: Option<PathBuf>, cfg: &T)
+where
+    T: ?Sized + serde::Serialize,
+{
+    if let Some(path) = &cfg_path {
+        std::fs::write(
+            path,
+            serde_json::to_string_pretty(cfg).unwrap_or_else(|error| {
+                panic!("Failed to serialize configuration file: {}", error)
+            }),
+        )
+        .expect(&format!(
+            "Failed to write the configuration to the file {:?}.",
+            path
+        ));
+    }
+}
+
+/// Helper function to generate a random seed using the thread RNG.
+pub fn gen_seed() -> String {
+    let mut rng = rand::thread_rng();
+    let mut seed = [0u8; 32];
+    rng.fill(&mut seed);
+    base64::encode(seed)
+}
+
+/// Helper function to create an RNG from seed.
 #[inline]
 pub fn create_rng_from_seed(seed: Option<String>) -> Result<StdRng, Error> {
     let seed = seed.ok_or(Error::EmptySeed)?;

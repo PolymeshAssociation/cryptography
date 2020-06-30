@@ -8,8 +8,8 @@ use metrics::timing;
 use std::time::Instant;
 
 fn main() {
-    info!("Starting the program.");
     env_logger::init();
+    info!("Starting the program.");
     init_print_logger();
 
     let start = Instant::now();
