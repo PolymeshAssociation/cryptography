@@ -190,7 +190,7 @@ impl AccountCreatorVerifier for AccountValidator {
 
         // Verify that the asset is from the proper asset list
         let membership_proof = account.content.asset_membership_proof.clone();
-        let generators = &OooNProofGenerators::new(EXPONENT, BASE);
+        let generators = &OooNProofGenerators::new(BASE, EXPONENT);
         single_property_verifier(
             &MembershipProofVerifier {
                 secret_element_com: membership_proof.commitment,
