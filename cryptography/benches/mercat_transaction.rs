@@ -296,7 +296,6 @@ fn issue_assets<R: RngCore + CryptoRng>(
             &mediator_account.signing_key,
         )
         .unwrap();
-
     updated_issuer_account
 }
 
