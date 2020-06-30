@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#![cfg(not(feature = "std"))]
+#[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
 
@@ -106,9 +106,6 @@ pub fn asset_id_from_ticker(ticker: &str) -> Result<AssetId, errors::Error> {
 }
 
 pub mod asset_proofs;
+
 pub mod claim_proofs;
 pub mod mercat;
-
-// Reexport
-pub use bulletproofs::RangeProof as BRangeProof;
-pub use rand_core::*;
