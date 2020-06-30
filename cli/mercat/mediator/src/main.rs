@@ -247,7 +247,8 @@ fn justify_asset_transaction(cfg: input::JustifyTransactionInfo) -> Result<(), E
     // Justification.
     let justify_library_timer = Instant::now();
     let mediator = CtxMediator {};
-    let asset_id = asset_id_from_ticker(&cfg.ticker_id).map_err(|error| Error::LibraryError { error })?;
+    let asset_id =
+        asset_id_from_ticker(&cfg.ticker_id).map_err(|error| Error::LibraryError { error })?;
     let (justified_tx, new_state) = mediator
         .justify(
             asset_tx.clone(),
