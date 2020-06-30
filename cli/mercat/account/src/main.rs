@@ -263,7 +263,9 @@ fn process_create_tx(cfg: input::CreateTransactionInfo) -> Result<(), Error> {
         data: asset_tx.encode().to_vec(),
     };
 
-    // todo where should I save these?
+    // TODO(CRYP-110)
+    // We should name the transactions based on the ordering counters, or we may decide that
+    // a global counter (tx_id) is enough and put all transactions inside a common folder.
     save_object(
         db_dir,
         ON_CHAIN_DIR,
@@ -358,7 +360,9 @@ fn process_finalize_tx(cfg: input::FinalizeTransactionInfo) -> Result<(), Error>
         data: asset_tx.encode().to_vec(),
     };
 
-    // todo where should I save these?
+    // TODO(CRYP-110)
+    // We should name the transactions based on the ordering counters, or we may decide that
+    // a global counter (tx_id) is enough and put all transactions inside a common folder.
     save_object(
         db_dir,
         ON_CHAIN_DIR,

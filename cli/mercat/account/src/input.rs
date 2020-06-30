@@ -204,7 +204,8 @@ pub struct FinalizeTransactionInfo {
     )]
     pub db_dir: Option<PathBuf>,
 
-    // todo if we put the tx on chain, we won't need sender here.
+    // TODO(CRYP-110)
+    // Depending on how we decide to name transaction files, we may or may not need the sender's name.
     /// The sender's name. An account must have already been created for this user.
     #[structopt(long, help = "The sender's name.")]
     pub sender: String,
