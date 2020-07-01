@@ -116,7 +116,6 @@ impl TryFrom<(u32, String)> for Transfer {
 #[derive(Debug)]
 pub struct Create {
     pub tx_id: u32,
-    pub seed: String,
     pub account_id: u32,
     pub owner: Party,
     pub ticker: Option<String>,
@@ -553,8 +552,7 @@ impl TransactionMode {
                         seqs.push(transaction.sequence(rng, chain_db_dir.clone()));
                     }
                 }
-                // TODO Tie this rng to a global rng whose seed can be set for reproduceablity
-                let mut rng = rand::thread_rng();
+
                 let mut seed = [0u8; 32];
                 rng.fill(&mut seed);
                 info!(
@@ -704,10 +702,8 @@ fn make_empty_accounts(accounts: &Vec<InputAccount>) -> Result<(u32, Transaction
         let mut rng = rand::thread_rng();
         let mut seed = [0u8; 32];
         rng.fill(&mut seed);
-        let seed = base64::encode(seed); // TODO consolidate all the rngs and seeds into one place instead of littering the code
         seq.push(TransactionMode::Transaction(Transaction::Create(Create {
             tx_id: transaction_counter,
-            seed: seed,
             account_id: account_id,
             owner: Party {
                 name: account.owner.clone(),
@@ -776,9 +772,13 @@ fn parse_transactions(
         match &transaction {
             Yaml::Hash(transaction) => {
                 for (key, value) in transaction {
-                    let key = to_string(key, path.clone(), "todo")?;
-                    let (new_transaction_id, steps) =
-                        parse_transactions(value, path.clone(), "todo", transaction_id)?;
+                    let key = to_string(key, path.clone(), "sequence-or-concurrent")?;
+                    let (new_transaction_id, steps) = parse_transactions(
+                        value,
+                        path.clone(),
+                        "sequence-or-concurrent",
+                        transaction_id,
+                    )?;
                     transaction_id = new_transaction_id;
                     if key == "sequence" {
                         // TODO add repeat to the config. Create new story for it.
@@ -786,7 +786,10 @@ fn parse_transactions(
                     } else if key == "concurrent" {
                         transaction_list.push(TransactionMode::Concurrent { repeat: 1, steps });
                     } else {
-                        // raise key error
+                        return Err(Error::ErrorParsingTestHarnessConfig {
+                            path: path.clone(),
+                            reason: format!("key: {} is invalid", key),
+                        });
                     }
                 }
             }
@@ -794,7 +797,7 @@ fn parse_transactions(
                 if let Some(issue) = Issue::try_from((transaction_id, transaction.to_string()))
                     .map_err(|_| Error::ErrorParsingTestHarnessConfig {
                         path: path.clone(),
-                        reason: String::from("todo"),
+                        reason: String::from("issuance"),
                     })
                     .ok()
                 {
@@ -804,7 +807,7 @@ fn parse_transactions(
                     Transfer::try_from((transaction_id, transaction.to_string()))
                         .map_err(|_| Error::ErrorParsingTestHarnessConfig {
                             path: path.clone(),
-                            reason: String::from("todo"),
+                            reason: String::from("transfer"),
                         })
                         .ok()
                 {
@@ -812,11 +815,21 @@ fn parse_transactions(
                     transaction_list.push(TransactionMode::Transaction(Transaction::Transfer(
                         transfer,
                     )));
+                } else {
+                    return Err(Error::ErrorParsingTestHarnessConfig {
+                        path: path.clone(),
+                        reason: format!(
+                            "Transaction {} does not match neither issuance or transfer format",
+                            transaction
+                        ),
+                    });
                 }
             }
             _ => {
-
-                // TODO raise error
+                return Err(Error::ErrorParsingTestHarnessConfig {
+                    path: path.clone(),
+                        reason: format!("Expected 'sequence', 'concurrent', or a transaction description. Got {:#?}", transaction),
+                });
             }
         }
     }
@@ -824,7 +837,7 @@ fn parse_transactions(
     Ok((transaction_id, transaction_list))
 }
 
-fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
+fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error> {
     let config = fs::read_to_string(path.clone()).map_err(|error| Error::FileReadError {
         error,
         path: path.clone(),
@@ -881,9 +894,7 @@ fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
             let key = to_string(key, path.clone(), "outcome.key")?;
             if key == "time-limit" {
                 if let Some(expected_time_limit) = value.as_i64() {
-                    // TODO generalize error
-                    timing_limit =
-                        u128::try_from(expected_time_limit).map_err(|_| Error::BalanceTooBig)?;
+                    timing_limit = expected_time_limit as u128;
                 }
             } else {
                 let accounts_for_user =
@@ -921,8 +932,6 @@ fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
         }
     }
 
-    let mut chain_db_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    chain_db_dir.push("chain_dir/unittest/node/simple"); // TODO change
     let (next_transaction_id, create_account_transactions) = make_empty_accounts(&all_accounts)?;
 
     // TODO declared mutable since later I want to consume a single element of it
@@ -957,12 +966,20 @@ fn accounts_are_equal(want: &HashSet<InputAccount>, got: &HashSet<InputAccount>)
 
 // This is called from the test and benchmark. Allowing it be unused to silence compiler warnings.
 #[allow(unused)]
-fn run_from(relative: &str) {
+fn run_from(mode: &str) {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push(relative);
+    path.push("scenarios/unittest");
+    path.push(mode);
+
+    let mut chain_db_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    chain_db_dir.push("chain_dir/unittest");
+    chain_db_dir.push(mode);
+
     let configs = all_files_in_dir(path).unwrap();
     for config in configs {
-        let testcase = &parse_config(config).unwrap();
+        let mut separate_chain_db_dir = chain_db_dir.clone();
+        separate_chain_db_dir.push(config.file_name().unwrap());
+        let testcase = &parse_config(config, separate_chain_db_dir).unwrap();
         info!("Running test case: {}.", testcase.title);
         let want = &testcase.accounts_outcome;
         let got = &testcase.run().unwrap();
@@ -981,21 +998,21 @@ fn run_from(relative: &str) {
 mod tests {
     use super::*;
     use env_logger;
-    //use sp_std::prelude::*;
+    use wasm_bindgen_test::*;
 
     #[test]
     fn test_on_slow_pc() {
         env_logger::init();
-        run_from("scenarios/unittest/pc");
+        run_from("pc");
     }
 
     #[test]
     fn test_on_fast_node() {
-        run_from("scenarios/unittest/node");
+        run_from("node");
     }
 
-    #[test] // TODO change this to wasm-test
+    #[wasm_bindgen_test]
     fn test_on_wasm() {
-        run_from("scenarios/unittest/wasm");
+        run_from("wasm");
     }
 }
