@@ -5,6 +5,7 @@ use crate::{
     errors::Error,
     gen_seed, gen_seed_from,
     issue_asset::process_issue_asset,
+    justify::{justify_asset_issuance, justify_asset_transaction},
     load_object,
     transfer::{process_create_tx, process_finalize_tx},
     COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
@@ -281,9 +282,32 @@ impl Transfer {
         });
     }
 
-    pub fn mediate(&self) -> StepFunc {
-        let value = format!("todo-mediate-transaction {}", self.tx_id);
-        return Box::new(move || value.clone());
+    pub fn mediate(&self, chain_db_dir: PathBuf) -> StepFunc {
+        let value = format!(
+            "mercat-mediator justify-transaction --sender {} --mediator {} --ticker {} --tx-id {} {}",
+            self.sender.name,
+            self.mediator.name,
+            self.ticker,
+            self.tx_id,
+            cheater_flag(self.sender.cheater)
+        );
+        let ticker = self.ticker.clone();
+        let sender = self.sender.name.clone();
+        let mediator = self.mediator.name.clone();
+        let tx_id = self.tx_id;
+        let reject = !self.mediator_approves;
+        return Box::new(move || {
+            justify_asset_transaction(
+                chain_db_dir.clone(),
+                sender.clone(),
+                mediator.clone(),
+                ticker.clone(),
+                tx_id,
+                reject,
+            )
+            .unwrap();
+            value.clone()
+        });
     }
 
     pub fn validate(&self) -> StepFunc {
@@ -298,8 +322,8 @@ impl Transfer {
     ) -> Vec<StepFunc> {
         vec![
             self.send(rng, chain_db_dir.clone()),
-            self.receive(rng, chain_db_dir),
-            self.mediate(),
+            self.receive(rng, chain_db_dir.clone()),
+            self.mediate(chain_db_dir),
             self.validate(),
         ]
     }
@@ -383,9 +407,32 @@ impl Issue {
         });
     }
 
-    pub fn mediate(&self) -> StepFunc {
-        let value = format!("todo-mediate-issue-transaction {}", self.tx_id);
-        return Box::new(move || value.clone());
+    pub fn mediate(&self, chain_db_dir: PathBuf) -> StepFunc {
+        let value = format!(
+            "mercat-mediator justify-issuance --account-id {} --issuer {} --mediator {} --tx-id {} {}",
+            self.ticker,
+            self.issuer.name,
+            self.mediator.name,
+            self.tx_id,
+            cheater_flag(self.issuer.cheater)
+        );
+        let issuer = self.issuer.name.clone();
+        let mediator = self.mediator.name.clone();
+        let ticker = self.ticker.clone();
+        let tx_id = self.tx_id;
+        let reject = !self.mediator_approves;
+        return Box::new(move || {
+            justify_asset_issuance(
+                chain_db_dir.clone(),
+                issuer.clone(),
+                mediator.clone(),
+                ticker.clone(),
+                tx_id,
+                reject,
+            )
+            .unwrap();
+            value.clone()
+        });
     }
 
     pub fn validate(&self) -> StepFunc {
@@ -399,8 +446,8 @@ impl Issue {
         chain_db_dir: PathBuf,
     ) -> Vec<StepFunc> {
         vec![
-            self.issue(rng, chain_db_dir),
-            self.mediate(),
+            self.issue(rng, chain_db_dir.clone()),
+            self.mediate(chain_db_dir),
             self.validate(),
         ]
     }

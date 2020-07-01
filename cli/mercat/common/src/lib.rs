@@ -3,6 +3,7 @@
 pub mod chain_setup;
 pub mod create_account;
 pub mod issue_asset;
+pub mod justify;
 pub mod transfer;
 
 pub mod errors;

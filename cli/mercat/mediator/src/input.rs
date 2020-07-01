@@ -49,6 +49,11 @@ pub struct CreateMediatorAccountInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct JustifyIssuanceInfo {
+    /// Account ID of the issuer.
+    /// In the CLI, we use the ticker name as the unique account id of each party.
+    #[structopt(long, help = "The issuer's account ID.")]
+    pub account_id: String,
+
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
     /// blockchain. Defaults to the current directory. This directory will have two main
@@ -127,9 +132,9 @@ pub struct JustifyTransactionInfo {
     #[structopt(
         short,
         long,
-        help = "The asset ticker id. String of at most 12 characters."
+        help = "The asset ticker name. String of at most 12 characters."
     )]
-    pub ticker_id: String,
+    pub ticker: String,
 
     /// The name of the sender.
     /// An account must have already been created for this user, using `mercat-account`
@@ -208,6 +213,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             info!("Seed: {:?}", seed.clone().unwrap());
             let cfg = JustifyIssuanceInfo {
                 db_dir,
+                account_id: cfg.account_id,
                 tx_id: cfg.tx_id,
                 issuer: cfg.issuer,
                 mediator: cfg.mediator,
@@ -234,7 +240,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             let cfg = JustifyTransactionInfo {
                 db_dir,
                 tx_id: cfg.tx_id,
-                ticker_id: cfg.ticker_id,
+                ticker: cfg.ticker,
                 sender: cfg.sender,
                 mediator: cfg.mediator,
                 reject: cfg.reject,
