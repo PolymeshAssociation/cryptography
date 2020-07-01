@@ -24,6 +24,7 @@ use mercat_common::{
     VALIDATED_PUBLIC_ACCOUNT_FILE,
 };
 use metrics::timing;
+use rand::rngs::OsRng;
 use std::time::Instant;
 
 fn main() {
@@ -198,10 +199,11 @@ fn process_transaction_initialization(
     instruction: CTXInstruction,
     sender_pub_account: &PubAccount,
 ) -> Result<ConfidentialTxState, Error> {
+    let mut rng = OsRng::default();
     let tx = PubInitConfidentialTxData::decode(&mut &instruction.data[..]).unwrap();
     let validator = CtxSenderValidator {};
     let state = validator
-        .verify(&tx, sender_pub_account, instruction.state)
+        .verify(&tx, sender_pub_account, instruction.state, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     Ok(state)
@@ -212,6 +214,7 @@ fn process_transaction_finalization(
     sender_pub_account: &PubAccount,
     receiver_pub_account: &PubAccount,
 ) -> Result<ConfidentialTxState, Error> {
+    let mut rng = OsRng::default();
     let tx = PubFinalConfidentialTxData::decode(&mut &instruction.data[..]).unwrap();
     let validator = CtxReceiverValidator {};
     let state = validator
@@ -220,6 +223,7 @@ fn process_transaction_finalization(
             receiver_pub_account,
             &tx,
             instruction.state,
+            &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })?;
 

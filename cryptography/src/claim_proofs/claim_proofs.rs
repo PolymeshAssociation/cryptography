@@ -44,6 +44,7 @@ use super::pedersen_commitments::PedersenGenerators;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use lazy_static::lazy_static;
 use schnorrkel::{context::SigningContext, signing_context, Keypair, PublicKey, Signature};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sha3::{
     digest::{FixedOutput, Input},
@@ -59,7 +60,8 @@ lazy_static! {
     static ref SIG_CTXT: SigningContext = signing_context(SIGNING_CTX);
 }
 
-#[derive(Debug, Copy, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RawData(pub [u8; 32]);
 
 impl AsRef<[u8; 32]> for RawData {
@@ -76,21 +78,24 @@ fn concat(a: RawData, b: RawData) -> Vec<u8> {
 }
 
 /// The data needed to generate a CDD ID
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CDDClaimData {
     pub investor_did: RawData,
     pub investor_unique_id: RawData,
 }
 
 /// The data needed to generate a SCOPE ID
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ScopeClaimData {
     pub scope_did: RawData,
     pub investor_unique_id: RawData,
 }
 
 /// The data needed to generate a proof that a SCOPE ID matches a CDD ID
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ScopeClaimProofData {
     pub scope_did: RawData,
     pub investor_did: RawData,
