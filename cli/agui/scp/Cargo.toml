@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 cli_common = { package = "cli-common", path = "../common/" }
-cryptography = { package = "cryptography", path = "../../../cryptography/" }
+cryptography = { path = "../../cryptography/" }
 
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

@@ -52,12 +52,7 @@ jobs:
           name: Run tests
           command: >-
             cargo +nightly test &&
-            cargo +nightly build --bench elgamal_decryption &&
-            echo "Wasm build (features 'no_std')"  &&
-            cd cryptography && 
-            cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std &&
-            cd .. &&
-            echo "TODO: add wasm tests"
+            cargo +nightly build --bench elgamal_decryption
           no_output_timeout: 30m
       - save_cache:
           key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
