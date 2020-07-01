@@ -8,6 +8,7 @@ use crate::{
     justify::{justify_asset_issuance, justify_asset_transaction, process_create_mediator},
     load_object,
     transfer::{process_create_tx, process_finalize_tx},
+    validate::{validate_account, validate_asset_issuance, validate_transaction},
     COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
 };
 use cryptography::mercat::{Account, PubAccount, SecAccount};
@@ -311,9 +312,31 @@ impl Transfer {
         });
     }
 
-    pub fn validate(&self) -> StepFunc {
-        let value = format!("todo-validate-transaction {}", self.tx_id);
-        return Box::new(move || value.clone());
+    pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
+        let value = format!(
+            "mercat-validator validate-transaction --sender {} --receiver {} --mediator {} --state {} --tx-id {}",
+            self.sender.name,
+            self.receiver.name,
+            self.mediator.name,
+            "state: todo",
+            self.tx_id,
+        );
+        let sender = self.sender.name.clone();
+        let receiver = self.receiver.name.clone();
+        let mediator = self.mediator.name.clone();
+        let tx_id = self.tx_id;
+        return Box::new(move || {
+            validate_transaction(
+                chain_db_dir.clone(),
+                sender.clone(),
+                receiver.clone(),
+                mediator.clone(),
+                String::from("state: todo"),
+                tx_id,
+            )
+            .unwrap();
+            value.clone()
+        });
     }
 
     pub fn order<T: RngCore + CryptoRng>(
@@ -324,8 +347,8 @@ impl Transfer {
         vec![
             self.send(rng, chain_db_dir.clone()),
             self.receive(rng, chain_db_dir.clone()),
-            self.mediate(chain_db_dir),
-            self.validate(),
+            self.mediate(chain_db_dir.clone()),
+            self.validate(chain_db_dir),
         ]
     }
 }
@@ -376,10 +399,26 @@ impl Create {
             });
         }
     }
+    // todo : add db_dir to all the commands
 
-    pub fn validate(&self) -> StepFunc {
-        let value = format!("todo-validate-account --account-id={}", self.account_id);
-        return Box::new(move || value.clone());
+    pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
+        if let Some(_) = self.ticker.clone() {
+            // validate a normal account
+            let value = format!(
+                "mercat-validator validate-account --user {}",
+                self.owner.name,
+            );
+            let owner = self.owner.name.clone();
+            return Box::new(move || {
+                validate_account(chain_db_dir.clone(), owner.clone()).unwrap();
+                value.clone()
+            });
+        } else {
+            // validate mediator account
+            return Box::new(move || {
+                String::from("todo: need a validator for mediator account creation")
+            });
+        }
     }
 
     pub fn order<T: RngCore + CryptoRng>(
@@ -387,7 +426,10 @@ impl Create {
         rng: &mut T,
         chain_db_dir: PathBuf,
     ) -> Vec<StepFunc> {
-        vec![self.create_account(rng, chain_db_dir), self.validate()]
+        vec![
+            self.create_account(rng, chain_db_dir.clone()),
+            self.validate(chain_db_dir),
+        ]
     }
 }
 
@@ -452,9 +494,26 @@ impl Issue {
         });
     }
 
-    pub fn validate(&self) -> StepFunc {
-        let value = format!("todo-validate-issue-transaction {}", self.tx_id);
-        return Box::new(move || value.clone());
+    pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
+        // validate a normal account
+        let value = format!(
+            "mercat-validator validate-issuance --issuer {} --mediator {} --state {} --tx-id {}",
+            self.issuer.name, self.mediator.name, "state: todo", self.tx_id,
+        );
+        let issuer = self.issuer.name.clone();
+        let mediator = self.mediator.name.clone();
+        let tx_id = self.tx_id;
+        return Box::new(move || {
+            validate_asset_issuance(
+                chain_db_dir.clone(),
+                issuer.clone(),
+                mediator.clone(),
+                String::from("state: todo"),
+                tx_id,
+            )
+            .unwrap();
+            value.clone()
+        });
     }
 
     pub fn order<T: RngCore + CryptoRng>(
@@ -464,8 +523,8 @@ impl Issue {
     ) -> Vec<StepFunc> {
         vec![
             self.issue(rng, chain_db_dir.clone()),
-            self.mediate(chain_db_dir),
-            self.validate(),
+            self.mediate(chain_db_dir.clone()),
+            self.validate(chain_db_dir),
         ]
     }
 }
