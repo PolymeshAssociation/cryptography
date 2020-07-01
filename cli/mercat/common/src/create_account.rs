@@ -14,47 +14,6 @@ use schnorrkel::{ExpansionMode, MiniSecretKey};
 use curve25519_dalek::scalar::Scalar;
 use std::{path::PathBuf, time::Instant};
 
-/*
-
-fn process_create_account(cfg: input::CreateAccountInfo) -> Result<(), Error> {
-    // Setup the rng.
-    let mut rng = create_rng_from_seed(cfg.seed)?;
-
-    // Create the account.
-    let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir)?;
-    let secret_account = create_secret_account(&mut rng, cfg.ticker_id.clone())?;
-    let valid_asset_ids = get_asset_ids(db_dir.clone())?;
-
-    let create_account_timer = Instant::now();
-    let account = create_account(secret_account, &valid_asset_ids, cfg.account_id, &mut rng)
-        .map_err(|error| Error::LibraryError { error })?;
-
-    timing!("account.call_library", create_account_timer, Instant::now());
-
-    // Save the artifacts to file.
-    let save_to_file_timer = Instant::now();
-    save_object(
-        db_dir.clone(),
-        OFF_CHAIN_DIR,
-        &cfg.user,
-        SECRET_ACCOUNT_FILE,
-        &account.scrt,
-    )?;
-
-    save_object(
-        db_dir,
-        ON_CHAIN_DIR,
-        &cfg.user,
-        PUBLIC_ACCOUNT_FILE,
-        &account.pblc,
-    )?;
-
-    timing!("account.save_output", save_to_file_timer, Instant::now());
-
-    Ok(())
-}
-*/
-
 pub fn process_create_account(
     seed: Option<String>,
     db_dir: PathBuf,

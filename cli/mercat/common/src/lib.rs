@@ -2,6 +2,8 @@
 
 pub mod chain_setup;
 pub mod create_account;
+pub mod issue_asset;
+pub mod transfer;
 
 pub mod errors;
 mod harness;

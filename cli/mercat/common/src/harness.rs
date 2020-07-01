@@ -51,16 +51,23 @@ pub struct Party {
     pub cheater: bool,
 }
 
-impl From<&str> for Party {
-    fn from(segment: &str) -> Self {
+impl TryFrom<&str> for Party {
+    type Error = Error;
+    fn try_from(segment: &str) -> Result<Self, Error> {
         // Example: alice or alice(cheat)
-        let re = Regex::new(r"([a-zA-Z0-9]+)(\(cheat\))?").unwrap();
-        let caps = re.captures(segment).unwrap(); // TODO: convert to try_from
+        let re = Regex::new(r"([a-zA-Z0-9]+)(\(cheat\))?").map_err(|_| Error::RegexError {
+            reason: String::from("Failed to compile the Transfer regex"),
+        })?;
+        let caps = re.captures(segment).ok_or(Error::RegexError {
+            reason: format!("Pattern did not match {}", segment),
+        })?;
         let name = String::from(caps.get(1).unwrap().as_str());
         let cheater = caps.get(2).is_some();
-        Self { name, cheater }
+        Ok(Self { name, cheater })
     }
 }
+
+// todo remove all unwraps
 
 /// Data type of the transaction of transferring balance.
 #[derive(Debug)]
@@ -91,10 +98,10 @@ impl TryFrom<(u32, String)> for Transfer {
         })?;
         Ok(Self {
             id,
-            sender: Party::from(caps.get(1).unwrap().as_str()),
-            receiver: Party::from(caps.get(4).unwrap().as_str()),
+            sender: Party::try_from(caps.get(1).unwrap().as_str())?,
+            receiver: Party::try_from(caps.get(4).unwrap().as_str())?,
             receiver_approves: caps.get(5).unwrap().as_str() == "approve",
-            mediator: Party::from(caps.get(6).unwrap().as_str()),
+            mediator: Party::try_from(caps.get(6).unwrap().as_str())?,
             mediator_approves: caps.get(7).unwrap().as_str() == "approve",
             amount: caps.get(2).unwrap().as_str().parse::<u32>().unwrap(),
             ticker: String::from(caps.get(3).unwrap().as_str()),
@@ -140,8 +147,8 @@ impl TryFrom<(u32, String)> for Issue {
         })?;
         Ok(Self {
             id,
-            owner: Party::from(caps.get(1).unwrap().as_str()),
-            mediator: Party::from(caps.get(4).unwrap().as_str()),
+            owner: Party::try_from(caps.get(1).unwrap().as_str())?,
+            mediator: Party::try_from(caps.get(4).unwrap().as_str())?,
             mediator_approves: caps.get(5).unwrap().as_str() == "approve",
             ticker: String::from(caps.get(3).unwrap().as_str()),
             amount: caps.get(2).unwrap().as_str().parse::<u32>().unwrap(),
