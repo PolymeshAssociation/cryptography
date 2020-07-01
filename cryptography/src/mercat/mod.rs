@@ -574,7 +574,8 @@ impl core::fmt::Debug for AssetTxState {
 
 /// Represents the four states (initialized, justified, finalized, reversed) of a
 /// confidentional transaction.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ConfidentialTxState {
     Initialization(TxSubstate),
     Finalization(TxSubstate),
@@ -823,7 +824,7 @@ impl Decode for PubInitConfidentialTxData {
 
 /// Holds the initial transaction data and the proof of equality of asset ids
 /// prepared by the receiver.
-#[derive(Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubFinalConfidentialTxDataContent {
@@ -833,6 +834,7 @@ pub struct PubFinalConfidentialTxDataContent {
 
 /// Wrapper for the contents and the signature of the content sent by the
 /// receiver of the transaction.
+#[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubFinalConfidentialTxData {
     pub content: PubFinalConfidentialTxDataContent,
@@ -870,6 +872,32 @@ pub struct JustifiedPubFinalConfidentialTxData {
     pub sig: Signature,
 }
 
+impl Encode for JustifiedPubFinalConfidentialTxData {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.conf_tx_final_data.size_hint() + schnorrkel::SIGNATURE_LENGTH
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.conf_tx_final_data.encode_to(dest);
+        self.sig.to_bytes().encode_to(dest);
+    }
+}
+
+impl Decode for JustifiedPubFinalConfidentialTxData {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let conf_tx_final_data = <PubFinalConfidentialTxData>::decode(input)?;
+        let sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
+        let sig = Signature::from_bytes(&sig)
+            .map_err(|_| CodecError::from("PubFinalConfidentialTxData::sig is invalid"))?;
+
+        Ok(JustifiedPubFinalConfidentialTxData {
+            conf_tx_final_data,
+            sig,
+        })
+    }
+}
+
 /// The interface for confidential transaction.
 pub trait ConfidentialTransactionSender {
     /// This is called by the sender of a confidential transaction. The outputs
@@ -897,13 +925,27 @@ pub trait ConfidentialTransactionInitVerifier {
     ) -> Fallible<ConfidentialTxState>;
 }
 
+pub trait ConfidentialTransactionFinalizationVerifier {
+    /// This is called by the validators to verify the signature and some of the
+    /// proofs of the initialized transaction.
+    fn verify_finalize_by_receiver<R: RngCore + CryptoRng>(
+        &self,
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
+        conf_tx_final_data: &PubFinalConfidentialTxData,
+        state: ConfidentialTxState,
+        rng: &mut R,
+    ) -> Fallible<ConfidentialTxState>;
+}
+
 pub trait ConfidentialTransactionMediator {
     /// Justify the transaction by mediator.
     fn justify(
         &self,
         conf_tx_final_data: PubFinalConfidentialTxData,
         state: ConfidentialTxState,
-        mdtr_sec_account: &SecAccount,
+        mdtr_enc_keys: &EncryptionKeys,
+        mdtr_sign_keys: &SigningKeys,
         // NOTE: without this, decryption takes a very long time. Since asset id to scalar takes the hash of the asset id array.
         asset_id_hint: AssetId,
     ) -> Fallible<(JustifiedPubFinalConfidentialTxData, ConfidentialTxState)>;
