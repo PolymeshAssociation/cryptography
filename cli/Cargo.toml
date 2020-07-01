@@ -2,12 +2,12 @@
 
 members = [
 	"cryptography",
-	"cli/agui/common",
-	"cli/agui/scp",
-	"cli/agui/scv",
-	"cli/mercat/account",
-	"cli/mercat/chain_setup",
-	"cli/mercat/common",
-	"cli/mercat/mediator",
-	"cli/mercat/validator",
+	"agui/common",
+	"agui/scp",
+	"agui/scv",
+	"mercat/account",
+	"mercat/chain_setup",
+	"mercat/common",
+	"mercat/mediator",
+	"mercat/validator",
 ]
