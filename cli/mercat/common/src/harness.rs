@@ -1,13 +1,20 @@
 use crate::{
-    chain_setup::process_asset_id_creation, create_account::process_create_account, errors::Error,
-    load_object, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
-    SECRET_ACCOUNT_FILE,
+    chain_setup::process_asset_id_creation,
+    create_account::process_create_account,
+    create_rng_from_seed,
+    errors::Error,
+    gen_seed, gen_seed_from,
+    issue_asset::process_issue_asset,
+    load_object,
+    transfer::{process_create_tx, process_finalize_tx},
+    COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
 };
 use cryptography::mercat::{PubAccount, SecAccount};
 use linked_hash_map::LinkedHashMap;
 use log::info;
 use rand::Rng;
 use rand::{rngs::StdRng, SeedableRng};
+use rand::{CryptoRng, RngCore};
 use regex::Regex;
 use std::path::PathBuf;
 use std::{
@@ -26,12 +33,6 @@ use yaml_rust::{Yaml, YamlLoader};
 /// the action (e.g., initializing a transaction, finalizing a transaction, or creating an account),
 /// and returns the corresponding CLI command that can be run to reproduce this step manually.
 type StepFunc = Box<dyn Fn() -> String + 'static>;
-
-/// The trait which prescribes the order of functions needed for a transaction. For example, for a
-/// confidential transaction, the order is initiate, finalize, mediate, and finally validate.
-trait TransactionOrder {
-    fn order(&self) -> Vec<StepFunc>;
-}
 
 /// Represents the three types of mercat transactions.
 #[derive(Debug)]
@@ -72,7 +73,7 @@ impl TryFrom<&str> for Party {
 /// Data type of the transaction of transferring balance.
 #[derive(Debug)]
 pub struct Transfer {
-    pub id: u32,
+    pub tx_id: u32,
     pub sender: Party,
     pub receiver: Party,
     pub receiver_approves: bool,
@@ -85,7 +86,7 @@ pub struct Transfer {
 impl TryFrom<(u32, String)> for Transfer {
     type Error = Error;
     fn try_from(pair: (u32, String)) -> Result<Self, Error> {
-        let (id, segment) = pair;
+        let (tx_id, segment) = pair;
         // Example: Bob(cheat) 40 ACME Carol approve Marry reject
         let re = Regex::new(
             r"^([a-zA-Z0-9()]+) ([0-9]+) ([a-zA-Z0-9]+) ([a-zA-Z0-9()]+) (approve|reject) ([a-zA-Z0-9()]+) (approve|reject)$",
@@ -97,7 +98,7 @@ impl TryFrom<(u32, String)> for Transfer {
             reason: format!("Pattern did not match {}", segment),
         })?;
         Ok(Self {
-            id,
+            tx_id,
             sender: Party::try_from(caps.get(1).unwrap().as_str())?,
             receiver: Party::try_from(caps.get(4).unwrap().as_str())?,
             receiver_approves: caps.get(5).unwrap().as_str() == "approve",
@@ -112,9 +113,8 @@ impl TryFrom<(u32, String)> for Transfer {
 /// Data type of the transaction of creating empty account.
 #[derive(Debug)]
 pub struct Create {
-    pub id: u32,
+    pub tx_id: u32,
     pub seed: String,
-    pub chain_db_dir: PathBuf,
     pub account_id: u32,
     pub owner: Party,
     pub ticker: String,
@@ -123,8 +123,8 @@ pub struct Create {
 /// Data type of the transaction of funding an account by issuer.
 #[derive(Debug)]
 pub struct Issue {
-    pub id: u32,
-    pub owner: Party,
+    pub tx_id: u32,
+    pub issuer: Party,
     pub mediator: Party,
     pub mediator_approves: bool,
     pub ticker: String,
@@ -134,7 +134,7 @@ pub struct Issue {
 impl TryFrom<(u32, String)> for Issue {
     type Error = Error;
     fn try_from(pair: (u32, String)) -> Result<Self, Error> {
-        let (id, segment) = pair;
+        let (tx_id, segment) = pair;
         // Example: Bob(cheat) 40 ACME Carol approve Marry reject
         let re = Regex::new(
             r"^([a-zA-Z0-9()]+) ([0-9]+) ([a-zA-Z0-9]+) ([a-zA-Z0-9()]+) (approve|reject)$",
@@ -146,8 +146,8 @@ impl TryFrom<(u32, String)> for Issue {
             reason: format!("Pattern did not match {}", segment),
         })?;
         Ok(Self {
-            id,
-            owner: Party::try_from(caps.get(1).unwrap().as_str())?,
+            tx_id,
+            issuer: Party::try_from(caps.get(1).unwrap().as_str())?,
             mediator: Party::try_from(caps.get(4).unwrap().as_str())?,
             mediator_approves: caps.get(5).unwrap().as_str() == "approve",
             ticker: String::from(caps.get(3).unwrap().as_str()),
@@ -203,55 +203,123 @@ pub struct TestCase {
 // -                                  data type methods                                             -
 // --------------------------------------------------------------------------------------------------
 
-impl TransactionOrder for Transaction {
-    fn order(&self) -> Vec<StepFunc> {
+impl Transaction {
+    fn order<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> Vec<StepFunc> {
         match self {
-            Transaction::Issue(fund) => fund.order(),
-            Transaction::Transfer(transfer) => transfer.order(),
-            Transaction::Create(create) => create.order(),
+            Transaction::Issue(fund) => fund.order(rng, chain_db_dir.clone()),
+            Transaction::Transfer(transfer) => transfer.order(rng, chain_db_dir.clone()),
+            Transaction::Create(create) => create.order(rng, chain_db_dir),
         }
     }
 }
 
 impl Transfer {
-    pub fn send(&self) -> StepFunc {
-        let value = format!("todo-send-transaction {}", self.id);
-        // TODO: run the initialize transfer function, and return its CLI + args
-        //       sea "create_account" function for an example of how it will look like.
-        return Box::new(move || value.clone());
+    pub fn send<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
+        let seed = gen_seed_from(rng);
+        let value = format!(
+            "mercat-account create-transaction --account-id {} --amount {} --sender {} --receiver {} --mediator {} --tx-id {} --seed {} {}",
+            self.ticker,
+            self.amount,
+            self.sender.name,
+            self.receiver.name,
+            self.mediator.name,
+            self.tx_id,
+            seed,
+            cheater_flag(self.sender.cheater)
+        );
+        let ticker = self.ticker.clone();
+        let sender = self.sender.name.clone();
+        let receiver = self.receiver.name.clone();
+        let mediator = self.mediator.name.clone();
+        let amount = self.amount;
+        let tx_id = self.tx_id;
+        return Box::new(move || {
+            process_create_tx(
+                seed.clone(),
+                chain_db_dir.clone(),
+                sender.clone(),
+                receiver.clone(),
+                mediator.clone(),
+                ticker.clone(),
+                amount,
+                tx_id,
+            )
+            .unwrap();
+            value.clone()
+        });
     }
 
-    pub fn receive(&self) -> StepFunc {
-        let value = format!("todo-receive-transaction {}", self.id);
-        return Box::new(move || value.clone());
+    pub fn receive<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
+        let seed = gen_seed_from(rng);
+        let value = format!(
+            "mercat-account finalize-transaction --account-id {} --amount {} --sender {} --receiver {} --tx-id {} --seed {} {}",
+            self.ticker,
+            self.amount,
+            self.sender.name,
+            self.receiver.name,
+            self.tx_id,
+            seed,
+            cheater_flag(self.sender.cheater)
+        );
+        let ticker = self.ticker.clone();
+        let sender = self.sender.name.clone();
+        let receiver = self.receiver.name.clone();
+        let amount = self.amount;
+        let tx_id = self.tx_id;
+        return Box::new(move || {
+            process_finalize_tx(
+                seed.clone(),
+                chain_db_dir.clone(),
+                sender.clone(),
+                receiver.clone(),
+                ticker.clone(),
+                amount,
+                tx_id,
+            )
+            .unwrap();
+            value.clone()
+        });
     }
 
     pub fn mediate(&self) -> StepFunc {
-        let value = format!("todo-mediate-transaction {}", self.id);
+        let value = format!("todo-mediate-transaction {}", self.tx_id);
         return Box::new(move || value.clone());
     }
 
     pub fn validate(&self) -> StepFunc {
-        let value = format!("todo-validate-transaction {}", self.id);
+        let value = format!("todo-validate-transaction {}", self.tx_id);
         return Box::new(move || value.clone());
     }
 
-    pub fn order(&self) -> Vec<StepFunc> {
-        vec![self.send(), self.receive(), self.mediate(), self.validate()]
+    pub fn order<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        chain_db_dir: PathBuf,
+    ) -> Vec<StepFunc> {
+        vec![
+            self.send(rng, chain_db_dir.clone()),
+            self.receive(rng, chain_db_dir),
+            self.mediate(),
+            self.validate(),
+        ]
     }
 }
 
 impl Create {
-    pub fn create_account(&self) -> StepFunc {
+    pub fn create_account<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        chain_db_dir: PathBuf,
+    ) -> StepFunc {
+        let seed = gen_seed_from(rng);
         let value = format!(
-            "mercat-account create --account-id {} --ticker {} --user {} {}",
+            "mercat-account create --account-id {} --ticker {} --user {} --seed {} {}",
             self.account_id,
             self.ticker,
             self.owner.name,
+            seed,
             cheater_flag(self.owner.cheater)
         );
-        let seed = self.seed.clone();
-        let chain_db_dir = self.chain_db_dir.clone();
         let ticker = self.ticker.clone();
         let account_id = self.account_id;
         let owner = self.owner.name.clone();
@@ -273,41 +341,84 @@ impl Create {
         return Box::new(move || value.clone());
     }
 
-    pub fn order(&self) -> Vec<StepFunc> {
-        vec![self.create_account(), self.validate()]
+    pub fn order<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        chain_db_dir: PathBuf,
+    ) -> Vec<StepFunc> {
+        vec![self.create_account(rng, chain_db_dir), self.validate()]
     }
 }
 
 impl Issue {
-    pub fn issue(&self) -> StepFunc {
-        let value = format!("todo-issue-transaction {}", self.id);
-        return Box::new(move || value.clone());
+    pub fn issue<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
+        let seed = gen_seed_from(rng);
+        let value = format!(
+            "mercat-account issue --account-id {} --amount {} --issuer {} --mediator {} --tx-id {} --seed {} {}",
+            self.ticker,
+            self.amount,
+            self.issuer.name,
+            self.mediator.name,
+            self.tx_id,
+            seed,
+            cheater_flag(self.issuer.cheater)
+        );
+        let ticker = self.ticker.clone();
+        let issuer = self.issuer.name.clone();
+        let mediator = self.mediator.name.clone();
+        let amount = self.amount;
+        let tx_id = self.tx_id;
+        return Box::new(move || {
+            process_issue_asset(
+                seed.clone(),
+                chain_db_dir.clone(),
+                issuer.clone(),
+                mediator.clone(),
+                ticker.clone(),
+                amount,
+                tx_id,
+            )
+            .unwrap();
+            value.clone()
+        });
     }
 
     pub fn mediate(&self) -> StepFunc {
-        let value = format!("todo-mediate-issue-transaction {}", self.id);
+        let value = format!("todo-mediate-issue-transaction {}", self.tx_id);
         return Box::new(move || value.clone());
     }
 
     pub fn validate(&self) -> StepFunc {
-        let value = format!("todo-validate-issue-transaction {}", self.id);
+        let value = format!("todo-validate-issue-transaction {}", self.tx_id);
         return Box::new(move || value.clone());
     }
 
-    pub fn order(&self) -> Vec<StepFunc> {
-        vec![self.issue(), self.mediate(), self.validate()]
+    pub fn order<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        chain_db_dir: PathBuf,
+    ) -> Vec<StepFunc> {
+        vec![
+            self.issue(rng, chain_db_dir),
+            self.mediate(),
+            self.validate(),
+        ]
     }
 }
 
 impl TransactionMode {
-    fn sequence(&self) -> Vec<StepFunc> {
+    fn sequence<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        chain_db_dir: PathBuf,
+    ) -> Vec<StepFunc> {
         match self {
-            TransactionMode::Transaction(transaction) => transaction.order(),
+            TransactionMode::Transaction(transaction) => transaction.order(rng, chain_db_dir),
             TransactionMode::Sequence { repeat, steps } => {
                 let mut seq: Vec<StepFunc> = vec![];
                 for _ in 0..*repeat {
                     for transaction in steps {
-                        seq.extend(transaction.sequence());
+                        seq.extend(transaction.sequence(rng, chain_db_dir.clone()));
                     }
                 }
                 seq
@@ -316,7 +427,7 @@ impl TransactionMode {
                 let mut seqs: Vec<Vec<StepFunc>> = vec![];
                 for _ in 0..*repeat {
                     for transaction in steps {
-                        seqs.push(transaction.sequence());
+                        seqs.push(transaction.sequence(rng, chain_db_dir.clone()));
                     }
                 }
                 // TODO Tie this rng to a global rng whose seed can be set for reproduceablity
@@ -347,9 +458,16 @@ impl TransactionMode {
 
 impl TestCase {
     fn run(&self) -> Result<HashSet<Account>, Error> {
+        let seed = gen_seed();
+        info!("Using seed {}, for testcase: {}.", seed, self.title);
+        let mut rng = create_rng_from_seed(Some(seed))?;
+
         self.chain_setup()?;
         let start = Instant::now();
-        for transaction in self.transactions.sequence() {
+        for transaction in self
+            .transactions
+            .sequence(&mut rng, self.chain_db_dir.clone())
+        {
             info!("Running {}", transaction());
         }
         let duration = Instant::now() - start;
@@ -455,10 +573,7 @@ fn all_dirs_in_dir(dir: PathBuf) -> Result<Vec<PathBuf>, Error> {
     }
     Ok(files)
 }
-fn make_empty_accounts(
-    accounts: &Vec<Account>,
-    chain_db_dir: PathBuf,
-) -> Result<(u32, TransactionMode), Error> {
+fn make_empty_accounts(accounts: &Vec<Account>) -> Result<(u32, TransactionMode), Error> {
     let mut account_id = 0;
     let mut transaction_counter = 0;
     let mut seq: Vec<TransactionMode> = vec![];
@@ -468,9 +583,8 @@ fn make_empty_accounts(
         rng.fill(&mut seed);
         let seed = base64::encode(seed); // TODO consolidate all the rngs and seeds into one place instead of littering the code
         seq.push(TransactionMode::Transaction(Transaction::Create(Create {
-            id: transaction_counter,
+            tx_id: transaction_counter,
             seed: seed,
-            chain_db_dir: chain_db_dir.clone(),
             account_id: account_id,
             owner: Party {
                 name: account.owner.clone(),
@@ -676,8 +790,7 @@ fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
 
     let mut chain_db_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     chain_db_dir.push("chain_dir/unittest/node/simple"); // TODO change
-    let (next_transaction_id, create_account_transactions) =
-        make_empty_accounts(&all_accounts, chain_db_dir.clone())?;
+    let (next_transaction_id, create_account_transactions) = make_empty_accounts(&all_accounts)?;
 
     // TODO declared mutable since later I want to consume a single element of it
     let (_, mut transactions) = parse_transactions(

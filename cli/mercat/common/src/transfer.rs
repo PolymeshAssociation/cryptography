@@ -1,7 +1,7 @@
 use crate::{
-    confidential_transaction_file, construct_path, errors::Error, load_object, save_object,
-    CTXInstruction, Instruction, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
-    SECRET_ACCOUNT_FILE, VALIDATED_PUBLIC_ACCOUNT_FILE,
+    confidential_transaction_file, construct_path, create_rng_from_seed, errors::Error,
+    load_object, save_object, CTXInstruction, Instruction, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE, VALIDATED_PUBLIC_ACCOUNT_FILE,
 };
 use codec::{Decode, Encode};
 use cryptography::mercat::{
@@ -9,35 +9,49 @@ use cryptography::mercat::{
     ConfidentialTxState, PubAccount, PubInitConfidentialTxData, TxSubstate,
 };
 use metrics::timing;
-use rand::{CryptoRng, RngCore};
 use std::{path::PathBuf, time::Instant};
 
-pub fn process_create_tx<T: RngCore + CryptoRng>(
-    rng: &mut T,
+pub fn process_create_tx(
+    seed: String,
     db_dir: PathBuf,
     sender: String,
     receiver: String,
     mediator: String,
+    ticker: String,
     amount: u32,
     tx_id: u32,
 ) -> Result<(), Error> {
+    let mut rng = create_rng_from_seed(Some(seed))?;
     let load_from_file_timer = Instant::now();
 
     let sender_account = Account {
-        scrt: load_object(db_dir.clone(), OFF_CHAIN_DIR, &sender, SECRET_ACCOUNT_FILE)?,
+        scrt: load_object(
+            db_dir.clone(),
+            OFF_CHAIN_DIR,
+            &sender,
+            &format!("{}_{}", ticker, SECRET_ACCOUNT_FILE),
+        )?,
         pblc: load_object(
             db_dir.clone(),
             ON_CHAIN_DIR,
             &sender,
-            VALIDATED_PUBLIC_ACCOUNT_FILE,
+            &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
         )?,
     };
 
-    let receiver_account: PubAccount =
-        load_object(db_dir.clone(), ON_CHAIN_DIR, &receiver, PUBLIC_ACCOUNT_FILE)?;
+    let receiver_account: PubAccount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &receiver,
+        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+    )?;
 
-    let mediator_account: AccountMemo =
-        load_object(db_dir.clone(), ON_CHAIN_DIR, &mediator, PUBLIC_ACCOUNT_FILE)?;
+    let mediator_account: AccountMemo = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &mediator,
+        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+    )?;
 
     timing!(
         "account.create_tx.load_from_file",
@@ -54,7 +68,7 @@ pub fn process_create_tx<T: RngCore + CryptoRng>(
             &receiver_account,
             &mediator_account.owner_enc_pub_key,
             amount,
-            rng,
+            &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })?;
     timing!("account.create_tx.create", create_tx_timer, Instant::now());
@@ -86,14 +100,16 @@ pub fn process_create_tx<T: RngCore + CryptoRng>(
     Ok(())
 }
 
-pub fn process_finalize_tx<T: RngCore + CryptoRng>(
-    rng: &mut T,
+pub fn process_finalize_tx(
+    seed: String,
     db_dir: PathBuf,
     sender: String,
     receiver: String,
+    ticker: String,
     amount: u32,
     tx_id: u32,
 ) -> Result<(), Error> {
+    let mut rng = create_rng_from_seed(Some(seed))?;
     let load_from_file_timer = Instant::now();
 
     let receiver_account = Account {
@@ -101,9 +117,14 @@ pub fn process_finalize_tx<T: RngCore + CryptoRng>(
             db_dir.clone(),
             OFF_CHAIN_DIR,
             &receiver,
-            SECRET_ACCOUNT_FILE,
+            &format!("{}_{}", ticker, SECRET_ACCOUNT_FILE),
         )?,
-        pblc: load_object(db_dir.clone(), ON_CHAIN_DIR, &receiver, PUBLIC_ACCOUNT_FILE)?,
+        pblc: load_object(
+            db_dir.clone(),
+            ON_CHAIN_DIR,
+            &receiver,
+            &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+        )?,
     };
 
     let instruction: Instruction = load_object(
@@ -143,7 +164,7 @@ pub fn process_finalize_tx<T: RngCore + CryptoRng>(
             receiver_account,
             ConfidentialTxState::Initialization(TxSubstate::Validated),
             amount,
-            rng,
+            &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })?;
 

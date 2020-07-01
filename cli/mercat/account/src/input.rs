@@ -60,9 +60,10 @@ pub struct CreateAccountInfo {
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct IssueAssetInfo {
     /// Account ID of the issuer.
-    /// The CLI will not throw any errors if a duplicate id is passed.
+    /// The CLI will not throw any errors if a duplicate id is passed. In the CLI, we use the
+    /// ticker name as the unique account id of each party.
     #[structopt(long, help = "The account ID.")]
-    pub account_id: u32,
+    pub account_id: String,
 
     /// A transaction ID for the asset issuance transaction.
     /// The CLI will not throw any errors if a duplicate id is passed.
@@ -115,9 +116,10 @@ pub struct IssueAssetInfo {
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct CreateTransactionInfo {
     /// Account ID of the sender.
-    /// The CLI will not throw any errors if a duplicate id is passed.
-    #[structopt(long, help = "The sender's account ID.")]
-    pub account_id: u32,
+    /// The CLI will not throw any errors if a duplicate id is passed. In the CLI, we use the
+    /// ticker name as the unique account id of each party.
+    #[structopt(long, help = "The party's account ID.")]
+    pub account_id: String,
 
     /// A transaction ID for the transaction.
     /// The CLI will not throw any errors if a duplicate id is passed.
@@ -173,6 +175,11 @@ pub struct CreateTransactionInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct FinalizeTransactionInfo {
+    /// Account ID of the receiver.
+    /// In the CLI, we use the ticker name as the unique account id of each party.
+    #[structopt(long, help = "The party's account ID.")]
+    pub account_id: String,
+
     /// The transaction ID for the transaction.
     /// The CLI will not throw any errors if a duplicate id is passed.
     /// It will silently overwrite the transaction.
@@ -386,6 +393,7 @@ pub fn parse_input() -> CLI {
 
             let cfg = FinalizeTransactionInfo {
                 tx_id: cfg.tx_id,
+                account_id: cfg.account_id,
                 seed,
                 amount: cfg.amount,
                 db_dir,

@@ -8,7 +8,6 @@ use input::{parse_input, CLI};
 use log::info;
 use mercat_common::{
     create_account::process_create_account,
-    create_rng_from_seed,
     errors::Error,
     init_print_logger,
     issue_asset::process_issue_asset,
@@ -36,7 +35,7 @@ fn main() {
         CLI::Cleanup { user, db_dir } => process_destroy_account(user, db_dir).unwrap(),
         CLI::CreateFrom { config: _ } => panic!("This should not happen!"),
         CLI::Issue(cfg) => process_issue_asset(
-            &mut create_rng_from_seed(cfg.seed).unwrap(),
+            cfg.seed.ok_or(Error::EmptySeed).unwrap(),
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.issuer,
             cfg.mediator,
@@ -46,20 +45,22 @@ fn main() {
         )
         .unwrap(),
         CLI::CreateTransaction(cfg) => process_create_tx(
-            &mut create_rng_from_seed(cfg.seed).unwrap(),
+            cfg.seed.ok_or(Error::EmptySeed).unwrap(),
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.sender,
             cfg.receiver,
             cfg.mediator,
+            cfg.account_id,
             cfg.amount,
             cfg.tx_id,
         )
         .unwrap(),
         CLI::FinalizeTransaction(cfg) => process_finalize_tx(
-            &mut create_rng_from_seed(cfg.clone().seed).unwrap(),
-            cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
+            cfg.seed.ok_or(Error::EmptySeed).unwrap(),
+            cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.sender,
             cfg.receiver,
+            cfg.account_id,
             cfg.amount,
             cfg.tx_id,
         )
