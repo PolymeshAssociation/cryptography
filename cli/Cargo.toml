@@ -1,0 +1,13 @@
+[workspace]
+
+members = [
+	"cryptography",
+	"agui/common",
+	"agui/scp",
+	"agui/scv",
+	"mercat/account",
+	"mercat/chain_setup",
+	"mercat/common",
+	"mercat/mediator",
+	"mercat/validator",
+]
