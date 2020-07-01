@@ -25,7 +25,7 @@ use cryptography::{
         ConfidentialTransactionMediatorVerifier, ConfidentialTransactionSender, ConfidentialTxMemo,
         ConfidentialTxState, CorrectnessProof, EncryptedAmount, EncryptedAssetId, EncryptionKeys,
         EncryptionPubKey, InRangeProof, MembershipProof, PubAccount, PubAccountContent,
-        PubInitConfidentialTxData, PubInitConfidentialTxDataContent, SecAccount, Signature,
+        PubInitConfidentialTxData, PubFinalConfidentialTxData, PubInitConfidentialTxDataContent, SecAccount, Signature,
         SigningKeys, SigningPubKey, TxSubstate, WellformednessProof,
     },
     AssetId, Balance,
@@ -135,7 +135,7 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
     let rcvr_vldtr = CtxReceiverValidator {};
     let mdtr_vldtr = CtxMediatorValidator {};
     let asset_id = AssetId::from(20);
-    let sndr_balance = 100;
+    let sndr_balance = 500;
     let rcvr_balance = 0;
     let amount = 5;
 
@@ -166,67 +166,48 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
             asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
         },
     };
+    // Generate multiple accounts with different balances 
+    let sndr_accounts : Vec<Account> = [5u32/*,5000u32,50000u32*/].iter()
+                        .zip([AssetId::from(20) /*,AssetId::from(30),AssetId::from(40)*/].iter())
+                        .map( |(balance, asset_id)| 
+                            {
+                                let mut seed = 11u8;
+                                let sndr_enc_keys_inner = mock_gen_enc_key_pair(seed);
+                                let sndr_sign_keys_inner = mock_gen_sign_key_pair(seed+6);
+                                seed += 1;
 
-    let sndr_accounts: Vec<Account> = [500u32, 5000u32, 50000u32]
-        .iter()
-        .zip([AssetId::from(20), AssetId::from(30), AssetId::from(40)].iter())
-        .map(|(balance, asset_id)| {
-            let mut seed = 11u8;
-            let sndr_enc_keys_inner = mock_gen_enc_key_pair(seed);
-            let sndr_sign_keys_inner = mock_gen_sign_key_pair(seed + 6);
-            seed += 1;
+                                Account {
+                                    pblc: mock_gen_account(
+                                        sndr_enc_keys_inner.pblc,
+                                        sndr_sign_keys_inner.public.clone(),
+                                        asset_id.clone(),
+                                        *balance,
+                                        &mut rng,
+                                    )
+                                    .unwrap(),
+                                    scrt: SecAccount {
+                                        enc_keys: sndr_enc_keys_inner,
+                                        sign_keys: sndr_sign_keys_inner,
+                                        asset_id: asset_id.clone(),
+                                        asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
+                                    },
+                                }
+                            }                            
+                        )
+                        .collect();
 
-            Account {
-                pblc: mock_gen_account(
-                    sndr_enc_keys_inner.pblc,
-                    sndr_sign_keys_inner.public.clone(),
-                    asset_id.clone(),
-                    *balance,
-                    &mut rng,
-                )
-                .unwrap(),
-                scrt: SecAccount {
-                    enc_keys: sndr_enc_keys_inner,
-                    sign_keys: sndr_sign_keys_inner,
-                    asset_id: asset_id.clone(),
-                    asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
-                },
-            }
-        })
-        .collect();
-
+    
     // Benchmarking the creation of initialized transaction
     // We clone all input parameters below for passing it to the criterion.
     let sndr_clone = sndr.clone();
-    let label_ctx_init = "Generation of Initialized Transaction";
-    //let sndr_account_clone = sndr_account.clone();
+    let rcvr_clone = rcvr.clone();
+    let rcvr_account_clone = rcvr_account.clone();
     let rcvr_account_pblc_clone = rcvr_account.pblc.clone();
     let mdtr_enc_keys_pblc_clone = mdtr_enc_keys.pblc.clone();
-    let rng_init = StdRng::from_seed([37u8; 32]);
+    
     let amount_clone = amount.clone();
 
-    c.bench_function_over_inputs(
-        &label_ctx_init,
-        move |b, sndr_account| {
-            b.iter(|| {
-                let (ctx_init_data, state) = sndr_clone
-                    .create_transaction(
-                        &sndr_account.clone(),
-                        &rcvr_account_pblc_clone.clone(),
-                        &mdtr_enc_keys_pblc_clone.clone(),
-                        amount_clone.clone(),
-                        &mut rng_init.clone(),
-                    )
-                    .unwrap();
-
-                assert_eq!(
-                    state,
-                    ConfidentialTxState::Initialization(TxSubstate::Started)
-                );
-            })
-        },
-        sndr_accounts,
-    );
+    
 
     let sndr_account = Account {
         pblc: mock_gen_account(
@@ -245,42 +226,108 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
         },
     };
 
-    // Create the trasaction and check its result and state
-    // We first create a transaction for using it in the subsequent steps of our workflow, and after
-    // use the same tx input parameters for benchmarking tx initialization phase.
-    let (ctx_init_data, state) = sndr
-        .create_transaction(
-            &sndr_account,
-            &rcvr_account.pblc,
-            &mdtr_enc_keys.pblc,
-            amount,
-            &mut rng,
-        )
-        .unwrap();
-
-    assert_eq!(
-        state,
-        ConfidentialTxState::Initialization(TxSubstate::Started)
-    );
+    let (ctx_init_data, state) = sndr.create_transaction(
+        &sndr_account,
+        &rcvr_account.pblc,
+        &mdtr_enc_keys.pblc,
+        amount,
+        &mut rng,
+    )
+    .unwrap();
 
     // Benchmarking the verification of initialized transaction
-    // We clone all input parameters below for passing it to the criterion.
+    // We create multiple initialized transactions with different amounts
 
-    let label_ctx_init_ver = "Initialized Transaction Verification";
+    let amount_vector = vec![4u32,40u32,400u32];
+
+    let init_ctxs : Vec<(PubInitConfidentialTxData, ConfidentialTxState)>= amount_vector.clone().iter()
+                                .map(|amount| 
+                                    {
+                                        let (ctx, state) = sndr.create_transaction(
+                                                    &sndr_account,
+                                                    &rcvr_account.pblc,
+                                                    &mdtr_enc_keys.pblc,
+                                                    *amount,
+                                                    &mut rng,
+                                                ).unwrap();
+                                        (ctx,state)
+                                    }
+                                )
+                                .collect(); 
+    
+    // We keep these final_ctxs along with the finalization state and final verification state for future use in the benchmarking of mediator justification.
+    let final_ctxs : Vec<(PubFinalConfidentialTxData, ConfidentialTxState, ConfidentialTxState )> = init_ctxs.clone()
+                                .iter()
+                                .zip(amount_vector.clone().iter())
+                                .map( |(init_data, expected_amount)|
+                                    {
+                                        let sndr_vld_state = sndr_vldtr.verify(&init_data.0, &sndr_account.pblc, init_data.1).unwrap();
+                                        let mut rng_final = StdRng::from_seed([17u8; 32]);
+                                        let (ctx_finalized_data, fnlz_state) = rcvr_clone
+                                            .finalize_by_receiver(
+                                                        init_data.0.clone(),
+                                                        rcvr_account_clone.clone(),
+                                                        sndr_vld_state,
+                                                        *expected_amount,
+                                                        &mut rng_final,
+                                            ).unwrap();
+                                        assert_eq!(fnlz_state,ConfidentialTxState::Finalization(TxSubstate::Started));
+                                        let fnlz_vld_state = rcvr_vldtr
+                                            .verify_finalize_by_receiver(
+                                                        &sndr_account.pblc.clone(),
+                                                        &rcvr_account_pblc_clone.clone(),
+                                                        &ctx_finalized_data,
+                                                        fnlz_state.clone(),
+                                            )
+                                            .unwrap();
+                                        (ctx_finalized_data, fnlz_state, fnlz_vld_state)
+                                    }
+                                )
+                                .collect();
+
     let sndr_vldtr_clone = sndr_vldtr.clone();
     let ctx_init_data_clone = ctx_init_data.clone();
     let sndr_acc_pbc_clone = sndr_account.pblc.clone();
     let state_clone = state.clone();
+    let init_ctxs_clone = init_ctxs.clone();
 
+
+    // Benchmarking the generation of initialized transaction of fixed amount with multiple accounts of different balances
     c.bench_function_over_inputs(
-        &label_ctx_init_ver,
+        "Generation of Initialized Transaction",
+        move |b, sndr_account| {
+            b.iter(|| {
+                let mut rng_init = StdRng::from_seed([37u8; 32]);
+                let (ctx_init_data, state) = sndr_clone
+                    .create_transaction(
+                        &sndr_account.clone(),
+                        &rcvr_account_pblc_clone.clone(),
+                        &mdtr_enc_keys_pblc_clone.clone(),
+                        amount_clone.clone(),
+                        &mut rng_init,
+                    )
+                    .unwrap();
+                   
+                    assert_eq!(
+                        state,
+                        ConfidentialTxState::Initialization(TxSubstate::Started)
+                    );
+            })
+        },
+        sndr_accounts,
+    );
+
+    // Benchmarking the verificaiton of initialized transactions
+    // The initialized transacations are transfering different amounts.
+    c.bench_function_over_inputs(
+        "Initialized Transaction Verification",
         move |b, ctx_init_data| {
             b.iter(|| {
                 let state = sndr_vldtr_clone
                     .verify(
-                        &ctx_init_data.clone(),
+                        &ctx_init_data.0.clone(),
                         &sndr_acc_pbc_clone.clone(),
-                        state_clone.clone(),
+                        ctx_init_data.1.clone(),
                     )
                     .unwrap();
                 assert_eq!(
@@ -289,7 +336,7 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
                 );
             })
         },
-        vec![ctx_init_data_clone.clone()],
+        init_ctxs_clone,
     );
 
     // We run the verification function over again in order to get the final
@@ -298,17 +345,19 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
         .verify(&ctx_init_data, &sndr_account.pblc, state)
         .unwrap();
 
-    let label_ctx_final = "Generation of Finalized Transaction";
     let rcvr_account_clone = rcvr_account.clone();
     let rcvr_clone = rcvr.clone();
     let ctx_init_data_clone = ctx_init_data.clone();
     let amount_clone = amount.clone();
     let state_clone = state.clone();
-    let mut rng_final = StdRng::from_seed([39u8; 32]);
+    let init_ctxs_clone = init_ctxs.clone();
+
+    // Benchmarking the Transaction Finalization phase for initialized transactions of different amounts.
     c.bench_function_over_inputs(
-        &label_ctx_final,
+        "Generation of Finalized Transaction",
         move |b, ctx_init_data| {
             b.iter(|| {
+                let mut rng_final = StdRng::from_seed([39u8; 32]);
                 let (ctx_finalized_data, state) = rcvr_clone
                     .finalize_by_receiver(
                         ctx_init_data_clone.clone(),
@@ -324,7 +373,7 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
                 );
             })
         },
-        vec![ctx_init_data.clone()],
+        init_ctxs_clone,
     );
 
     // We finalize the transaction and get the finalization state in order to
@@ -335,23 +384,22 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
 
     // Bencharking of finalized transaction verification step
     // We clone all parameters before passing them to the criterion.
-    let label_ctx_final_ver = "Finalized Transaction Verification";
     let rcvr_vldtr_clone = rcvr_vldtr.clone();
     let ctx_finalized_data_clone = ctx_finalized_data.clone();
     let sndr_acc_pbc_clone = sndr_account.pblc.clone();
     let rcvr_account_pbc_clone = rcvr_account.pblc.clone();
-    let state_clone = state.clone();
 
+    
     c.bench_function_over_inputs(
-        &label_ctx_final_ver,
+        "Finalized Transaction Verification",
         move |b, ctx_finalized_data| {
             b.iter(|| {
                 let state = rcvr_vldtr_clone
                     .verify_finalize_by_receiver(
                         &sndr_acc_pbc_clone.clone(),
                         &rcvr_account_pbc_clone.clone(),
-                        &ctx_finalized_data.clone(),
-                        state_clone.clone(),
+                        &ctx_finalized_data.0,
+                        ctx_finalized_data.1,
                     )
                     .unwrap();
                 assert_eq!(
@@ -360,27 +408,13 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
                 );
             })
         },
-        vec![ctx_finalized_data_clone.clone()],
+        final_ctxs.clone(),
     );
-
-    // verify the finalization step
-    let result_state = rcvr_vldtr
-        .verify_finalize_by_receiver(
-            &sndr_account.pblc,
-            &rcvr_account.pblc,
-            &ctx_finalized_data,
-            state,
-        )
-        .unwrap();
 
     // Bencharking the transaction justification
     // We clone all parameters before passing them to the criterion.
-    let label_ctx_justify = "Justify the Finalized Transaction";
+   
     let mdtr_clone = mdtr.clone();
-    let ctx_finalized_data_clone = ctx_finalized_data.clone();
-    let sndr_acc_pbc_clone = sndr_account.pblc.clone();
-    let rcvr_account_pbc_clone = rcvr_account.pblc.clone();
-    let state_clone = result_state.clone();
     let asset_id_clone = asset_id.clone();
 
     let mdtr_sec_account = SecAccount {
@@ -391,13 +425,13 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
     };
 
     c.bench_function_over_inputs(
-        &label_ctx_justify,
-        move |b, ctx_finalized_data_clone| {
+        "Justify the Finalized Transaction",
+        move |b, ctx_fnlzd_data| {
             b.iter(|| {
                 let (justified_finalized_ctx_data, state) = mdtr_clone
                     .justify(
-                        ctx_finalized_data_clone.clone(),
-                        result_state.clone(),
+                        ctx_fnlzd_data.0.clone(),
+                        ctx_fnlzd_data.2,
                         &mdtr_sec_account.clone(),
                         asset_id_clone.clone(),
                     )
@@ -408,7 +442,7 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
                 );
             })
         },
-        vec![ctx_finalized_data_clone.clone()],
+        final_ctxs.clone(),
     );
 }
 
