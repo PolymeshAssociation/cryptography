@@ -21,6 +21,7 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -38,7 +39,8 @@ pub const ENCRYPTING_SAME_VALUE_PROOF_CHALLENGE_LABEL: &[u8] =
 // Public Keys
 // ------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Default)]
+#[derive(PartialEq, Copy, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptingSameValueFinalResponse {
     z1: Scalar,
@@ -68,7 +70,8 @@ impl Decode for EncryptingSameValueFinalResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptingSameValueInitialMessage {
     a1: RistrettoPoint,

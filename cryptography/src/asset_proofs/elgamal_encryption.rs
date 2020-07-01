@@ -14,6 +14,7 @@ use curve25519_dalek::{
 use rand::rngs::StdRng;
 use rand_core::{CryptoRng, RngCore};
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
@@ -21,9 +22,10 @@ use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use sp_std::prelude::*;
 
 /// Prover's representation of the commitment secret.
-#[derive(Clone, Serialize, Deserialize, PartialEq, Zeroize)]
+#[derive(Clone, PartialEq, Zeroize)]
 #[zeroize(drop)]
 #[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CommitmentWitness {
     /// Depending on how the witness was created this variable stores the
     /// balance value or the asset id in Scalar format.
@@ -86,8 +88,9 @@ impl Decode for CommitmentWitness {
 }
 
 /// Prover's representation of the encrypted secret.
-#[derive(PartialEq, Copy, Clone, Serialize, Deserialize, Default)]
+#[derive(PartialEq, Copy, Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CipherText {
     pub x: RistrettoPoint,
     pub y: RistrettoPoint,
@@ -185,7 +188,8 @@ define_sub_assign_variants!(LHS = CipherText, RHS = CipherText);
 /// where g and h are 2 orthogonal generators.
 
 /// An Elgamal Secret Key is a random scalar.
-#[derive(Clone, Serialize, Deserialize, Zeroize)]
+#[derive(Clone, Zeroize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 #[zeroize(drop)]
 pub struct ElgamalSecretKey {
@@ -214,7 +218,8 @@ impl Decode for ElgamalSecretKey {
 }
 
 /// The Elgamal Public Key is the secret key multiplied by the blinding generator (g).
-#[derive(Copy, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Copy, Clone, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ElgamalPublicKey {
     pub pub_key: RistrettoPoint,

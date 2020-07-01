@@ -14,13 +14,13 @@ use crate::{
     errors::{ErrorKind, Fallible},
     mercat::{
         Account, CipherEqualDifferentPubKeyProof, CipherEqualSamePubKeyProof,
-        ConfidentialTransactionInitVerifier, ConfidentialTransactionMediator,
-        ConfidentialTransactionMediatorVerifier, ConfidentialTransactionReceiver,
-        ConfidentialTransactionSender, ConfidentialTxMemo, ConfidentialTxState, CorrectnessProof,
-        EncryptedAssetId, EncryptionPubKey, InRangeProof, JustifiedPubFinalConfidentialTxData,
-        PubAccount, PubFinalConfidentialTxData, PubFinalConfidentialTxDataContent,
-        PubInitConfidentialTxData, PubInitConfidentialTxDataContent, SecAccount, SigningPubKey,
-        TxSubstate,
+        ConfidentialTransactionFinalizationVerifier, ConfidentialTransactionInitVerifier,
+        ConfidentialTransactionMediator, ConfidentialTransactionMediatorVerifier,
+        ConfidentialTransactionReceiver, ConfidentialTransactionSender, ConfidentialTxMemo,
+        ConfidentialTxState, CorrectnessProof, EncryptedAssetId, EncryptionKeys, EncryptionPubKey,
+        InRangeProof, JustifiedPubFinalConfidentialTxData, PubAccount, PubFinalConfidentialTxData,
+        PubFinalConfidentialTxDataContent, PubInitConfidentialTxData,
+        PubInitConfidentialTxDataContent, SigningKeys, SigningPubKey, TxSubstate,
     },
     AssetId, Balance, BALANCE_RANGE,
 };
@@ -29,7 +29,7 @@ use bulletproofs::PedersenGens;
 use codec::Encode;
 use curve25519_dalek::scalar::Scalar;
 use lazy_static::lazy_static;
-use rand_core::{CryptoRng, OsRng, RngCore};
+use rand_core::{CryptoRng, RngCore};
 use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
 
@@ -109,6 +109,7 @@ impl ConfidentialTransactionSender for CtxSender {
             .enc_balance
             .cipher
             .refresh(&sndr_enc_keys.scrt, balance_refresh_enc_blinding)?;
+
         let balance_refreshed_same_proof =
             CipherEqualSamePubKeyProof::from(single_property_prover(
                 CipherTextRefreshmentProverAwaitingChallenge::new(
@@ -328,7 +329,8 @@ impl ConfidentialTransactionMediator for CtxMediator {
         &self,
         conf_tx_final_data: PubFinalConfidentialTxData,
         state: ConfidentialTxState,
-        mdtr_sec_account: &SecAccount,
+        mdtr_enc_keys: &EncryptionKeys,
+        mdtr_sign_keys: &SigningKeys,
         asset_id_hint: AssetId,
     ) -> Fallible<(JustifiedPubFinalConfidentialTxData, ConfidentialTxState)> {
         // TODO: may need to change the signature CRYP-111
@@ -341,14 +343,13 @@ impl ConfidentialTransactionMediator for CtxMediator {
         let tx_data = &conf_tx_final_data.content.init_data.content;
 
         // Verify that the encrypted amount is correct
-        let amount = mdtr_sec_account
-            .enc_keys
+        let amount = mdtr_enc_keys
             .scrt
             .decrypt(&tx_data.memo.enc_amount_for_mdtr.cipher)?;
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),
-                pub_key: mdtr_sec_account.enc_keys.pblc,
+                pub_key: mdtr_enc_keys.pblc,
                 cipher: tx_data.memo.enc_amount_for_mdtr.cipher,
                 pc_gens: &gens,
             },
@@ -357,7 +358,7 @@ impl ConfidentialTransactionMediator for CtxMediator {
         )?;
 
         // Verify that the encrypted asset_id is correct
-        mdtr_sec_account.enc_keys.scrt.verify(
+        mdtr_enc_keys.scrt.verify(
             &tx_data.memo.enc_asset_id_for_mdtr.cipher,
             &asset_id_hint.clone().into(),
         )?;
@@ -366,7 +367,7 @@ impl ConfidentialTransactionMediator for CtxMediator {
         single_property_verifier(
             &CorrectnessVerifier {
                 value: asset_id.into(),
-                pub_key: mdtr_sec_account.enc_keys.pblc,
+                pub_key: mdtr_enc_keys.pblc,
                 cipher: tx_data.memo.enc_asset_id_for_mdtr.cipher,
                 pc_gens: &gens,
             },
@@ -375,7 +376,7 @@ impl ConfidentialTransactionMediator for CtxMediator {
         )?;
 
         let message = conf_tx_final_data.encode();
-        let sig = mdtr_sec_account.sign_keys.sign(SIG_CTXT.bytes(&message));
+        let sig = mdtr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok((
             JustifiedPubFinalConfidentialTxData {
@@ -404,9 +405,10 @@ pub struct CtxReceiverValidator {}
 /// confidential transaction.
 pub struct CtxMediatorValidator {}
 
-fn verify_initital_transaction_proofs(
+fn verify_initital_transaction_proofs<R: RngCore + CryptoRng>(
     transaction: &PubInitConfidentialTxData,
     sndr_account: &PubAccount,
+    rng: &mut R,
 ) -> Fallible<()> {
     let memo = &transaction.content.memo;
     let init_data = &transaction.content;
@@ -431,14 +433,12 @@ fn verify_initital_transaction_proofs(
         init_data.amount_equal_cipher_proof.response,
     )?;
 
-    let mut rng = OsRng::default();
-
     // Verify that the amount is not negative
     verify_within_range(
         init_data.non_neg_amount_proof.init.clone(),
         init_data.non_neg_amount_proof.response.clone(),
         init_data.non_neg_amount_proof.range,
-        &mut rng,
+        rng,
     )?;
 
     // verify that the balance refreshment was done correctly
@@ -458,7 +458,7 @@ fn verify_initital_transaction_proofs(
         init_data.enough_fund_proof.init.clone(),
         init_data.enough_fund_proof.response.clone(),
         init_data.enough_fund_proof.range,
-        &mut rng,
+        rng,
     )?;
 
     // Verify that the asset id refreshment was done correctly
@@ -496,11 +496,12 @@ fn verify_initital_transaction_proofs(
 }
 
 impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
-    fn verify(
+    fn verify<R: RngCore + CryptoRng>(
         &self,
         transaction: &PubInitConfidentialTxData,
         sndr_account: &PubAccount,
         state: ConfidentialTxState,
+        rng: &mut R,
     ) -> Fallible<ConfidentialTxState> {
         ensure!(
             state == ConfidentialTxState::Initialization(TxSubstate::Started),
@@ -514,19 +515,20 @@ impl ConfidentialTransactionInitVerifier for CtxSenderValidator {
             .owner_sign_pub_key
             .verify(SIG_CTXT.bytes(&message), &transaction.sig)?;
 
-        verify_initital_transaction_proofs(transaction, sndr_account)?;
+        verify_initital_transaction_proofs(transaction, sndr_account, rng)?;
 
         Ok(ConfidentialTxState::Initialization(TxSubstate::Validated))
     }
 }
 
-impl CtxReceiverValidator {
-    pub fn verify_finalize_by_receiver(
+impl ConfidentialTransactionFinalizationVerifier for CtxReceiverValidator {
+    fn verify_finalize_by_receiver<R: RngCore + CryptoRng>(
         &self,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
         conf_tx_final_data: &PubFinalConfidentialTxData,
         state: ConfidentialTxState,
+        rng: &mut R,
     ) -> Fallible<ConfidentialTxState> {
         ensure!(
             state == ConfidentialTxState::Finalization(TxSubstate::Started),
@@ -544,7 +546,7 @@ impl CtxReceiverValidator {
         let init_data = &conf_tx_final_data.content.init_data;
         let final_content = &conf_tx_final_data.content;
 
-        verify_initital_transaction_proofs(init_data, &sndr_account)?;
+        verify_initital_transaction_proofs(init_data, &sndr_account, rng)?;
 
         // In the inital transaction, the sender has encrypted the asset id
         // using the receiver pub key. We verify that this encrypted asset id
@@ -688,8 +690,8 @@ mod tests {
                 asset_id_equal_cipher_with_sndr_rcvr_keys_proof:
                     CipherEqualDifferentPubKeyProof::default(),
                 amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
-                non_neg_amount_proof: InRangeProof::default(),
-                enough_fund_proof: InRangeProof::default(),
+                non_neg_amount_proof: InRangeProof::build(rng),
+                enough_fund_proof: InRangeProof::build(rng),
                 balance_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
                 asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
                 amount_correctness_proof: CorrectnessProof::default(),
@@ -985,7 +987,7 @@ mod tests {
         );
 
         // Verify the initialization step
-        let result = sndr_vldtr.verify(&ctx_init_data, &sndr_account.pblc, state);
+        let result = sndr_vldtr.verify(&ctx_init_data, &sndr_account.pblc, state, &mut rng);
         let state = result.unwrap();
         assert_eq!(
             state,
@@ -1007,6 +1009,7 @@ mod tests {
             &rcvr_account.pblc,
             &ctx_finalized_data,
             state,
+            &mut rng,
         );
         let state = result.unwrap();
         assert_eq!(
@@ -1015,14 +1018,13 @@ mod tests {
         );
 
         // justify the transaction
-        let mdtr_sec_account = SecAccount {
-            enc_keys: mdtr_enc_keys,
-            sign_keys: mdtr_sign_keys.clone(),
-            asset_id: asset_id.clone(),
-            asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
-        };
-
-        let result = mdtr.justify(ctx_finalized_data, state, &mdtr_sec_account, asset_id);
+        let result = mdtr.justify(
+            ctx_finalized_data,
+            state,
+            &mdtr_enc_keys,
+            &mdtr_sign_keys,
+            asset_id,
+        );
         let (justified_finalized_ctx_data, state) = result.unwrap();
         assert_eq!(
             state,

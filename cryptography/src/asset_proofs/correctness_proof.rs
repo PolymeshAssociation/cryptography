@@ -19,6 +19,7 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
@@ -34,7 +35,8 @@ pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessChalle
 // Proof of Correct Encryption of the Given Value
 // ------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug, Default)]
+#[derive(PartialEq, Copy, Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CorrectnessFinalResponse(Scalar);
 
 impl From<Scalar> for CorrectnessFinalResponse {
@@ -63,7 +65,8 @@ impl Decode for CorrectnessFinalResponse {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
+#[derive(PartialEq, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CorrectnessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,

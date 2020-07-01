@@ -24,6 +24,7 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_512;
 use zeroize::{Zeroize, Zeroizing};
@@ -273,7 +274,8 @@ impl Polynomial {
 /// The R1 Proof is a zero-knowledge proof for a (bit-matrix) commitment B having an opening
 /// to a bit-matrix of size m x n, where in each row there is exactly one 1.
 
-#[derive(Serialize, Deserialize, PartialEq, Copy, Clone, Debug)]
+#[derive(PartialEq, Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct R1ProofInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -345,7 +347,8 @@ impl UpdateTranscript for R1ProofInitialMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default)]
+#[derive(PartialEq, Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct R1ProofFinalResponse {
     f_elements: Vec<Scalar>,
     z_a: Scalar,
@@ -601,7 +604,8 @@ impl<'a> AssetProofVerifier for R1ProofVerifier<'a> {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OOONProofInitialMessage {
     pub(crate) r1_proof_initial_message: R1ProofInitialMessage,
     pub(crate) g_vec: Vec<RistrettoPoint>,
@@ -686,7 +690,8 @@ impl UpdateTranscript for OOONProofInitialMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug, Default)]
+#[derive(PartialEq, Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OOONProofFinalResponse {
     r1_proof_final_response: R1ProofFinalResponse,
     z: Scalar,
