@@ -87,14 +87,16 @@ std = [
 	"failure/std",
 ]
 
-#[[bench]]
-#name = "elgamal_decryption"
-#harness = false
-
-#[[bench]]
-#name = "membership_verification"
-#harness = false
-
 [[bench]]
 name = "mercat_operations"
 harness = false
+
+[[bench]]
+name = "elgamal_decryption"
+harness = false
+
+[[bench]]
+name = "membership_verification"
+harness = false
+
+

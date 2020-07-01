@@ -102,7 +102,7 @@ impl From<CipherText> for EncryptedAmount {
 // TODO: move all these XXXProof to the proper file. CRYP-113
 
 /// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
-#[derive(Default, Clone, Encode, Decode)]
+#[derive(Default, Clone, Debug, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct WellformednessProof {
     init: WellformednessInitialMessage,
@@ -332,7 +332,7 @@ impl Decode for MediatorAccount {
 }
 
 /// Holds the owner public keys and the creation date of an account.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
@@ -398,7 +398,7 @@ pub struct PubAccountContent {
 }
 
 /// Wrapper for the account content and signature.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAccount {
     pub content: PubAccountContent,
@@ -433,7 +433,7 @@ impl Decode for PubAccount {
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
@@ -619,7 +619,7 @@ impl core::fmt::Debug for ConfidentialTxState {
 
 /// Holds the public portion of an asset issuance transaction after initialization.
 /// This can be placed on the chain.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAssetTxDataContent {
     account_id: u32,
@@ -631,7 +631,7 @@ pub struct PubAssetTxDataContent {
     balance_correctness_proof: CorrectnessProof,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAssetTxData {
     pub content: PubAssetTxDataContent,
@@ -824,12 +824,8 @@ impl Decode for PubInitConfidentialTxData {
 
 /// Holds the initial transaction data and the proof of equality of asset ids
 /// prepared by the receiver.
-<<<<<<< HEAD
-#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
-=======
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
->>>>>>> master
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubFinalConfidentialTxDataContent {
     pub init_data: PubInitConfidentialTxData,
