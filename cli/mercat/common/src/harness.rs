@@ -5,12 +5,12 @@ use crate::{
     errors::Error,
     gen_seed, gen_seed_from,
     issue_asset::process_issue_asset,
-    justify::{justify_asset_issuance, justify_asset_transaction},
+    justify::{justify_asset_issuance, justify_asset_transaction, process_create_mediator},
     load_object,
     transfer::{process_create_tx, process_finalize_tx},
     COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
 };
-use cryptography::mercat::{PubAccount, SecAccount};
+use cryptography::mercat::{Account, PubAccount, SecAccount};
 use linked_hash_map::LinkedHashMap;
 use log::info;
 use rand::Rng;
@@ -118,7 +118,7 @@ pub struct Create {
     pub seed: String,
     pub account_id: u32,
     pub owner: Party,
-    pub ticker: String,
+    pub ticker: Option<String>,
 }
 
 /// Data type of the transaction of funding an account by issuer.
@@ -158,9 +158,9 @@ impl TryFrom<(u32, String)> for Issue {
 }
 /// Human readable form of a mercat account.
 #[derive(PartialEq, Eq, Hash, Debug)]
-pub struct Account {
+pub struct InputAccount {
     owner: String,
-    ticker: String,
+    ticker: Option<String>,
     balance: u32,
 }
 
@@ -189,11 +189,12 @@ pub struct TestCase {
     /// The list of valid ticker names. This names will be converted to asset ids for meract.
     ticker_names: Vec<String>,
     ///// The initial list of accounts for each party.
+    //// todo remove this
     //accounts: Vec<Account>,
     /// The transactions of this testcase.
     transactions: TransactionMode,
     /// The expected value of the accounts at the end of the scenario.
-    accounts_outcome: HashSet<Account>,
+    accounts_outcome: HashSet<InputAccount>,
     /// Maximum allowable time in Milliseconds
     timing_limit: u128,
     /// the directory that will act as the chain datastore.
@@ -336,28 +337,44 @@ impl Create {
         chain_db_dir: PathBuf,
     ) -> StepFunc {
         let seed = gen_seed_from(rng);
-        let value = format!(
-            "mercat-account create --account-id {} --ticker {} --user {} --seed {} {}",
-            self.account_id,
-            self.ticker,
-            self.owner.name,
-            seed,
-            cheater_flag(self.owner.cheater)
-        );
-        let ticker = self.ticker.clone();
-        let account_id = self.account_id;
-        let owner = self.owner.name.clone();
-        return Box::new(move || {
-            process_create_account(
-                Some(seed.clone()),
-                chain_db_dir.clone(),
-                ticker.clone(),
-                account_id,
-                owner.clone(),
-            )
-            .unwrap();
-            value.clone()
-        });
+        if let Some(ticker) = self.ticker.clone() {
+            // create a normal account
+            let value = format!(
+                "mercat-account create --account-id {} --ticker {} --user {} --seed {} {}",
+                self.account_id,
+                ticker,
+                self.owner.name,
+                seed,
+                cheater_flag(self.owner.cheater)
+            );
+            let ticker = ticker.clone();
+            let account_id = self.account_id;
+            let owner = self.owner.name.clone();
+            return Box::new(move || {
+                process_create_account(
+                    Some(seed.clone()),
+                    chain_db_dir.clone(),
+                    ticker.clone(),
+                    account_id,
+                    owner.clone(),
+                )
+                .unwrap();
+                value.clone()
+            });
+        } else {
+            // create a mediator account
+            let value = format!(
+                "mercat-mediator create --user {} --seed {} {}",
+                self.owner.name,
+                seed,
+                cheater_flag(self.owner.cheater)
+            );
+            let owner = self.owner.name.clone();
+            return Box::new(move || {
+                process_create_mediator(seed.clone(), chain_db_dir.clone(), owner.clone()).unwrap();
+                value.clone()
+            });
+        }
     }
 
     pub fn validate(&self) -> StepFunc {
@@ -504,7 +521,7 @@ impl TransactionMode {
 }
 
 impl TestCase {
-    fn run(&self) -> Result<HashSet<Account>, Error> {
+    fn run(&self) -> Result<HashSet<InputAccount>, Error> {
         let seed = gen_seed();
         info!("Using seed {}, for testcase: {}.", seed, self.title);
         let mut rng = create_rng_from_seed(Some(seed))?;
@@ -533,8 +550,8 @@ impl TestCase {
 
     /// Reads the contents of all the accounts from the on-chain directory and decrypts
     /// the balance with the secret account from the off-chain directory.
-    fn resulting_accounts(&self) -> Result<HashSet<Account>, Error> {
-        let mut accounts: HashSet<Account> = HashSet::new();
+    fn resulting_accounts(&self) -> Result<HashSet<InputAccount>, Error> {
+        let mut accounts: HashSet<InputAccount> = HashSet::new();
         let mut path = self.chain_db_dir.clone();
         path.push(ON_CHAIN_DIR);
 
@@ -562,14 +579,14 @@ impl TestCase {
                             user,
                             &sec_file_name,
                         )?;
-                        let account = cryptography::mercat::Account {
+                        let account = Account {
                             pblc: pub_account,
                             scrt: sec_account,
                         };
                         let balance = account.decrypt_balance().unwrap();
-                        accounts.insert(Account {
+                        accounts.insert(InputAccount {
                             owner: String::from(user),
-                            ticker,
+                            ticker: Some(ticker),
                             balance,
                         });
                     }
@@ -620,7 +637,7 @@ fn all_dirs_in_dir(dir: PathBuf) -> Result<Vec<PathBuf>, Error> {
     }
     Ok(files)
 }
-fn make_empty_accounts(accounts: &Vec<Account>) -> Result<(u32, TransactionMode), Error> {
+fn make_empty_accounts(accounts: &Vec<InputAccount>) -> Result<(u32, TransactionMode), Error> {
     let mut account_id = 0;
     let mut transaction_counter = 0;
     let mut seq: Vec<TransactionMode> = vec![];
@@ -764,7 +781,7 @@ fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
         }
     }
 
-    let mut all_accounts: Vec<Account> = vec![];
+    let mut all_accounts: Vec<InputAccount> = vec![];
     let accounts = to_array(&config["accounts"], path.clone(), "accounts")?;
     for user in accounts {
         let user = to_hash(&user, path.clone(), "accounts.user")?;
@@ -777,16 +794,26 @@ fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
                     path.clone(),
                     &format!("accounts.{}.ticker", user.clone()),
                 )?;
-                all_accounts.push(Account {
+                all_accounts.push(InputAccount {
                     balance: 0,
                     owner: user.clone(),
-                    ticker,
+                    ticker: Some(ticker),
                 });
             }
         }
     }
 
-    let mut accounts_outcome: HashSet<Account> = HashSet::new();
+    let accounts = to_array(&config["mediators"], path.clone(), "mediators")?;
+    for user in accounts {
+        let user = to_string(&user, path.clone(), "mediator.user")?;
+        all_accounts.push(InputAccount {
+            balance: 0,
+            owner: user.clone(),
+            ticker: None,
+        });
+    }
+
+    let mut accounts_outcome: HashSet<InputAccount> = HashSet::new();
     let outcomes = to_array(&config["outcome"], path.clone(), "outcome")?;
     let mut timing_limit: u128 = 0;
     for outcome in outcomes {
@@ -824,9 +851,9 @@ fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
                                     ),
                                 })?;
                         let balance = u32::try_from(balance).map_err(|_| Error::BalanceTooBig)?;
-                        accounts_outcome.insert(Account {
+                        accounts_outcome.insert(InputAccount {
                             owner: owner.clone(),
-                            ticker: ticker.clone(),
+                            ticker: Some(ticker.clone()),
                             balance,
                         });
                     }
@@ -864,7 +891,7 @@ fn parse_config(path: PathBuf) -> Result<TestCase, Error> {
     })
 }
 
-fn accounts_are_equal(want: &HashSet<Account>, got: &HashSet<Account>) -> bool {
+fn accounts_are_equal(want: &HashSet<InputAccount>, got: &HashSet<InputAccount>) -> bool {
     let intersection: HashSet<_> = want.intersection(&got).collect();
     intersection.len() == want.len() && want.len() == got.len()
 }
