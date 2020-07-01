@@ -24,14 +24,13 @@ use crate::{
     AssetId, Balance,
 };
 
-use chrono::{DateTime, NaiveDateTime, Utc};
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-use rand_core::OsRng;
 use rand_core::{CryptoRng, RngCore};
 use schnorrkel::keys::{Keypair, PublicKey};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
@@ -58,7 +57,8 @@ pub type EncryptionPubKey = ElgamalPublicKey;
 pub type EncryptionSecKey = ElgamalSecretKey;
 
 /// Holds ElGamal encryption keys.
-#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptionKeys {
     pub pblc: EncryptionPubKey,
@@ -72,7 +72,8 @@ pub type SigningKeys = Keypair;
 pub type Signature = schnorrkel::sign::Signature;
 
 /// New type for Twisted ElGamal ciphertext of asset ids.
-#[derive(Default, Copy, Clone, Serialize, Deserialize, PartialEq, Encode, Decode)]
+#[derive(Default, Copy, Clone, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptedAssetId {
     pub cipher: CipherText,
@@ -85,7 +86,8 @@ impl From<CipherText> for EncryptedAssetId {
 }
 
 /// New type for Twisted ElGamal ciphertext of account amounts/balances.
-#[derive(Default, Copy, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Copy, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptedAmount {
     pub cipher: CipherText,
@@ -100,8 +102,8 @@ impl From<CipherText> for EncryptedAmount {
 // TODO: move all these XXXProof to the proper file. CRYP-113
 
 /// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Default, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct WellformednessProof {
     init: WellformednessInitialMessage,
     response: WellformednessFinalResponse,
@@ -117,7 +119,8 @@ impl From<(WellformednessInitialMessage, WellformednessFinalResponse)> for Wellf
 }
 
 /// Holds the non-interactive proofs of correctness, equivalent of L_correct of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CorrectnessProof {
     init: CorrectnessInitialMessage,
@@ -134,7 +137,8 @@ impl From<(CorrectnessInitialMessage, CorrectnessFinalResponse)> for Correctness
 }
 
 /// Holds the non-interactive proofs of membership, equivalent of L_member of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Default, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MembershipProof {
     init: MembershipProofInitialMessage,
     response: MembershipProofFinalResponse,
@@ -173,7 +177,8 @@ impl Decode for MembershipProof {
 }
 
 /// Holds the non-interactive range proofs, equivalent of L_range of MERCAT paper.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct InRangeProof {
     pub init: RangeProofInitialMessage,
@@ -205,12 +210,12 @@ impl Decode for InRangeProof {
     }
 }
 
-impl Default for InRangeProof {
-    fn default() -> Self {
-        let mut rng = OsRng::default();
+impl InRangeProof {
+    #[allow(dead_code)]
+    fn build<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let range = 32;
         InRangeProof::from(
-            range_proof::prove_within_range(0, Scalar::one(), range, &mut rng)
+            range_proof::prove_within_range(0, Scalar::one(), range, rng)
                 .expect("This shouldn't happen."),
         )
     }
@@ -228,7 +233,8 @@ impl From<(RangeProofInitialMessage, RangeProofFinalResponse, u32)> for InRangeP
 
 /// Holds the non-interactive proofs of equality using different public keys, equivalent
 /// of L_cipher of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherEqualDifferentPubKeyProof {
     pub init: EncryptingSameValueInitialMessage,
@@ -256,7 +262,8 @@ impl
 
 /// Holds the non-interactive proofs of equality using different public keys, equivalent
 /// of L_equal of MERCAT paper.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherEqualSamePubKeyProof {
     pub init: CipherTextRefreshmentInitialMessage,
@@ -289,7 +296,7 @@ pub type AssetMemo = EncryptedAmount;
 // -                                    Account                                        -
 // -------------------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct MediatorAccount {
     pub encryption_key: EncryptionKeys,
@@ -325,21 +332,20 @@ impl Decode for MediatorAccount {
 }
 
 /// Holds the owner public keys and the creation date of an account.
-#[derive(Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
     pub owner_sign_pub_key: SigningPubKey,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: u64,
 }
 
 impl AccountMemo {
     pub fn new(owner_enc_pub_key: EncryptionPubKey, owner_sign_pub_key: SigningPubKey) -> Self {
-        let timestamp = Utc::now();
         AccountMemo {
             owner_enc_pub_key,
             owner_sign_pub_key,
-            timestamp,
+            timestamp: 0,
         }
     }
 }
@@ -356,7 +362,7 @@ impl Encode for AccountMemo {
     fn encode_to<W: Output>(&self, dest: &mut W) {
         self.owner_enc_pub_key.encode_to(dest);
         self.owner_sign_pub_key.to_bytes().encode_to(dest);
-        self.timestamp.timestamp().encode_to(dest);
+        self.timestamp.encode_to(dest);
     }
 }
 
@@ -368,10 +374,7 @@ impl Decode for AccountMemo {
         let owner_sign_pub_key = SigningPubKey::from_bytes(&owner_sign_pub_key)
             .map_err(|_| CodecError::from("AccountMemo.owner_sign_pub_key is invalid"))?;
 
-        let secs_from_epoc = <i64>::decode(input)?;
-        let naive_timestamp = NaiveDateTime::from_timestamp_opt(secs_from_epoc, 0)
-            .ok_or_else(|| CodecError::from("AccountMemo.timestamp is invalid"))?;
-        let timestamp = DateTime::<Utc>::from_utc(naive_timestamp, Utc);
+        let timestamp = <u64>::decode(input)?;
 
         Ok(AccountMemo {
             owner_enc_pub_key,
@@ -382,7 +385,8 @@ impl Decode for AccountMemo {
 }
 
 /// Holds contents of the public portion of an account which can be safely put on the chain.
-#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAccountContent {
     pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
@@ -394,7 +398,8 @@ pub struct PubAccountContent {
 }
 
 /// Wrapper for the account content and signature.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAccount {
     pub content: PubAccountContent,
     pub initial_sig: Signature,
@@ -428,8 +433,8 @@ impl Decode for PubAccount {
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
-#[derive(Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
     pub sign_keys: SigningKeys,
@@ -519,8 +524,8 @@ pub trait AccountCreatorVerifier {
 
 /// Represents the three substates (started, verified, rejected) of a
 /// confidential transaction state.
-#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TxSubstate {
     /// The action on transaction has been taken but is not verified yet.
     Started,
@@ -542,7 +547,8 @@ impl fmt::Display for TxSubstate {
 }
 /// Represents the two states (initialized, justified) of a
 /// confidentional asset issuance transaction.
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AssetTxState {
     Initialization(TxSubstate),
     Justification(TxSubstate),
@@ -568,7 +574,8 @@ impl core::fmt::Debug for AssetTxState {
 
 /// Represents the four states (initialized, justified, finalized, reversed) of a
 /// confidentional transaction.
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ConfidentialTxState {
     Initialization(TxSubstate),
     Finalization(TxSubstate),
@@ -612,8 +619,8 @@ impl core::fmt::Debug for ConfidentialTxState {
 
 /// Holds the public portion of an asset issuance transaction after initialization.
 /// This can be placed on the chain.
-#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAssetTxDataContent {
     account_id: u32,
     enc_asset_id: EncryptedAssetId,
@@ -624,8 +631,8 @@ pub struct PubAssetTxDataContent {
     balance_correctness_proof: CorrectnessProof,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAssetTxData {
     pub content: PubAssetTxDataContent,
     pub sig: Signature,
@@ -656,13 +663,15 @@ impl Decode for PubAssetTxData {
 
 /// Holds the public portion of an asset issuance transaction after Justification.
 /// This can be placed on the chain.
-#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubJustifiedAssetTxDataContent {
     pub tx_content: PubAssetTxData,
     pub state: AssetTxState,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubJustifiedAssetTxData {
     pub content: PubJustifiedAssetTxDataContent,
     pub sig: Signature,
@@ -748,7 +757,8 @@ pub trait AssetTransactionFinalizeAndProcessVerifier {
 // -------------------------------------------------------------------------------------
 
 /// Holds the memo for confidential transaction sent by the sender.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Default, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ConfidentialTxMemo {
     pub sndr_account_id: u32,
@@ -765,7 +775,8 @@ pub struct ConfidentialTxMemo {
 }
 
 /// Holds the proofs and memo of the confidential transaction sent by the sender.
-#[derive(Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubInitConfidentialTxDataContent {
     pub amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
@@ -780,7 +791,8 @@ pub struct PubInitConfidentialTxDataContent {
 }
 
 /// Wrapper for the initial transaction data and its signature.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubInitConfidentialTxData {
     pub content: PubInitConfidentialTxDataContent,
@@ -812,7 +824,8 @@ impl Decode for PubInitConfidentialTxData {
 
 /// Holds the initial transaction data and the proof of equality of asset ids
 /// prepared by the receiver.
-#[derive(Serialize, Deserialize, Encode, Decode, Clone)]
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubFinalConfidentialTxDataContent {
     pub init_data: PubInitConfidentialTxData,
@@ -903,23 +916,25 @@ pub trait ConfidentialTransactionSender {
 pub trait ConfidentialTransactionInitVerifier {
     /// This is called by the validators to verify the signature and some of the
     /// proofs of the initialized transaction.
-    fn verify(
+    fn verify<R: RngCore + CryptoRng>(
         &self,
         transaction: &PubInitConfidentialTxData,
         sndr_account: &PubAccount,
         state: ConfidentialTxState,
+        rng: &mut R,
     ) -> Fallible<ConfidentialTxState>;
 }
 
 pub trait ConfidentialTransactionFinalizationVerifier {
     /// This is called by the validators to verify the signature and some of the
     /// proofs of the initialized transaction.
-    fn verify_finalize_by_receiver(
+    fn verify_finalize_by_receiver<R: RngCore + CryptoRng>(
         &self,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
         conf_tx_final_data: &PubFinalConfidentialTxData,
         state: ConfidentialTxState,
+        rng: &mut R,
     ) -> Fallible<ConfidentialTxState>;
 }
 

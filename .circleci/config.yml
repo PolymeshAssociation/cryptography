@@ -53,10 +53,8 @@ jobs:
           command: >-
             cargo +nightly test &&
             cargo +nightly build --bench elgamal_decryption &&
-            echo "Wasm build (features 'no_std')"  &&
-            cd cryptography && 
-            cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std &&
-            cd .. &&
+            echo "Wasm build (features 'no_std' & 'u32_backend')"  &&
+            cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
             echo "TODO: add wasm tests"
           no_output_timeout: 30m
       - save_cache:
