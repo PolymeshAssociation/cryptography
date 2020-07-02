@@ -102,8 +102,9 @@ impl From<CipherText> for EncryptedAmount {
 // TODO: move all these XXXProof to the proper file. CRYP-113
 
 /// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of MERCAT paper.
-#[derive(Default, Clone, Debug, Encode, Decode)]
+#[derive(Default, Clone, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessProof {
     init: WellformednessInitialMessage,
     response: WellformednessFinalResponse,
@@ -332,8 +333,9 @@ impl Decode for MediatorAccount {
 }
 
 /// Holds the owner public keys and the creation date of an account.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
     pub owner_sign_pub_key: SigningPubKey,
@@ -385,8 +387,9 @@ impl Decode for AccountMemo {
 }
 
 /// Holds contents of the public portion of an account which can be safely put on the chain.
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccountContent {
     pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
@@ -398,8 +401,9 @@ pub struct PubAccountContent {
 }
 
 /// Wrapper for the account content and signature.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccount {
     pub content: PubAccountContent,
     pub initial_sig: Signature,
@@ -433,8 +437,9 @@ impl Decode for PubAccount {
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
     pub sign_keys: SigningKeys,
@@ -479,7 +484,8 @@ impl Decode for SecAccount {
 }
 
 /// Wrapper for both the secret and public account info
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Account {
     pub pblc: PubAccount,
     pub scrt: SecAccount,
@@ -619,8 +625,9 @@ impl core::fmt::Debug for ConfidentialTxState {
 
 /// Holds the public portion of an asset issuance transaction after initialization.
 /// This can be placed on the chain.
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAssetTxDataContent {
     account_id: u32,
     enc_asset_id: EncryptedAssetId,
@@ -631,8 +638,9 @@ pub struct PubAssetTxDataContent {
     balance_correctness_proof: CorrectnessProof,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAssetTxData {
     pub content: PubAssetTxDataContent,
     pub sig: Signature,
