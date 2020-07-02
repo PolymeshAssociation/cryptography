@@ -14,7 +14,7 @@ use crate::{
 };
 use cryptography::mercat::{Account, PubAccount, SecAccount};
 use linked_hash_map::LinkedHashMap;
-use log::{debug, info};
+use log::info;
 use rand::Rng;
 use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, RngCore};
@@ -35,7 +35,7 @@ use yaml_rust::{Yaml, YamlLoader};
 /// The signature fo the function for a generic step in a transaction. This function performs
 /// the action (e.g., initializing a transaction, finalizing a transaction, or creating an account),
 /// and returns the corresponding CLI command that can be run to reproduce this step manually.
-type StepFunc = Box<dyn Fn() -> String + 'static>;
+type StepFunc = Box<dyn Fn() -> Result<String, Error>>;
 
 /// Represents the three types of mercat transactions.
 #[derive(Debug)]
@@ -65,14 +65,11 @@ impl TryFrom<&str> for Party {
         let caps = re.captures(segment).ok_or(Error::RegexError {
             reason: format!("Pattern did not match {}", segment),
         })?;
-        let name = String::from(caps.get(1).unwrap().as_str());
-        let name = name.to_lowercase();
+        let name = caps[1].to_string().to_lowercase();
         let cheater = caps.get(2).is_some();
         Ok(Self { name, cheater })
     }
 }
-
-// todo remove all unwraps
 
 /// Data type of the transaction of transferring balance.
 #[derive(Debug)]
@@ -101,16 +98,20 @@ impl TryFrom<(u32, String)> for Transfer {
         let caps = re.captures(&segment).ok_or(Error::RegexError {
             reason: format!("Pattern did not match {}", segment),
         })?;
-        let ticker = String::from(caps.get(3).unwrap().as_str());
-        let ticker = ticker.to_uppercase();
+        let ticker = caps[3].to_string().to_uppercase();
         Ok(Self {
             tx_id,
-            sender: Party::try_from(caps.get(1).unwrap().as_str())?,
-            receiver: Party::try_from(caps.get(4).unwrap().as_str())?,
-            receiver_approves: caps.get(5).unwrap().as_str() == "approve",
-            mediator: Party::try_from(caps.get(6).unwrap().as_str())?,
-            mediator_approves: caps.get(7).unwrap().as_str() == "approve",
-            amount: caps.get(2).unwrap().as_str().parse::<u32>().unwrap(),
+            sender: Party::try_from(&caps[1])?,
+            receiver: Party::try_from(&caps[4])?,
+            receiver_approves: caps[5].to_string() == "approve",
+            mediator: Party::try_from(&caps[6])?,
+            mediator_approves: caps[7].to_string() == "approve",
+            amount: caps[2]
+                .to_string()
+                .parse::<u32>()
+                .map_err(|_| Error::RegexError {
+                    reason: String::from("failed to convert amount to u32."),
+                })?,
             ticker,
         })
     }
@@ -150,15 +151,19 @@ impl TryFrom<(u32, String)> for Issue {
         let caps = re.captures(&segment).ok_or(Error::RegexError {
             reason: format!("Pattern did not match {}", segment),
         })?;
-        let ticker = String::from(caps.get(3).unwrap().as_str());
-        let ticker = ticker.to_uppercase();
+        let ticker = caps[3].to_string().to_uppercase();
         Ok(Self {
             tx_id,
-            issuer: Party::try_from(caps.get(1).unwrap().as_str())?,
-            mediator: Party::try_from(caps.get(4).unwrap().as_str())?,
-            mediator_approves: caps.get(5).unwrap().as_str() == "approve",
+            issuer: Party::try_from(&caps[1])?,
+            mediator: Party::try_from(&caps[4])?,
+            mediator_approves: caps[5].to_string() == "approve",
             ticker,
-            amount: caps.get(2).unwrap().as_str().parse::<u32>().unwrap(),
+            amount: caps[2]
+                .to_string()
+                .parse::<u32>()
+                .map_err(|_| Error::RegexError {
+                    reason: String::from("failed to convert amount to u32."),
+                })?,
         })
     }
 }
@@ -193,17 +198,19 @@ pub enum TransactionMode {
 pub struct TestCase {
     /// Human readable description of the testcase. Will be printed to the log.
     title: String,
+
     /// The list of valid ticker names. This names will be converted to asset ids for meract.
     ticker_names: Vec<String>,
-    ///// The initial list of accounts for each party.
-    //// todo remove this
-    //accounts: Vec<Account>,
+
     /// The transactions of this testcase.
     transactions: TransactionMode,
+
     /// The expected value of the accounts at the end of the scenario.
     accounts_outcome: HashSet<InputAccount>,
+
     /// Maximum allowable time in Milliseconds
     timing_limit: u128,
+
     /// the directory that will act as the chain datastore.
     chain_db_dir: PathBuf,
 }
@@ -213,20 +220,28 @@ pub struct TestCase {
 // --------------------------------------------------------------------------------------------------
 
 impl Transaction {
-    fn order<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> Vec<StepFunc> {
+    fn operations_order<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        chain_db_dir: PathBuf,
+    ) -> Vec<StepFunc> {
         match self {
-            Transaction::Issue(fund) => fund.order(rng, chain_db_dir.clone()),
-            Transaction::Transfer(transfer) => transfer.order(rng, chain_db_dir.clone()),
-            Transaction::Create(create) => create.order(rng, chain_db_dir),
+            Transaction::Issue(fund) => fund.operations_order(rng, chain_db_dir.clone()),
+            Transaction::Transfer(transfer) => transfer.operations_order(rng, chain_db_dir.clone()),
+            Transaction::Create(create) => create.operations_order(rng, chain_db_dir),
         }
     }
 }
+
+// TODO: CRYP-120: add cheating support to CLIs
 
 impl Transfer {
     pub fn send<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
         let value = format!(
-            "mercat-account create-transaction --account-id {} --amount {} --sender {} --receiver {} --mediator {} --tx-id {} --seed {} {}",
+            "tx-{}: $ mercat-account create-transaction --account-id {} --amount {} --sender {} --receiver {} \
+            --mediator {} --tx-id {} --seed {} --db-dir {} {}",
+            self.tx_id,
             self.ticker,
             self.amount,
             self.sender.name,
@@ -234,6 +249,7 @@ impl Transfer {
             self.mediator.name,
             self.tx_id,
             seed,
+            path_to_string(&chain_db_dir),
             cheater_flag(self.sender.cheater)
         );
         let ticker = self.ticker.clone();
@@ -252,22 +268,23 @@ impl Transfer {
                 ticker.clone(),
                 amount,
                 tx_id,
-            )
-            .unwrap();
-            value.clone()
+            )?;
+            Ok(value.clone())
         });
     }
 
     pub fn receive<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
         let value = format!(
-            "mercat-account finalize-transaction --account-id {} --amount {} --sender {} --receiver {} --tx-id {} --seed {} {}",
+            "tx-{}: $ mercat-account finalize-transaction --account-id {} --amount {} --sender {} --receiver {} --tx-id {} --seed {} --db-dir {} {}",
+            self.tx_id,
             self.ticker,
             self.amount,
             self.sender.name,
             self.receiver.name,
             self.tx_id,
             seed,
+            path_to_string(&chain_db_dir),
             cheater_flag(self.sender.cheater)
         );
         let ticker = self.ticker.clone();
@@ -284,19 +301,20 @@ impl Transfer {
                 ticker.clone(),
                 amount,
                 tx_id,
-            )
-            .unwrap();
-            value.clone()
+            )?;
+            Ok(value.clone())
         });
     }
 
     pub fn mediate(&self, chain_db_dir: PathBuf) -> StepFunc {
         let value = format!(
-            "mercat-mediator justify-transaction --sender {} --mediator {} --ticker {} --tx-id {} {}",
+            "tx-{}: $ mercat-mediator justify-transaction --sender {} --mediator {} --ticker {} --tx-id {} --db-dir {} {}",
+            self.tx_id,
             self.sender.name,
             self.mediator.name,
             self.ticker,
             self.tx_id,
+            path_to_string(&chain_db_dir),
             cheater_flag(self.sender.cheater)
         );
         let ticker = self.ticker.clone();
@@ -312,20 +330,21 @@ impl Transfer {
                 ticker.clone(),
                 tx_id,
                 reject,
-            )
-            .unwrap();
-            value.clone()
+            )?;
+            Ok(value.clone())
         });
     }
 
     pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
         let value = format!(
-            "mercat-validator validate-transaction --sender {} --receiver {} --mediator {} --state {} --tx-id {}",
+            "tx-{}: $ mercat-validator validate-transaction --sender {} --receiver {} --mediator {} --state {} --tx-id {} --db-dr {}",
+            self.tx_id,
             self.sender.name,
             self.receiver.name,
             self.mediator.name,
             "state: todo",
             self.tx_id,
+            path_to_string(&chain_db_dir),
         );
         let sender = self.sender.name.clone();
         let receiver = self.receiver.name.clone();
@@ -339,13 +358,12 @@ impl Transfer {
                 mediator.clone(),
                 String::from("state: todo"),
                 tx_id,
-            )
-            .unwrap();
-            value.clone()
+            )?;
+            Ok(value.clone())
         });
     }
 
-    pub fn order<T: RngCore + CryptoRng>(
+    pub fn operations_order<T: RngCore + CryptoRng>(
         &self,
         rng: &mut T,
         chain_db_dir: PathBuf,
@@ -369,11 +387,13 @@ impl Create {
         if let Some(ticker) = self.ticker.clone() {
             // create a normal account
             let value = format!(
-                "mercat-account create --account-id {} --ticker {} --user {} --seed {} {}",
+                "tx-{}: $ mercat-account create --account-id {} --ticker {} --user {} --seed {} --db-dir {} {}",
+                self.tx_id,
                 self.account_id,
                 ticker,
                 self.owner.name,
                 seed,
+                path_to_string(&chain_db_dir),
                 cheater_flag(self.owner.cheater)
             );
             let ticker = ticker.clone();
@@ -386,49 +406,51 @@ impl Create {
                     ticker.clone(),
                     account_id,
                     owner.clone(),
-                )
-                .unwrap();
-                value.clone()
+                )?;
+                Ok(value.clone())
             });
         } else {
             // create a mediator account
             let value = format!(
-                "mercat-mediator create --user {} --seed {} {}",
+                "tx-{}: $ mercat-mediator create --user {} --seed {} --db-dir {} {}",
+                self.tx_id,
                 self.owner.name,
                 seed,
+                path_to_string(&chain_db_dir),
                 cheater_flag(self.owner.cheater)
             );
             let owner = self.owner.name.clone();
             return Box::new(move || {
-                process_create_mediator(seed.clone(), chain_db_dir.clone(), owner.clone()).unwrap();
-                value.clone()
+                process_create_mediator(seed.clone(), chain_db_dir.clone(), owner.clone())?;
+                Ok(value.clone())
             });
         }
     }
-    // todo : add db_dir to all the commands
 
     pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
         if let Some(ticker) = self.ticker.clone() {
             // validate a normal account
             let value = format!(
-                "mercat-validator validate-account --user {} --ticker {}",
-                self.owner.name, ticker,
+                "tx-{}: $ mercat-validator validate-account --user {} --ticker {} --db-dir {}",
+                self.tx_id,
+                self.owner.name,
+                ticker,
+                path_to_string(&chain_db_dir),
             );
             let owner = self.owner.name.clone();
             let ticker = ticker.clone();
             return Box::new(move || {
-                validate_account(chain_db_dir.clone(), owner.clone(), ticker.clone()).unwrap();
-                value.clone()
+                validate_account(chain_db_dir.clone(), owner.clone(), ticker.clone())?;
+                Ok(value.clone())
             });
         } else {
             // validate mediator account
-            return Box::new(move || {
-                String::from("todo: need a validator for mediator account creation")
-            });
+            let value = format!("tx-{}: $ # mercat does not validate mediator accounts, since they are just to key pairs.",  self.tx_id);
+            return Box::new(move || Ok(value.clone()));
         }
     }
 
-    pub fn order<T: RngCore + CryptoRng>(
+    pub fn operations_order<T: RngCore + CryptoRng>(
         &self,
         rng: &mut T,
         chain_db_dir: PathBuf,
@@ -444,13 +466,15 @@ impl Issue {
     pub fn issue<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
         let value = format!(
-            "mercat-account issue --account-id {} --amount {} --issuer {} --mediator {} --tx-id {} --seed {} {}",
+            "tx-{}: $ mercat-account issue --account-id {} --amount {} --issuer {} --mediator {} --tx-id {} --seed {} --db-dir {} {}",
+            self.tx_id,
             self.ticker,
             self.amount,
             self.issuer.name,
             self.mediator.name,
             self.tx_id,
             seed,
+            path_to_string(&chain_db_dir),
             cheater_flag(self.issuer.cheater)
         );
         let ticker = self.ticker.clone();
@@ -467,19 +491,20 @@ impl Issue {
                 ticker.clone(),
                 amount,
                 tx_id,
-            )
-            .unwrap();
-            value.clone()
+            )?;
+            Ok(value.clone())
         });
     }
 
     pub fn mediate(&self, chain_db_dir: PathBuf) -> StepFunc {
         let value = format!(
-            "mercat-mediator justify-issuance --account-id {} --issuer {} --mediator {} --tx-id {} {}",
+            "tx-{}: $ mercat-mediator justify-issuance --account-id {} --issuer {} --mediator {} --tx-id {} --db-dir {} {}",
+            self.tx_id,
             self.ticker,
             self.issuer.name,
             self.mediator.name,
             self.tx_id,
+            path_to_string(&chain_db_dir),
             cheater_flag(self.issuer.cheater)
         );
         let issuer = self.issuer.name.clone();
@@ -495,17 +520,21 @@ impl Issue {
                 ticker.clone(),
                 tx_id,
                 reject,
-            )
-            .unwrap();
-            value.clone()
+            )?;
+            Ok(value.clone())
         });
     }
 
     pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
         // validate a normal account
         let value = format!(
-            "mercat-validator validate-issuance --issuer {} --mediator {} --state {} --tx-id {}",
-            self.issuer.name, self.mediator.name, "state: todo", self.tx_id,
+            "tx-{}: $ mercat-validator validate-issuance --issuer {} --mediator {} --state {} --tx-id {} --db-dir {}",
+            self.tx_id,
+            self.issuer.name,
+            self.mediator.name,
+            "state: todo",
+            self.tx_id,
+            path_to_string(&chain_db_dir),
         );
         let issuer = self.issuer.name.clone();
         let mediator = self.mediator.name.clone();
@@ -517,13 +546,12 @@ impl Issue {
                 mediator.clone(),
                 String::from("state: todo"),
                 tx_id,
-            )
-            .unwrap();
-            value.clone()
+            )?;
+            Ok(value.clone())
         });
     }
 
-    pub fn order<T: RngCore + CryptoRng>(
+    pub fn operations_order<T: RngCore + CryptoRng>(
         &self,
         rng: &mut T,
         chain_db_dir: PathBuf,
@@ -543,7 +571,9 @@ impl TransactionMode {
         chain_db_dir: PathBuf,
     ) -> Vec<StepFunc> {
         match self {
-            TransactionMode::Transaction(transaction) => transaction.order(rng, chain_db_dir),
+            TransactionMode::Transaction(transaction) => {
+                transaction.operations_order(rng, chain_db_dir)
+            }
             TransactionMode::Sequence { repeat, steps } => {
                 let mut seq: Vec<StepFunc> = vec![];
                 for _ in 0..*repeat {
@@ -598,7 +628,7 @@ impl TestCase {
             .transactions
             .sequence(&mut rng, self.chain_db_dir.clone())
         {
-            info!("Running {}", transaction());
+            info!("Running {}", transaction()?);
         }
         let duration = Instant::now() - start;
 
@@ -614,8 +644,6 @@ impl TestCase {
     fn chain_setup(&self) -> Result<(), Error> {
         process_asset_id_creation(self.chain_db_dir.clone(), self.ticker_names.clone())
     }
-
-    // todo: all logs must have transaction id in them
 
     /// Reads the contents of all the accounts from the on-chain directory and decrypts
     /// the balance with the secret account from the off-chain directory.
@@ -652,7 +680,9 @@ impl TestCase {
                             pblc: pub_account,
                             scrt: sec_account,
                         };
-                        let balance = account.decrypt_balance().unwrap();
+                        let balance = account
+                            .decrypt_balance()
+                            .map_err(|error| Error::LibraryError { error })?;
                         accounts.insert(InputAccount {
                             owner: String::from(user),
                             ticker: Some(ticker),
@@ -719,7 +749,7 @@ fn make_empty_accounts(accounts: &Vec<InputAccount>) -> Result<(u32, Transaction
             account_id: account_id,
             owner: Party {
                 name: account.owner.clone(),
-                cheater: false, // TODO: test harness does not support cheating for account creation yet.
+                cheater: false, // TODO: CRYP-120: test harness does not support cheating for account creation yet.
             },
             ticker: account.ticker.clone(),
         })));
@@ -798,7 +828,7 @@ fn parse_transactions(
                     )?;
                     transaction_id = new_transaction_id;
                     if key == "sequence" {
-                        // TODO add repeat to the config. Create new story for it.
+                        // TODO: CRYP-122: Add repeat to the config. Create new story for it.
                         transaction_list.push(TransactionMode::Sequence { repeat: 1, steps });
                     } else if key == "concurrent" {
                         transaction_list.push(TransactionMode::Concurrent { repeat: 1, steps });
@@ -859,7 +889,11 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         error,
         path: path.clone(),
     })?;
-    let config = YamlLoader::load_from_str(&config).unwrap();
+    let config =
+        YamlLoader::load_from_str(&config).map_err(|_| Error::ErrorParsingTestHarnessConfig {
+            path: path.clone(),
+            reason: String::from("YmlLoader scan error"),
+        })?;
     let config = &config[0];
 
     let title: String = to_string(&config["title"], path.clone(), "title")?;
@@ -1003,7 +1037,7 @@ fn run_from(mode: &str) {
         let got = &testcase.run().unwrap();
         assert!(
             accounts_are_equal(want, got),
-            format!("want: {:?}, got: {:?}", want, got)
+            format!("want: {:#?}, got: {:#?}", want, got)
         );
     }
 }
@@ -1032,5 +1066,13 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_on_wasm() {
         run_from("wasm");
+    }
+}
+
+fn path_to_string(path: &PathBuf) -> String {
+    if let Some(path) = path.to_str() {
+        String::from(path)
+    } else {
+        String::from(env!("CARGO_MANIFEST_DIR"))
     }
 }
