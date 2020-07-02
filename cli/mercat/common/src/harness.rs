@@ -9,11 +9,12 @@ use crate::{
     load_object,
     transfer::{process_create_tx, process_finalize_tx},
     validate::{validate_account, validate_asset_issuance, validate_transaction},
-    COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
+    COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
+    VALIDATED_PUBLIC_ACCOUNT_FILE,
 };
 use cryptography::mercat::{Account, PubAccount, SecAccount};
 use linked_hash_map::LinkedHashMap;
-use log::info;
+use log::{debug, info};
 use rand::Rng;
 use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, RngCore};
@@ -180,6 +181,7 @@ pub enum TransactionMode {
         steps: Vec<TransactionMode>,
     },
     Transaction(Transaction),
+    Empty,
 }
 
 /// Represents a testcase that is read from the config file.
@@ -401,15 +403,16 @@ impl Create {
     // todo : add db_dir to all the commands
 
     pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
-        if let Some(_) = self.ticker.clone() {
+        if let Some(ticker) = self.ticker.clone() {
             // validate a normal account
             let value = format!(
-                "mercat-validator validate-account --user {}",
-                self.owner.name,
+                "mercat-validator validate-account --user {} --ticker {}",
+                self.owner.name, ticker,
             );
             let owner = self.owner.name.clone();
+            let ticker = ticker.clone();
             return Box::new(move || {
-                validate_account(chain_db_dir.clone(), owner.clone()).unwrap();
+                validate_account(chain_db_dir.clone(), owner.clone(), ticker.clone()).unwrap();
                 value.clone()
             });
         } else {
@@ -573,6 +576,7 @@ impl TransactionMode {
                 }
                 seq
             }
+            TransactionMode::Empty => vec![],
         }
     }
 }
@@ -592,6 +596,7 @@ impl TestCase {
             info!("Running {}", transaction());
         }
         let duration = Instant::now() - start;
+
         if duration.as_millis() > self.timing_limit {
             return Err(Error::TimeLimitExceeded {
                 want: self.timing_limit,
@@ -616,7 +621,7 @@ impl TestCase {
             if let Some(user) = dir.file_name().and_then(|user| user.to_str()) {
                 if user != COMMON_OBJECTS_DIR {
                     for ticker in self.ticker_names.clone() {
-                        let pub_file_name = format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE);
+                        let pub_file_name = format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE);
                         let sec_file_name = format!("{}_{}", ticker, SECRET_ACCOUNT_FILE);
 
                         let mut path = dir.clone();
@@ -767,6 +772,11 @@ fn parse_transactions(
 ) -> Result<(u32, Vec<TransactionMode>), Error> {
     let mut transaction_list: Vec<TransactionMode> = vec![];
     let mut transaction_id = transaction_id;
+    let value = &value["transactions"];
+    if &Yaml::BadValue == value {
+        transaction_list.push(TransactionMode::Empty);
+        return Ok((transaction_id, transaction_list));
+    }
     let transactions = to_array(value, path.clone(), attribute)?;
     for transaction in transactions.into_iter() {
         match &transaction {
@@ -934,15 +944,11 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
 
     let (next_transaction_id, create_account_transactions) = make_empty_accounts(&all_accounts)?;
 
-    // TODO declared mutable since later I want to consume a single element of it
-    let (_, mut transactions) = parse_transactions(
-        &config["transactions"],
-        path.clone(),
-        "transactions",
-        next_transaction_id,
-    )?;
+    // Declared mutable since later I want to consume a single element of it.
+    let (_, mut transactions) =
+        parse_transactions(&config, path.clone(), "transactions", next_transaction_id)?;
 
-    if transactions.len() != 1 {
+    if transactions.len() > 1 {
         return Err(Error::TopLevelTransaction);
     }
     let transactions = TransactionMode::Sequence {

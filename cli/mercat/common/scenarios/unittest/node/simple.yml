@@ -20,26 +20,26 @@ mediators:
   - Marry
   - Moe
     
-transactions:
-  - concurrent:
-    - sequence:
-      - concurrent:
-        - Alice(cheat) 50 ACME Mike approve
-        - Carol 10 ACME Mike approve
-      - Alice 50 ACME Bob approve Marry approve
-      - Bob 40 ACME Carol approve Marry approve
-    - sequence:
-      - Bob 10 AAPL Moe approve
-      - Bob 5 AAPL Alice approve Moe approve
+#transactions:
+#  - concurrent:
+#    - sequence:
+#      - concurrent:
+#        - Alice(cheat) 50 ACME Mike approve
+#        - Carol 10 ACME Mike approve
+#      - Alice 50 ACME Bob approve Marry approve
+#      - Bob 40 ACME Carol approve Marry approve
+#    - sequence:
+#      - Bob 10 AAPL Moe approve
+#      - Bob 5 AAPL Alice approve Moe approve
 
 
 outcome: 
-  - time-limit: 100
+  - time-limit: 600
   - alice: 
       - ACME: 0
-      - AAPL: 50
+      - AAPL: 0
   - bob: 
-      - ACME: 10
-      - AAPL: 5
+      - ACME: 0
+      - AAPL: 0
   - carol: 
-      - ACME: 40
+      - ACME: 0

@@ -126,12 +126,16 @@ pub fn validate_asset_issuance(
     Ok(())
 }
 
-pub fn validate_account(db_dir: PathBuf, user: String) -> Result<(), Error> {
+pub fn validate_account(db_dir: PathBuf, user: String, ticker: String) -> Result<(), Error> {
     // Load the user's public account.
     let load_objects_timer = Instant::now();
 
-    let user_account: PubAccount =
-        load_object(db_dir.clone(), ON_CHAIN_DIR, &user, PUBLIC_ACCOUNT_FILE)?;
+    let user_account: PubAccount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &user,
+        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+    )?;
 
     let valid_asset_ids = get_asset_ids(db_dir.clone())?;
     timing!(
@@ -155,7 +159,7 @@ pub fn validate_account(db_dir: PathBuf, user: String) -> Result<(), Error> {
         db_dir,
         ON_CHAIN_DIR,
         &user,
-        &VALIDATED_PUBLIC_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
         &user_account,
     )?;
     timing!(

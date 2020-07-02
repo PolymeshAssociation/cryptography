@@ -31,9 +31,12 @@ fn main() {
             cfg.tx_id,
         )
         .unwrap(),
-        CLI::ValidateAccount(cfg) => {
-            validate_account(cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(), cfg.user).unwrap()
-        }
+        CLI::ValidateAccount(cfg) => validate_account(
+            cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
+            cfg.user,
+            cfg.ticker,
+        )
+        .unwrap(),
         CLI::ValidateTransaction(cfg) => validate_transaction(
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.sender,

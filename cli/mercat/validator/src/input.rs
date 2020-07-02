@@ -68,6 +68,10 @@ pub struct AccountCreationInfo {
     #[structopt(short, long, help = "The name of the user.")]
     pub user: String,
 
+    /// The ticker name for the account.
+    #[structopt(short, long, help = "The ticker name for the account.")]
+    pub ticker: String,
+
     /// An optional path to save the config used for this experiment.
     #[structopt(
         parse(from_os_str),
