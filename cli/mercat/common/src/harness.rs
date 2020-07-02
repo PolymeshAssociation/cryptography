@@ -66,6 +66,7 @@ impl TryFrom<&str> for Party {
             reason: format!("Pattern did not match {}", segment),
         })?;
         let name = String::from(caps.get(1).unwrap().as_str());
+        let name = name.to_lowercase();
         let cheater = caps.get(2).is_some();
         Ok(Self { name, cheater })
     }
@@ -100,6 +101,8 @@ impl TryFrom<(u32, String)> for Transfer {
         let caps = re.captures(&segment).ok_or(Error::RegexError {
             reason: format!("Pattern did not match {}", segment),
         })?;
+        let ticker = String::from(caps.get(3).unwrap().as_str());
+        let ticker = ticker.to_uppercase();
         Ok(Self {
             tx_id,
             sender: Party::try_from(caps.get(1).unwrap().as_str())?,
@@ -108,7 +111,7 @@ impl TryFrom<(u32, String)> for Transfer {
             mediator: Party::try_from(caps.get(6).unwrap().as_str())?,
             mediator_approves: caps.get(7).unwrap().as_str() == "approve",
             amount: caps.get(2).unwrap().as_str().parse::<u32>().unwrap(),
-            ticker: String::from(caps.get(3).unwrap().as_str()),
+            ticker,
         })
     }
 }
@@ -147,12 +150,14 @@ impl TryFrom<(u32, String)> for Issue {
         let caps = re.captures(&segment).ok_or(Error::RegexError {
             reason: format!("Pattern did not match {}", segment),
         })?;
+        let ticker = String::from(caps.get(3).unwrap().as_str());
+        let ticker = ticker.to_uppercase();
         Ok(Self {
             tx_id,
             issuer: Party::try_from(caps.get(1).unwrap().as_str())?,
             mediator: Party::try_from(caps.get(4).unwrap().as_str())?,
             mediator_approves: caps.get(5).unwrap().as_str() == "approve",
-            ticker: String::from(caps.get(3).unwrap().as_str()),
+            ticker,
             amount: caps.get(2).unwrap().as_str().parse::<u32>().unwrap(),
         })
     }
@@ -610,6 +615,8 @@ impl TestCase {
         process_asset_id_creation(self.chain_db_dir.clone(), self.ticker_names.clone())
     }
 
+    // todo: all logs must have transaction id in them
+
     /// Reads the contents of all the accounts from the on-chain directory and decrypts
     /// the balance with the secret account from the off-chain directory.
     fn resulting_accounts(&self) -> Result<HashSet<InputAccount>, Error> {
@@ -869,6 +876,7 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         let user = to_hash(&user, path.clone(), "accounts.user")?;
         for (user, tickers) in user {
             let user = to_string(&user, path.clone(), "accounts.user")?;
+            let user = user.to_lowercase();
             let tickers = to_array(&tickers, path.clone(), "accounts.tickers")?;
             for ticker in tickers {
                 let ticker = to_string(
@@ -876,6 +884,7 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
                     path.clone(),
                     &format!("accounts.{}.ticker", user.clone()),
                 )?;
+                let ticker = ticker.to_uppercase();
                 all_accounts.push(InputAccount {
                     balance: 0,
                     owner: user.clone(),
@@ -888,6 +897,7 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
     let accounts = to_array(&config["mediators"], path.clone(), "mediators")?;
     for user in accounts {
         let user = to_string(&user, path.clone(), "mediator.user")?;
+        let user = user.to_lowercase();
         all_accounts.push(InputAccount {
             balance: 0,
             owner: user.clone(),
@@ -986,7 +996,9 @@ fn run_from(mode: &str) {
         let mut separate_chain_db_dir = chain_db_dir.clone();
         separate_chain_db_dir.push(config.file_name().unwrap());
         let testcase = &parse_config(config, separate_chain_db_dir).unwrap();
-        info!("Running test case: {}.", testcase.title);
+        info!("----------------------------------------------------------------------------------");
+        info!("- Running test case: {}.", testcase.title);
+        info!("----------------------------------------------------------------------------------");
         let want = &testcase.accounts_outcome;
         let got = &testcase.run().unwrap();
         assert!(

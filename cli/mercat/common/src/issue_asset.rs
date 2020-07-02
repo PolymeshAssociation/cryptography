@@ -31,7 +31,7 @@ pub fn process_issue_asset(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &mediator,
-        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+        &PUBLIC_ACCOUNT_FILE, // todo : change all of these to VALIDATED_PUBLIC_ACCOUNT
     )?;
 
     timing!(
