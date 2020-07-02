@@ -138,8 +138,9 @@ impl From<(CorrectnessInitialMessage, CorrectnessFinalResponse)> for Correctness
 }
 
 /// Holds the non-interactive proofs of membership, equivalent of L_member of MERCAT paper.
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct MembershipProof {
     init: MembershipProofInitialMessage,
     response: MembershipProofFinalResponse,
