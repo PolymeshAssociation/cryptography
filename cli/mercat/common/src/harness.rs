@@ -1029,6 +1029,9 @@ fn run_from(mode: &str) {
     for config in configs {
         let mut separate_chain_db_dir = chain_db_dir.clone();
         separate_chain_db_dir.push(config.file_name().unwrap());
+        if config.file_name().unwrap() == ".keep" {
+            continue;
+        }
         let testcase = &parse_config(config, separate_chain_db_dir).unwrap();
         info!("----------------------------------------------------------------------------------");
         info!("- Running test case: {}.", testcase.title);
