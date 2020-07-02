@@ -51,7 +51,7 @@ jobs:
       - run:
           name: Run tests
           command: >-
-            cargo +nightly test &&
+            RUST_LOG=info cargo +nightly test &&
             cargo +nightly build --bench elgamal_decryption &&
             echo "Wasm build (features 'no_std')"  &&
             cd cryptography && 
