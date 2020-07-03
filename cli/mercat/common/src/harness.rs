@@ -259,6 +259,7 @@ impl Transfer {
         let amount = self.amount;
         let tx_id = self.tx_id;
         return Box::new(move || {
+            info!("Running: {}", value.clone());
             process_create_tx(
                 seed.clone(),
                 chain_db_dir.clone(),
@@ -293,6 +294,7 @@ impl Transfer {
         let amount = self.amount;
         let tx_id = self.tx_id;
         return Box::new(move || {
+            info!("Running: {}", value.clone());
             process_finalize_tx(
                 seed.clone(),
                 chain_db_dir.clone(),
@@ -323,6 +325,7 @@ impl Transfer {
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
         return Box::new(move || {
+            info!("Running: {}", value.clone());
             justify_asset_transaction(
                 chain_db_dir.clone(),
                 sender.clone(),
@@ -335,14 +338,16 @@ impl Transfer {
         });
     }
 
-    pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
+    pub fn validate(&self, chain_db_dir: PathBuf, state: String) -> StepFunc {
         let value = format!(
-            "tx-{}: $ mercat-validator validate-transaction --sender {} --receiver {} --mediator {} --state {} --tx-id {} --db-dr {}",
+            "tx-{}: $ mercat-validator validate-transaction --sender {} --receiver {} --mediator {} --state {} \
+            --account-id {} --tx-id {} --db-dir {}",
             self.tx_id,
             self.sender.name,
             self.receiver.name,
             self.mediator.name,
-            "state: todo", // TODO: CRYP-125: Add state parsing to test harness
+            state,
+            self.ticker,
             self.tx_id,
             path_to_string(&chain_db_dir),
         );
@@ -350,14 +355,18 @@ impl Transfer {
         let receiver = self.receiver.name.clone();
         let mediator = self.mediator.name.clone();
         let tx_id = self.tx_id;
+        let state = state.clone();
+        let ticker = self.ticker.clone();
         return Box::new(move || {
+            info!("Running: {}", value.clone());
             validate_transaction(
                 chain_db_dir.clone(),
                 sender.clone(),
                 receiver.clone(),
                 mediator.clone(),
-                String::from("state: todo"),
+                state.clone(),
                 tx_id,
+                ticker.clone(),
             )?;
             Ok(value.clone())
         });
@@ -370,9 +379,14 @@ impl Transfer {
     ) -> Vec<StepFunc> {
         vec![
             self.send(rng, chain_db_dir.clone()),
+            self.validate(chain_db_dir.clone(), String::from("initialization_started")),
             self.receive(rng, chain_db_dir.clone()),
+            self.validate(chain_db_dir.clone(), String::from("finalization_started")),
             self.mediate(chain_db_dir.clone()),
-            self.validate(chain_db_dir),
+            self.validate(
+                chain_db_dir,
+                String::from("finalization_justification_started"),
+            ),
         ]
     }
 }
@@ -400,6 +414,7 @@ impl Create {
             let account_id = self.account_id;
             let owner = self.owner.name.clone();
             return Box::new(move || {
+                info!("Running: {}", value.clone());
                 process_create_account(
                     Some(seed.clone()),
                     chain_db_dir.clone(),
@@ -421,6 +436,7 @@ impl Create {
             );
             let owner = self.owner.name.clone();
             return Box::new(move || {
+                info!("Running: {}", value.clone());
                 process_create_mediator(seed.clone(), chain_db_dir.clone(), owner.clone())?;
                 Ok(value.clone())
             });
@@ -440,12 +456,14 @@ impl Create {
             let owner = self.owner.name.clone();
             let ticker = ticker.clone();
             return Box::new(move || {
+                info!("Running: {}", value.clone());
                 validate_account(chain_db_dir.clone(), owner.clone(), ticker.clone())?;
                 Ok(value.clone())
             });
         } else {
             // validate mediator account
-            let value = format!("tx-{}: $ # mercat does not validate mediator accounts, since they are just to key pairs.",  self.tx_id);
+            let value = format!("tx-{}: $ # mercat does not validate mediator accounts, since they are just two key pairs.",  self.tx_id);
+            info!("Running: {}", value.clone());
             return Box::new(move || Ok(value.clone()));
         }
     }
@@ -483,6 +501,7 @@ impl Issue {
         let amount = self.amount;
         let tx_id = self.tx_id;
         return Box::new(move || {
+            info!("Running: {}", value.clone());
             process_issue_asset(
                 seed.clone(),
                 chain_db_dir.clone(),
@@ -513,6 +532,7 @@ impl Issue {
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
         return Box::new(move || {
+            info!("Running: {}", value.clone());
             justify_asset_issuance(
                 chain_db_dir.clone(),
                 issuer.clone(),
@@ -525,27 +545,32 @@ impl Issue {
         });
     }
 
-    pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
+    pub fn validate(&self, chain_db_dir: PathBuf, state: String) -> StepFunc {
         // validate a normal account
         let value = format!(
-            "tx-{}: $ mercat-validator validate-issuance --issuer {} --mediator {} --state {} --tx-id {} --db-dir {}",
+            "tx-{}: $ mercat-validator validate-issuance --issuer {} --mediator {} --state {} --account-id {} --tx-id {} --db-dir {}",
             self.tx_id,
             self.issuer.name,
             self.mediator.name,
-            "state: todo",
+            state,
+            self.ticker,
             self.tx_id,
             path_to_string(&chain_db_dir),
         );
         let issuer = self.issuer.name.clone();
         let mediator = self.mediator.name.clone();
+        let ticker = self.ticker.clone();
         let tx_id = self.tx_id;
+        let state = state.clone();
         return Box::new(move || {
+            info!("Running: {}", value.clone());
             validate_asset_issuance(
                 chain_db_dir.clone(),
                 issuer.clone(),
                 mediator.clone(),
-                String::from("state: todo"),
+                state.clone(),
                 tx_id,
+                ticker.clone(),
             )?;
             Ok(value.clone())
         });
@@ -558,8 +583,9 @@ impl Issue {
     ) -> Vec<StepFunc> {
         vec![
             self.issue(rng, chain_db_dir.clone()),
+            self.validate(chain_db_dir.clone(), String::from("initialization_started")),
             self.mediate(chain_db_dir.clone()),
-            self.validate(chain_db_dir),
+            self.validate(chain_db_dir, String::from("justification_started")),
         ]
     }
 }
@@ -628,7 +654,8 @@ impl TestCase {
             .transactions
             .sequence(&mut rng, self.chain_db_dir.clone())
         {
-            info!("Running {}", transaction()?);
+            let _command = transaction()?;
+            info!("Success!");
         }
         let duration = Instant::now() - start;
 
@@ -809,11 +836,6 @@ fn parse_transactions(
 ) -> Result<(u32, Vec<TransactionMode>), Error> {
     let mut transaction_list: Vec<TransactionMode> = vec![];
     let mut transaction_id = transaction_id;
-    let value = &value["transactions"];
-    if &Yaml::BadValue == value {
-        transaction_list.push(TransactionMode::Empty);
-        return Ok((transaction_id, transaction_list));
-    }
     let transactions = to_array(value, path.clone(), attribute)?;
     for transaction in transactions.into_iter() {
         match &transaction {
@@ -989,16 +1011,23 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
     let (next_transaction_id, create_account_transactions) = make_empty_accounts(&all_accounts)?;
 
     // Declared mutable since later I want to consume a single element of it.
-    let (_, mut transactions) =
-        parse_transactions(&config, path.clone(), "transactions", next_transaction_id)?;
+    let (_, mut transactions_list) = parse_transactions(
+        &config["transactions"],
+        path.clone(),
+        "transactions",
+        next_transaction_id,
+    )?;
 
-    if transactions.len() > 1 {
+    let mut transactions = TransactionMode::Empty;
+    if transactions_list.len() > 1 {
         return Err(Error::TopLevelTransaction);
     }
-    let transactions = TransactionMode::Sequence {
-        repeat: 1,
-        steps: vec![create_account_transactions, transactions.remove(0)],
-    };
+    if transactions_list.len() == 1 {
+        transactions = TransactionMode::Sequence {
+            repeat: 1,
+            steps: vec![create_account_transactions, transactions_list.remove(0)],
+        };
+    }
     Ok(TestCase {
         title,
         ticker_names,

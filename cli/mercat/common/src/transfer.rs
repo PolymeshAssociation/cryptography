@@ -46,12 +46,8 @@ pub fn process_create_tx(
         &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
     )?;
 
-    let mediator_account: AccountMemo = load_object(
-        db_dir.clone(),
-        ON_CHAIN_DIR,
-        &mediator,
-        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
-    )?;
+    let mediator_account: AccountMemo =
+        load_object(db_dir.clone(), ON_CHAIN_DIR, &mediator, PUBLIC_ACCOUNT_FILE)?;
 
     timing!(
         "account.create_tx.load_from_file",

@@ -57,6 +57,7 @@ pub fn validate_asset_issuance(
     mediator: String,
     state: String,
     tx_id: u32,
+    ticker: String,
 ) -> Result<(), Error> {
     let load_objects_timer = Instant::now();
 
@@ -80,7 +81,7 @@ pub fn validate_asset_issuance(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &issuer,
-        VALIDATED_PUBLIC_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
     )?;
     timing!(
         "validator.issuance.load_objects",
@@ -223,6 +224,7 @@ pub fn validate_transaction(
     mediator: String,
     state: String,
     tx_id: u32,
+    ticker: String,
 ) -> Result<(), Error> {
     let load_objects_timer = Instant::now();
     // Load the transaction, mediator's account, and issuer's public account.
@@ -248,14 +250,14 @@ pub fn validate_transaction(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &sender,
-        VALIDATED_PUBLIC_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
     )?;
 
     let receiver_account: PubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &receiver,
-        VALIDATED_PUBLIC_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
     )?;
 
     timing!(

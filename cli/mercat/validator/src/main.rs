@@ -29,6 +29,7 @@ fn main() {
             cfg.mediator,
             cfg.state,
             cfg.tx_id,
+            cfg.account_id,
         )
         .unwrap(),
         CLI::ValidateAccount(cfg) => validate_account(
@@ -44,6 +45,7 @@ fn main() {
             cfg.mediator,
             cfg.state,
             cfg.tx_id,
+            cfg.account_id,
         )
         .unwrap(),
     };

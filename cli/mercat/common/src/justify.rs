@@ -100,7 +100,7 @@ pub fn justify_asset_issuance(
         db_dir.clone(),
         OFF_CHAIN_DIR,
         &mediator,
-        &format!("{}_{}", ticker, SECRET_ACCOUNT_FILE),
+        SECRET_ACCOUNT_FILE,
     )?;
 
     let issuer_account: PubAccount = load_object(
@@ -214,7 +214,7 @@ pub fn justify_asset_transaction(
         db_dir.clone(),
         OFF_CHAIN_DIR,
         &mediator,
-        &format!("{}_{}", ticker, SECRET_ACCOUNT_FILE),
+        SECRET_ACCOUNT_FILE,
     )?;
 
     timing!(
