@@ -391,7 +391,7 @@ impl TransactionMediator for CtxMediator {
 
         Ok((
             JustifiedTx {
-                conf_tx_final_data,
+                content: conf_tx_final_data,
                 sig,
             },
             TxState::Justification(TxSubstate::Started),
@@ -412,25 +412,43 @@ impl TransactionVerifier for TransactionValidator {
     fn verify<R: RngCore + CryptoRng>(
         &self,
         transaction: &JustifiedTx,
-        sndr_account: &PubAccount,
-        rcvr_account: &PubAccount,
+        sndr_account: PubAccount,
+        rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
         rng: &mut R,
-    ) -> Fallible<()> {
+    ) -> Fallible<(PubAccount, PubAccount)> {
         verify_initialized_transaction(
-            &transaction.conf_tx_final_data.content.init_data,
-            sndr_account,
-            rcvr_account,
+            &transaction.content.content.init_data,
+            &sndr_account,
+            &rcvr_account,
             rng,
         )?;
-        verify_finalized_transaction(
-            &transaction.conf_tx_final_data,
-            sndr_account,
-            rcvr_account,
-            rng,
-        )?;
+        verify_finalized_transaction(&transaction.content, &sndr_account, &rcvr_account, rng)?;
         verify_justified_transaction(&transaction, mdtr_sign_pub_key)?;
-        Ok(())
+
+        // All verifications were successful, update the sender and receiver balances.
+        let updated_sndr_account = crate::mercat::account::withdraw(
+            sndr_account,
+            transaction
+                .content
+                .content
+                .init_data
+                .content
+                .memo
+                .enc_amount_using_sndr,
+        );
+        let updated_rcvr_account = crate::mercat::account::deposit(
+            rcvr_account,
+            transaction
+                .content
+                .content
+                .init_data
+                .content
+                .memo
+                .enc_amount_using_rcvr,
+        );
+
+        Ok((updated_sndr_account, updated_rcvr_account))
     }
 }
 
@@ -495,7 +513,7 @@ fn verify_justified_transaction(
     mdtr_sign_pub_key: &SigningPubKey,
 ) -> Fallible<TxState> {
     let ctx_data = &conf_tx_justified_final_data;
-    let message = ctx_data.conf_tx_final_data.encode();
+    let message = ctx_data.content.encode();
     let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &ctx_data.sig)?;
 
     Ok(TxState::Justification(TxSubstate::Validated))
@@ -893,7 +911,7 @@ mod tests {
             )
             .unwrap(),
             scrt: SecAccount {
-                enc_keys: rcvr_enc_keys,
+                enc_keys: rcvr_enc_keys.clone(),
                 sign_keys: rcvr_sign_keys.clone(),
                 asset_id: asset_id.clone(),
                 asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
@@ -910,7 +928,7 @@ mod tests {
             )
             .unwrap(),
             scrt: SecAccount {
-                enc_keys: sndr_enc_keys,
+                enc_keys: sndr_enc_keys.clone(),
                 sign_keys: sndr_sign_keys.clone(),
                 asset_id: asset_id.clone(),
                 asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
@@ -947,13 +965,31 @@ mod tests {
         let (justified_finalized_ctx_data, state) = result.unwrap();
         assert_eq!(state, TxState::Justification(TxSubstate::Started));
 
-        assert!(tx_validator
+        let (updated_sender_account, updated_receiver_account) = tx_validator
             .verify(
                 &justified_finalized_ctx_data,
-                &sndr_account.pblc,
-                &rcvr_account.pblc,
+                sndr_account.pblc,
+                rcvr_account.pblc,
                 &mdtr_sign_keys.public,
-                &mut rng
+                &mut rng,
+            )
+            .unwrap();
+
+        // ----------------------- Processing
+        // Check that the transferred amount is added to the receiver's account balance
+        // and subtracted from sender's balance.
+        assert!(sndr_enc_keys
+            .scrt
+            .verify(
+                &updated_sender_account.content.enc_balance,
+                &Scalar::from(sndr_balance - amount)
+            )
+            .is_ok());
+        assert!(rcvr_enc_keys
+            .scrt
+            .verify(
+                &updated_receiver_account.content.enc_balance,
+                &Scalar::from(rcvr_balance + amount)
             )
             .is_ok());
     }

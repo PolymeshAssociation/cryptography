@@ -627,33 +627,30 @@ impl Decode for FinalizedTx {
 /// transaction.
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct JustifiedTx {
-    pub conf_tx_final_data: FinalizedTx,
+    pub content: FinalizedTx,
     pub sig: Signature,
 }
 
 impl Encode for JustifiedTx {
     #[inline]
     fn size_hint(&self) -> usize {
-        self.conf_tx_final_data.size_hint() + schnorrkel::SIGNATURE_LENGTH
+        self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.conf_tx_final_data.encode_to(dest);
+        self.content.encode_to(dest);
         self.sig.to_bytes().encode_to(dest);
     }
 }
 
 impl Decode for JustifiedTx {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let conf_tx_final_data = <FinalizedTx>::decode(input)?;
+        let content = <FinalizedTx>::decode(input)?;
         let sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
         let sig = Signature::from_bytes(&sig)
             .map_err(|_| CodecError::from("JustifiedTx::sig is invalid"))?;
 
-        Ok(JustifiedTx {
-            conf_tx_final_data,
-            sig,
-        })
+        Ok(JustifiedTx { content, sig })
     }
 }
 
@@ -704,14 +701,15 @@ pub trait TransactionMediator {
 
 pub trait TransactionVerifier {
     /// Verify the intialized, finalized, and justified transactions.
+    /// Returns the updated sender and receiver accounts.
     fn verify<R: RngCore + CryptoRng>(
         &self,
         conf_tx_justified_final_data: &JustifiedTx,
-        sndr_account: &PubAccount,
-        rcvr_account: &PubAccount,
+        sndr_account: PubAccount,
+        rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
         rng: &mut R,
-    ) -> Fallible<()>;
+    ) -> Fallible<(PubAccount, PubAccount)>;
 }
 
 // -------------------------------------------------------------------------------------

@@ -2,11 +2,11 @@ mod utility;
 use criterion::{criterion_group, criterion_main, Criterion};
 use cryptography::{
     mercat::{
-        account::{convert_asset_ids},
+        account::convert_asset_ids,
         conf_tx::{CtxMediator, CtxReceiver, CtxSender},
-        Account, EncryptionPubKey, FinalizedTx,
-        InitializedTx, MediatorAccount, PubAccount, SigningPubKey, TransactionMediator,
-        TransactionReceiver, TransactionSender, TxState, TxSubstate,
+        Account, EncryptionPubKey, FinalizedTx, InitializedTx, MediatorAccount, PubAccount,
+        SigningPubKey, TransactionMediator, TransactionReceiver, TransactionSender, TxState,
+        TxSubstate,
     },
     AssetId, Balance,
 };
