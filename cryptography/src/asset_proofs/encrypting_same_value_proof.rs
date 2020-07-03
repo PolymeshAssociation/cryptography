@@ -132,6 +132,35 @@ impl UpdateTranscript for EncryptingSameValueInitialMessage {
     }
 }
 
+/// Holds the non-interactive proofs of equality using different public keys, equivalent
+/// of L_cipher of the MERCAT paper.
+#[derive(Default, Clone, Copy, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct CipherEqualDifferentPubKeyProof {
+    pub init: EncryptingSameValueInitialMessage,
+    pub response: EncryptingSameValueFinalResponse,
+}
+
+impl
+    From<(
+        EncryptingSameValueInitialMessage,
+        EncryptingSameValueFinalResponse,
+    )> for CipherEqualDifferentPubKeyProof
+{
+    fn from(
+        pair: (
+            EncryptingSameValueInitialMessage,
+            EncryptingSameValueFinalResponse,
+        ),
+    ) -> Self {
+        Self {
+            init: pair.0,
+            response: pair.1,
+        }
+    }
+}
+
 pub struct EncryptingSameValueProverAwaitingChallenge<'a> {
     /// The first public key used for the elgamal encryption.
     pub pub_key1: ElgamalPublicKey,

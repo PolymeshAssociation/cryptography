@@ -6,9 +6,12 @@
 use crate::errors::{ErrorKind, Fallible};
 
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 
@@ -19,6 +22,60 @@ const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 pub type RangeProofInitialMessage = CompressedRistretto;
 
 pub type RangeProofFinalResponse = RangeProof;
+
+/// Holds the non-interactive range proofs, equivalent of L_range of MERCAT paper.
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct InRangeProof {
+    pub init: RangeProofInitialMessage,
+    pub response: RangeProofFinalResponse,
+    pub range: u32,
+}
+
+impl Encode for InRangeProof {
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.init.as_bytes().encode_to(dest);
+        self.response.to_bytes().encode_to(dest);
+        self.range.encode_to(dest);
+    }
+}
+
+impl Decode for InRangeProof {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let init = CompressedRistretto(<[u8; 32]>::decode(input)?);
+        let response = <Vec<u8>>::decode(input)?;
+        let response = RangeProofFinalResponse::from_bytes(&response)
+            .map_err(|_| CodecError::from("InRangeProof::response is invalid"))?;
+        let range = <u32>::decode(input)?;
+
+        Ok(InRangeProof {
+            init,
+            response,
+            range,
+        })
+    }
+}
+
+impl InRangeProof {
+    #[allow(dead_code)]
+    pub fn build<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        let range = 32;
+        InRangeProof::from(
+            prove_within_range(0, Scalar::one(), range, rng).expect("This shouldn't happen."),
+        )
+    }
+}
+
+impl From<(RangeProofInitialMessage, RangeProofFinalResponse, u32)> for InRangeProof {
+    fn from(proof: (RangeProofInitialMessage, RangeProofFinalResponse, u32)) -> Self {
+        Self {
+            init: proof.0,
+            response: proof.1,
+            range: proof.2,
+        }
+    }
+}
 
 /// Generate a range proof for a commitment to a secret value.
 /// Range proof commitments are equevalant to the second term (Y)

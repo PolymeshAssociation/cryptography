@@ -4,7 +4,7 @@
 pub mod errors;
 
 use codec::{Decode, Encode};
-use cryptography::mercat::{AssetTxState, ConfidentialTxState};
+use cryptography::mercat::{AssetTxState, TxState};
 use curve25519_dalek::scalar::Scalar;
 use errors::Error;
 use log::info;
@@ -44,13 +44,13 @@ pub struct Instruction {
 }
 
 #[inline]
-pub fn confidential_transaction_file(tx_id: u32, state: ConfidentialTxState) -> String {
+pub fn confidential_transaction_file(tx_id: u32, state: TxState) -> String {
     format!("tx_{}_{}.json", tx_id, state)
 }
 
 #[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
 pub struct CTXInstruction {
-    pub state: ConfidentialTxState,
+    pub state: TxState,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }

@@ -1,5 +1,5 @@
 use crate::mercat::AssetTxState;
-use crate::mercat::ConfidentialTxState;
+use crate::mercat::TxState;
 
 use bulletproofs::ProofError;
 use failure::{Backtrace, Context, Fail};
@@ -148,7 +148,7 @@ pub enum ErrorKind {
 
     /// The incoming transaction state does not match the expectation.
     #[fail(display = "Received an invalid previous state: {}", state)]
-    InvalidPreviousState { state: ConfidentialTxState },
+    InvalidPreviousState { state: TxState },
 
     /// The incoming asset transaction state does not match the expectation.
     #[fail(

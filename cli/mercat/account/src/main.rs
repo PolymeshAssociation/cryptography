@@ -9,10 +9,9 @@ use cryptography::{
     asset_id_from_ticker,
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
-        account::create_account, asset::CtxIssuer, conf_tx::CtxReceiver, conf_tx::CtxSender,
-        Account, AccountMemo, AssetTransactionIssuer, ConfidentialTransactionSender,
-        ConfidentialTxState, EncryptionKeys, PubAccount, PubInitConfidentialTxData, SecAccount,
-        TxSubstate,
+        account::AccountCreator, asset::CtxIssuer, conf_tx::CtxReceiver, conf_tx::CtxSender,
+        Account, AccountCreatorInitializer, AccountMemo, AssetTransactionIssuer, EncryptionKeys,
+        InitializedTx, PubAccount, SecAccount, TransactionSender, TxState, TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -60,7 +59,9 @@ fn process_create_account(cfg: input::CreateAccountInfo) -> Result<(), Error> {
     let valid_asset_ids = get_asset_ids(db_dir.clone())?;
 
     let create_account_timer = Instant::now();
-    let account = create_account(secret_account, &valid_asset_ids, cfg.account_id, &mut rng)
+    let account_creator = AccountCreator {};
+    let account = account_creator
+        .create(secret_account, &valid_asset_ids, cfg.account_id, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     timing!("account.call_library", create_account_timer, Instant::now());
@@ -246,7 +247,7 @@ fn process_create_tx(cfg: input::CreateTransactionInfo) -> Result<(), Error> {
     let create_tx_timer = Instant::now();
     let sender = CtxSender {};
     let (asset_tx, state) = sender
-        .create_transaction(
+        .create(
             &sender_account,
             &receiver_account,
             &mediator_account.owner_enc_pub_key,
@@ -312,11 +313,11 @@ fn process_finalize_tx(cfg: input::FinalizeTransactionInfo) -> Result<(), Error>
         &cfg.sender,
         &confidential_transaction_file(
             cfg.tx_id.clone(),
-            ConfidentialTxState::Initialization(TxSubstate::Validated),
+            TxState::Initialization(TxSubstate::Validated),
         ),
     )?;
 
-    let tx = PubInitConfidentialTxData::decode(&mut &instruction.data[..]).map_err(|error| {
+    let tx = InitializedTx::decode(&mut &instruction.data[..]).map_err(|error| {
         Error::ObjectLoadError {
             error,
             path: construct_path(
@@ -341,7 +342,7 @@ fn process_finalize_tx(cfg: input::FinalizeTransactionInfo) -> Result<(), Error>
         .finalize_by_receiver(
             tx,
             receiver_account,
-            ConfidentialTxState::Initialization(TxSubstate::Validated),
+            TxState::Initialization(TxSubstate::Validated),
             cfg.amount,
             &mut rng,
         )

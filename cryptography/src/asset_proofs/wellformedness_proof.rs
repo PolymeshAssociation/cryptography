@@ -122,6 +122,24 @@ impl UpdateTranscript for WellformednessInitialMessage {
     }
 }
 
+/// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of the MERCAT paper.
+#[derive(Default, Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct WellformednessProof {
+    pub init: WellformednessInitialMessage,
+    pub response: WellformednessFinalResponse,
+}
+
+impl From<(WellformednessInitialMessage, WellformednessFinalResponse)> for WellformednessProof {
+    fn from(pair: (WellformednessInitialMessage, WellformednessFinalResponse)) -> Self {
+        Self {
+            init: pair.0,
+            response: pair.1,
+        }
+    }
+}
+
 #[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessProver {

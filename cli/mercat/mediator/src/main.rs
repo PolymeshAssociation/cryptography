@@ -9,8 +9,8 @@ use cryptography::{
     asset_proofs::ElgamalSecretKey,
     mercat::{
         asset::AssetTxIssueMediator, conf_tx::CtxMediator, AccountMemo, AssetTransactionMediator,
-        AssetTxState, ConfidentialTransactionMediator, ConfidentialTxState, EncryptionKeys,
-        MediatorAccount, PubAccount, PubAssetTxData, PubFinalConfidentialTxData, TxSubstate,
+        AssetTxState, EncryptionKeys, FinalizedTx, InitializedAssetTx, MediatorAccount, PubAccount,
+        TransactionMediator, TxState, TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -116,7 +116,7 @@ fn justify_asset_issuance(cfg: input::JustifyIssuanceInfo) -> Result<(), Error> 
     let instruction: Instruction =
         load_object(db_dir.clone(), ON_CHAIN_DIR, &cfg.issuer, &instruction_path)?;
 
-    let asset_tx = PubAssetTxData::decode(&mut &instruction.data[..]).map_err(|error| {
+    let asset_tx = InitializedAssetTx::decode(&mut &instruction.data[..]).map_err(|error| {
         Error::ObjectLoadError {
             error,
             path: construct_path(db_dir.clone(), ON_CHAIN_DIR, &cfg.issuer, &instruction_path),
@@ -147,7 +147,7 @@ fn justify_asset_issuance(cfg: input::JustifyIssuanceInfo) -> Result<(), Error> 
     let justify_library_timer = Instant::now();
     let mediator = AssetTxIssueMediator {};
     let (justified_tx, updated_issuer_account) = mediator
-        .justify_and_process(
+        .justify(
             asset_tx.clone(),
             &issuer_account,
             instruction.state,
@@ -182,7 +182,7 @@ fn justify_asset_issuance(cfg: input::JustifyIssuanceInfo) -> Result<(), Error> 
         // Save the updated_issuer_account, and the justified transaction.
         next_instruction = Instruction {
             data: justified_tx.encode().to_vec(),
-            state: justified_tx.content.state,
+            state: AssetTxState::Justification(TxSubstate::Started),
         };
 
         save_object(
@@ -198,7 +198,7 @@ fn justify_asset_issuance(cfg: input::JustifyIssuanceInfo) -> Result<(), Error> 
         db_dir,
         ON_CHAIN_DIR,
         &cfg.issuer,
-        &asset_transaction_file(cfg.tx_id, justified_tx.content.state),
+        &asset_transaction_file(cfg.tx_id, AssetTxState::Justification(TxSubstate::Started)),
         &next_instruction,
     )?;
 
@@ -216,26 +216,37 @@ fn justify_asset_transaction(cfg: input::JustifyTransactionInfo) -> Result<(), E
     let justify_load_objects_timer = Instant::now();
     let db_dir = cfg.clone().db_dir.ok_or(Error::EmptyDatabaseDir)?;
 
-    let instruction_path = confidential_transaction_file(
-        cfg.tx_id,
-        ConfidentialTxState::Finalization(TxSubstate::Validated),
-    );
+    let instruction_path =
+        confidential_transaction_file(cfg.tx_id, TxState::Finalization(TxSubstate::Validated));
     let instruction: CTXInstruction =
         load_object(db_dir.clone(), ON_CHAIN_DIR, &cfg.sender, &instruction_path)?;
 
-    let asset_tx =
-        PubFinalConfidentialTxData::decode(&mut &instruction.data[..]).map_err(|error| {
-            Error::ObjectLoadError {
-                error,
-                path: construct_path(db_dir.clone(), ON_CHAIN_DIR, &cfg.sender, &instruction_path),
-            }
-        })?;
+    let asset_tx = FinalizedTx::decode(&mut &instruction.data[..]).map_err(|error| {
+        Error::ObjectLoadError {
+            error,
+            path: construct_path(db_dir.clone(), ON_CHAIN_DIR, &cfg.sender, &instruction_path),
+        }
+    })?;
 
     let mediator_account: MediatorAccount = load_object(
         db_dir.clone(),
         OFF_CHAIN_DIR,
         &cfg.mediator,
         SECRET_ACCOUNT_FILE,
+    )?;
+
+    let sender_account: PubAccount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &cfg.sender.clone(),
+        VALIDATED_PUBLIC_ACCOUNT_FILE,
+    )?;
+
+    let receiver_account: PubAccount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &cfg.receiver.clone(),
+        VALIDATED_PUBLIC_ACCOUNT_FILE,
     )?;
 
     timing!(
@@ -255,6 +266,8 @@ fn justify_asset_transaction(cfg: input::JustifyTransactionInfo) -> Result<(), E
             instruction.state,
             &mediator_account.encryption_key,
             &mediator_account.signing_key,
+            &sender_account.content.memo.owner_sign_pub_key,
+            &receiver_account.content.memo.owner_sign_pub_key,
             asset_id,
         )
         .map_err(|error| Error::LibraryError { error })?;
@@ -269,7 +282,7 @@ fn justify_asset_transaction(cfg: input::JustifyTransactionInfo) -> Result<(), E
     let justify_save_objects_timer = Instant::now();
     // If the `reject` flag is set, save the transaction as rejected.
     if cfg.reject {
-        let rejected_state = ConfidentialTxState::FinalizationJustification(TxSubstate::Rejected);
+        let rejected_state = TxState::Justification(TxSubstate::Rejected);
         next_instruction = CTXInstruction {
             data: asset_tx.encode().to_vec(),
             state: rejected_state,
@@ -286,7 +299,6 @@ fn justify_asset_transaction(cfg: input::JustifyTransactionInfo) -> Result<(), E
         // Save the updated_issuer_account, and the justified transaction.
         next_instruction = CTXInstruction {
             data: justified_tx.encode().to_vec(),
-            // Note that unlike `PubJustifiedAssetTxData`, `JustifiedPubFinalConfidentialTxData` does not keep a copy of the state.
             state: new_state,
         };
     }
