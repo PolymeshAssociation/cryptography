@@ -32,7 +32,7 @@ use yaml_rust::{Yaml, YamlLoader};
 // -                                       data types                                                -
 // ---------------------------------------------------------------------------------------------------
 
-/// The signature fo the function for a generic step in a transaction. This function performs
+/// The signature of the function for a generic step in a transaction. This function performs
 /// the action (e.g., initializing a transaction, finalizing a transaction, or creating an account),
 /// and returns the corresponding CLI command that can be run to reproduce this step manually.
 type StepFunc = Box<dyn Fn() -> Result<String, Error>>;
@@ -121,7 +121,6 @@ impl TryFrom<(u32, String)> for Transfer {
 #[derive(Debug)]
 pub struct Create {
     pub tx_id: u32,
-    pub account_id: u32,
     pub owner: Party,
     pub ticker: Option<String>,
 }
@@ -199,7 +198,7 @@ pub struct TestCase {
     /// Human readable description of the testcase. Will be printed to the log.
     title: String,
 
-    /// The list of valid ticker names. This names will be converted to asset ids for meract.
+    /// The list of valid ticker names. These names will be converted to asset ids for meract.
     ticker_names: Vec<String>,
 
     /// The transactions of this testcase.
@@ -211,7 +210,7 @@ pub struct TestCase {
     /// Maximum allowable time in Milliseconds
     timing_limit: u128,
 
-    /// the directory that will act as the chain datastore.
+    /// The directory that will act as the chain datastore.
     chain_db_dir: PathBuf,
 }
 
@@ -239,7 +238,7 @@ impl Transfer {
     pub fn send<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
         let value = format!(
-            "tx-{}: $ mercat-account create-transaction --account-id {} --amount {} --sender {} --receiver {} \
+            "tx-{}: $ mercat-account create-transaction --account-id-from-ticker {} --amount {} --sender {} --receiver {} \
             --mediator {} --tx-id {} --seed {} --db-dir {} {}",
             self.tx_id,
             self.ticker,
@@ -277,7 +276,7 @@ impl Transfer {
     pub fn receive<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
         let value = format!(
-            "tx-{}: $ mercat-account finalize-transaction --account-id {} --amount {} --sender {} --receiver {} --tx-id {} --seed {} --db-dir {} {}",
+            "tx-{}: $ mercat-account finalize-transaction --account-id-from-ticker {} --amount {} --sender {} --receiver {} --tx-id {} --seed {} --db-dir {} {}",
             self.tx_id,
             self.ticker,
             self.amount,
@@ -341,7 +340,7 @@ impl Transfer {
     pub fn validate(&self, chain_db_dir: PathBuf, state: String) -> StepFunc {
         let value = format!(
             "tx-{}: $ mercat-validator validate-transaction --sender {} --receiver {} --mediator {} --state {} \
-            --account-id {} --tx-id {} --db-dir {}",
+            --account-id-from-ticker {} --tx-id {} --db-dir {}",
             self.tx_id,
             self.sender.name,
             self.receiver.name,
@@ -401,9 +400,8 @@ impl Create {
         if let Some(ticker) = self.ticker.clone() {
             // create a normal account
             let value = format!(
-                "tx-{}: $ mercat-account create --account-id {} --ticker {} --user {} --seed {} --db-dir {} {}",
+                "tx-{}: $ mercat-account create --ticker {} --user {} --seed {} --db-dir {} {}",
                 self.tx_id,
-                self.account_id,
                 ticker,
                 self.owner.name,
                 seed,
@@ -411,7 +409,6 @@ impl Create {
                 cheater_flag(self.owner.cheater)
             );
             let ticker = ticker.clone();
-            let account_id = self.account_id;
             let owner = self.owner.name.clone();
             return Box::new(move || {
                 info!("Running: {}", value.clone());
@@ -419,7 +416,6 @@ impl Create {
                     Some(seed.clone()),
                     chain_db_dir.clone(),
                     ticker.clone(),
-                    account_id,
                     owner.clone(),
                 )?;
                 Ok(value.clone())
@@ -484,7 +480,7 @@ impl Issue {
     pub fn issue<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
         let value = format!(
-            "tx-{}: $ mercat-account issue --account-id {} --amount {} --issuer {} --mediator {} --tx-id {} --seed {} --db-dir {} {}",
+            "tx-{}: $ mercat-account issue --account-id-from-ticker {} --amount {} --issuer {} --mediator {} --tx-id {} --seed {} --db-dir {} {}",
             self.tx_id,
             self.ticker,
             self.amount,
@@ -517,7 +513,7 @@ impl Issue {
 
     pub fn mediate(&self, chain_db_dir: PathBuf) -> StepFunc {
         let value = format!(
-            "tx-{}: $ mercat-mediator justify-issuance --account-id {} --issuer {} --mediator {} --tx-id {} --db-dir {} {}",
+            "tx-{}: $ mercat-mediator justify-issuance --account-id-from-ticker {} --issuer {} --mediator {} --tx-id {} --db-dir {} {}",
             self.tx_id,
             self.ticker,
             self.issuer.name,
@@ -548,7 +544,7 @@ impl Issue {
     pub fn validate(&self, chain_db_dir: PathBuf, state: String) -> StepFunc {
         // validate a normal account
         let value = format!(
-            "tx-{}: $ mercat-validator validate-issuance --issuer {} --mediator {} --state {} --account-id {} --tx-id {} --db-dir {}",
+            "tx-{}: $ mercat-validator validate-issuance --issuer {} --mediator {} --state {} --account-id-from-ticker {} --tx-id {} --db-dir {}",
             self.tx_id,
             self.issuer.name,
             self.mediator.name,
@@ -657,7 +653,7 @@ impl TestCase {
             let _command = transaction()?;
             info!("Success!");
         }
-        let duration = Instant::now() - start;
+        let duration = start.elapsed();
 
         if duration.as_millis() > self.timing_limit {
             return Err(Error::TimeLimitExceeded {
@@ -764,23 +760,17 @@ fn all_dirs_in_dir(dir: PathBuf) -> Result<Vec<PathBuf>, Error> {
     Ok(files)
 }
 fn make_empty_accounts(accounts: &Vec<InputAccount>) -> Result<(u32, TransactionMode), Error> {
-    let mut account_id = 0;
     let mut transaction_counter = 0;
     let mut seq: Vec<TransactionMode> = vec![];
     for account in accounts {
-        let mut rng = rand::thread_rng();
-        let mut seed = [0u8; 32];
-        rng.fill(&mut seed);
         seq.push(TransactionMode::Transaction(Transaction::Create(Create {
             tx_id: transaction_counter,
-            account_id: account_id,
             owner: Party {
                 name: account.owner.clone(),
                 cheater: false, // TODO: CRYP-120: test harness does not support cheating for account creation yet.
             },
             ticker: account.ticker.clone(),
         })));
-        account_id += 1;
         transaction_counter += 1;
     }
     Ok((
@@ -842,7 +832,10 @@ fn parse_transactions(
     }
     let transactions = to_array(value, path.clone(), attribute)?;
     for transaction in transactions.into_iter() {
+        // In the yaml file, either the transaction starts with a keyword of sequence or concurrent,
+        // or it is simply a string. If it is a string, then it either represents an asset issuance or a transfer.
         match &transaction {
+            // Check if the sequence or concurrent keys are found
             Yaml::Hash(transaction) => {
                 for (key, value) in transaction {
                     let key = to_string(key, path.clone(), "sequence-or-concurrent")?;
@@ -866,6 +859,7 @@ fn parse_transactions(
                     }
                 }
             }
+            // check if a string is found
             Yaml::String(transaction) => {
                 if let Some(issue) = Issue::try_from((transaction_id, transaction.to_string()))
                     .map_err(|_| Error::ErrorParsingTestHarnessConfig {

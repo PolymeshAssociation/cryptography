@@ -23,16 +23,8 @@ pub struct CreateAccountInfo {
     )]
     pub db_dir: Option<PathBuf>,
 
-    /// Account id. It is the responsibility of the caller to ensure the uniqueness of the id.
-    /// The CLI will not throw any errors if a duplicate id is passed.
-    #[structopt(
-        short,
-        long,
-        help = "The id of the account. This value must be unique."
-    )]
-    pub account_id: u32,
-
-    /// Asset id. An asset ticker name which is a string of at most 12 characters.
+    /// An asset ticker name which is a string of at most 12 characters.
+    /// In these test CLIs, the unique account id is created from the pair of username and ticker.
     #[structopt(
         short,
         long,
@@ -59,11 +51,12 @@ pub struct CreateAccountInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct IssueAssetInfo {
-    /// Account ID of the issuer.
-    /// The CLI will not throw any errors if a duplicate id is passed. In the CLI, we use the
-    /// ticker name as the unique account id of each party.
-    #[structopt(long, help = "The account ID.")]
-    pub account_id: String,
+    /// Account ID of the issuer will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
 
     /// A transaction ID for the asset issuance transaction.
     /// The CLI will not throw any errors if a duplicate id is passed.
@@ -115,11 +108,12 @@ pub struct IssueAssetInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct CreateTransactionInfo {
-    /// Account ID of the sender.
-    /// The CLI will not throw any errors if a duplicate id is passed. In the CLI, we use the
-    /// ticker name as the unique account id of each party.
-    #[structopt(long, help = "The party's account ID.")]
-    pub account_id: String,
+    /// Account ID of the issuer will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
 
     /// A transaction ID for the transaction.
     /// The CLI will not throw any errors if a duplicate id is passed.
@@ -175,10 +169,12 @@ pub struct CreateTransactionInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct FinalizeTransactionInfo {
-    /// Account ID of the receiver.
-    /// In the CLI, we use the ticker name as the unique account id of each party.
-    #[structopt(long, help = "The party's account ID.")]
-    pub account_id: String,
+    /// Account ID of the receiver will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
 
     /// The transaction ID for the transaction.
     /// The CLI will not throw any errors if a duplicate id is passed.
@@ -283,7 +279,6 @@ pub fn parse_input() -> CLI {
             let cfg = CreateAccountInfo {
                 save_config: cfg.save_config.clone(),
                 seed,
-                account_id: cfg.account_id,
                 ticker: cfg.ticker,
                 db_dir,
                 user: cfg.user.clone(),
@@ -335,7 +330,7 @@ pub fn parse_input() -> CLI {
             info!("Seed: {:?}", seed.clone().unwrap()); // unwrap won't panic
 
             let cfg = IssueAssetInfo {
-                account_id: cfg.account_id,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 tx_id: cfg.tx_id,
                 seed,
                 amount: cfg.amount,
@@ -363,7 +358,7 @@ pub fn parse_input() -> CLI {
             info!("Seed: {:?}", seed.clone().unwrap());
 
             let cfg = CreateTransactionInfo {
-                account_id: cfg.account_id,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 tx_id: cfg.tx_id,
                 seed,
                 amount: cfg.amount,
@@ -393,7 +388,7 @@ pub fn parse_input() -> CLI {
 
             let cfg = FinalizeTransactionInfo {
                 tx_id: cfg.tx_id,
-                account_id: cfg.account_id,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 seed,
                 amount: cfg.amount,
                 db_dir,

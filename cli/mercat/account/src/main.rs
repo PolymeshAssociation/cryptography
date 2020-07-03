@@ -30,7 +30,7 @@ fn main() {
     match args {
         CLI::Create(cfg) => {
             let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap();
-            process_create_account(cfg.seed, db_dir, cfg.ticker, cfg.account_id, cfg.user).unwrap()
+            process_create_account(cfg.seed, db_dir, cfg.ticker, cfg.user).unwrap()
         }
         CLI::Cleanup { user, db_dir } => process_destroy_account(user, db_dir).unwrap(),
         CLI::CreateFrom { config: _ } => panic!("This should not happen!"),
@@ -39,7 +39,7 @@ fn main() {
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.issuer,
             cfg.mediator,
-            cfg.account_id,
+            cfg.account_id_from_ticker,
             cfg.amount,
             cfg.tx_id,
         )
@@ -50,7 +50,7 @@ fn main() {
             cfg.sender,
             cfg.receiver,
             cfg.mediator,
-            cfg.account_id,
+            cfg.account_id_from_ticker,
             cfg.amount,
             cfg.tx_id,
         )
@@ -60,7 +60,7 @@ fn main() {
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.sender,
             cfg.receiver,
-            cfg.account_id,
+            cfg.account_id_from_ticker,
             cfg.amount,
             cfg.tx_id,
         )

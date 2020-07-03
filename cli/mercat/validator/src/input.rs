@@ -19,10 +19,12 @@ pub struct ValidateAssetIssuanceInfo {
     )]
     pub db_dir: Option<PathBuf>,
 
-    /// Account ID of the issuer.
-    /// In the CLI, we use the ticker name as the unique account id of each party.
-    #[structopt(long, help = "The issuer's account ID.")]
-    pub account_id: String,
+    /// Account ID of the issuer will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
 
     /// The name of the mediator.
     #[structopt(short, long, help = "The mediator's name.")]
@@ -100,10 +102,12 @@ pub struct ValidateTransactionInfo {
     )]
     pub db_dir: Option<PathBuf>,
 
-    /// Account ID of the issuer.
-    /// In the CLI, we use the ticker name as the unique account id of each party.
-    #[structopt(long, help = "The issuer's account ID.")]
-    pub account_id: String,
+    /// Account ID of the issuer will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
 
     /// The name of the mediator.
     #[structopt(short, long, help = "The mediator's name.")]
@@ -162,7 +166,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
             let cfg = ValidateAssetIssuanceInfo {
                 db_dir,
-                account_id: cfg.account_id,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 mediator: cfg.mediator,
                 issuer: cfg.issuer,
                 tx_id: cfg.tx_id,
@@ -189,7 +193,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
             let cfg = ValidateTransactionInfo {
                 db_dir,
-                account_id: cfg.account_id,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 mediator: cfg.mediator,
                 sender: cfg.sender,
                 receiver: cfg.receiver,

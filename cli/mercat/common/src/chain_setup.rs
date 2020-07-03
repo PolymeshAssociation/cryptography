@@ -6,7 +6,6 @@ use metrics::timing;
 use std::{path::PathBuf, time::Instant};
 
 pub fn process_asset_id_creation(db_dir: PathBuf, ticker_names: Vec<String>) -> Result<(), Error> {
-    println!("{:?}", db_dir);
     let start = Instant::now();
 
     let valid_asset_ids: Vec<AssetId> = ticker_names

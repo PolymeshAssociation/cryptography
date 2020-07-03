@@ -1,6 +1,6 @@
 use crate::{
-    create_rng_from_seed, errors::Error, get_asset_ids, save_object, OFF_CHAIN_DIR, ON_CHAIN_DIR,
-    PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
+    calc_account_id, create_rng_from_seed, errors::Error, get_asset_ids, save_object,
+    OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
 };
 use cryptography::{
     asset_id_from_ticker,
@@ -18,7 +18,6 @@ pub fn process_create_account(
     seed: Option<String>,
     db_dir: PathBuf,
     ticker: String,
-    account_id: u32,
     user: String,
 ) -> Result<(), Error> {
     // Setup the rng
@@ -27,6 +26,7 @@ pub fn process_create_account(
     // Create the account
     let secret_account = create_secret_account(&mut rng, ticker.clone())?;
     let valid_asset_ids = get_asset_ids(db_dir.clone())?;
+    let account_id = calc_account_id(user.clone(), ticker.clone());
 
     let create_account_timer = Instant::now();
     let account = create_account(secret_account, &valid_asset_ids, account_id, &mut rng)

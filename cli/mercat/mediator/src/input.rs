@@ -49,10 +49,12 @@ pub struct CreateMediatorAccountInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct JustifyIssuanceInfo {
-    /// Account ID of the issuer.
-    /// In the CLI, we use the ticker name as the unique account id of each party.
-    #[structopt(long, help = "The issuer's account ID.")]
-    pub account_id: String,
+    /// Account ID of the issuer will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
 
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
@@ -213,7 +215,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             info!("Seed: {:?}", seed.clone().unwrap());
             let cfg = JustifyIssuanceInfo {
                 db_dir,
-                account_id: cfg.account_id,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 tx_id: cfg.tx_id,
                 issuer: cfg.issuer,
                 mediator: cfg.mediator,

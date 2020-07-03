@@ -11,7 +11,6 @@ use mercat_common::{
     validate::{validate_account, validate_asset_issuance, validate_transaction},
 };
 use metrics::timing;
-use rand::rngs::OsRng;
 use std::time::Instant;
 
 fn main() {
@@ -30,7 +29,7 @@ fn main() {
             cfg.mediator,
             cfg.state,
             cfg.tx_id,
-            cfg.account_id,
+            cfg.account_id_from_ticker,
         )
         .unwrap(),
         CLI::ValidateAccount(cfg) => validate_account(
@@ -46,7 +45,7 @@ fn main() {
             cfg.mediator,
             cfg.state,
             cfg.tx_id,
-            cfg.account_id,
+            cfg.account_id_from_ticker,
         )
         .unwrap(),
     };

@@ -36,7 +36,7 @@ fn main() {
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.issuer,
             cfg.mediator,
-            cfg.account_id,
+            cfg.account_id_from_ticker,
             cfg.tx_id,
             cfg.reject,
         )
