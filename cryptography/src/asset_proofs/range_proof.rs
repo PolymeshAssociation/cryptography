@@ -12,6 +12,7 @@ use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use sp_std::vec::Vec;
 
 const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 

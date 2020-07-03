@@ -165,7 +165,8 @@ impl Decode for AccountMemo {
 }
 
 /// Holds contents of the public portion of an account which can be safely put on the chain.
-#[derive(Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccountContent {
     pub id: u32,
@@ -178,7 +179,8 @@ pub struct PubAccountContent {
 }
 
 /// Wrapper for the account content and signature.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccount {
     pub content: PubAccountContent,
