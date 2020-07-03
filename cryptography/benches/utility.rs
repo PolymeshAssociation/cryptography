@@ -48,7 +48,9 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
     updated_issuer_account
 }
 
-pub fn generate_mediator_keys<R: RngCore + CryptoRng>(rng: &mut R) -> (AccountMemo, MediatorAccount) {
+pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
+    rng: &mut R,
+) -> (AccountMemo, MediatorAccount) {
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
     let mediator_enc_key = EncryptionKeys {
         pblc: mediator_elg_secret_key.get_public_key().into(),
@@ -102,7 +104,7 @@ pub fn create_account<R: RngCore + CryptoRng>(
     rng: &mut R,
     asset_id: &AssetId,
     valid_asset_ids: &Vec<Scalar>,
-    account_id: u32
+    account_id: u32,
 ) -> Account {
     let secret_account = gen_keys(rng, asset_id);
 
