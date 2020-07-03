@@ -1,4 +1,29 @@
-//! A simple commandline application to act as a MERCAT Validator.
+mod input;
+use env_logger;
+use input::{parse_input, CLI};
+use log::info;
+use metrics::timing;
+use std::time::Instant;
+
+fn main() {
+    env_logger::init();
+    info!("Starting the program.");
+    // init_print_logger();
+
+    let parse_arg_timer = Instant::now();
+    let args = parse_input().unwrap();
+    timing!("validator.argument_parse", parse_arg_timer, Instant::now());
+
+    // match args {
+    //     CLI::ValidateIssuance(cfg) => validate_asset_issuance(cfg).unwrap(),
+    //     CLI::ValidateAccount(cfg) => validate_account(cfg).unwrap(),
+    //     CLI::ValidateTransaction(cfg) => validate_transaction(cfg).unwrap(),
+    // };
+
+    info!("The program finished successfully.");
+}
+
+/*//! A simple commandline application to act as a MERCAT Validator.
 //! Use `mercat_validator --help` to see the usage.
 
 mod input;
@@ -52,3 +77,4 @@ fn main() {
 
     info!("The program finished successfully.");
 }
+*/

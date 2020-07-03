@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use cryptography::{
+/*use cryptography::{
     asset_proofs::{
         one_out_of_many_proof::OooNProofGenerators, CommitmentWitness, ElgamalSecretKey,
     },
@@ -29,7 +29,6 @@ use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
 use sp_std::prelude::*;
 use std::time::{Duration, Instant};
-use wasm_bindgen_test::*;
 
 const SEED_1: [u8; 32] = [42u8; 32];
 const SET_SIZE: u32 = 65536;
@@ -392,7 +391,7 @@ fn bench_mercat_confidential_tx_operations(c: &mut Criterion) {
                     .unwrap();
                 assert_eq!(
                     state,
-                    ConfidentialTxState::FinalizationJustification(TxSubstate::Started)
+                    ConfidentialTxState::Justification(TxSubstate::Started)
                 );
             })
         },
@@ -587,3 +586,4 @@ criterion_group! {
 }
 
 criterion_main!(bench_account_validation);
+*/

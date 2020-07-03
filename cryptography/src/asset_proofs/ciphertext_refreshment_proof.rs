@@ -125,6 +125,35 @@ impl UpdateTranscript for CipherTextRefreshmentInitialMessage {
     }
 }
 
+/// Holds the non-interactive proofs of equality using different public keys, equivalent
+/// of L_equal of MERCAT paper.
+#[derive(Default, Clone, Copy, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct CipherEqualSamePubKeyProof {
+    pub init: CipherTextRefreshmentInitialMessage,
+    pub response: CipherTextRefreshmentFinalResponse,
+}
+
+impl
+    From<(
+        CipherTextRefreshmentInitialMessage,
+        CipherTextRefreshmentFinalResponse,
+    )> for CipherEqualSamePubKeyProof
+{
+    fn from(
+        pair: (
+            CipherTextRefreshmentInitialMessage,
+            CipherTextRefreshmentFinalResponse,
+        ),
+    ) -> Self {
+        Self {
+            init: pair.0,
+            response: pair.1,
+        }
+    }
+}
+
 pub struct CipherTextRefreshmentProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
     secret_key: ElgamalSecretKey,

@@ -119,6 +119,24 @@ impl UpdateTranscript for CorrectnessInitialMessage {
     }
 }
 
+/// Holds the non-interactive proofs of correctness, equivalent of L_correct of MERCAT paper.
+#[derive(Default, Clone, Copy, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct CorrectnessProof {
+    pub init: CorrectnessInitialMessage,
+    pub response: CorrectnessFinalResponse,
+}
+
+impl From<(CorrectnessInitialMessage, CorrectnessFinalResponse)> for CorrectnessProof {
+    fn from(pair: (CorrectnessInitialMessage, CorrectnessFinalResponse)) -> Self {
+        Self {
+            init: pair.0,
+            response: pair.1,
+        }
+    }
+}
+
 pub struct CorrectnessProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
     pub pub_key: ElgamalPublicKey,

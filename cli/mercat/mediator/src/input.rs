@@ -144,6 +144,11 @@ pub struct JustifyTransactionInfo {
     #[structopt(long, help = "The name of the sender.")]
     pub sender: String,
 
+    /// An account must have already been created for this user, using `mercat-account`
+    /// CLI.
+    #[structopt(long, help = "The name of the receiver.")]
+    pub receiver: String,
+
     /// The name of the mediator.
     #[structopt(short, long, help = "The name of the mediator.")]
     pub mediator: String,
@@ -244,6 +249,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 tx_id: cfg.tx_id,
                 ticker: cfg.ticker,
                 sender: cfg.sender,
+                receiver: cfg.receiver,
                 mediator: cfg.mediator,
                 reject: cfg.reject,
                 save_config: cfg.save_config.clone(),

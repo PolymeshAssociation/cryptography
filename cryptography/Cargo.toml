@@ -87,9 +87,9 @@ std = [
 	"failure/std",
 ]
 
-[[bench]]
-name = "mercat_operations"
-harness = false
+# [[bench]]
+# name = "mercat_operations"
+# harness = false
 
 [[bench]]
 name = "elgamal_decryption"
