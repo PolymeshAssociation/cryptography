@@ -22,6 +22,7 @@ use curve25519_dalek::{
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
@@ -31,7 +32,8 @@ use sp_std::{cmp::min, convert::TryFrom, prelude::*};
 pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MembershipProofInitialMessage {
     ooon_proof_initial_message: OOONProofInitialMessage,
     secret_element_comm: RistrettoPoint,
@@ -78,7 +80,8 @@ impl UpdateTranscript for MembershipProofInitialMessage {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Default, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MembershipProofFinalResponse {
     ooon_proof_final_response: OOONProofFinalResponse,
 }
@@ -521,9 +524,9 @@ mod tests {
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
-        let elements_set: Vec<Scalar> = (0..2000u32).map(|m| Scalar::from(m)).collect();
+        let elements_set: Vec<Scalar> = (0..20000u32).map(|m| Scalar::from(m)).collect();
 
-        let secret = Scalar::from(8u32);
+        let secret = Scalar::from(8760u32);
         let blinding = Scalar::random(&mut rng);
 
         let secret_commitment = generators.com_gens.commit(secret, blinding);

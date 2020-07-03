@@ -836,6 +836,10 @@ fn parse_transactions(
 ) -> Result<(u32, Vec<TransactionMode>), Error> {
     let mut transaction_list: Vec<TransactionMode> = vec![];
     let mut transaction_id = transaction_id;
+    if value == &Yaml::BadValue {
+        transaction_list.push(TransactionMode::Empty);
+        return Ok((transaction_id, transaction_list));
+    }
     let transactions = to_array(value, path.clone(), attribute)?;
     for transaction in transactions.into_iter() {
         match &transaction {

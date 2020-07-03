@@ -11,6 +11,7 @@ use mercat_common::{
     validate::{validate_account, validate_asset_issuance, validate_transaction},
 };
 use metrics::timing;
+use rand::rngs::OsRng;
 use std::time::Instant;
 
 fn main() {
