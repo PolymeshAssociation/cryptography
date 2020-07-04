@@ -84,9 +84,9 @@ fn asset_issuance_init_verify(
 
 /// The confidential transaction issuer issues an asset for an issuer account, and
 /// encrypts the metadata to the mediator's public key.
-pub struct CtxIssuer {}
+pub struct AssetIssuer {}
 
-impl AssetTransactionIssuer for CtxIssuer {
+impl AssetTransactionIssuer for AssetIssuer {
     fn initialize<T: RngCore + CryptoRng>(
         &self,
         issr_account_id: u32,
@@ -166,7 +166,7 @@ impl AssetTransactionIssuer for CtxIssuer {
 // -                                    Validator                                      -
 // -------------------------------------------------------------------------------------
 
-pub struct AssetTxIssueValidator {}
+pub struct AssetValidator {}
 
 /// Called by validators to verify the ZKP of the wellformedness of encrypted balance
 /// and to verify the signature.
@@ -187,7 +187,7 @@ fn verify_initialization(
     Ok(AssetTxState::Initialization(TxSubstate::Validated))
 }
 
-impl AssetTransactionVerifier for AssetTxIssueValidator {
+impl AssetTransactionVerifier for AssetValidator {
     /// Called by validators to verify the justification and processing of the transaction.
     fn verify(
         &self,
@@ -195,7 +195,7 @@ impl AssetTransactionVerifier for AssetTxIssueValidator {
         issr_account: &PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
-    ) -> Fallible<AssetTxState> {
+    ) -> Fallible<(PubAccount, AssetTxState)> {
         // Verify mediator's signature on the transaction.
         let message = asset_tx.content.encode();
         let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &asset_tx.sig)?;
@@ -209,7 +209,15 @@ impl AssetTransactionVerifier for AssetTxIssueValidator {
             mdtr_enc_pub_key,
         )?;
 
-        Ok(AssetTxState::Justification(TxSubstate::Validated))
+        // After successfully verifying the transaction, validator deposits the amount
+        // to issuer's account (aka processing phase).
+        let updated_issr_account =
+            crate::mercat::account::deposit(issr_account.clone(), asset_tx.content.memo);
+
+        Ok((
+            updated_issr_account,
+            AssetTxState::Justification(TxSubstate::Validated),
+        ))
     }
 }
 
@@ -217,9 +225,9 @@ impl AssetTransactionVerifier for AssetTxIssueValidator {
 // -                                    Mediator                                       -
 // -------------------------------------------------------------------------------------
 
-pub struct AssetTxIssueMediator {}
+pub struct AssetMediator {}
 
-impl AssetTransactionMediator for AssetTxIssueMediator {
+impl AssetTransactionMediator for AssetMediator {
     /// Justifies and processes a confidential asset issue transaction. This method is called
     /// by mediator. Corresponds to `JustifyAssetTx` and `ProcessCTx` of MERCAT paper.
     /// If the trasaction is justified, it will be processed immediately.
@@ -230,7 +238,7 @@ impl AssetTransactionMediator for AssetTxIssueMediator {
         state: AssetTxState,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
-    ) -> Fallible<(JustifiedAssetTx, PubAccount)> {
+    ) -> Fallible<JustifiedAssetTx> {
         let gens = PedersenGens::default();
 
         // Validate the state.
@@ -256,22 +264,14 @@ impl AssetTransactionMediator for AssetTxIssueMediator {
             asset_tx.content.balance_correctness_proof.response,
         )?;
 
-        // After successfully justifying the transaction, mediator deposits the amount
-        // to issuer's account (aka processing phase).
-        let mut updated_issr_account = issr_pub_account.clone();
-        updated_issr_account.content.enc_balance += asset_tx.content.memo;
-
-        // On successful justification, mediator transitions the state.
+        // On successful justification, mediator signs the transaction.
         let message = asset_tx.encode();
         let sig = mdtr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
-        Ok((
-            JustifiedAssetTx {
-                content: asset_tx,
-                sig,
-            },
-            updated_issr_account,
-        ))
+        Ok(JustifiedAssetTx {
+            content: asset_tx,
+            sig,
+        })
     }
 }
 
@@ -358,7 +358,7 @@ mod tests {
             .expand_to_keypair(ExpansionMode::Ed25519);
 
         // ----------------------- Initialization
-        let issuer = CtxIssuer {};
+        let issuer = AssetIssuer {};
         let (asset_tx, state) = issuer
             .initialize(
                 1234u32,
@@ -370,8 +370,8 @@ mod tests {
             .unwrap();
 
         // ----------------------- Justification
-        let mediator = AssetTxIssueMediator {};
-        let (justified_tx, updated_issuer_account) = mediator
+        let mediator = AssetMediator {};
+        let justified_tx = mediator
             .justify(
                 asset_tx.clone(),
                 &issuer_public_account,
@@ -382,11 +382,11 @@ mod tests {
             .unwrap();
 
         // Positive test.
-        let validator = AssetTxIssueValidator {};
-        let state = validator
+        let validator = AssetValidator {};
+        let (updated_issuer_account, state) = validator
             .verify(
                 &justified_tx,
-                &updated_issuer_account,
+                &issuer_public_account,
                 &mediator_enc_key.pblc,
                 &mediator_signing_pair.public.into(),
             )
@@ -415,7 +415,7 @@ mod tests {
 
         let result = validator.verify(
             &invalid_justified_tx,
-            &updated_issuer_account,
+            &issuer_public_account,
             &mediator_enc_key.pblc,
             &mediator_signing_pair.public.into(),
         );
@@ -428,7 +428,7 @@ mod tests {
 
         let result = validator.verify(
             &invalid_justified_tx,
-            &updated_issuer_account,
+            &issuer_public_account,
             &mediator_enc_key.pblc,
             &mediator_signing_pair.public.into(),
         );

@@ -87,10 +87,6 @@ std = [
 	"failure/std",
 ]
 
-# [[bench]]
-# name = "mercat_operations"
-# harness = false
-
 [[bench]]
 name = "elgamal_decryption"
 harness = false
@@ -101,4 +97,12 @@ harness = false
 
 [[bench]]
 name = "mercat_transaction"
+harness = false
+
+[[bench]]
+name = "mercat_asset"
+harness = false
+
+[[bench]]
+name = "mercat_account"
 harness = false

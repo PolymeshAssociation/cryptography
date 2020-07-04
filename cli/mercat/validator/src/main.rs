@@ -31,7 +31,7 @@ mod input;
 use codec::Decode;
 use cryptography::mercat::{
     account::AccountValidator,
-    asset::AssetTxIssueValidator,
+    asset::AssetValidator,
     conf_tx::{CtxMediatorValidator, CtxReceiverValidator, CtxSenderValidator},
     AccountCreatorVerifier, AccountMemo, AssetTransactionFinalizeAndProcessVerifier,
     AssetTransactionInitializeVerifier, AssetTxState, ConfidentialTransactionFinalizationVerifier,
@@ -76,7 +76,7 @@ fn process_asset_issuance_init(
     issr_pub_account: &PubAccount,
 ) -> Result<AssetTxState, Error> {
     let tx = PubAssetTxData::decode(&mut &instruction.data[..]).unwrap();
-    let validator = AssetTxIssueValidator {};
+    let validator = AssetValidator {};
     let state = validator
         .verify_initialization(
             &tx,
@@ -95,7 +95,7 @@ fn process_asset_issuance_justification(
     issr_pub_account: &PubAccount,
 ) -> Result<AssetTxState, Error> {
     let tx = PubJustifiedAssetTxData::decode(&mut &instruction.data[..]).unwrap();
-    let validator = AssetTxIssueValidator {};
+    let validator = AssetValidator {};
     let state = validator
         .verify_justification(&tx, issr_pub_account, &mdtr_account.owner_sign_pub_key)
         .map_err(|error| Error::LibraryError { error })?;
@@ -159,6 +159,7 @@ fn validate_asset_issuance(cfg: input::ValidateAssetIssuanceInfo) -> Result<(), 
         Instant::now()
     );
 
+    // todo also save the updated issuer account.
     let save_objects_timer = Instant::now();
     // Save the transaction under the new state.
     instruction.state = result;

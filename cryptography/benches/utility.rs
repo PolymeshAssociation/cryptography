@@ -2,12 +2,13 @@ use cryptography::{
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
         account::{convert_asset_ids, AccountCreator},
-        asset::{AssetTxIssueMediator, CtxIssuer},
+        asset::{AssetIssuer, AssetMediator, AssetValidator},
         conf_tx::{CtxMediator, CtxReceiver, CtxSender},
         Account, AccountCreatorInitializer, AccountMemo, AssetTransactionIssuer,
-        AssetTransactionMediator, AssetTxState, EncryptionKeys, EncryptionPubKey, FinalizedTx,
-        InitializedTx, MediatorAccount, PubAccount, SecAccount, SigningPubKey, TransactionMediator,
-        TransactionReceiver, TransactionSender, TxState, TxSubstate,
+        AssetTransactionMediator, AssetTransactionVerifier, AssetTxState, EncryptionKeys,
+        EncryptionPubKey, FinalizedTx, InitializedTx, MediatorAccount, PubAccount, SecAccount,
+        SigningPubKey, TransactionMediator, TransactionReceiver, TransactionSender, TxState,
+        TxSubstate,
     },
     AssetId, Balance,
 };
@@ -23,7 +24,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
     amount: u32,
 ) -> PubAccount {
     // Issuer side.
-    let issuer = CtxIssuer {};
+    let issuer = AssetIssuer {};
     let (asset_tx, _) = issuer
         .initialize(
             0,
@@ -35,14 +36,24 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
         .unwrap();
 
     // Mediator side.
-    let mediator = AssetTxIssueMediator {};
-    let (_, updated_issuer_account) = mediator
+    let mediator = AssetMediator {};
+    let tx = mediator
         .justify(
             asset_tx.clone(),
             &account.pblc,
-            AssetTxState::Initialization(TxSubstate::Validated),
+            AssetTxState::Initialization(TxSubstate::Started),
             &mediator_account.encryption_key,
             &mediator_account.signing_key,
+        )
+        .unwrap();
+
+    let validator = AssetValidator {};
+    let (updated_issuer_account, _) = validator
+        .verify(
+            &tx,
+            &account.pblc,
+            &mediator_pub_account.owner_enc_pub_key,
+            &mediator_pub_account.owner_sign_pub_key,
         )
         .unwrap();
     updated_issuer_account

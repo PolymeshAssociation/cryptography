@@ -9,7 +9,7 @@ use cryptography::{
     asset_id_from_ticker,
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
-        account::AccountCreator, asset::CtxIssuer, conf_tx::CtxReceiver, conf_tx::CtxSender,
+        account::AccountCreator, asset::AssetIssuer, conf_tx::CtxReceiver, conf_tx::CtxSender,
         Account, AccountCreatorInitializer, AccountMemo, AssetTransactionIssuer, EncryptionKeys,
         InitializedTx, PubAccount, SecAccount, TransactionSender, TxState, TxSubstate,
     },
@@ -159,7 +159,7 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
 
     // Initialize the asset issuance process.
     let issuance_init_timer = Instant::now();
-    let issuer = CtxIssuer {};
+    let issuer = AssetIssuer {};
     let (asset_tx, state) = issuer
         .initialize(
             cfg.account_id,

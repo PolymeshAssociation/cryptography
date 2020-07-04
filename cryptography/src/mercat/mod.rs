@@ -31,7 +31,7 @@ use sp_std::{convert::From, fmt, mem, vec::Vec};
 // -                                  Constants                                        -
 // -------------------------------------------------------------------------------------
 
-const EXPONENT: u32 = 3; // TODO: change to 8. CRYP-112
+const EXPONENT: u32 = 8; // TODO: change to 8. CRYP-112
 const BASE: u32 = 4;
 
 // -------------------------------------------------------------------------------------
@@ -499,7 +499,7 @@ pub trait AssetTransactionMediator {
         state: AssetTxState,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
-    ) -> Fallible<(JustifiedAssetTx, PubAccount)>;
+    ) -> Fallible<JustifiedAssetTx>;
 }
 
 pub trait AssetTransactionVerifier {
@@ -510,7 +510,7 @@ pub trait AssetTransactionVerifier {
         issr_account: &PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
-    ) -> Fallible<AssetTxState>;
+    ) -> Fallible<(PubAccount, AssetTxState)>;
 }
 
 // -------------------------------------------------------------------------------------
@@ -625,6 +625,7 @@ impl Decode for FinalizedTx {
 
 /// Wrapper for the contents and the signature of the justified and finalized
 /// transaction.
+#[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct JustifiedTx {
     pub content: FinalizedTx,

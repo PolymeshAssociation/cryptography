@@ -8,7 +8,7 @@ use cryptography::{
     asset_id_from_ticker,
     asset_proofs::ElgamalSecretKey,
     mercat::{
-        asset::AssetTxIssueMediator, conf_tx::CtxMediator, AccountMemo, AssetTransactionMediator,
+        asset::AssetMediator, conf_tx::CtxMediator, AccountMemo, AssetTransactionMediator,
         AssetTxState, EncryptionKeys, FinalizedTx, InitializedAssetTx, MediatorAccount, PubAccount,
         TransactionMediator, TxState, TxSubstate,
     },
@@ -145,8 +145,8 @@ fn justify_asset_issuance(cfg: input::JustifyIssuanceInfo) -> Result<(), Error> 
 
     // Justification.
     let justify_library_timer = Instant::now();
-    let mediator = AssetTxIssueMediator {};
-    let (justified_tx, updated_issuer_account) = mediator
+    let mediator = AssetMediator {};
+    let justified_tx = mediator
         .justify(
             asset_tx.clone(),
             &issuer_account,
@@ -184,14 +184,6 @@ fn justify_asset_issuance(cfg: input::JustifyIssuanceInfo) -> Result<(), Error> 
             data: justified_tx.encode().to_vec(),
             state: AssetTxState::Justification(TxSubstate::Started),
         };
-
-        save_object(
-            db_dir.clone(),
-            ON_CHAIN_DIR,
-            &cfg.issuer,
-            VALIDATED_PUBLIC_ACCOUNT_FILE,
-            &updated_issuer_account,
-        )?;
     }
 
     save_object(
