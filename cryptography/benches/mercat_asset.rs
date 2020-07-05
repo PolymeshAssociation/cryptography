@@ -14,8 +14,8 @@ use rand::thread_rng;
 
 // The issued amount. Will be in:
 // [10^MIN_ISSUER_AMOUNT_ORDER, 10^(MIN_ISSUER_AMOUNT_ORDER+1), ..., 10^MAX_ISSUER_AMOUNT_ORDER]
-const MIN_ISSUED_AMOUNT_ORDER: u32 = 2;
-const MAX_ISSUED_AMOUNT_ORDER: u32 = 4;
+const MIN_ISSUED_AMOUNT_ORDER: u32 = 1;
+const MAX_ISSUED_AMOUNT_ORDER: u32 = 5;
 
 // const ISSUED_AMOUNT: u32 = 1000;
 

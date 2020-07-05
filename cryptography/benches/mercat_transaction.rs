@@ -14,14 +14,14 @@ use rand::thread_rng;
 
 // The sender's initial balance. Will be in:
 // [10^MIN_SENDER_BALANCE_ORDER, 10^(MIN_SENDER_BALANCE_ORDER+1), ..., 10^MAX_SENDER_BALANCE_ORDER]
-const MIN_SENDER_BALANCE_ORDER: u32 = 2;
-const MAX_SENDER_BALANCE_ORDER: u32 = 4;
+const MIN_SENDER_BALANCE_ORDER: u32 = 1;
+const MAX_SENDER_BALANCE_ORDER: u32 = 5;
 
 // The receiver's initial balance.
 const RECEIVER_INIT_BALANCE: u32 = 10000;
 
 // The transferred amout must be in [0, 10^MIN_SENDER_BALANCE_ORDER].
-const TRANSFERRED_AMOUNT: u32 = 100;
+const TRANSFERRED_AMOUNT: u32 = 1;
 
 // The size of the valid asset id set.
 const MAX_ASSET_ID_INDEX: u32 = 1000000;

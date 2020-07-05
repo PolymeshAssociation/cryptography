@@ -22,15 +22,20 @@ fn bench_account_creation(c: &mut Criterion) {
     let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
     let mut rng = thread_rng();
-    let public_accounts: Vec<PubAccount> = ASSET_IDS
+    let public_accounts: Vec<(String, PubAccount)> = ASSET_IDS
         .iter()
-        .map(|&id| utility::create_account(&mut rng, &AssetId::from(id), &valid_asset_ids, 0).pblc)
+        .map(|&id| {
+            (
+                format!("asset_id: {:?}", id),
+                utility::create_account(&mut rng, &AssetId::from(id), &valid_asset_ids, 0).pblc,
+            )
+        })
         .collect();
 
     let label = format!("MERCAT Transaction: Validator");
     c.bench_function_over_inputs(
         &label,
-        move |b, account| {
+        move |b, (_label, account)| {
             b.iter(|| {
                 let validator = AccountValidator {};
                 validator.verify(account, &valid_asset_ids).unwrap()
