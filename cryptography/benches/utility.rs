@@ -1,21 +1,19 @@
 use cryptography::{
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
-        account::{convert_asset_ids, AccountCreator},
+        account::AccountCreator,
         asset::{AssetIssuer, AssetMediator, AssetValidator},
-        conf_tx::{CtxMediator, CtxReceiver, CtxSender},
         Account, AccountCreatorInitializer, AccountMemo, AssetTransactionIssuer,
         AssetTransactionMediator, AssetTransactionVerifier, AssetTxState, EncryptionKeys,
-        EncryptionPubKey, FinalizedTx, InitializedTx, MediatorAccount, PubAccount, SecAccount,
-        SigningPubKey, TransactionMediator, TransactionReceiver, TransactionSender, TxState,
-        TxSubstate,
+        MediatorAccount, PubAccount, SecAccount, TxSubstate,
     },
-    AssetId, Balance,
+    AssetId,
 };
 use curve25519_dalek::scalar::Scalar;
-use rand::{thread_rng, CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 use schnorrkel::{ExpansionMode, MiniSecretKey};
 
+#[allow(dead_code)]
 pub fn issue_assets<R: RngCore + CryptoRng>(
     rng: &mut R,
     account: Account,
@@ -59,6 +57,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
     updated_issuer_account
 }
 
+#[allow(dead_code)]
 pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
     rng: &mut R,
 ) -> (AccountMemo, MediatorAccount) {
@@ -80,6 +79,7 @@ pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
     )
 }
 
+#[allow(dead_code)]
 pub fn create_account_with_amount<R: RngCore + CryptoRng>(
     rng: &mut R,
     asset_id: &AssetId,
@@ -111,6 +111,7 @@ pub fn create_account_with_amount<R: RngCore + CryptoRng>(
     }
 }
 
+#[allow(dead_code)]
 pub fn create_account<R: RngCore + CryptoRng>(
     rng: &mut R,
     asset_id: &AssetId,
