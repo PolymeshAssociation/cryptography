@@ -1,6 +1,6 @@
 mod input;
 use env_logger;
-use input::{parse_input, CLI};
+use input::parse_input;
 use log::info;
 use metrics::timing;
 use std::time::Instant;
@@ -11,7 +11,6 @@ fn main() {
     // init_print_logger();
 
     let parse_arg_timer = Instant::now();
-    let args = parse_input().unwrap();
     timing!("validator.argument_parse", parse_arg_timer, Instant::now());
 
     // match args {

@@ -57,7 +57,7 @@ impl TransactionSender for CtxSender {
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
         rng: &mut T,
-    ) -> Fallible<(InitializedTx, TxState)> {
+    ) -> Fallible<InitializedTx> {
         let gens = PedersenGens::default();
         // NOTE: If this decryption ends up being too slow, we can pass in the balance
         // as input.
@@ -221,10 +221,7 @@ impl TransactionSender for CtxSender {
         let message = content.encode();
         let sig = sndr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
-        Ok((
-            InitializedTx { content, sig },
-            TxState::Initialization(TxSubstate::Started),
-        ))
+        Ok(InitializedTx { content, sig })
     }
 }
 
@@ -245,15 +242,14 @@ impl TransactionReceiver for CtxReceiver {
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
         amount: Balance,
-        state: TxState,
         rng: &mut T,
-    ) -> Fallible<(FinalizedTx, TxState)> {
+    ) -> Fallible<FinalizedTx> {
         // Verify sender's signature.
         let ctx_data = &conf_tx_init_data;
         let message = ctx_data.content.encode();
         let _ = sndr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &ctx_data.sig)?;
 
-        self.finalize_by_receiver(conf_tx_init_data, rcvr_account, state, amount, rng)
+        self.finalize_by_receiver(conf_tx_init_data, rcvr_account, amount, rng)
 
         // TODO: CRYP-110 also ensure that _sndr_pub_account and _enc_asset_id are actually used
         // Err(ErrorKind::NotImplemented.into())
@@ -267,14 +263,9 @@ impl CtxReceiver {
         &self,
         conf_tx_init_data: InitializedTx,
         rcvr_account: Account,
-        state: TxState,
         expected_amount: Balance,
         rng: &mut T,
-    ) -> Fallible<(FinalizedTx, TxState)> {
-        ensure!(
-            state == TxState::Initialization(TxSubstate::Started),
-            ErrorKind::InvalidPreviousState { state }
-        );
+    ) -> Fallible<FinalizedTx> {
         let rcvr_enc_sec = &rcvr_account.scrt.enc_keys.scrt;
         let rcvr_sign_keys = &rcvr_account.scrt.sign_keys;
         let rcvr_pub_account = &rcvr_account.pblc.content;
@@ -309,10 +300,7 @@ impl CtxReceiver {
         let message = content.encode();
         let sig = rcvr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
-        Ok((
-            FinalizedTx { content, sig },
-            TxState::Finalization(TxSubstate::Started),
-        ))
+        Ok(FinalizedTx { content, sig })
     }
 }
 
@@ -327,18 +315,13 @@ impl TransactionMediator for CtxMediator {
     fn justify(
         &self,
         conf_tx_final_data: FinalizedTx,
-        state: TxState,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_sign_pub_key: &SigningPubKey,
         asset_id_hint: AssetId,
-    ) -> Fallible<(JustifiedTx, TxState)> {
+    ) -> Fallible<JustifiedTx> {
         // TODO: may need to change the signature CRYP-111
-        ensure!(
-            state == TxState::Finalization(TxSubstate::Started),
-            ErrorKind::InvalidPreviousState { state }
-        );
 
         // Verify receiver's signature on the transaction.
         let final_tx_data = &conf_tx_final_data;
@@ -389,13 +372,10 @@ impl TransactionMediator for CtxMediator {
         let message = conf_tx_final_data.encode();
         let sig = mdtr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
-        Ok((
-            JustifiedTx {
-                content: conf_tx_final_data,
-                sig,
-            },
-            TxState::Justification(TxSubstate::Started),
-        ))
+        Ok(JustifiedTx {
+            content: conf_tx_final_data,
+            sig,
+        })
     }
 }
 
@@ -755,72 +735,12 @@ mod tests {
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
-        let valid_state = TxState::Initialization(TxSubstate::Started);
 
-        let result = ctx_rcvr.finalize_by_receiver(
-            ctx_init_data,
-            rcvr_account,
-            valid_state,
-            expected_amount,
-            &mut rng,
-        );
+        let result =
+            ctx_rcvr.finalize_by_receiver(ctx_init_data, rcvr_account, expected_amount, &mut rng);
 
         result.unwrap();
         // Correctness of the proof will be verified in the verify function
-    }
-
-    #[test]
-    #[wasm_bindgen_test]
-    fn test_finalize_ctx_prev_state_error() {
-        let ctx_rcvr = CtxReceiver {};
-        let expected_amount = 10;
-        let asset_id = AssetId::from(20u32);
-        let balance = 0;
-        let mut rng = StdRng::from_seed([17u8; 32]);
-
-        let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
-        let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
-        let sign = rcvr_sign_keys.sign(SIG_CTXT.bytes(b""));
-
-        let ctx_init_data = mock_ctx_init_data(
-            rcvr_enc_keys.pblc,
-            expected_amount,
-            asset_id.clone(),
-            sign,
-            &mut rng,
-        );
-        let rcvr_account = Account {
-            pblc: mock_gen_account(
-                rcvr_enc_keys.pblc,
-                rcvr_sign_keys.public,
-                asset_id.clone(),
-                balance,
-                &mut rng,
-            )
-            .unwrap(),
-            scrt: SecAccount {
-                enc_keys: rcvr_enc_keys,
-                sign_keys: rcvr_sign_keys,
-                asset_id: asset_id.clone(),
-                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
-            },
-        };
-        let invalid_state = TxState::Justification(TxSubstate::Started);
-
-        let result = ctx_rcvr.finalize_by_receiver(
-            ctx_init_data,
-            rcvr_account,
-            invalid_state,
-            expected_amount,
-            &mut rng,
-        );
-
-        assert_err!(
-            result,
-            ErrorKind::InvalidPreviousState {
-                state: invalid_state,
-            }
-        );
     }
 
     #[test]
@@ -860,15 +780,9 @@ mod tests {
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
-        let valid_state = TxState::Initialization(TxSubstate::Started);
 
-        let result = ctx_rcvr.finalize_by_receiver(
-            ctx_init_data,
-            rcvr_account,
-            valid_state,
-            expected_amount,
-            &mut rng,
-        );
+        let result =
+            ctx_rcvr.finalize_by_receiver(ctx_init_data, rcvr_account, expected_amount, &mut rng);
 
         assert_err!(
             result,
@@ -943,27 +857,23 @@ mod tests {
             amount,
             &mut rng,
         );
-        let (ctx_init_data, state) = result.unwrap();
-        assert_eq!(state, TxState::Initialization(TxSubstate::Started));
+        let ctx_init_data = result.unwrap();
 
         // Finalize the transaction and check its state
         let result =
-            rcvr.finalize_by_receiver(ctx_init_data, rcvr_account.clone(), state, amount, &mut rng);
-        let (ctx_finalized_data, state) = result.unwrap();
-        assert_eq!(state, TxState::Finalization(TxSubstate::Started));
+            rcvr.finalize_by_receiver(ctx_init_data, rcvr_account.clone(), amount, &mut rng);
+        let ctx_finalized_data = result.unwrap();
 
         // Justify the transaction
         let result = mdtr.justify(
             ctx_finalized_data,
-            state,
             &mdtr_enc_keys,
             &mdtr_sign_keys,
             &sndr_sign_keys.public.clone(),
             &rcvr_sign_keys.public.clone(),
             asset_id,
         );
-        let (justified_finalized_ctx_data, state) = result.unwrap();
-        assert_eq!(state, TxState::Justification(TxSubstate::Started));
+        let justified_finalized_ctx_data = result.unwrap();
 
         let (updated_sender_account, updated_receiver_account) = tx_validator
             .verify(

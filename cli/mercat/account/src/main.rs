@@ -10,8 +10,9 @@ use cryptography::{
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
         account::AccountCreator, asset::AssetIssuer, conf_tx::CtxReceiver, conf_tx::CtxSender,
-        Account, AccountCreatorInitializer, AccountMemo, AssetTransactionIssuer, EncryptionKeys,
-        InitializedTx, PubAccount, SecAccount, TransactionSender, TxState, TxSubstate,
+        Account, AccountCreatorInitializer, AccountMemo, AssetTransactionIssuer, AssetTxState,
+        EncryptionKeys, InitializedTx, PubAccount, SecAccount, TransactionSender, TxState,
+        TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -160,7 +161,7 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
     // Initialize the asset issuance process.
     let issuance_init_timer = Instant::now();
     let issuer = AssetIssuer {};
-    let (asset_tx, state) = issuer
+    let asset_tx = issuer
         .initialize(
             cfg.account_id,
             &issuer_account,
@@ -177,6 +178,7 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
     );
 
     // Save the artifacts to file.
+    let state = AssetTxState::Initialization(TxSubstate::Started);
     let save_to_file_timer = Instant::now();
     let instruction = Instruction {
         state,
@@ -246,7 +248,7 @@ fn process_create_tx(cfg: input::CreateTransactionInfo) -> Result<(), Error> {
     // Initialize the transaction.
     let create_tx_timer = Instant::now();
     let sender = CtxSender {};
-    let (asset_tx, state) = sender
+    let asset_tx = sender
         .create(
             &sender_account,
             &receiver_account,
@@ -258,6 +260,7 @@ fn process_create_tx(cfg: input::CreateTransactionInfo) -> Result<(), Error> {
     timing!("account.create_tx.create", create_tx_timer, Instant::now());
 
     // Save the artifacts to file.
+    let state = TxState::Initialization(TxSubstate::Started);
     let save_to_file_timer = Instant::now();
     let instruction = CTXInstruction {
         state,
@@ -338,14 +341,8 @@ fn process_finalize_tx(cfg: input::FinalizeTransactionInfo) -> Result<(), Error>
     // Finalize the transaction.
     let finalize_by_receiver_timer = Instant::now();
     let receiver = CtxReceiver {};
-    let (asset_tx, state) = receiver
-        .finalize_by_receiver(
-            tx,
-            receiver_account,
-            TxState::Initialization(TxSubstate::Validated),
-            cfg.amount,
-            &mut rng,
-        )
+    let asset_tx = receiver
+        .finalize_by_receiver(tx, receiver_account, cfg.amount, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     timing!(
@@ -355,6 +352,7 @@ fn process_finalize_tx(cfg: input::FinalizeTransactionInfo) -> Result<(), Error>
     );
 
     // Save the artifacts to file.
+    let state = TxState::Finalization(TxSubstate::Started);
     let save_to_file_timer = Instant::now();
     let instruction = CTXInstruction {
         state,

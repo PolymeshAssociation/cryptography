@@ -150,7 +150,6 @@ fn justify_asset_issuance(cfg: input::JustifyIssuanceInfo) -> Result<(), Error> 
         .justify(
             asset_tx.clone(),
             &issuer_account,
-            instruction.state,
             &mediator_account.encryption_key,
             &mediator_account.signing_key,
         )
@@ -252,10 +251,9 @@ fn justify_asset_transaction(cfg: input::JustifyTransactionInfo) -> Result<(), E
     let mediator = CtxMediator {};
     let asset_id =
         asset_id_from_ticker(&cfg.ticker_id).map_err(|error| Error::LibraryError { error })?;
-    let (justified_tx, new_state) = mediator
+    let justified_tx = mediator
         .justify(
             asset_tx.clone(),
-            instruction.state,
             &mediator_account.encryption_key,
             &mediator_account.signing_key,
             &sender_account.content.memo.owner_sign_pub_key,
@@ -291,7 +289,7 @@ fn justify_asset_transaction(cfg: input::JustifyTransactionInfo) -> Result<(), E
         // Save the updated_issuer_account, and the justified transaction.
         next_instruction = CTXInstruction {
             data: justified_tx.encode().to_vec(),
-            state: new_state,
+            state: TxState::Justification(TxSubstate::Started),
         };
     }
 
@@ -299,7 +297,7 @@ fn justify_asset_transaction(cfg: input::JustifyTransactionInfo) -> Result<(), E
         db_dir,
         ON_CHAIN_DIR,
         &cfg.sender,
-        &confidential_transaction_file(cfg.tx_id, new_state),
+        &confidential_transaction_file(cfg.tx_id, TxState::Justification(TxSubstate::Started)),
         &next_instruction,
     )?;
 
