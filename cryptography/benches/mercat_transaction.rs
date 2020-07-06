@@ -6,7 +6,7 @@ use cryptography::{
         conf_tx::{CtxMediator, CtxReceiver, CtxSender, TransactionValidator},
         Account, EncryptionPubKey, FinalizedTx, InitializedTx, JustifiedTx, MediatorAccount,
         PubAccount, SigningPubKey, TransactionMediator, TransactionReceiver, TransactionSender,
-        TransactionVerifier, TxState, TxSubstate,
+        TransactionVerifier,
     },
     AssetId, Balance,
 };
@@ -70,7 +70,7 @@ fn bench_transaction_sender(
         .iter()
         .map(|sender_account| {
             let ctx_sender = CtxSender {};
-            let (tx, state) = ctx_sender
+            ctx_sender
                 .create(
                     &sender_account.clone(),
                     &rcvr_pub_account.clone(),
@@ -78,9 +78,7 @@ fn bench_transaction_sender(
                     amount,
                     &mut rng,
                 )
-                .unwrap();
-            assert_eq!(state, TxState::Initialization(TxSubstate::Started));
-            tx
+                .unwrap()
         })
         .collect()
 }
@@ -114,7 +112,6 @@ fn bench_transaction_receiver(
                         &sender_pub_key.clone(), // todo right now the sender's pub account is used to get its public key.
                         receiver_account.clone(),
                         amount,
-                        TxState::Initialization(TxSubstate::Started),
                         &mut rng,
                     )
                     .unwrap();
@@ -127,18 +124,15 @@ fn bench_transaction_receiver(
         .iter()
         .map(|tx| {
             let receiver = CtxReceiver {};
-            let (finalized_tx, state) = receiver
+            receiver
                 .finalize(
                     tx.clone(),
                     &sender_pub_key_cloned.clone(),
                     receiver_account_cloned.clone(),
                     TRANSFERRED_AMOUNT,
-                    TxState::Initialization(TxSubstate::Started),
                     &mut rng,
                 )
-                .unwrap();
-            assert_eq!(state, TxState::Finalization(TxSubstate::Started));
-            finalized_tx
+                .unwrap()
         })
         .collect()
 }
@@ -169,7 +163,6 @@ fn bench_transaction_mediator(
                 mediator
                     .justify(
                         tx.clone(),
-                        TxState::Finalization(TxSubstate::Started),
                         &mediator_account_cloned.encryption_key,
                         &mediator_account_cloned.signing_key,
                         &sender_pub_key,
@@ -186,19 +179,16 @@ fn bench_transaction_mediator(
         .iter()
         .map(|tx| {
             let mediator = CtxMediator {};
-            let (justified_tx, state) = mediator
+            mediator
                 .justify(
                     tx.clone(),
-                    TxState::Finalization(TxSubstate::Started),
                     &mediator_account.encryption_key,
                     &mediator_account.signing_key,
                     &sender_pub_key,
                     &receiver_pub_key,
                     asset_id.clone(),
                 )
-                .unwrap();
-            assert_eq!(state, TxState::Justification(TxSubstate::Started));
-            justified_tx
+                .unwrap()
         })
         .collect()
 }

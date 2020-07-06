@@ -1,6 +1,3 @@
-use crate::mercat::AssetTxState;
-use crate::mercat::TxState;
-
 use bulletproofs::ProofError;
 use failure::{Backtrace, Context, Fail};
 
@@ -145,17 +142,6 @@ pub enum ErrorKind {
 
     #[fail(display = "Wrong exponent parameter is passed")]
     InvalidExponentParameter,
-
-    /// The incoming transaction state does not match the expectation.
-    #[fail(display = "Received an invalid previous state: {}", state)]
-    InvalidPreviousState { state: TxState },
-
-    /// The incoming asset transaction state does not match the expectation.
-    #[fail(
-        display = "Received an invalid previous asset transaction state: {}",
-        state
-    )]
-    InvalidPreviousAssetTransactionState { state: AssetTxState },
 
     /// The amount in the initial transaction does not match the amount that receiver expected.
     #[fail(

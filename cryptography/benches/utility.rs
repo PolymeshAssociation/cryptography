@@ -4,8 +4,8 @@ use cryptography::{
         account::AccountCreator,
         asset::{AssetIssuer, AssetMediator, AssetValidator},
         Account, AccountCreatorInitializer, AccountMemo, AssetTransactionIssuer,
-        AssetTransactionMediator, AssetTransactionVerifier, AssetTxState, EncryptionKeys,
-        MediatorAccount, PubAccount, SecAccount, TxSubstate,
+        AssetTransactionMediator, AssetTransactionVerifier, EncryptionKeys, MediatorAccount,
+        PubAccount, SecAccount,
     },
     AssetId,
 };
@@ -23,7 +23,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
 ) -> PubAccount {
     // Issuer side.
     let issuer = AssetIssuer {};
-    let (asset_tx, _) = issuer
+    let asset_tx = issuer
         .initialize(
             0,
             &account.scrt,
@@ -39,14 +39,13 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
         .justify(
             asset_tx.clone(),
             &account.pblc,
-            AssetTxState::Initialization(TxSubstate::Started),
             &mediator_account.encryption_key,
             &mediator_account.signing_key,
         )
         .unwrap();
 
     let validator = AssetValidator {};
-    let (updated_issuer_account, _) = validator
+    let updated_issuer_account = validator
         .verify(
             &tx,
             &account.pblc,

@@ -14,12 +14,11 @@ use crate::{
             WellformednessProof, WellformednessProverAwaitingChallenge, WellformednessVerifier,
         },
     },
-    errors::{ErrorKind, Fallible},
+    errors::Fallible,
     mercat::{
         AssetMemo, AssetTransactionIssuer, AssetTransactionMediator, AssetTransactionVerifier,
-        AssetTxContent, AssetTxState, CipherEqualDifferentPubKeyProof, EncryptionKeys,
-        EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx, PubAccount, SecAccount,
-        SigningKeys, SigningPubKey, TxSubstate,
+        AssetTxContent, CipherEqualDifferentPubKeyProof, EncryptionKeys, EncryptionPubKey,
+        InitializedAssetTx, JustifiedAssetTx, PubAccount, SecAccount, SigningKeys, SigningPubKey,
     },
     Balance,
 };
@@ -94,7 +93,7 @@ impl AssetTransactionIssuer for AssetIssuer {
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
         rng: &mut T,
-    ) -> Fallible<(InitializedAssetTx, AssetTxState)> {
+    ) -> Fallible<InitializedAssetTx> {
         let gens = PedersenGens::default();
 
         // Encrypt the asset_id with mediator's public key.
@@ -155,10 +154,7 @@ impl AssetTransactionIssuer for AssetIssuer {
         let message = content.encode();
         let sig = issr_account.sign_keys.sign(SIG_CTXT.bytes(&message));
 
-        Ok((
-            InitializedAssetTx { content, sig },
-            AssetTxState::Initialization(TxSubstate::Started),
-        ))
+        Ok(InitializedAssetTx { content, sig })
     }
 }
 
@@ -172,19 +168,14 @@ pub struct AssetValidator {}
 /// and to verify the signature.
 fn verify_initialization(
     asset_tx: &InitializedAssetTx,
-    state: AssetTxState,
     issr_pub_account: &PubAccount,
     mdtr_enc_pub_key: &EncryptionPubKey,
-) -> Fallible<AssetTxState> {
-    // Validate the state.
-    ensure!(
-        state == AssetTxState::Initialization(TxSubstate::Started),
-        ErrorKind::InvalidPreviousAssetTransactionState { state }
-    );
-
-    asset_issuance_init_verify(asset_tx, issr_pub_account, mdtr_enc_pub_key)?;
-
-    Ok(AssetTxState::Initialization(TxSubstate::Validated))
+) -> Fallible<()> {
+    Ok(asset_issuance_init_verify(
+        asset_tx,
+        issr_pub_account,
+        mdtr_enc_pub_key,
+    )?)
 }
 
 impl AssetTransactionVerifier for AssetValidator {
@@ -195,29 +186,21 @@ impl AssetTransactionVerifier for AssetValidator {
         issr_account: &PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
-    ) -> Fallible<(PubAccount, AssetTxState)> {
+    ) -> Fallible<PubAccount> {
         // Verify mediator's signature on the transaction.
         let message = asset_tx.content.encode();
         let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &asset_tx.sig)?;
 
         // Verify issuer's initialization proofs and signature.
         let asset_tx = asset_tx.content.clone();
-        verify_initialization(
-            &asset_tx,
-            AssetTxState::Initialization(TxSubstate::Started),
-            issr_account,
-            mdtr_enc_pub_key,
-        )?;
+        verify_initialization(&asset_tx, issr_account, mdtr_enc_pub_key)?;
 
         // After successfully verifying the transaction, validator deposits the amount
         // to issuer's account (aka processing phase).
         let updated_issr_account =
             crate::mercat::account::deposit(issr_account.clone(), asset_tx.content.memo);
 
-        Ok((
-            updated_issr_account,
-            AssetTxState::Justification(TxSubstate::Validated),
-        ))
+        Ok(updated_issr_account)
     }
 }
 
@@ -235,17 +218,10 @@ impl AssetTransactionMediator for AssetMediator {
         &self,
         asset_tx: InitializedAssetTx,
         issr_pub_account: &PubAccount,
-        state: AssetTxState,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
     ) -> Fallible<JustifiedAssetTx> {
         let gens = PedersenGens::default();
-
-        // Validate the state.
-        ensure!(
-            state == AssetTxState::Initialization(TxSubstate::Started),
-            ErrorKind::InvalidPreviousAssetTransactionState { state }
-        );
 
         // Mediator revalidates all proofs.
         asset_issuance_init_verify(&asset_tx, issr_pub_account, &mdtr_enc_keys.pblc)?;
@@ -288,6 +264,7 @@ mod tests {
             correctness_proof::CorrectnessProof, membership_proof::MembershipProof,
             CommitmentWitness, ElgamalSecretKey,
         },
+        errors::ErrorKind,
         mercat::{
             AccountMemo, EncryptedAmount, EncryptedAssetId, EncryptionKeys, PubAccountContent,
             SecAccount, Signature,
@@ -359,7 +336,7 @@ mod tests {
 
         // ----------------------- Initialization
         let issuer = AssetIssuer {};
-        let (asset_tx, state) = issuer
+        let asset_tx = issuer
             .initialize(
                 1234u32,
                 &issuer_secret_account,
@@ -375,7 +352,6 @@ mod tests {
             .justify(
                 asset_tx.clone(),
                 &issuer_public_account,
-                state,
                 &mediator_enc_key,
                 &mediator_signing_pair,
             )
@@ -383,7 +359,7 @@ mod tests {
 
         // Positive test.
         let validator = AssetValidator {};
-        let (updated_issuer_account, state) = validator
+        let updated_issuer_account = validator
             .verify(
                 &justified_tx,
                 &issuer_public_account,
@@ -391,7 +367,6 @@ mod tests {
                 &mediator_signing_pair.public.into(),
             )
             .unwrap();
-        assert_eq!(state, AssetTxState::Justification(TxSubstate::Validated));
 
         // Negative tests.
         // Invalid issuer signature.
@@ -401,7 +376,6 @@ mod tests {
         let result = mediator.justify(
             invalid_tx,
             &issuer_public_account,
-            AssetTxState::Initialization(TxSubstate::Started),
             &mediator_enc_key,
             &mediator_signing_pair,
         );

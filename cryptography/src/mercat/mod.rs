@@ -484,7 +484,7 @@ pub trait AssetTransactionIssuer {
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
         rng: &mut T,
-    ) -> Fallible<(InitializedAssetTx, AssetTxState)>;
+    ) -> Fallible<InitializedAssetTx>;
 }
 
 pub trait AssetTransactionMediator {
@@ -496,7 +496,6 @@ pub trait AssetTransactionMediator {
         &self,
         asset_tx: InitializedAssetTx,
         issr_pub_account: &PubAccount,
-        state: AssetTxState,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
     ) -> Fallible<JustifiedAssetTx>;
@@ -510,7 +509,7 @@ pub trait AssetTransactionVerifier {
         issr_account: &PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
-    ) -> Fallible<(PubAccount, AssetTxState)>;
+    ) -> Fallible<PubAccount>;
 }
 
 // -------------------------------------------------------------------------------------
@@ -667,7 +666,7 @@ pub trait TransactionSender {
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
         rng: &mut T,
-    ) -> Fallible<(InitializedTx, TxState)>;
+    ) -> Fallible<InitializedTx>;
 }
 
 pub trait TransactionReceiver {
@@ -680,9 +679,8 @@ pub trait TransactionReceiver {
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
         amount: Balance,
-        state: TxState,
         rng: &mut T,
-    ) -> Fallible<(FinalizedTx, TxState)>;
+    ) -> Fallible<FinalizedTx>;
 }
 
 pub trait TransactionMediator {
@@ -690,14 +688,13 @@ pub trait TransactionMediator {
     fn justify(
         &self,
         conf_tx_final_data: FinalizedTx,
-        state: TxState,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_sign_pub_key: &SigningPubKey,
         // NOTE: without this, decryption takes a very long time. Since asset id to scalar takes the hash of the asset id array.
         asset_id_hint: AssetId,
-    ) -> Fallible<(JustifiedTx, TxState)>;
+    ) -> Fallible<JustifiedTx>;
 }
 
 pub trait TransactionVerifier {

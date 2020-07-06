@@ -4,9 +4,9 @@ use cryptography::{
     mercat::{
         account::convert_asset_ids,
         asset::{AssetIssuer, AssetMediator, AssetValidator},
-        AssetTransactionIssuer, AssetTransactionMediator, AssetTransactionVerifier, AssetTxState,
+        AssetTransactionIssuer, AssetTransactionMediator, AssetTransactionVerifier,
         EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx, MediatorAccount, PubAccount,
-        SecAccount, SigningPubKey, TxSubstate,
+        SecAccount, SigningPubKey,
     },
     AssetId, Balance,
 };
@@ -60,7 +60,7 @@ fn bench_transaction_issuer(
         .iter()
         .map(|&amount| {
             let issuer = AssetIssuer {};
-            let (tx, state) = issuer
+            issuer
                 .initialize(
                     ISSUER_ACCOUNT_ID,
                     &issuer_account.clone(),
@@ -68,9 +68,7 @@ fn bench_transaction_issuer(
                     amount,
                     &mut rng,
                 )
-                .unwrap();
-            assert_eq!(state, AssetTxState::Initialization(TxSubstate::Started));
-            tx
+                .unwrap()
         })
         .collect()
 }
@@ -100,7 +98,6 @@ fn bench_transaction_mediator(
                     .justify(
                         tx.clone(),
                         &issuer_account_cloned.clone(),
-                        AssetTxState::Initialization(TxSubstate::Started),
                         &mediator_account_cloned.encryption_key.clone(),
                         &mediator_account_cloned.signing_key.clone(),
                     )
@@ -118,7 +115,6 @@ fn bench_transaction_mediator(
                 .justify(
                     tx.clone(),
                     &issuer_account.clone(),
-                    AssetTxState::Initialization(TxSubstate::Started),
                     &mediator_account.encryption_key.clone(),
                     &mediator_account.signing_key.clone(),
                 )
