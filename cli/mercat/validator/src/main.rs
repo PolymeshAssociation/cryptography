@@ -31,7 +31,7 @@ use codec::Decode;
 use cryptography::mercat::{
     account::AccountValidator,
     asset::AssetValidator,
-    conf_tx::{CtxMediatorValidator, CtxReceiverValidator, CtxSenderValidator},
+    transaction::{CtxMediatorValidator, CtxReceiverValidator, CtxSenderValidator},
     AccountCreatorVerifier, AccountMemo, AssetTransactionFinalizeAndProcessVerifier,
     AssetTransactionInitializeVerifier, AssetTxState, ConfidentialTransactionFinalizationVerifier,
     ConfidentialTransactionInitVerifier, ConfidentialTransactionMediatorVerifier,

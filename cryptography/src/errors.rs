@@ -136,11 +136,8 @@ pub enum ErrorKind {
     #[fail(display = "The elements set passed to the membership proof cannot be empty.")]
     EmptyElementsSet,
 
-    /// TODO: remove this once all the mercat methods are implemented.
-    #[fail(display = "This method is not implemented yet")]
-    NotImplemented,
-
-    #[fail(display = "Wrong exponent parameter is passed")]
+    /// Invalid exponent parameter was passed.
+    #[fail(display = "Invalid exponent parameter was passed.")]
     InvalidExponentParameter,
 
     /// The amount in the initial transaction does not match the amount that receiver expected.

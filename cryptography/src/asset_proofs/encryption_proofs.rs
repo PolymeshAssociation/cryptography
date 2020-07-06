@@ -125,6 +125,10 @@ pub trait AssetProofVerifier {
 // Non-Interactive Zero Knowledge Proofs API
 // ------------------------------------------------------------------------
 
+/// The proof in the non-interactive implementation of the protocol is a tuple
+/// of the initial message and the final response.
+pub type ZKProofResponse<ZKInitialMessage, ZKFinalResponse> = (ZKInitialMessage, ZKFinalResponse);
+
 /// The non-interactive implementation of the protocol for a single
 /// encryption proof's prover role.
 ///
@@ -133,17 +137,19 @@ pub trait AssetProofVerifier {
 /// `rng`    An RNG.
 ///
 /// # Outputs
-/// An initial message and a final response on success, or failure on an error.
+/// An initial message and a final response as a tuple on success, or failure on an error.
 pub fn single_property_prover<
     T: RngCore + CryptoRng,
     ProverAwaitingChallenge: AssetProofProverAwaitingChallenge,
 >(
     prover_ac: ProverAwaitingChallenge,
     rng: &mut T,
-) -> Fallible<(
-    ProverAwaitingChallenge::ZKInitialMessage,
-    ProverAwaitingChallenge::ZKFinalResponse,
-)> {
+) -> Fallible<
+    ZKProofResponse<
+        ProverAwaitingChallenge::ZKInitialMessage,
+        ProverAwaitingChallenge::ZKFinalResponse,
+    >,
+> {
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
 
     let mut transcript_rng = prover_ac.create_transcript_rng(rng, &transcript);
@@ -163,16 +169,16 @@ pub fn single_property_prover<
 ///
 /// # Inputs
 /// `verifier` Any verifier that implements the `AssetProofVerifier` trait.
-/// `initial_message` Prover's initial message.
-/// `final_response` Prover's final response.
+/// `proof`    Prover's initial message and final response.
 ///
 /// # Outputs
 /// Ok on success, or failure on error.
 pub fn single_property_verifier<Verifier: AssetProofVerifier>(
     verifier: &Verifier,
-    initial_message: Verifier::ZKInitialMessage,
-    final_response: Verifier::ZKFinalResponse,
+    proof: ZKProofResponse<Verifier::ZKInitialMessage, Verifier::ZKFinalResponse>,
 ) -> Fallible<()> {
+    let initial_message = proof.0;
+    let final_response = proof.1;
     let mut transcript = Transcript::new(ENCRYPTION_PROOFS_LABEL);
 
     // Update the transcript with Prover's initial message
@@ -289,19 +295,19 @@ mod tests {
         .unwrap();
 
         // Positive tests
-        assert!(single_property_verifier(&verifier0, initial_message0, final_response0).is_ok());
-        assert!(single_property_verifier(&verifier1, initial_message1, final_response1).is_ok());
+        assert!(single_property_verifier(&verifier0, (initial_message0, final_response0)).is_ok());
+        assert!(single_property_verifier(&verifier1, (initial_message1, final_response1)).is_ok());
 
         // Negative tests
         let bad_initial_message = CorrectnessInitialMessage::default();
         assert_err!(
-            single_property_verifier(&verifier0, bad_initial_message, final_response0),
+            single_property_verifier(&verifier0, (bad_initial_message, final_response0)),
             ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
 
         let bad_final_response = CorrectnessFinalResponse::from(Scalar::one());
         assert_err!(
-            single_property_verifier(&verifier0, initial_message0, bad_final_response),
+            single_property_verifier(&verifier0, (initial_message0, bad_final_response)),
             ErrorKind::CorrectnessFinalResponseVerificationError { check: 1 }
         );
     }

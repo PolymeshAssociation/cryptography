@@ -9,10 +9,10 @@ use cryptography::{
     asset_id_from_ticker,
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
-        account::AccountCreator, asset::AssetIssuer, conf_tx::CtxReceiver, conf_tx::CtxSender,
-        Account, AccountCreatorInitializer, AccountMemo, AssetTransactionIssuer, AssetTxState,
-        EncryptionKeys, InitializedTx, PubAccount, SecAccount, TransactionSender, TxState,
-        TxSubstate,
+        account::AccountCreator, asset::AssetIssuer, transaction::CtxReceiver,
+        transaction::CtxSender, Account, AccountCreatorInitializer, AccountMemo,
+        AssetTransactionIssuer, AssetTxState, EncryptionKeys, InitializedTx, PubAccount,
+        SecAccount, TransactionReceiver, TransactionSender, TxState, TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -162,7 +162,7 @@ fn process_issue_asset(cfg: input::IssueAssetInfo) -> Result<(), Error> {
     let issuance_init_timer = Instant::now();
     let issuer = AssetIssuer {};
     let asset_tx = issuer
-        .initialize(
+        .initialize_asset_transaction(
             cfg.account_id,
             &issuer_account,
             &mediator_account.owner_enc_pub_key,
@@ -249,7 +249,7 @@ fn process_create_tx(cfg: input::CreateTransactionInfo) -> Result<(), Error> {
     let create_tx_timer = Instant::now();
     let sender = CtxSender {};
     let asset_tx = sender
-        .create(
+        .create_transaction(
             &sender_account,
             &receiver_account,
             &mediator_account.owner_enc_pub_key,
@@ -310,6 +310,13 @@ fn process_finalize_tx(cfg: input::FinalizeTransactionInfo) -> Result<(), Error>
         )?,
     };
 
+    let sender_account: PubAccount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &cfg.sender.clone(),
+        VALIDATED_PUBLIC_ACCOUNT_FILE,
+    )?;
+
     let instruction: Instruction = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
@@ -342,7 +349,13 @@ fn process_finalize_tx(cfg: input::FinalizeTransactionInfo) -> Result<(), Error>
     let finalize_by_receiver_timer = Instant::now();
     let receiver = CtxReceiver {};
     let asset_tx = receiver
-        .finalize_by_receiver(tx, receiver_account, cfg.amount, &mut rng)
+        .finalize_transaction(
+            tx,
+            &sender_account.content.memo.owner_sign_pub_key,
+            receiver_account,
+            cfg.amount,
+            &mut rng,
+        )
         .map_err(|error| Error::LibraryError { error })?;
 
     timing!(

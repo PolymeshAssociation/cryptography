@@ -8,7 +8,7 @@ use cryptography::{
     asset_id_from_ticker,
     asset_proofs::ElgamalSecretKey,
     mercat::{
-        asset::AssetMediator, conf_tx::CtxMediator, AccountMemo, AssetTransactionMediator,
+        asset::AssetMediator, transaction::CtxMediator, AccountMemo, AssetTransactionMediator,
         AssetTxState, EncryptionKeys, FinalizedTx, InitializedAssetTx, MediatorAccount, PubAccount,
         TransactionMediator, TxState, TxSubstate,
     },
@@ -147,7 +147,7 @@ fn justify_asset_issuance(cfg: input::JustifyIssuanceInfo) -> Result<(), Error> 
     let justify_library_timer = Instant::now();
     let mediator = AssetMediator {};
     let justified_tx = mediator
-        .justify(
+        .justify_asset_transaction(
             asset_tx.clone(),
             &issuer_account,
             &mediator_account.encryption_key,
@@ -252,7 +252,7 @@ fn justify_asset_transaction(cfg: input::JustifyTransactionInfo) -> Result<(), E
     let asset_id =
         asset_id_from_ticker(&cfg.ticker_id).map_err(|error| Error::LibraryError { error })?;
     let justified_tx = mediator
-        .justify(
+        .justify_transaction(
             asset_tx.clone(),
             &mediator_account.encryption_key,
             &mediator_account.signing_key,

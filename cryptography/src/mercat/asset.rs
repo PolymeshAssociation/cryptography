@@ -59,8 +59,7 @@ fn asset_issuance_init_verify(
             cipher2: asset_tx.content.enc_asset_id,
             pc_gens: &gens,
         },
-        asset_tx.content.asset_id_equal_cipher_proof.init,
-        asset_tx.content.asset_id_equal_cipher_proof.response,
+        asset_tx.content.asset_id_equal_cipher_proof,
     )?;
 
     // Verify the proof of memo's wellformedness.
@@ -70,8 +69,7 @@ fn asset_issuance_init_verify(
             cipher: asset_tx.content.memo,
             pc_gens: &gens,
         },
-        asset_tx.content.balance_wellformedness_proof.init,
-        asset_tx.content.balance_wellformedness_proof.response,
+        asset_tx.content.balance_wellformedness_proof,
     )?;
 
     Ok(())
@@ -86,7 +84,7 @@ fn asset_issuance_init_verify(
 pub struct AssetIssuer {}
 
 impl AssetTransactionIssuer for AssetIssuer {
-    fn initialize<T: RngCore + CryptoRng>(
+    fn initialize_asset_transaction<T: RngCore + CryptoRng>(
         &self,
         issr_account_id: u32,
         issr_account: &SecAccount,
@@ -180,25 +178,27 @@ fn verify_initialization(
 
 impl AssetTransactionVerifier for AssetValidator {
     /// Called by validators to verify the justification and processing of the transaction.
-    fn verify(
+    fn verify_asset_transaction(
         &self,
-        asset_tx: &JustifiedAssetTx,
+        justified_asset_tx: &JustifiedAssetTx,
         issr_account: &PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
     ) -> Fallible<PubAccount> {
         // Verify mediator's signature on the transaction.
-        let message = asset_tx.content.encode();
-        let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &asset_tx.sig)?;
+        let message = justified_asset_tx.content.encode();
+        let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &justified_asset_tx.sig)?;
 
         // Verify issuer's initialization proofs and signature.
-        let asset_tx = asset_tx.content.clone();
-        verify_initialization(&asset_tx, issr_account, mdtr_enc_pub_key)?;
+        let initialized_asset_tx = justified_asset_tx.content.clone();
+        verify_initialization(&initialized_asset_tx, issr_account, mdtr_enc_pub_key)?;
 
         // After successfully verifying the transaction, validator deposits the amount
         // to issuer's account (aka processing phase).
-        let updated_issr_account =
-            crate::mercat::account::deposit(issr_account.clone(), asset_tx.content.memo);
+        let updated_issr_account = crate::mercat::account::deposit(
+            issr_account.clone(),
+            initialized_asset_tx.content.memo,
+        );
 
         Ok(updated_issr_account)
     }
@@ -214,9 +214,9 @@ impl AssetTransactionMediator for AssetMediator {
     /// Justifies and processes a confidential asset issue transaction. This method is called
     /// by mediator. Corresponds to `JustifyAssetTx` and `ProcessCTx` of MERCAT paper.
     /// If the trasaction is justified, it will be processed immediately.
-    fn justify(
+    fn justify_asset_transaction(
         &self,
-        asset_tx: InitializedAssetTx,
+        initialized_asset_tx: InitializedAssetTx,
         issr_pub_account: &PubAccount,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
@@ -224,28 +224,29 @@ impl AssetTransactionMediator for AssetMediator {
         let gens = PedersenGens::default();
 
         // Mediator revalidates all proofs.
-        asset_issuance_init_verify(&asset_tx, issr_pub_account, &mdtr_enc_keys.pblc)?;
+        asset_issuance_init_verify(&initialized_asset_tx, issr_pub_account, &mdtr_enc_keys.pblc)?;
 
         // Mediator decrypts the encrypted amount and uses it to verify the correctness proof.
-        let amount = mdtr_enc_keys.scrt.decrypt(&asset_tx.content.enc_amount)?;
+        let amount = mdtr_enc_keys
+            .scrt
+            .decrypt(&initialized_asset_tx.content.enc_amount)?;
 
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),
                 pub_key: issr_pub_account.content.memo.owner_enc_pub_key,
-                cipher: asset_tx.content.memo,
+                cipher: initialized_asset_tx.content.memo,
                 pc_gens: &gens,
             },
-            asset_tx.content.balance_correctness_proof.init,
-            asset_tx.content.balance_correctness_proof.response,
+            initialized_asset_tx.content.balance_correctness_proof,
         )?;
 
         // On successful justification, mediator signs the transaction.
-        let message = asset_tx.encode();
+        let message = initialized_asset_tx.encode();
         let sig = mdtr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok(JustifiedAssetTx {
-            content: asset_tx,
+            content: initialized_asset_tx,
             sig,
         })
     }
@@ -337,7 +338,7 @@ mod tests {
         // ----------------------- Initialization
         let issuer = AssetIssuer {};
         let asset_tx = issuer
-            .initialize(
+            .initialize_asset_transaction(
                 1234u32,
                 &issuer_secret_account,
                 &mediator_enc_key.pblc,
@@ -349,7 +350,7 @@ mod tests {
         // ----------------------- Justification
         let mediator = AssetMediator {};
         let justified_tx = mediator
-            .justify(
+            .justify_asset_transaction(
                 asset_tx.clone(),
                 &issuer_public_account,
                 &mediator_enc_key,
@@ -360,7 +361,7 @@ mod tests {
         // Positive test.
         let validator = AssetValidator {};
         let updated_issuer_account = validator
-            .verify(
+            .verify_asset_transaction(
                 &justified_tx,
                 &issuer_public_account,
                 &mediator_enc_key.pblc,
@@ -373,7 +374,7 @@ mod tests {
         let mut invalid_tx = asset_tx.clone();
         invalid_tx.sig = Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature");
 
-        let result = mediator.justify(
+        let result = mediator.justify_asset_transaction(
             invalid_tx,
             &issuer_public_account,
             &mediator_enc_key,
@@ -387,7 +388,7 @@ mod tests {
         invalid_justified_tx.sig =
             Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature");
 
-        let result = validator.verify(
+        let result = validator.verify_asset_transaction(
             &invalid_justified_tx,
             &issuer_public_account,
             &mediator_enc_key.pblc,
@@ -400,7 +401,7 @@ mod tests {
         invalid_justified_tx.content.sig =
             Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature");
 
-        let result = validator.verify(
+        let result = validator.verify_asset_transaction(
             &invalid_justified_tx,
             &issuer_public_account,
             &mediator_enc_key.pblc,

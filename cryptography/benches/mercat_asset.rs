@@ -43,7 +43,7 @@ fn bench_transaction_issuer(
             b.iter(|| {
                 let issuer = AssetIssuer {};
                 issuer
-                    .initialize(
+                    .initialize_asset_transaction(
                         ISSUER_ACCOUNT_ID,
                         &issuer_account_cloned.clone(),
                         &mdtr_pub_key.clone(),
@@ -61,7 +61,7 @@ fn bench_transaction_issuer(
         .map(|&amount| {
             let issuer = AssetIssuer {};
             issuer
-                .initialize(
+                .initialize_asset_transaction(
                     ISSUER_ACCOUNT_ID,
                     &issuer_account.clone(),
                     &mdtr_pub_key.clone(),
@@ -95,7 +95,7 @@ fn bench_transaction_mediator(
             b.iter(|| {
                 let mediator = AssetMediator {};
                 mediator
-                    .justify(
+                    .justify_asset_transaction(
                         tx.clone(),
                         &issuer_account_cloned.clone(),
                         &mediator_account_cloned.encryption_key.clone(),
@@ -112,7 +112,7 @@ fn bench_transaction_mediator(
         .map(|tx| {
             let mediator = AssetMediator {};
             mediator
-                .justify(
+                .justify_asset_transaction(
                     tx.clone(),
                     &issuer_account.clone(),
                     &mediator_account.encryption_key.clone(),
@@ -144,7 +144,7 @@ fn bench_transaction_validator(
             b.iter(|| {
                 let validator = AssetValidator {};
                 validator
-                    .verify(
+                    .verify_asset_transaction(
                         &tx,
                         &issuer_account,
                         &mediator_enc_pub_key,
