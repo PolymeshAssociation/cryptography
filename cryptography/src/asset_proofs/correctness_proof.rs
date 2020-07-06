@@ -5,6 +5,7 @@ use crate::{
     asset_proofs::{
         encryption_proofs::{
             AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+            ZKProofResponse,
         },
         transcript::{TranscriptProtocol, UpdateTranscript},
         CipherText, CommitmentWitness, ElgamalPublicKey,
@@ -120,22 +121,7 @@ impl UpdateTranscript for CorrectnessInitialMessage {
 }
 
 /// Holds the non-interactive proofs of correctness, equivalent of L_correct of MERCAT paper.
-#[derive(Default, Clone, Copy, Encode, Decode)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct CorrectnessProof {
-    pub init: CorrectnessInitialMessage,
-    pub response: CorrectnessFinalResponse,
-}
-
-impl From<(CorrectnessInitialMessage, CorrectnessFinalResponse)> for CorrectnessProof {
-    fn from(pair: (CorrectnessInitialMessage, CorrectnessFinalResponse)) -> Self {
-        Self {
-            init: pair.0,
-            response: pair.1,
-        }
-    }
-}
+pub type CorrectnessProof = ZKProofResponse<CorrectnessInitialMessage, CorrectnessFinalResponse>;
 
 pub struct CorrectnessProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.

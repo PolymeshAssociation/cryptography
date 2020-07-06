@@ -7,6 +7,7 @@
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        ZKProofResponse,
     },
     one_out_of_many_proof::{
         convert_to_base, convert_to_matrix_rep, Matrix, OOONProofFinalResponse,
@@ -87,45 +88,8 @@ pub struct MembershipProofFinalResponse {
 }
 
 /// Holds the non-interactive proofs of membership, equivalent of L_member of MERCAT paper.
-#[derive(Default, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct MembershipProof {
-    pub init: MembershipProofInitialMessage,
-    pub response: MembershipProofFinalResponse,
-    pub commitment: RistrettoPoint,
-}
-
-impl Encode for MembershipProof {
-    fn size_hint(&self) -> usize {
-        self.init.size_hint() + self.response.size_hint() + 32
-    }
-
-    fn encode_to<W: Output>(&self, dest: &mut W) {
-        let commitment = self.commitment.compress();
-
-        self.init.encode_to(dest);
-        self.response.encode_to(dest);
-        commitment.as_bytes().encode_to(dest);
-    }
-}
-
-impl Decode for MembershipProof {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let init = <MembershipProofInitialMessage>::decode(input)?;
-        let response = <MembershipProofFinalResponse>::decode(input)?;
-        let commitment = <[u8; 32]>::decode(input)?;
-        let commitment = CompressedRistretto(commitment)
-            .decompress()
-            .ok_or_else(|| CodecError::from("MembershipProof::commitment is invalid"))?;
-
-        Ok(MembershipProof {
-            init,
-            response,
-            commitment,
-        })
-    }
-}
+pub type MembershipProof =
+    ZKProofResponse<MembershipProofInitialMessage, MembershipProofFinalResponse>;
 
 #[derive(Clone, Debug)]
 pub struct MembershipProver {
@@ -534,8 +498,7 @@ mod tests {
             // 4th round
             single_property_verifier(
                 &verifier,
-                initial_message_1.clone(),
-                final_response_1.clone()
+                (initial_message_1.clone(), final_response_1.clone())
             )
             .is_ok()
         );
@@ -544,12 +507,12 @@ mod tests {
         let bad_initial_message = initial_message;
         let bad_final_response = final_response;
         assert_err!(
-            single_property_verifier(&verifier, bad_initial_message, final_response_1),
+            single_property_verifier(&verifier, (bad_initial_message, final_response_1)),
             ErrorKind::MembershipProofVerificationError { check: 1 }
         );
 
         assert_err!(
-            single_property_verifier(&verifier, initial_message_1, bad_final_response),
+            single_property_verifier(&verifier, (initial_message_1, bad_final_response)),
             ErrorKind::MembershipProofVerificationError { check: 1 }
         );
     }

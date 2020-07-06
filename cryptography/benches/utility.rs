@@ -24,7 +24,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
     // Issuer side.
     let issuer = AssetIssuer {};
     let asset_tx = issuer
-        .initialize(
+        .initialize_asset_transaction(
             0,
             &account.scrt,
             &mediator_pub_account.owner_enc_pub_key,
@@ -36,7 +36,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
     // Mediator side.
     let mediator = AssetMediator {};
     let tx = mediator
-        .justify(
+        .justify_asset_transaction(
             asset_tx.clone(),
             &account.pblc,
             &mediator_account.encryption_key,
@@ -46,7 +46,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
 
     let validator = AssetValidator {};
     let updated_issuer_account = validator
-        .verify(
+        .verify_asset_transaction(
             &tx,
             &account.pblc,
             &mediator_pub_account.owner_enc_pub_key,

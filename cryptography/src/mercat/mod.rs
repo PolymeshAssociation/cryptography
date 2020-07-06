@@ -3,7 +3,7 @@
 
 pub mod account;
 pub mod asset;
-pub mod conf_tx;
+pub mod transaction;
 
 use crate::{
     asset_proofs::{
@@ -269,7 +269,6 @@ pub struct Account {
     pub scrt: SecAccount,
 }
 
-// todo move this down
 impl Account {
     /// Utility method that can decrypt the the balance of an account.
     pub fn decrypt_balance(&self) -> Fallible<Balance> {
@@ -307,7 +306,6 @@ pub trait AccountCreatorVerifier {
 // -                               Transaction State                                   -
 // -------------------------------------------------------------------------------------
 
-// todo remove all of these.
 /// Represents the three substates (started, verified, rejected) of a
 /// confidential transaction state.
 #[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, Debug)]
@@ -477,7 +475,7 @@ pub trait AssetTransactionIssuer {
     /// Initializes a confidentional asset issue transaction. Note that the returing
     /// values of this function contain sensitive information. Corresponds
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
-    fn initialize<T: RngCore + CryptoRng>(
+    fn initialize_asset_transaction<T: RngCore + CryptoRng>(
         &self,
         issr_account_id: u32,
         issr_account: &SecAccount,
@@ -492,9 +490,9 @@ pub trait AssetTransactionMediator {
     /// by mediator. Corresponds to `JustifyAssetTx` and `ProcessCTx` of MERCAT paper.
     /// If the trasaction is justified, it will be processed immediately and the updated account
     /// is returned.
-    fn justify(
+    fn justify_asset_transaction(
         &self,
-        asset_tx: InitializedAssetTx,
+        initialized_asset_tx: InitializedAssetTx,
         issr_pub_account: &PubAccount,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
@@ -503,9 +501,9 @@ pub trait AssetTransactionMediator {
 
 pub trait AssetTransactionVerifier {
     /// Called by validators to verify the justification and processing of the transaction.
-    fn verify(
+    fn verify_asset_transaction(
         &self,
-        asset_tx: &JustifiedAssetTx,
+        justified_asset_tx: &JustifiedAssetTx,
         issr_account: &PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
@@ -659,7 +657,7 @@ pub trait TransactionSender {
     /// This is called by the sender of a confidential transaction. The outputs
     /// can be safely placed on the chain. It corresponds to `CreateCTX` function of
     /// MERCAT paper.
-    fn create<T: RngCore + CryptoRng>(
+    fn create_transaction<T: RngCore + CryptoRng>(
         &self,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
@@ -673,9 +671,9 @@ pub trait TransactionReceiver {
     /// This function is called the receiver of the transaction to finalize and process
     /// the transaction. It corresponds to `FinalizeCTX` and `ProcessCTX` functions
     /// of the MERCAT paper.
-    fn finalize<T: RngCore + CryptoRng>(
+    fn finalize_transaction<T: RngCore + CryptoRng>(
         &self,
-        conf_tx_init_data: InitializedTx,
+        initialized_transaction: InitializedTx,
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
         amount: Balance,
@@ -685,9 +683,9 @@ pub trait TransactionReceiver {
 
 pub trait TransactionMediator {
     /// Justify the transaction by mediator.
-    fn justify(
+    fn justify_transaction(
         &self,
-        conf_tx_final_data: FinalizedTx,
+        finalized_transaction: FinalizedTx,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
         sndr_sign_pub_key: &SigningPubKey,
@@ -700,9 +698,9 @@ pub trait TransactionMediator {
 pub trait TransactionVerifier {
     /// Verify the intialized, finalized, and justified transactions.
     /// Returns the updated sender and receiver accounts.
-    fn verify<R: RngCore + CryptoRng>(
+    fn verify_transaction<R: RngCore + CryptoRng>(
         &self,
-        conf_tx_justified_final_data: &JustifiedTx,
+        justified_transaction: &JustifiedTx,
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
@@ -733,7 +731,7 @@ pub trait ReversedTransactionMediator {
     /// the transaction. It corresponds to `ReverseCTX` of the MERCAT paper.
     fn create(
         &self,
-        conf_tx_final_data: FinalizedTx,
+        transaction_final_data: FinalizedTx,
         mdtr_enc_keys: EncryptionSecKey,
         mdtr_sign_keys: SigningKeys,
         state: TxState,
@@ -745,7 +743,7 @@ pub trait ReversedTransactionVerifier {
     /// reversal transaction.
     fn verify(
         &self,
-        reverse_conf_tx_data: ReversedTx,
+        reverse_transaction_data: ReversedTx,
         mdtr_sign_pub_key: SigningPubKey,
         state: TxState,
     ) -> Fallible<TxState>;

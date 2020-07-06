@@ -5,9 +5,7 @@ use crate::{
         },
         encryption_proofs::single_property_prover,
         encryption_proofs::single_property_verifier,
-        membership_proof::{
-            MembershipProof, MembershipProofVerifier, MembershipProverAwaitingChallenge,
-        },
+        membership_proof::{MembershipProofVerifier, MembershipProverAwaitingChallenge},
         one_out_of_many_proof::OooNProofGenerators,
         wellformedness_proof::{
             WellformednessProof, WellformednessProverAwaitingChallenge, WellformednessVerifier,
@@ -86,11 +84,10 @@ impl AccountCreatorInitializer for AccountCreator {
             rng,
         )?);
 
-        // Prove that the asset id is among the list of publicly known asset ids
+        // Prove that the encrypted asset id that is stored as `enc_asset_id.y` is among the list of publicly known asset ids.
         let generators = &OooNProofGenerators::new(BASE, EXPONENT);
         let asset_id = Scalar::from(scrt.asset_id.clone());
-        let secret_element_com = enc_asset_id.y;
-        let (init, response) = single_property_prover(
+        let asset_membership_proof = single_property_prover(
             MembershipProverAwaitingChallenge::new(
                 asset_id,
                 scrt.asset_id_witness.blinding(),
@@ -101,12 +98,6 @@ impl AccountCreatorInitializer for AccountCreator {
             )?,
             rng,
         )?;
-
-        let asset_membership_proof = MembershipProof {
-            init,
-            response,
-            commitment: secret_element_com,
-        };
 
         // Gather content and sign it
         let content = PubAccountContent {
@@ -182,8 +173,7 @@ impl AccountCreatorVerifier for AccountValidator {
                 cipher: account.content.enc_asset_id,
                 pc_gens: &gens,
             },
-            account.content.asset_wellformedness_proof.init,
-            account.content.asset_wellformedness_proof.response,
+            account.content.asset_wellformedness_proof,
         )?;
 
         // Verify that the encrypted balance is correct
@@ -195,8 +185,7 @@ impl AccountCreatorVerifier for AccountValidator {
                 cipher: account.content.enc_balance,
                 pc_gens: &gens,
             },
-            account.content.initial_balance_correctness_proof.init,
-            account.content.initial_balance_correctness_proof.response,
+            account.content.initial_balance_correctness_proof,
         )?;
 
         // Verify that the asset is from the proper asset list
@@ -204,12 +193,11 @@ impl AccountCreatorVerifier for AccountValidator {
         let generators = &OooNProofGenerators::new(BASE, EXPONENT);
         single_property_verifier(
             &MembershipProofVerifier {
-                secret_element_com: membership_proof.commitment,
+                secret_element_com: account.content.enc_asset_id.y,
                 generators,
                 elements_set: valid_asset_ids,
             },
-            membership_proof.init,
-            membership_proof.response,
+            membership_proof,
         )?;
 
         Ok(())

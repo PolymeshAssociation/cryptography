@@ -62,19 +62,7 @@ impl InRangeProof {
     #[allow(dead_code)]
     pub fn build<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let range = 32;
-        InRangeProof::from(
-            prove_within_range(0, Scalar::one(), range, rng).expect("This shouldn't happen."),
-        )
-    }
-}
-
-impl From<(RangeProofInitialMessage, RangeProofFinalResponse, u32)> for InRangeProof {
-    fn from(proof: (RangeProofInitialMessage, RangeProofFinalResponse, u32)) -> Self {
-        Self {
-            init: proof.0,
-            response: proof.1,
-            range: proof.2,
-        }
+        prove_within_range(0, Scalar::one(), range, rng).expect("This shouldn't happen.")
     }
 }
 
@@ -86,7 +74,7 @@ pub fn prove_within_range<Rng: RngCore + CryptoRng>(
     rand_blind: Scalar,
     range: u32,
     rng: &mut Rng,
-) -> Fallible<(RangeProofInitialMessage, RangeProofFinalResponse, u32)> {
+) -> Fallible<InRangeProof> {
     // Generators for Pedersen commitments.
     let pc_gens = PedersenGens::default();
 
@@ -111,14 +99,16 @@ pub fn prove_within_range<Rng: RngCore + CryptoRng>(
     )
     .map_err(|source| ErrorKind::ProvingError { source })?;
 
-    Ok((commitment, proof, range))
+    Ok(InRangeProof {
+        init: commitment,
+        response: proof,
+        range,
+    })
 }
 
 /// Verify that a range proof is valid given a commitment to a secret value.
 pub fn verify_within_range<Rng: RngCore + CryptoRng>(
-    init: RangeProofInitialMessage,
-    response: RangeProofFinalResponse,
-    range: u32,
+    proof: &InRangeProof,
     rng: &mut Rng,
 ) -> Fallible<()> {
     // Generators for Pedersen commitments.
@@ -132,13 +122,14 @@ pub fn verify_within_range<Rng: RngCore + CryptoRng>(
     // the Fiat-Shamir huristic.
     let mut verifier_transcript = Transcript::new(RANGE_PROOF_LABEL);
 
-    response
+    proof
+        .response
         .verify_single_with_rng(
             &bp_gens,
             &pc_gens,
             &mut verifier_transcript,
-            &init,
-            range as usize,
+            &proof.init,
+            proof.range as usize,
             rng,
         )
         .map_err(|_| ErrorKind::VerificationError.into())
@@ -170,23 +161,23 @@ mod tests {
         let (witness, cipher) = elg_pub.encrypt_value(secret_value.into(), &mut rng);
 
         // Positive test: secret value within range [0, 2^32)
-        let (initial_message, final_response, range) = prove_within_range(
+        let proof = prove_within_range(
             secret_value as u64,
             witness.blinding().clone(),
             32,
             &mut rng,
         )
         .expect("This shouldn't happen.");
-        assert_eq!(range, 32);
-        assert!(verify_within_range(initial_message, final_response, 32, &mut rng).is_ok());
+        assert_eq!(proof.range, 32);
+        assert!(verify_within_range(&proof, &mut rng).is_ok());
 
         // Make sure the second part of the elgamal encryption is the same as the commited value in the range proof.
-        assert_eq!(initial_message, cipher.y.compress());
+        assert_eq!(proof.init, cipher.y.compress());
 
         // Negative test: secret value outside the allowed range
         let large_secret_value: u64 = u64::from(u32::max_value()) + 3;
-        let (bad_proof, bad_commitment, _) =
+        let bad_proof =
             prove_within_range(large_secret_value, witness.blinding(), 32, &mut rng).unwrap();
-        assert!(!verify_within_range(bad_proof, bad_commitment, 32, &mut rng).is_ok());
+        assert!(!verify_within_range(&bad_proof, &mut rng).is_ok());
     }
 }
