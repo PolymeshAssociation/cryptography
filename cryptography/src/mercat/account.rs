@@ -246,7 +246,6 @@ mod tests {
         let scrt_account = SecAccount {
             enc_keys,
             sign_keys,
-            asset_id,
             asset_id_witness,
         };
 
@@ -290,7 +289,6 @@ mod tests {
         let scrt_account = SecAccount {
             enc_keys,
             sign_keys,
-            asset_id,
             asset_id_witness,
         };
 

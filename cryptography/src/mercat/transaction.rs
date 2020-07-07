@@ -62,7 +62,7 @@ impl TransactionSender for CtxSender {
         // as input.
         let sndr_enc_keys = &sndr_account.scrt.enc_keys;
         let sndr_sign_keys = &sndr_account.scrt.sign_keys;
-        let asset_id = sndr_account.scrt.asset_id.clone();
+        let asset_id = sndr_account.scrt.asset_id_witness.value();
         let sndr_pub_account = &sndr_account.pblc.content;
         let rcvr_pub_account = &rcvr_pub_account.content;
         let rcvr_pub_key = rcvr_pub_account.memo.owner_enc_pub_key;
@@ -699,7 +699,6 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
-                asset_id: asset_id.clone(),
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
@@ -713,6 +712,62 @@ mod tests {
 
     #[test]
     #[wasm_bindgen_test]
+<<<<<<< HEAD:cryptography/src/mercat/transaction.rs
+=======
+    fn test_finalize_ctx_prev_state_error() {
+        let ctx_rcvr = CtxReceiver {};
+        let expected_amount = 10;
+        let asset_id = AssetId::from(20u32);
+        let balance = 0;
+        let mut rng = StdRng::from_seed([17u8; 32]);
+
+        let rcvr_enc_keys = mock_gen_enc_key_pair(17u8);
+        let rcvr_sign_keys = mock_gen_sign_key_pair(18u8);
+        let sign = rcvr_sign_keys.sign(SIG_CTXT.bytes(b""));
+
+        let ctx_init_data = mock_ctx_init_data(
+            rcvr_enc_keys.pblc,
+            expected_amount,
+            asset_id.clone(),
+            sign,
+            &mut rng,
+        );
+        let rcvr_account = Account {
+            pblc: mock_gen_account(
+                rcvr_enc_keys.pblc,
+                rcvr_sign_keys.public,
+                asset_id.clone(),
+                balance,
+                &mut rng,
+            )
+            .unwrap(),
+            scrt: SecAccount {
+                enc_keys: rcvr_enc_keys,
+                sign_keys: rcvr_sign_keys,
+                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
+            },
+        };
+        let invalid_state = ConfidentialTxState::Initialization(TxSubstate::Started);
+
+        let result = ctx_rcvr.finalize_by_receiver(
+            ctx_init_data,
+            rcvr_account,
+            invalid_state,
+            expected_amount,
+            &mut rng,
+        );
+
+        assert_err!(
+            result,
+            ErrorKind::InvalidPreviousState {
+                state: invalid_state,
+            }
+        );
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+>>>>>>> Adds cheat flag to the create account:cryptography/src/mercat/conf_tx.rs
     fn test_finalize_ctx_amount_mismatch_error() {
         let ctx_rcvr = CtxReceiver {};
         let expected_amount = 10;
@@ -744,7 +799,6 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
-                asset_id: asset_id.clone(),
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
@@ -795,7 +849,6 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys.clone(),
                 sign_keys: rcvr_sign_keys.clone(),
-                asset_id: asset_id.clone(),
                 asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
             },
         };
@@ -812,7 +865,6 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: sndr_enc_keys.clone(),
                 sign_keys: sndr_sign_keys.clone(),
-                asset_id: asset_id.clone(),
                 asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
             },
         };
