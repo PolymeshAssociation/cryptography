@@ -7,6 +7,7 @@
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        ZKProofResponse,
     },
     one_out_of_many_proof::{
         convert_to_base, convert_to_matrix_rep, Matrix, OOONProofFinalResponse,
@@ -85,6 +86,10 @@ impl UpdateTranscript for MembershipProofInitialMessage {
 pub struct MembershipProofFinalResponse {
     ooon_proof_final_response: OOONProofFinalResponse,
 }
+
+/// Holds the non-interactive proofs of membership, equivalent of L_member of MERCAT paper.
+pub type MembershipProof =
+    ZKProofResponse<MembershipProofInitialMessage, MembershipProofFinalResponse>;
 
 #[derive(Clone, Debug)]
 pub struct MembershipProver {
@@ -493,8 +498,7 @@ mod tests {
             // 4th round
             single_property_verifier(
                 &verifier,
-                initial_message_1.clone(),
-                final_response_1.clone()
+                (initial_message_1.clone(), final_response_1.clone())
             )
             .is_ok()
         );
@@ -503,12 +507,12 @@ mod tests {
         let bad_initial_message = initial_message;
         let bad_final_response = final_response;
         assert_err!(
-            single_property_verifier(&verifier, bad_initial_message, final_response_1),
+            single_property_verifier(&verifier, (bad_initial_message, final_response_1)),
             ErrorKind::MembershipProofVerificationError { check: 1 }
         );
 
         assert_err!(
-            single_property_verifier(&verifier, initial_message_1, bad_final_response),
+            single_property_verifier(&verifier, (initial_message_1, bad_final_response)),
             ErrorKind::MembershipProofVerificationError { check: 1 }
         );
     }

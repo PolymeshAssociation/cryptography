@@ -6,6 +6,7 @@ use crate::{
     asset_proofs::{
         encryption_proofs::{
             AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+            ZKProofResponse,
         },
         transcript::{TranscriptProtocol, UpdateTranscript},
         CipherText, CommitmentWitness, ElgamalPublicKey,
@@ -121,6 +122,10 @@ impl UpdateTranscript for WellformednessInitialMessage {
         Ok(())
     }
 }
+
+/// Holds the non-interactive proofs of wellformedness, equivalent of L_enc of the MERCAT paper.
+pub type WellformednessProof =
+    ZKProofResponse<WellformednessInitialMessage, WellformednessFinalResponse>;
 
 #[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -316,20 +321,20 @@ mod tests {
         // Positive test
         assert!(
             // 4th round
-            single_property_verifier(&verifier, initial_message, final_response.clone()).is_ok()
+            single_property_verifier(&verifier, (initial_message, final_response.clone())).is_ok()
         );
 
         // Negative tests
         let bad_initial_message = WellformednessInitialMessage::default();
         assert_err!(
             // 4th round
-            single_property_verifier(&verifier, bad_initial_message, final_response),
+            single_property_verifier(&verifier, (bad_initial_message, final_response)),
             ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
 
         assert_err!(
             // 4th round
-            single_property_verifier(&verifier, initial_message, bad_final_response),
+            single_property_verifier(&verifier, (initial_message, bad_final_response)),
             ErrorKind::WellformednessFinalResponseVerificationError { check: 1 }
         );
     }

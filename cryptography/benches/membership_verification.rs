@@ -37,8 +37,7 @@ fn bench_membership_verify(
                         elements_set: elements.as_slice(),
                         generators: &generators,
                     },
-                    proof.0.clone(),
-                    proof.1.clone(),
+                    proof.clone(),
                 )
                 .unwrap()
             })

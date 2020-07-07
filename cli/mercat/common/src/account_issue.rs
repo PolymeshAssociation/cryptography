@@ -4,7 +4,9 @@ use crate::{
     SECRET_ACCOUNT_FILE,
 };
 use codec::Encode;
-use cryptography::mercat::{asset::CtxIssuer, AccountMemo, AssetTransactionIssuer, SecAccount};
+use cryptography::mercat::{
+    asset::AssetIssuer, AccountMemo, AssetTransactionIssuer, AssetTxState, SecAccount, TxSubstate,
+};
 use metrics::timing;
 use std::{path::PathBuf, time::Instant};
 
@@ -31,7 +33,7 @@ pub fn process_issue_asset(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &mediator,
-        &PUBLIC_ACCOUNT_FILE, // todo : change all of these to VALIDATED_PUBLIC_ACCOUNT
+        &PUBLIC_ACCOUNT_FILE,
     )?;
 
     timing!(
@@ -42,9 +44,9 @@ pub fn process_issue_asset(
 
     // Initialize the asset issuance process.
     let issuance_init_timer = Instant::now();
-    let ctx_issuer = CtxIssuer {};
-    let (asset_tx, state) = ctx_issuer
-        .initialize(
+    let ctx_issuer = AssetIssuer {};
+    let asset_tx = ctx_issuer
+        .initialize_asset_transaction(
             calc_account_id(issuer.clone(), ticker),
             &issuer_account,
             &mediator_account.owner_enc_pub_key,
@@ -60,6 +62,7 @@ pub fn process_issue_asset(
     );
 
     // Save the artifacts to file.
+    let state = AssetTxState::Initialization(TxSubstate::Started);
     let save_to_file_timer = Instant::now();
     let instruction = Instruction {
         state,

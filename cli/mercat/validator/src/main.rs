@@ -27,7 +27,6 @@ fn main() {
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.issuer,
             cfg.mediator,
-            cfg.state,
             cfg.tx_id,
             cfg.account_id_from_ticker,
         )
@@ -43,7 +42,6 @@ fn main() {
             cfg.sender,
             cfg.receiver,
             cfg.mediator,
-            cfg.state,
             cfg.tx_id,
             cfg.account_id_from_ticker,
         )
