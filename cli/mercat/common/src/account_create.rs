@@ -6,11 +6,10 @@ use codec::Encode;
 use cryptography::{
     asset_id_from_ticker,
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
-<<<<<<< HEAD
-    mercat::{account::AccountCreator, AccountCreatorInitializer, EncryptionKeys, SecAccount},
-=======
-    mercat::{account::create_account, EncryptedAssetId, EncryptionKeys, SecAccount},
->>>>>>> Adds cheat flag to the create account
+    mercat::{
+        account::AccountCreator, AccountCreatorInitializer, EncryptedAssetId, EncryptionKeys,
+        SecAccount,
+    },
 };
 use curve25519_dalek::scalar::Scalar;
 use lazy_static::lazy_static;
@@ -42,13 +41,15 @@ pub fn process_create_account(
     let account_id = calc_account_id(user.clone(), ticker.clone());
 
     let create_account_timer = Instant::now();
-    let mut account = create_account(
-        secret_account.clone(),
-        &valid_asset_ids,
-        account_id,
-        &mut rng,
-    )
-    .map_err(|error| Error::LibraryError { error })?;
+    let account_creator = AccountCreator {};
+    let mut account = account_creator
+        .create(
+            secret_account.clone(),
+            &valid_asset_ids,
+            account_id,
+            &mut rng,
+        )
+        .map_err(|error| Error::LibraryError { error })?;
     timing!("account.call_library", create_account_timer, Instant::now());
     if cheat {
         // To simplify the cheating selection process, we randomly choose a cheating strategy,
@@ -76,7 +77,8 @@ pub fn process_create_account(
                     .sign(SIG_CTXT.bytes(&message));
             }
             1 => {
-                info!("CLI log: tx-{}: Cheating by overwriting the account id. Correct account id: {}", tx_id, account.pblc.content.id);
+                info!("CLI log: tx-{}: Cheating by overwriting the account id but not the signature. Correct account id: {}",
+                      tx_id, account.pblc.content.id);
                 account.pblc.content.id = 2;
             }
             _ => error!("CLI log: tx-{}: This should never happen!", tx_id),

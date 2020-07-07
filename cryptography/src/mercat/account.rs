@@ -86,7 +86,7 @@ impl AccountCreatorInitializer for AccountCreator {
 
         // Prove that the encrypted asset id that is stored as `enc_asset_id.y` is among the list of publicly known asset ids.
         let generators = &OooNProofGenerators::new(BASE, EXPONENT);
-        let asset_id = Scalar::from(scrt.asset_id.clone());
+        let asset_id = scrt.asset_id_witness.value();
         let asset_membership_proof = single_property_prover(
             MembershipProverAwaitingChallenge::new(
                 asset_id,
