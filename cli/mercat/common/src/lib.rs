@@ -325,10 +325,5 @@ where
 #[inline]
 pub fn calc_account_id(user: String, ticker: String) -> u32 {
     let u32_val = simple_hasher(&format!("{}_{}", user, ticker)) % (u32::MAX as u64);
-    if let Ok(u32_val) = u32::try_from(u32_val) {
-        u32_val
-    } else {
-        // this never happens
-        0
-    }
+    u32::try_from(u32_val).unwrap_or_default()
 }
