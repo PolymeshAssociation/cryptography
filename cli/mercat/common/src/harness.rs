@@ -1090,7 +1090,7 @@ mod tests {
     #[test]
     fn test_on_slow_pc() {
         env_logger::init();
-        run_from("pcaaa");
+        run_from("pc");
     }
 
     #[test]
