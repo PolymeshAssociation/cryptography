@@ -309,9 +309,10 @@ impl Transfer {
 
     pub fn mediate(&self, chain_db_dir: PathBuf) -> StepFunc {
         let value = format!(
-            "tx-{}: $ mercat-mediator justify-transaction --sender {} --mediator {} --ticker {} --tx-id {} --db-dir {} {}",
+            "tx-{}: $ mercat-mediator justify-transaction --sender {} --receiver {} --mediator {} --ticker {} --tx-id {} --db-dir {} {}",
             self.tx_id,
             self.sender.name,
+            self.receiver.name,
             self.mediator.name,
             self.ticker,
             self.tx_id,
@@ -320,6 +321,7 @@ impl Transfer {
         );
         let ticker = self.ticker.clone();
         let sender = self.sender.name.clone();
+        let receiver = self.receiver.name.clone();
         let mediator = self.mediator.name.clone();
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
@@ -328,6 +330,7 @@ impl Transfer {
             justify_asset_transaction(
                 chain_db_dir.clone(),
                 sender.clone(),
+                receiver.clone(),
                 mediator.clone(),
                 ticker.clone(),
                 tx_id,
@@ -337,15 +340,14 @@ impl Transfer {
         });
     }
 
-    pub fn validate(&self, chain_db_dir: PathBuf, state: String) -> StepFunc {
+    pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
         let value = format!(
-            "tx-{}: $ mercat-validator validate-transaction --sender {} --receiver {} --mediator {} --state {} \
+            "tx-{}: $ mercat-validator validate-transaction --sender {} --receiver {} --mediator {} \
             --account-id-from-ticker {} --tx-id {} --db-dir {}",
             self.tx_id,
             self.sender.name,
             self.receiver.name,
             self.mediator.name,
-            state,
             self.ticker,
             self.tx_id,
             path_to_string(&chain_db_dir),
@@ -354,7 +356,6 @@ impl Transfer {
         let receiver = self.receiver.name.clone();
         let mediator = self.mediator.name.clone();
         let tx_id = self.tx_id;
-        let state = state.clone();
         let ticker = self.ticker.clone();
         return Box::new(move || {
             info!("Running: {}", value.clone());
@@ -363,7 +364,6 @@ impl Transfer {
                 sender.clone(),
                 receiver.clone(),
                 mediator.clone(),
-                state.clone(),
                 tx_id,
                 ticker.clone(),
             )?;
@@ -378,14 +378,9 @@ impl Transfer {
     ) -> Vec<StepFunc> {
         vec![
             self.send(rng, chain_db_dir.clone()),
-            self.validate(chain_db_dir.clone(), String::from("initialization_started")),
             self.receive(rng, chain_db_dir.clone()),
-            self.validate(chain_db_dir.clone(), String::from("finalization_started")),
             self.mediate(chain_db_dir.clone()),
-            self.validate(
-                chain_db_dir,
-                String::from("finalization_justification_started"),
-            ),
+            self.validate(chain_db_dir),
         ]
     }
 }
@@ -541,14 +536,13 @@ impl Issue {
         });
     }
 
-    pub fn validate(&self, chain_db_dir: PathBuf, state: String) -> StepFunc {
+    pub fn validate(&self, chain_db_dir: PathBuf) -> StepFunc {
         // validate a normal account
         let value = format!(
-            "tx-{}: $ mercat-validator validate-issuance --issuer {} --mediator {} --state {} --account-id-from-ticker {} --tx-id {} --db-dir {}",
+            "tx-{}: $ mercat-validator validate-issuance --issuer {} --mediator {} --account-id-from-ticker {} --tx-id {} --db-dir {}",
             self.tx_id,
             self.issuer.name,
             self.mediator.name,
-            state,
             self.ticker,
             self.tx_id,
             path_to_string(&chain_db_dir),
@@ -557,14 +551,12 @@ impl Issue {
         let mediator = self.mediator.name.clone();
         let ticker = self.ticker.clone();
         let tx_id = self.tx_id;
-        let state = state.clone();
         return Box::new(move || {
             info!("Running: {}", value.clone());
             validate_asset_issuance(
                 chain_db_dir.clone(),
                 issuer.clone(),
                 mediator.clone(),
-                state.clone(),
                 tx_id,
                 ticker.clone(),
             )?;
@@ -579,9 +571,8 @@ impl Issue {
     ) -> Vec<StepFunc> {
         vec![
             self.issue(rng, chain_db_dir.clone()),
-            self.validate(chain_db_dir.clone(), String::from("initialization_started")),
             self.mediate(chain_db_dir.clone()),
-            self.validate(chain_db_dir, String::from("justification_started")),
+            self.validate(chain_db_dir),
         ]
     }
 }

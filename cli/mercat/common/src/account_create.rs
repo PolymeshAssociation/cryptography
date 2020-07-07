@@ -5,7 +5,7 @@ use crate::{
 use cryptography::{
     asset_id_from_ticker,
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
-    mercat::{account::create_account, EncryptionKeys, SecAccount},
+    mercat::{account::AccountCreator, AccountCreatorInitializer, EncryptionKeys, SecAccount},
 };
 use metrics::timing;
 use rand::{CryptoRng, RngCore};
@@ -29,7 +29,9 @@ pub fn process_create_account(
     let account_id = calc_account_id(user.clone(), ticker.clone());
 
     let create_account_timer = Instant::now();
-    let account = create_account(secret_account, &valid_asset_ids, account_id, &mut rng)
+    let account_creator = AccountCreator {};
+    let account = account_creator
+        .create(secret_account, &valid_asset_ids, account_id, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
     timing!("account.call_library", create_account_timer, Instant::now());
 

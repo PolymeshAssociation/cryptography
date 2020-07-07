@@ -146,7 +146,7 @@ fn bench_transaction_validator(
                 validator
                     .verify_asset_transaction(
                         &tx,
-                        &issuer_account,
+                        issuer_account.clone(),
                         &mediator_enc_pub_key,
                         &mediator_sign_pub_key,
                     )

@@ -504,7 +504,7 @@ pub trait AssetTransactionVerifier {
     fn verify_asset_transaction(
         &self,
         justified_asset_tx: &JustifiedAssetTx,
-        issr_account: &PubAccount,
+        issr_account: PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
     ) -> Fallible<PubAccount>;

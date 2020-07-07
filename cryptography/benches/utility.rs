@@ -48,7 +48,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
     let updated_issuer_account = validator
         .verify_asset_transaction(
             &tx,
-            &account.pblc,
+            account.pblc.clone(),
             &mediator_pub_account.owner_enc_pub_key,
             &mediator_pub_account.owner_sign_pub_key,
         )

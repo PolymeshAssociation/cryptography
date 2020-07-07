@@ -1,72 +1,47 @@
 use crate::{
     asset_transaction_file, confidential_transaction_file, errors::Error, get_asset_ids,
-    load_object, save_object, CTXInstruction, Instruction, FINISHED_STATE, INIT_STATE,
-    JUSTIFICATION_STATE, JUSTIFY_STATE, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
+    load_object, save_object, CTXInstruction, Instruction, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
     VALIDATED_PUBLIC_ACCOUNT_FILE,
 };
 use codec::Decode;
 use cryptography::mercat::{
-    account::AccountValidator,
-    asset::AssetTxIssueValidator,
-    conf_tx::{CtxMediatorValidator, CtxReceiverValidator, CtxSenderValidator},
-    AccountCreatorVerifier, AccountMemo, AssetTransactionFinalizeAndProcessVerifier,
-    AssetTransactionInitializeVerifier, AssetTxState, ConfidentialTransactionFinalizationVerifier,
-    ConfidentialTransactionInitVerifier, ConfidentialTransactionMediatorVerifier,
-    ConfidentialTxState, JustifiedPubFinalConfidentialTxData, PubAccount, PubAssetTxData,
-    PubFinalConfidentialTxData, PubInitConfidentialTxData, PubJustifiedAssetTxData, TxSubstate,
+    account::AccountValidator, asset::AssetValidator, transaction::TransactionValidator,
+    AccountCreatorVerifier, AccountMemo, AssetTransactionVerifier, AssetTxState, JustifiedAssetTx,
+    JustifiedTx, PubAccount, TransactionVerifier, TxState, TxSubstate,
 };
 use metrics::timing;
 use rand::rngs::OsRng;
 use std::{path::PathBuf, time::Instant};
 
-fn process_asset_issuance_init(
+fn process_asset_issuance(
     instruction: Instruction,
     mdtr_account: &AccountMemo,
-    issr_pub_account: &PubAccount,
-) -> Result<AssetTxState, Error> {
-    let tx = PubAssetTxData::decode(&mut &instruction.data[..]).unwrap();
-    let validator = AssetTxIssueValidator {};
-    let state = validator
-        .verify_initialization(
+    issr_pub_account: PubAccount,
+) -> Result<PubAccount, Error> {
+    let tx = JustifiedAssetTx::decode(&mut &instruction.data[..]).unwrap();
+    let validator = AssetValidator {};
+    let updated_issuer_account = validator
+        .verify_asset_transaction(
             &tx,
-            instruction.state,
-            &issr_pub_account,
+            issr_pub_account,
             &mdtr_account.owner_enc_pub_key,
+            &mdtr_account.owner_sign_pub_key,
         )
         .map_err(|error| Error::LibraryError { error })?;
 
-    Ok(state)
-}
-
-fn process_asset_issuance_justification(
-    instruction: Instruction,
-    mdtr_account: &AccountMemo,
-    issr_pub_account: &PubAccount,
-) -> Result<AssetTxState, Error> {
-    let tx = PubJustifiedAssetTxData::decode(&mut &instruction.data[..]).unwrap();
-    let validator = AssetTxIssueValidator {};
-    let state = validator
-        .verify_justification(&tx, issr_pub_account, &mdtr_account.owner_sign_pub_key)
-        .map_err(|error| Error::LibraryError { error })?;
-
-    Ok(state)
+    Ok(updated_issuer_account)
 }
 
 pub fn validate_asset_issuance(
     db_dir: PathBuf,
     issuer: String,
     mediator: String,
-    state: String,
     tx_id: u32,
     ticker: String,
 ) -> Result<(), Error> {
     let load_objects_timer = Instant::now();
 
-    let state = match state.as_str() {
-        INIT_STATE => AssetTxState::Initialization(TxSubstate::Started),
-        JUSTIFY_STATE => AssetTxState::Justification(TxSubstate::Started),
-        _ => return Err(Error::InvalidInstructionError),
-    };
+    let state = AssetTxState::Justification(TxSubstate::Started);
 
     let mut instruction: Instruction = load_object(
         db_dir.clone(),
@@ -91,17 +66,8 @@ pub fn validate_asset_issuance(
     );
 
     let validate_issuance_transaction_timer = Instant::now();
-    let result = match instruction.state {
-        AssetTxState::Initialization(TxSubstate::Started) => {
-            process_asset_issuance_init(instruction.clone(), &mediator_account, &issuer_account)?
-        }
-        AssetTxState::Justification(TxSubstate::Started) => process_asset_issuance_justification(
-            instruction.clone(),
-            &mediator_account,
-            &issuer_account,
-        )?,
-        _ => return Err(Error::InvalidInstructionError),
-    };
+    let updated_issuer_account =
+        process_asset_issuance(instruction.clone(), &mediator_account, issuer_account)?;
 
     timing!(
         "validator.issuance.transaction",
@@ -111,14 +77,25 @@ pub fn validate_asset_issuance(
 
     let save_objects_timer = Instant::now();
     // Save the transaction under the new state.
-    instruction.state = result;
+    let new_state = AssetTxState::Justification(TxSubstate::Validated);
+    instruction.state = new_state;
+    save_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &issuer,
+        &asset_transaction_file(tx_id, new_state),
+        &instruction,
+    )?;
+
+    // Save the updated issuer account.
     save_object(
         db_dir,
         ON_CHAIN_DIR,
         &issuer,
-        &asset_transaction_file(tx_id, result),
-        &instruction,
+        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+        &updated_issuer_account,
     )?;
+
     timing!(
         "validator.issuance.save_objects",
         save_objects_timer,
@@ -164,6 +141,7 @@ pub fn validate_account(db_dir: PathBuf, user: String, ticker: String) -> Result
         &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
         &user_account,
     )?;
+
     timing!(
         "validator.account.save_objects",
         save_objects_timer,
@@ -173,52 +151,26 @@ pub fn validate_account(db_dir: PathBuf, user: String, ticker: String) -> Result
     Ok(())
 }
 
-fn process_transaction_initialization(
+fn process_transaction(
     instruction: CTXInstruction,
-    sender_pub_account: &PubAccount,
-) -> Result<ConfidentialTxState, Error> {
+    sender_pub_account: PubAccount,
+    receiver_pub_account: PubAccount,
+    mdtr_account: &AccountMemo,
+) -> Result<(PubAccount, PubAccount), Error> {
     let mut rng = OsRng::default();
-    let tx = PubInitConfidentialTxData::decode(&mut &instruction.data[..]).unwrap();
-    let validator = CtxSenderValidator {};
-    let state = validator
-        .verify(&tx, sender_pub_account, instruction.state, &mut rng)
-        .map_err(|error| Error::LibraryError { error })?;
-
-    Ok(state)
-}
-
-fn process_transaction_finalization(
-    instruction: CTXInstruction,
-    sender_pub_account: &PubAccount,
-    receiver_pub_account: &PubAccount,
-) -> Result<ConfidentialTxState, Error> {
-    let mut rng = OsRng::default();
-    let tx = PubFinalConfidentialTxData::decode(&mut &instruction.data[..]).unwrap();
-    let validator = CtxReceiverValidator {};
-    let state = validator
-        .verify_finalize_by_receiver(
+    let tx = JustifiedTx::decode(&mut &instruction.data[..]).unwrap();
+    let validator = TransactionValidator {};
+    let (updated_sender_account, updated_receiver_account) = validator
+        .verify_transaction(
+            &tx,
             sender_pub_account,
             receiver_pub_account,
-            &tx,
-            instruction.state,
+            &mdtr_account.owner_sign_pub_key,
             &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })?;
 
-    Ok(state)
-}
-
-fn process_transaction_finalization_justification(
-    instruction: CTXInstruction,
-    mdtr_account: &AccountMemo,
-) -> Result<ConfidentialTxState, Error> {
-    let tx = JustifiedPubFinalConfidentialTxData::decode(&mut &instruction.data[..]).unwrap();
-    let validator = CtxMediatorValidator {};
-    let state = validator
-        .verify(&tx, &mdtr_account.owner_sign_pub_key, instruction.state)
-        .map_err(|error| Error::LibraryError { error })?;
-
-    Ok(state)
+    Ok((updated_sender_account, updated_receiver_account))
 }
 
 pub fn validate_transaction(
@@ -226,19 +178,13 @@ pub fn validate_transaction(
     sender: String,
     receiver: String,
     mediator: String,
-    state: String,
     tx_id: u32,
     ticker: String,
 ) -> Result<(), Error> {
     let load_objects_timer = Instant::now();
     // Load the transaction, mediator's account, and issuer's public account.
 
-    let state = match state.as_str() {
-        INIT_STATE => ConfidentialTxState::Initialization(TxSubstate::Started),
-        FINISHED_STATE => ConfidentialTxState::Finalization(TxSubstate::Started),
-        JUSTIFICATION_STATE => ConfidentialTxState::FinalizationJustification(TxSubstate::Started),
-        _ => return Err(Error::InvalidInstructionError),
-    };
+    let state = TxState::Justification(TxSubstate::Started);
 
     let mut instruction: CTXInstruction = load_object(
         db_dir.clone(),
@@ -271,20 +217,12 @@ pub fn validate_transaction(
     );
 
     let validate_transaction_timer = Instant::now();
-    let result = match instruction.state {
-        ConfidentialTxState::Initialization(TxSubstate::Started) => {
-            process_transaction_initialization(instruction.clone(), &sender_account)?
-        }
-        ConfidentialTxState::Finalization(TxSubstate::Started) => process_transaction_finalization(
-            instruction.clone(),
-            &sender_account,
-            &receiver_account,
-        )?,
-        ConfidentialTxState::FinalizationJustification(TxSubstate::Started) => {
-            process_transaction_finalization_justification(instruction.clone(), &mediator_account)?
-        }
-        _ => return Err(Error::InvalidInstructionError),
-    };
+    let (updated_sender_account, updated_receiver_account) = process_transaction(
+        instruction.clone(),
+        sender_account,
+        receiver_account,
+        &mediator_account,
+    )?;
 
     timing!(
         "validator.transaction",
@@ -294,14 +232,31 @@ pub fn validate_transaction(
 
     let save_objects_timer = Instant::now();
     // Save the transaction under the new state.
-    instruction.state = result;
+    instruction.state = TxState::Justification(TxSubstate::Validated);
+    save_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &sender,
+        &confidential_transaction_file(tx_id, instruction.state),
+        &instruction,
+    )?;
+
+    // Save the updated sender and receiver accounts.
+    save_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &sender,
+        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+        &updated_sender_account,
+    )?;
     save_object(
         db_dir,
         ON_CHAIN_DIR,
-        &sender,
-        &confidential_transaction_file(tx_id, result),
-        &instruction,
+        &receiver,
+        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+        &updated_receiver_account,
     )?;
+
     timing!(
         "validator.issuance.save_objects",
         save_objects_timer,

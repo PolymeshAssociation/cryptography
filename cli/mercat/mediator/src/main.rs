@@ -44,6 +44,7 @@ fn main() {
         CLI::JustifyTransaction(cfg) => justify_asset_transaction(
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.sender,
+            cfg.receiver,
             cfg.mediator,
             cfg.ticker,
             cfg.tx_id,

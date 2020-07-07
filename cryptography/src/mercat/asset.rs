@@ -181,7 +181,7 @@ impl AssetTransactionVerifier for AssetValidator {
     fn verify_asset_transaction(
         &self,
         justified_asset_tx: &JustifiedAssetTx,
-        issr_account: &PubAccount,
+        issr_account: PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
     ) -> Fallible<PubAccount> {
@@ -191,14 +191,12 @@ impl AssetTransactionVerifier for AssetValidator {
 
         // Verify issuer's initialization proofs and signature.
         let initialized_asset_tx = justified_asset_tx.content.clone();
-        verify_initialization(&initialized_asset_tx, issr_account, mdtr_enc_pub_key)?;
+        verify_initialization(&initialized_asset_tx, &issr_account, mdtr_enc_pub_key)?;
 
         // After successfully verifying the transaction, validator deposits the amount
         // to issuer's account (aka processing phase).
-        let updated_issr_account = crate::mercat::account::deposit(
-            issr_account.clone(),
-            initialized_asset_tx.content.memo,
-        );
+        let updated_issr_account =
+            crate::mercat::account::deposit(issr_account, initialized_asset_tx.content.memo);
 
         Ok(updated_issr_account)
     }
@@ -363,7 +361,7 @@ mod tests {
         let updated_issuer_account = validator
             .verify_asset_transaction(
                 &justified_tx,
-                &issuer_public_account,
+                issuer_public_account.clone(),
                 &mediator_enc_key.pblc,
                 &mediator_signing_pair.public.into(),
             )
@@ -390,7 +388,7 @@ mod tests {
 
         let result = validator.verify_asset_transaction(
             &invalid_justified_tx,
-            &issuer_public_account,
+            issuer_public_account.clone(),
             &mediator_enc_key.pblc,
             &mediator_signing_pair.public.into(),
         );
@@ -403,7 +401,7 @@ mod tests {
 
         let result = validator.verify_asset_transaction(
             &invalid_justified_tx,
-            &issuer_public_account,
+            issuer_public_account,
             &mediator_enc_key.pblc,
             &mediator_signing_pair.public.into(),
         );

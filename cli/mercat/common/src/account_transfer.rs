@@ -5,8 +5,9 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use cryptography::mercat::{
-    conf_tx::CtxReceiver, conf_tx::CtxSender, Account, AccountMemo, ConfidentialTransactionSender,
-    ConfidentialTxState, PubAccount, PubInitConfidentialTxData, TxSubstate,
+    transaction::{CtxReceiver, CtxSender},
+    Account, AccountMemo, InitializedTx, PubAccount, TransactionReceiver, TransactionSender,
+    TxState, TxSubstate,
 };
 use metrics::timing;
 use std::{path::PathBuf, time::Instant};
@@ -58,7 +59,7 @@ pub fn process_create_tx(
     // Initialize the transaction.
     let create_tx_timer = Instant::now();
     let ctx_sender = CtxSender {};
-    let (asset_tx, state) = ctx_sender
+    let asset_tx = ctx_sender
         .create_transaction(
             &sender_account,
             &receiver_account,
@@ -70,20 +71,21 @@ pub fn process_create_tx(
     timing!("account.create_tx.create", create_tx_timer, Instant::now());
 
     // Save the artifacts to file.
+    let new_state = TxState::Initialization(TxSubstate::Started);
     let save_to_file_timer = Instant::now();
     let instruction = CTXInstruction {
-        state,
+        state: new_state,
         data: asset_tx.encode().to_vec(),
     };
 
-    // TODO(CRYP-110)
+    // TODO(CRYP-127)
     // We should name the transactions based on the ordering counters, or we may decide that
     // a global counter (tx_id) is enough and put all transactions inside a common folder.
     save_object(
         db_dir,
         ON_CHAIN_DIR,
         &sender,
-        &confidential_transaction_file(tx_id, state),
+        &confidential_transaction_file(tx_id, new_state),
         &instruction,
     )?;
 
@@ -107,6 +109,14 @@ pub fn process_finalize_tx(
 ) -> Result<(), Error> {
     let mut rng = create_rng_from_seed(Some(seed))?;
     let load_from_file_timer = Instant::now();
+    let state = TxState::Initialization(TxSubstate::Started);
+
+    let sender_account: PubAccount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &sender,
+        VALIDATED_PUBLIC_ACCOUNT_FILE,
+    )?;
 
     let receiver_account = Account {
         scrt: load_object(
@@ -127,13 +137,10 @@ pub fn process_finalize_tx(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &sender,
-        &confidential_transaction_file(
-            tx_id.clone(),
-            ConfidentialTxState::Initialization(TxSubstate::Validated),
-        ),
+        &confidential_transaction_file(tx_id.clone(), state),
     )?;
 
-    let tx = PubInitConfidentialTxData::decode(&mut &instruction.data[..]).map_err(|error| {
+    let tx = InitializedTx::decode(&mut &instruction.data[..]).map_err(|error| {
         Error::ObjectLoadError {
             error,
             path: construct_path(
@@ -154,11 +161,11 @@ pub fn process_finalize_tx(
     // Finalize the transaction.
     let finalize_by_receiver_timer = Instant::now();
     let receiver = CtxReceiver {};
-    let (asset_tx, state) = receiver
-        .finalize_by_receiver(
+    let asset_tx = receiver
+        .finalize_transaction(
             tx,
+            &sender_account.content.memo.owner_sign_pub_key,
             receiver_account,
-            ConfidentialTxState::Initialization(TxSubstate::Validated),
             amount,
             &mut rng,
         )
@@ -177,7 +184,7 @@ pub fn process_finalize_tx(
         data: asset_tx.encode().to_vec(),
     };
 
-    // TODO(CRYP-110)
+    // TODO(CRYP-127)
     // We should name the transactions based on the ordering counters, or we may decide that
     // a global counter (tx_id) is enough and put all transactions inside a common folder.
     save_object(
