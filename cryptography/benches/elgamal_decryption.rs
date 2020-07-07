@@ -3,7 +3,6 @@ use cryptography::asset_proofs::{CipherText, ElgamalSecretKey};
 use curve25519_dalek::scalar::Scalar;
 
 use rand::{rngs::StdRng, SeedableRng};
-// use std::time::Duration;
 
 fn bench_elgamal_decrypt(
     c: &mut Criterion,
@@ -47,7 +46,6 @@ criterion_group! {
     // 10 is the minimum allowed sample size in Criterion.
     config = Criterion::default()
         .sample_size(10);
-        // .measurement_time(Duration::new(60, 0));
     targets = bench_elgamal,
 }
 
