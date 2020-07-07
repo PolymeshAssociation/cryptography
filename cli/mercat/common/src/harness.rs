@@ -1089,11 +1089,24 @@ fn run_from(mode: &str) {
                 }
             } else {
                 // TODO: CRYP-124: enable this one the transaction processing is done.
-                //let got = got.unwrap();
-                //assert!(
-                //    accounts_are_equal(want, got),
-                //    format!("want: {:#?}, got: {:#?}", want, got)
-                //);
+                if let Err(error) = got {
+                    assert!(
+                        false,
+                        format!(
+                            "Test was expected to succeed, but failed with {:#?}.",
+                            error
+                        )
+                    );
+                } else {
+                    let got = got.unwrap();
+                    assert!(
+                        accounts_are_equal(want, &got),
+                        format!(
+                            "Test failed due to account value mismatch.\nWant: {:#?}, got: {:#?}",
+                            want, got
+                        )
+                    );
+                }
             }
         }
     }

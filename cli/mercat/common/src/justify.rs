@@ -84,7 +84,7 @@ pub fn justify_asset_issuance(
     let justify_load_objects_timer = Instant::now();
 
     let instruction_path =
-        asset_transaction_file(tx_id, AssetTxState::Initialization(TxSubstate::Validated));
+        asset_transaction_file(tx_id, AssetTxState::Initialization(TxSubstate::Started));
 
     let instruction: Instruction =
         load_object(db_dir.clone(), ON_CHAIN_DIR, &issuer, &instruction_path)?;

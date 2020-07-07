@@ -92,7 +92,7 @@ pub fn validate_asset_issuance(
         db_dir,
         ON_CHAIN_DIR,
         &issuer,
-        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
         &updated_issuer_account,
     )?;
 

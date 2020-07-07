@@ -15,6 +15,6 @@ transactions:
   - Alice 10 ACME Mike approve
 
 outcome: 
-  - time-limit: 600
+  - time-limit: 60000
   - alice: 
       - ACME: 10
