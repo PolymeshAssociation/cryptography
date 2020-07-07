@@ -7,13 +7,12 @@ use env_logger;
 use input::{parse_input, CLI};
 use log::info;
 use mercat_common::{
-    create_account::process_create_account,
+    account_create::process_create_account,
+    account_issue::process_issue_asset,
+    account_transfer::{process_create_tx, process_finalize_tx},
     errors::Error,
-    init_print_logger,
-    issue_asset::process_issue_asset,
-    remove_file,
-    transfer::{process_create_tx, process_finalize_tx},
-    OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
+    init_print_logger, remove_file, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
+    SECRET_ACCOUNT_FILE,
 };
 use metrics::timing;
 use std::{path::PathBuf, time::Instant};
