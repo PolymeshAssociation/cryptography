@@ -1,0 +1,20 @@
+--- 
+title: "Fund a single account"
+
+tickers: 
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+
+mediators:
+  - Mike
+    
+transactions:
+  - Alice 10 ACME Mike approve
+
+outcome: 
+  - time-limit: 600
+  - alice: 
+      - ACME: 10
