@@ -172,6 +172,10 @@ pub struct JustifyTransactionInfo {
         help = "Path to save the input command line arguments as a config file."
     )]
     pub save_config: Option<PathBuf>,
+
+    /// Instructs the CLI to act as a cheater.
+    #[structopt(long, help = "Instructs the CLI to act as a cheater.")]
+    pub cheat: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
@@ -258,6 +262,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 mediator: cfg.mediator,
                 reject: cfg.reject,
                 save_config: cfg.save_config.clone(),
+                cheat: cfg.cheat,
             };
 
             info!(

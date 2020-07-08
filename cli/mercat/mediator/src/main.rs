@@ -50,6 +50,7 @@ fn main() {
             cfg.ticker,
             cfg.tx_id,
             cfg.reject,
+            cfg.cheat,
         )
         .unwrap(),
     };

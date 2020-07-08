@@ -22,7 +22,8 @@ use schnorrkel::{context::SigningContext, signing_context, ExpansionMode, MiniSe
 use std::{path::PathBuf, time::Instant};
 
 lazy_static! {
-    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/asset");
+    static ref SIG_CTXT_ISSUE: SigningContext = signing_context(b"mercat/asset");
+    static ref SIG_CTXT_TRANSACTION: SigningContext = signing_context(b"mercat/transaction");
 }
 
 fn generate_mediator_keys<R: RngCore + CryptoRng>(rng: &mut R) -> (AccountMemo, MediatorAccount) {
@@ -155,7 +156,7 @@ pub fn justify_asset_issuance(
         justified_tx.sig = mediator_account
             .clone()
             .signing_key
-            .sign(SIG_CTXT.bytes(&message));
+            .sign(SIG_CTXT_ISSUE.bytes(&message));
     }
 
     timing!(
@@ -214,6 +215,7 @@ pub fn justify_asset_transaction(
     ticker: String,
     tx_id: u32,
     reject: bool,
+    cheat: bool,
 ) -> Result<(), Error> {
     // Load the transaction, mediator's credentials, and issuer's public account.
     let justify_load_objects_timer = Instant::now();
@@ -261,7 +263,7 @@ pub fn justify_asset_transaction(
     let justify_library_timer = Instant::now();
     let mediator = CtxMediator {};
     let asset_id = asset_id_from_ticker(&ticker).map_err(|error| Error::LibraryError { error })?;
-    let justified_tx = mediator
+    let mut justified_tx = mediator
         .justify_transaction(
             asset_tx.clone(),
             &mediator_account.encryption_key,
@@ -271,6 +273,26 @@ pub fn justify_asset_transaction(
             asset_id,
         )
         .map_err(|error| Error::LibraryError { error })?;
+
+    if cheat {
+        info!(
+            "CLI log: tx-{}: Cheating by overwriting the sender's account id.",
+            tx_id
+        );
+
+        justified_tx
+            .content
+            .content
+            .init_data
+            .content
+            .memo
+            .sndr_account_id += 1;
+        let message = justified_tx.content.encode();
+        justified_tx.sig = mediator_account
+            .clone()
+            .signing_key
+            .sign(SIG_CTXT_TRANSACTION.bytes(&message));
+    }
 
     timing!(
         "mediator.justify_tx.library",

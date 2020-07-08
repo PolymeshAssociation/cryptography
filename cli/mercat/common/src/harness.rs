@@ -325,7 +325,7 @@ impl Transfer {
             self.ticker,
             self.tx_id,
             path_to_string(&chain_db_dir),
-            cheater_flag(self.sender.cheater)
+            cheater_flag(self.mediator.cheater)
         );
         let ticker = self.ticker.clone();
         let sender = self.sender.name.clone();
@@ -333,6 +333,7 @@ impl Transfer {
         let mediator = self.mediator.name.clone();
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
+        let cheat = self.mediator.cheater;
         return Box::new(move || {
             info!("Running: {}", value.clone());
             justify_asset_transaction(
@@ -343,6 +344,7 @@ impl Transfer {
                 ticker.clone(),
                 tx_id,
                 reject,
+                cheat,
             )?;
             Ok(value.clone())
         });
