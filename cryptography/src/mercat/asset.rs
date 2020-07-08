@@ -295,7 +295,6 @@ mod tests {
         let issuer_secret_account = SecAccount {
             enc_keys: issuer_enc_key.clone(),
             sign_keys: sign_keys.clone(),
-            asset_id: asset_id.clone(),
             asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
         };
 

@@ -47,6 +47,14 @@ pub struct CreateAccountInfo {
         help = "Path to save the input command line arguments as a config file."
     )]
     pub save_config: Option<PathBuf>,
+
+    /// Instructs the CLI to act as a cheater.
+    #[structopt(long, help = "Instructs the CLI to act as a cheater.")]
+    pub cheat: bool,
+
+    /// Transaction id.
+    #[structopt(long, help = "Transaction id.")]
+    pub tx_id: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
@@ -282,6 +290,8 @@ pub fn parse_input() -> CLI {
                 ticker: cfg.ticker,
                 db_dir,
                 user: cfg.user.clone(),
+                cheat: cfg.cheat,
+                tx_id: cfg.tx_id,
             };
 
             info!(

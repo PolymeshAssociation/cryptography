@@ -140,7 +140,6 @@ pub fn gen_keys<R: RngCore + CryptoRng>(rng: &mut R, asset_id: &AssetId) -> SecA
     SecAccount {
         enc_keys,
         sign_keys,
-        asset_id: asset_id.clone(),
         asset_id_witness,
     }
 }

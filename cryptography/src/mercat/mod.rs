@@ -221,7 +221,6 @@ impl Decode for PubAccount {
 pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
     pub sign_keys: SigningKeys,
-    pub asset_id: AssetId,
     pub asset_id_witness: CommitmentWitness,
 }
 
@@ -230,7 +229,6 @@ impl Encode for SecAccount {
     fn size_hint(&self) -> usize {
         self.enc_keys.size_hint()
             + schnorrkel::KEYPAIR_LENGTH  // sign_keys
-            + self.asset_id.size_hint()
             + self.asset_id_witness.size_hint()
     }
 
@@ -238,7 +236,6 @@ impl Encode for SecAccount {
     fn encode_to<W: Output>(&self, dest: &mut W) {
         self.enc_keys.encode_to(dest);
         self.sign_keys.to_bytes().encode_to(dest);
-        self.asset_id.encode_to(dest);
         self.asset_id_witness.encode_to(dest);
     }
 }
@@ -249,13 +246,11 @@ impl Decode for SecAccount {
         let sign_keys = <[u8; schnorrkel::KEYPAIR_LENGTH]>::decode(input)?;
         let sign_keys = SigningKeys::from_bytes(&sign_keys)
             .map_err(|_| CodecError::from("SecAccount.sign_keys is invalid"))?;
-        let asset_id = AssetId::decode(input)?;
         let asset_id_witness = CommitmentWitness::decode(input)?;
 
         Ok(SecAccount {
             enc_keys,
             sign_keys,
-            asset_id,
             asset_id_witness,
         })
     }

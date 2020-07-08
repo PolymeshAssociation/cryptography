@@ -14,7 +14,7 @@ use crate::{
 };
 use cryptography::mercat::{Account, PubAccount, SecAccount};
 use linked_hash_map::LinkedHashMap;
-use log::info;
+use log::{info, warn};
 use rand::Rng;
 use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, RngCore};
@@ -49,7 +49,7 @@ pub enum Transaction {
 }
 
 /// A generic party, can be sender, receiver, or mediator.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Party {
     pub name: String,
     pub cheater: bool,
@@ -169,7 +169,7 @@ impl TryFrom<(u32, String)> for Issue {
 /// Human readable form of a mercat account.
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub struct InputAccount {
-    owner: String,
+    owner: Party,
     ticker: Option<String>,
     balance: u32,
 }
@@ -212,6 +212,9 @@ pub struct TestCase {
 
     /// The directory that will act as the chain datastore.
     chain_db_dir: PathBuf,
+
+    /// Defines whether the test is expected to fail.
+    should_fail: bool,
 }
 
 // --------------------------------------------------------------------------------------------------
@@ -395,16 +398,19 @@ impl Create {
         if let Some(ticker) = self.ticker.clone() {
             // create a normal account
             let value = format!(
-                "tx-{}: $ mercat-account create --ticker {} --user {} --seed {} --db-dir {} {}",
+                "tx-{}: $ mercat-account create --ticker {} --user {} --seed {} --db-dir {} --tx-id {} {}",
                 self.tx_id,
                 ticker,
                 self.owner.name,
                 seed,
                 path_to_string(&chain_db_dir),
+                self.tx_id,
                 cheater_flag(self.owner.cheater)
             );
             let ticker = ticker.clone();
             let owner = self.owner.name.clone();
+            let cheat = self.owner.cheater;
+            let tx_id = self.tx_id;
             return Box::new(move || {
                 info!("Running: {}", value.clone());
                 process_create_account(
@@ -412,6 +418,8 @@ impl Create {
                     chain_db_dir.clone(),
                     ticker.clone(),
                     owner.clone(),
+                    cheat,
+                    tx_id,
                 )?;
                 Ok(value.clone())
             });
@@ -698,7 +706,7 @@ impl TestCase {
                             .decrypt_balance()
                             .map_err(|error| Error::LibraryError { error })?;
                         accounts.insert(InputAccount {
-                            owner: String::from(user),
+                            owner: Party::try_from(user)?,
                             ticker: Some(ticker),
                             balance,
                         });
@@ -715,7 +723,7 @@ impl TestCase {
 // ------------------------------------------------------------------------------------------
 fn cheater_flag(is_cheater: bool) -> String {
     if is_cheater {
-        String::from("--cheater")
+        String::from("--cheat")
     } else {
         String::from("")
     }
@@ -756,10 +764,7 @@ fn make_empty_accounts(accounts: &Vec<InputAccount>) -> Result<(u32, Transaction
     for account in accounts {
         seq.push(TransactionMode::Transaction(Transaction::Create(Create {
             tx_id: transaction_counter,
-            owner: Party {
-                name: account.owner.clone(),
-                cheater: false, // TODO: CRYP-120: test harness does not support cheating for account creation yet.
-            },
+            owner: account.owner.clone(),
             ticker: account.ticker.clone(),
         })));
         transaction_counter += 1;
@@ -920,14 +925,14 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
     for user in accounts {
         let user = to_hash(&user, path.clone(), "accounts.user")?;
         for (user, tickers) in user {
-            let user = to_string(&user, path.clone(), "accounts.user")?;
-            let user = user.to_lowercase();
+            let user: &str = &to_string(&user, path.clone(), "accounts.user")?;
+            let user = Party::try_from(user)?;
             let tickers = to_array(&tickers, path.clone(), "accounts.tickers")?;
             for ticker in tickers {
                 let ticker = to_string(
                     &ticker,
                     path.clone(),
-                    &format!("accounts.{}.ticker", user.clone()),
+                    &format!("accounts.{}.ticker", user.name),
                 )?;
                 let ticker = ticker.to_uppercase();
                 all_accounts.push(InputAccount {
@@ -939,20 +944,23 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         }
     }
 
-    let accounts = to_array(&config["mediators"], path.clone(), "mediators")?;
-    for user in accounts {
-        let user = to_string(&user, path.clone(), "mediator.user")?;
-        let user = user.to_lowercase();
-        all_accounts.push(InputAccount {
-            balance: 0,
-            owner: user.clone(),
-            ticker: None,
-        });
+    if &config["mediators"] != &Yaml::BadValue {
+        let accounts = to_array(&config["mediators"], path.clone(), "mediators")?;
+        for user in accounts {
+            let user = to_string(&user, path.clone(), "mediator.user")?;
+            let user: &str = &user.to_lowercase();
+            all_accounts.push(InputAccount {
+                balance: 0,
+                owner: Party::try_from(user.clone())?,
+                ticker: None,
+            });
+        }
     }
 
     let mut accounts_outcome: HashSet<InputAccount> = HashSet::new();
     let outcomes = to_array(&config["outcome"], path.clone(), "outcome")?;
     let mut timing_limit: u128 = 0;
+    let mut should_fail = false;
     for outcome in outcomes {
         let outcome_type = to_hash(&outcome, path.clone(), "outcome.key")?;
         for (key, value) in outcome_type {
@@ -961,10 +969,12 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
                 if let Some(expected_time_limit) = value.as_i64() {
                     timing_limit = expected_time_limit as u128;
                 }
+            } else if key == "should-fail" {
+                should_fail = true
             } else {
                 let accounts_for_user =
                     to_array(&value, path.clone(), &format!("outcome.{}.ticker", key))?;
-                let owner = key.clone();
+                let owner: &str = &key.clone();
                 for accounts in accounts_for_user {
                     let accounts =
                         to_hash(&accounts, path.clone(), &format!("outcome.{}.ticker", key))?;
@@ -987,7 +997,7 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
                                 })?;
                         let balance = u32::try_from(balance).map_err(|_| Error::BalanceTooBig)?;
                         accounts_outcome.insert(InputAccount {
-                            owner: owner.clone(),
+                            owner: Party::try_from(owner.clone())?,
                             ticker: Some(ticker.clone()),
                             balance,
                         });
@@ -1024,9 +1034,11 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         accounts_outcome,
         timing_limit,
         chain_db_dir,
+        should_fail,
     })
 }
 
+#[allow(unused)]
 fn accounts_are_equal(want: &HashSet<InputAccount>, got: &HashSet<InputAccount>) -> bool {
     let intersection: HashSet<_> = want.intersection(&got).collect();
     intersection.len() == want.len() && want.len() == got.len()
@@ -1046,24 +1058,43 @@ fn run_from(mode: &str) {
     // Do not fail if the top level directory does not exist
     if let Ok(configs) = all_files_in_dir(path) {
         for config in configs {
-            let mut separate_chain_db_dir = chain_db_dir.clone();
-            separate_chain_db_dir.push(config.file_name().unwrap());
-            if config.file_name().unwrap() == ".keep" {
+            let file_name = config.file_name().unwrap();
+            let file_name = file_name.to_str().unwrap();
+            if file_name.starts_with("_") {
+                // skip the test case
+                warn!("Skipping test case: {}", file_name);
                 continue;
             }
+
+            let mut separate_chain_db_dir = chain_db_dir.clone();
+            separate_chain_db_dir.push(file_name);
             let testcase = &parse_config(config, separate_chain_db_dir).unwrap();
             info!("----------------------------------------------------------------------------------");
             info!("- Running test case: {}.", testcase.title);
             info!("----------------------------------------------------------------------------------");
             let want = &testcase.accounts_outcome;
-            let got = &testcase.run().is_ok(); // the proper form is commented below
-
-            // TODO: CRYP-124: enable this one the transaction processing is done.
-            //let got = &testcase.run().unwrap();
-            //assert!(
-            //    accounts_are_equal(want, got),
-            //    format!("want: {:#?}, got: {:#?}", want, got)
-            //);
+            let got = testcase.run();
+            if testcase.should_fail {
+                if let Err(error) = got {
+                    match error {
+                        Error::LibraryError { error: lib_error } => {
+                            info!("Testcase passed! Since the library correctly reject the transaction with error: {:#?}", lib_error);
+                        }
+                        _ => {
+                            assert!(false, format!("Test failed for the wrong reason. Expected mercat library error, but got: {:#?}.", error));
+                        }
+                    }
+                } else {
+                    assert!(false, "Test succeed, but it was expected to fail.");
+                }
+            } else {
+                // TODO: CRYP-124: enable this one the transaction processing is done.
+                //let got = got.unwrap();
+                //assert!(
+                //    accounts_are_equal(want, got),
+                //    format!("want: {:#?}, got: {:#?}", want, got)
+                //);
+            }
         }
     }
 }

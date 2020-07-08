@@ -62,7 +62,7 @@ impl TransactionSender for CtxSender {
         // as input.
         let sndr_enc_keys = &sndr_account.scrt.enc_keys;
         let sndr_sign_keys = &sndr_account.scrt.sign_keys;
-        let asset_id = sndr_account.scrt.asset_id.clone();
+        let asset_id = sndr_account.scrt.asset_id_witness.value();
         let sndr_pub_account = &sndr_account.pblc.content;
         let rcvr_pub_account = &rcvr_pub_account.content;
         let rcvr_pub_key = rcvr_pub_account.memo.owner_enc_pub_key;
@@ -699,7 +699,6 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
-                asset_id: asset_id.clone(),
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
@@ -744,7 +743,6 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
-                asset_id: asset_id.clone(),
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
@@ -795,7 +793,6 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys.clone(),
                 sign_keys: rcvr_sign_keys.clone(),
-                asset_id: asset_id.clone(),
                 asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
             },
         };
@@ -812,7 +809,6 @@ mod tests {
             scrt: SecAccount {
                 enc_keys: sndr_enc_keys.clone(),
                 sign_keys: sndr_sign_keys.clone(),
-                asset_id: asset_id.clone(),
                 asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
             },
         };

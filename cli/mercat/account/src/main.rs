@@ -29,7 +29,8 @@ fn main() {
     match args {
         CLI::Create(cfg) => {
             let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap();
-            process_create_account(cfg.seed, db_dir, cfg.ticker, cfg.user).unwrap()
+            process_create_account(cfg.seed, db_dir, cfg.ticker, cfg.user, cfg.cheat, cfg.tx_id)
+                .unwrap()
         }
         CLI::Cleanup { user, db_dir } => process_destroy_account(user, db_dir).unwrap(),
         CLI::CreateFrom { config: _ } => panic!("This should not happen!"),
