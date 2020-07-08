@@ -281,7 +281,8 @@ impl Transfer {
     pub fn receive<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
         let value = format!(
-            "tx-{}: $ mercat-account finalize-transaction --account-id-from-ticker {} --amount {} --sender {} --receiver {} --tx-id {} --seed {} --db-dir {} {}",
+            "tx-{}: $ mercat-account finalize-transaction --account-id-from-ticker {} --amount {} --sender {} --receiver {} --tx-id {} \
+            --seed {} --db-dir {} {}",
             self.tx_id,
             self.ticker,
             self.amount,
@@ -290,13 +291,14 @@ impl Transfer {
             self.tx_id,
             seed,
             path_to_string(&chain_db_dir),
-            cheater_flag(self.sender.cheater)
+            cheater_flag(self.receiver.cheater)
         );
         let ticker = self.ticker.clone();
         let sender = self.sender.name.clone();
         let receiver = self.receiver.name.clone();
         let amount = self.amount;
         let tx_id = self.tx_id;
+        let cheat = self.receiver.cheater;
         return Box::new(move || {
             info!("Running: {}", value.clone());
             process_finalize_tx(
@@ -307,6 +309,7 @@ impl Transfer {
                 ticker.clone(),
                 amount,
                 tx_id,
+                cheat,
             )?;
             Ok(value.clone())
         });

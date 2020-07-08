@@ -140,6 +140,7 @@ pub fn process_finalize_tx(
     ticker: String,
     amount: u32,
     tx_id: u32,
+    cheat: bool,
 ) -> Result<(), Error> {
     let mut rng = create_rng_from_seed(Some(seed))?;
     let load_from_file_timer = Instant::now();
@@ -192,18 +193,46 @@ pub fn process_finalize_tx(
         Instant::now()
     );
 
+    let mut amount = amount;
+    // To simplify the cheating selection process, we randomly choose a cheating strategy,
+    // instead of requiring the caller to know of all the different cheating strategies.
+    let cheating_strategy: u32 = rng.gen_range(0, 2);
+
+    // The first cheating strategies make changes to the input, while the 2nd one
+    // changes the output.
+    if cheat && cheating_strategy == 0 {
+        info!(
+            "CLI log: tx-{}: Cheating by changing the agreed upon amount. Correct amount: {}",
+            tx_id, amount
+        );
+        amount += 1
+    }
+
     // Finalize the transaction.
     let finalize_by_receiver_timer = Instant::now();
     let receiver = CtxReceiver {};
-    let asset_tx = receiver
+    let mut asset_tx = receiver
         .finalize_transaction(
             tx,
             &sender_account.content.memo.owner_sign_pub_key,
-            receiver_account,
+            receiver_account.clone(),
             amount,
             &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })?;
+
+    if cheat && cheating_strategy == 1 {
+        info!(
+            "CLI log: tx-{}: Cheating by changing the sender's account id. Correct account id: {}",
+            tx_id, receiver_account.pblc.content.id
+        );
+        asset_tx.content.init_data.content.memo.rcvr_account_id += 1;
+        let message = asset_tx.content.encode();
+        asset_tx.sig = receiver_account
+            .scrt
+            .sign_keys
+            .sign(SIG_CTXT.bytes(&message));
+    }
 
     timing!(
         "account.finalize_tx.finalize_by_receiver",
