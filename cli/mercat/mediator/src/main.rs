@@ -39,6 +39,7 @@ fn main() {
             cfg.account_id_from_ticker,
             cfg.tx_id,
             cfg.reject,
+            cfg.cheat,
         )
         .unwrap(),
         CLI::JustifyTransaction(cfg) => justify_asset_transaction(

@@ -532,6 +532,7 @@ impl Issue {
         let ticker = self.ticker.clone();
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
+        let cheat = self.mediator.cheater;
         return Box::new(move || {
             info!("Running: {}", value.clone());
             justify_asset_issuance(
@@ -541,6 +542,7 @@ impl Issue {
                 ticker.clone(),
                 tx_id,
                 reject,
+                cheat,
             )?;
             Ok(value.clone())
         });

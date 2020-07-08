@@ -6,7 +6,7 @@ use crate::{
 use codec::{Decode, Encode};
 use cryptography::{
     asset_id_from_ticker,
-    asset_proofs::ElgamalSecretKey,
+    asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
         asset::AssetMediator, transaction::CtxMediator, AccountMemo, AssetTransactionMediator,
         AssetTxState, EncryptionKeys, FinalizedTx, InitializedAssetTx, MediatorAccount, PubAccount,
@@ -14,10 +14,16 @@ use cryptography::{
     },
 };
 use curve25519_dalek::scalar::Scalar;
+use lazy_static::lazy_static;
+use log::info;
 use metrics::timing;
 use rand::{CryptoRng, RngCore};
-use schnorrkel::{ExpansionMode, MiniSecretKey};
+use schnorrkel::{context::SigningContext, signing_context, ExpansionMode, MiniSecretKey};
 use std::{path::PathBuf, time::Instant};
+
+lazy_static! {
+    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/asset");
+}
 
 fn generate_mediator_keys<R: RngCore + CryptoRng>(rng: &mut R) -> (AccountMemo, MediatorAccount) {
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
@@ -79,6 +85,7 @@ pub fn justify_asset_issuance(
     ticker: String,
     tx_id: u32,
     reject: bool,
+    cheat: bool,
 ) -> Result<(), Error> {
     // Load the transaction, mediator's credentials, and issuer's public account.
     let justify_load_objects_timer = Instant::now();
@@ -119,7 +126,7 @@ pub fn justify_asset_issuance(
     // Justification.
     let justify_library_timer = Instant::now();
     let mediator = AssetMediator {};
-    let justified_tx = mediator
+    let mut justified_tx = mediator
         .justify_asset_transaction(
             asset_tx.clone(),
             &issuer_account,
@@ -127,6 +134,30 @@ pub fn justify_asset_issuance(
             &mediator_account.signing_key,
         )
         .map_err(|error| Error::LibraryError { error })?;
+
+    if cheat {
+        info!(
+            "CLI log: tx-{}: Cheating by overwriting the asset id of the account.",
+            tx_id
+        );
+        let cheat_asset_id =
+            asset_id_from_ticker("CHEAT").map_err(|error| Error::LibraryError { error })?;
+        let cheat_asset_id_witness =
+            CommitmentWitness::new(cheat_asset_id.clone().into(), Scalar::one());
+        let cheat_enc_asset_id = mediator_account
+            .clone()
+            .encryption_key
+            .pblc
+            .encrypt(&cheat_asset_id_witness);
+
+        justified_tx.content.content.enc_asset_id = cheat_enc_asset_id;
+        let message = justified_tx.content.encode();
+        justified_tx.sig = mediator_account
+            .clone()
+            .signing_key
+            .sign(SIG_CTXT.bytes(&message));
+    }
+
     timing!(
         "mediator.justify_library",
         justify_library_timer,
