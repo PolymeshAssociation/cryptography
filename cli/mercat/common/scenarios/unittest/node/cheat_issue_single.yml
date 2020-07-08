@@ -1,5 +1,5 @@
 --- 
-title: "Issue tokens to a single account"
+title: "Cheat in issuing tokens to a single account"
 
 tickers: 
   - ACME
@@ -12,9 +12,8 @@ mediators:
   - Mike
     
 transactions:
-  - Alice 10 ACME Mike approve
+  - Alice(cheat) 10 ACME Mike approve
 
 outcome: 
   - time-limit: 60000
-  - alice: 
-      - ACME: 10
+  - should-fail: true

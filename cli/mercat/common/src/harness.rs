@@ -499,6 +499,7 @@ impl Issue {
         let mediator = self.mediator.name.clone();
         let amount = self.amount;
         let tx_id = self.tx_id;
+        let cheat = self.issuer.cheater;
         return Box::new(move || {
             info!("Running: {}", value.clone());
             process_issue_asset(
@@ -509,6 +510,7 @@ impl Issue {
                 ticker.clone(),
                 amount,
                 tx_id,
+                cheat,
             )?;
             Ok(value.clone())
         });
@@ -523,7 +525,7 @@ impl Issue {
             self.mediator.name,
             self.tx_id,
             path_to_string(&chain_db_dir),
-            cheater_flag(self.issuer.cheater)
+            cheater_flag(self.mediator.cheater)
         );
         let issuer = self.issuer.name.clone();
         let mediator = self.mediator.name.clone();
