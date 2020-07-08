@@ -246,14 +246,14 @@ pub fn validate_transaction(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &sender,
-        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
         &updated_sender_account,
     )?;
     save_object(
         db_dir,
         ON_CHAIN_DIR,
         &receiver,
-        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
         &updated_receiver_account,
     )?;
 

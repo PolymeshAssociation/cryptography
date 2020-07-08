@@ -115,7 +115,7 @@ pub fn process_finalize_tx(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &sender,
-        VALIDATED_PUBLIC_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
     )?;
 
     let receiver_account = Account {
@@ -129,7 +129,7 @@ pub fn process_finalize_tx(
             db_dir.clone(),
             ON_CHAIN_DIR,
             &receiver,
-            &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
+            &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
         )?,
     };
 
@@ -179,6 +179,7 @@ pub fn process_finalize_tx(
 
     // Save the artifacts to file.
     let save_to_file_timer = Instant::now();
+    let state = TxState::Finalization(TxSubstate::Started);
     let instruction = CTXInstruction {
         state,
         data: asset_tx.encode().to_vec(),

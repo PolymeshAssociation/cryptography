@@ -219,7 +219,7 @@ pub fn justify_asset_transaction(
     let justify_load_objects_timer = Instant::now();
 
     let instruction_path =
-        confidential_transaction_file(tx_id, TxState::Finalization(TxSubstate::Validated));
+        confidential_transaction_file(tx_id, TxState::Finalization(TxSubstate::Started));
     let instruction: CTXInstruction =
         load_object(db_dir.clone(), ON_CHAIN_DIR, &sender, &instruction_path)?;
 
@@ -241,14 +241,14 @@ pub fn justify_asset_transaction(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &sender.clone(),
-        VALIDATED_PUBLIC_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
     )?;
 
     let receiver_account: PubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &receiver.clone(),
-        VALIDATED_PUBLIC_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
     )?;
 
     timing!(

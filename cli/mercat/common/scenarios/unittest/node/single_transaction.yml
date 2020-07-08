@@ -1,0 +1,26 @@
+--- 
+title: "A single confidential transaction"
+
+tickers: 
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+  - bob:
+    - ACME
+
+mediators:
+  - Mike
+    
+transactions:
+  - sequence:
+    - Alice 50 ACME Mike approve
+    - Alice 30 ACME Bob approve Mike approve
+
+outcome: 
+  - time-limit: 60000
+  - alice: 
+      - ACME: 20
+  - bob: 
+      - ACME: 30
