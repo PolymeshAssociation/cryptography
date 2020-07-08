@@ -260,6 +260,7 @@ impl Transfer {
         let mediator = self.mediator.name.clone();
         let amount = self.amount;
         let tx_id = self.tx_id;
+        let cheat = self.sender.cheater;
         return Box::new(move || {
             info!("Running: {}", value.clone());
             process_create_tx(
@@ -271,6 +272,7 @@ impl Transfer {
                 ticker.clone(),
                 amount,
                 tx_id,
+                cheat,
             )?;
             Ok(value.clone())
         });

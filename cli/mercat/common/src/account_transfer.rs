@@ -9,8 +9,16 @@ use cryptography::mercat::{
     Account, AccountMemo, InitializedTx, PubAccount, TransactionReceiver, TransactionSender,
     TxState, TxSubstate,
 };
+use lazy_static::lazy_static;
+use log::info;
 use metrics::timing;
+use rand::Rng;
+use schnorrkel::{context::SigningContext, signing_context};
 use std::{path::PathBuf, time::Instant};
+
+lazy_static! {
+    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/transaction");
+}
 
 pub fn process_create_tx(
     seed: String,
@@ -21,6 +29,7 @@ pub fn process_create_tx(
     ticker: String,
     amount: u32,
     tx_id: u32,
+    cheat: bool,
 ) -> Result<(), Error> {
     let mut rng = create_rng_from_seed(Some(seed))?;
     let load_from_file_timer = Instant::now();
@@ -56,10 +65,25 @@ pub fn process_create_tx(
         Instant::now()
     );
 
+    let mut amount = amount;
+    // To simplify the cheating selection process, we randomly choose a cheating strategy,
+    // instead of requiring the caller to know of all the different cheating strategies.
+    let cheating_strategy: u32 = rng.gen_range(0, 2);
+
+    // The first cheating strategies make changes to the input, while the 2nd one
+    // changes the output.
+    if cheat && cheating_strategy == 0 {
+        info!(
+            "CLI log: tx-{}: Cheating by changing the agreed upon amount. Correct amount: {}",
+            tx_id, amount
+        );
+        amount += 1
+    }
+
     // Initialize the transaction.
     let create_tx_timer = Instant::now();
     let ctx_sender = CtxSender {};
-    let asset_tx = ctx_sender
+    let mut asset_tx = ctx_sender
         .create_transaction(
             &sender_account,
             &receiver_account,
@@ -69,6 +93,16 @@ pub fn process_create_tx(
         )
         .map_err(|error| Error::LibraryError { error })?;
     timing!("account.create_tx.create", create_tx_timer, Instant::now());
+
+    if cheat && cheating_strategy == 1 {
+        info!(
+            "CLI log: tx-{}: Cheating by changing the sender's account id. Correct account id: {}",
+            tx_id, sender_account.pblc.content.id
+        );
+        asset_tx.content.memo.sndr_account_id += 1;
+        let message = asset_tx.content.encode();
+        asset_tx.sig = sender_account.scrt.sign_keys.sign(SIG_CTXT.bytes(&message));
+    }
 
     // Save the artifacts to file.
     let new_state = TxState::Initialization(TxSubstate::Started);
