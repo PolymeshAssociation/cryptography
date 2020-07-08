@@ -79,7 +79,7 @@ pub fn process_create_account(
             1 => {
                 info!("CLI log: tx-{}: Cheating by overwriting the account id but not the signature. Correct account id: {}",
                       tx_id, account.pblc.content.id);
-                account.pblc.content.id = 2;
+                account.pblc.content.id += 1;
             }
             _ => error!("CLI log: tx-{}: This should never happen!", tx_id),
         }
