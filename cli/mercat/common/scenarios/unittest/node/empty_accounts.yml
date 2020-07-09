@@ -21,7 +21,6 @@ mediators:
   - Moe
     
 outcome: 
-  - time-limit: 60000
   - alice: 
       - ACME: 0
       - AAPL: 0

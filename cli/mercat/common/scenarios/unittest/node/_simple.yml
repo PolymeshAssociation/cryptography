@@ -34,7 +34,6 @@ transactions:
 
 
 outcome: 
-  - time-limit: 600
   - alice: 
       - ACME: 0
       - AAPL: 50

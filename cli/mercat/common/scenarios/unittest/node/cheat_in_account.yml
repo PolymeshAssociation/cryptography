@@ -10,5 +10,4 @@ accounts:
     - ACME
 
 outcome: 
-  - time-limit: 60000
   - should-fail: true

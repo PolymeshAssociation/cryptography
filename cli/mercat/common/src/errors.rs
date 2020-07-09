@@ -84,13 +84,6 @@ pub enum Error {
         path: PathBuf,
     },
 
-    /// The test case took longer than expected to run.
-    #[fail(
-        display = "Time limit exceeded. Expected a max of {}, got {} ms.",
-        want, got
-    )]
-    TimeLimitExceeded { want: u128, got: u128 },
-
     /// An error occurred while reading from a file.
     #[fail(
         display = "Failed to parse the config file {:?}, because {:?}",

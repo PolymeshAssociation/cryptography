@@ -24,7 +24,6 @@ use std::{
     collections::HashSet,
     convert::{From, TryFrom},
     fs, io,
-    time::Instant,
 };
 use yaml_rust::{Yaml, YamlLoader};
 
@@ -206,9 +205,6 @@ pub struct TestCase {
 
     /// The expected value of the accounts at the end of the scenario.
     accounts_outcome: HashSet<InputAccount>,
-
-    /// Maximum allowable time in Milliseconds
-    timing_limit: u128,
 
     /// The directory that will act as the chain datastore.
     chain_db_dir: PathBuf,
@@ -655,7 +651,6 @@ impl TestCase {
         let mut rng = create_rng_from_seed(Some(seed))?;
 
         self.chain_setup()?;
-        let start = Instant::now();
         for transaction in self
             .transactions
             .sequence(&mut rng, self.chain_db_dir.clone())
@@ -663,14 +658,7 @@ impl TestCase {
             let _command = transaction()?;
             info!("Success!");
         }
-        let duration = start.elapsed();
 
-        if duration.as_millis() > self.timing_limit {
-            return Err(Error::TimeLimitExceeded {
-                want: self.timing_limit,
-                got: duration.as_millis(),
-            });
-        }
         self.resulting_accounts()
     }
 
@@ -970,17 +958,12 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
 
     let mut accounts_outcome: HashSet<InputAccount> = HashSet::new();
     let outcomes = to_array(&config["outcome"], path.clone(), "outcome")?;
-    let mut timing_limit: u128 = 0;
     let mut should_fail = false;
     for outcome in outcomes {
         let outcome_type = to_hash(&outcome, path.clone(), "outcome.key")?;
         for (key, value) in outcome_type {
             let key = to_string(key, path.clone(), "outcome.key")?;
-            if key == "time-limit" {
-                if let Some(expected_time_limit) = value.as_i64() {
-                    timing_limit = expected_time_limit as u128;
-                }
-            } else if key == "should-fail" {
+            if key == "should-fail" {
                 should_fail = true
             } else {
                 let accounts_for_user =
@@ -1043,7 +1026,6 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         ticker_names,
         transactions,
         accounts_outcome,
-        timing_limit,
         chain_db_dir,
         should_fail,
     })

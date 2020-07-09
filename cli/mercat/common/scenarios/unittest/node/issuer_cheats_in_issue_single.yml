@@ -15,5 +15,4 @@ transactions:
   - Alice(cheat) 10 ACME Mike approve
 
 outcome: 
-  - time-limit: 60000
   - should-fail: true
