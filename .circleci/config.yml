@@ -57,9 +57,7 @@ jobs:
             cargo +nightly build --bench mercat_asset &&
             cargo +nightly build --bench mercat_transaction &&
             echo "Wasm build (features 'no_std' & 'u32_backend')"  &&
-            cd cryptography &&
             cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
-            cd .. &&
             echo "TODO: add wasm tests"
           no_output_timeout: 30m
       - save_cache:
