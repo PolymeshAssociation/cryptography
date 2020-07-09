@@ -1,4 +1,3 @@
-use confy;
 use log::info;
 use mercat_common::{gen_seed, save_config};
 use serde::{Deserialize, Serialize};
@@ -24,22 +23,14 @@ pub struct CreateAccountInfo {
     )]
     pub db_dir: Option<PathBuf>,
 
-    /// Account id. It is the responsibility of the caller to ensure the uniqueness of the id.
-    /// The CLI will not throw any errors if a duplicate id is passed.
+    /// An asset ticker name which is a string of at most 12 characters.
+    /// In these test CLIs, the unique account id is created from the pair of username and ticker.
     #[structopt(
         short,
         long,
-        help = "The id of the account. This value must be unique."
+        help = "The asset ticker name. String of at most 12 characters."
     )]
-    pub account_id: u32,
-
-    /// Asset id. An asset ticker name which is a string of at most 12 characters.
-    #[structopt(
-        short,
-        long,
-        help = "The asset ticker id. String of at most 12 characters."
-    )]
-    pub ticker_id: String,
+    pub ticker: String,
 
     /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
@@ -56,14 +47,24 @@ pub struct CreateAccountInfo {
         help = "Path to save the input command line arguments as a config file."
     )]
     pub save_config: Option<PathBuf>,
+
+    /// Instructs the CLI to act as a cheater.
+    #[structopt(long, help = "Instructs the CLI to act as a cheater.")]
+    pub cheat: bool,
+
+    /// Transaction id.
+    #[structopt(long, help = "Transaction id.")]
+    pub tx_id: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct IssueAssetInfo {
-    /// Account ID of the issuer.
-    /// The CLI will not throw any errors if a duplicate id is passed.
-    #[structopt(long, help = "The account ID.")]
-    pub account_id: u32,
+    /// Account ID of the issuer will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
 
     /// A transaction ID for the asset issuance transaction.
     /// The CLI will not throw any errors if a duplicate id is passed.
@@ -115,10 +116,12 @@ pub struct IssueAssetInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct CreateTransactionInfo {
-    /// Account ID of the sender.
-    /// The CLI will not throw any errors if a duplicate id is passed.
-    #[structopt(long, help = "The sender's account ID.")]
-    pub account_id: u32,
+    /// Account ID of the issuer will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
 
     /// A transaction ID for the transaction.
     /// The CLI will not throw any errors if a duplicate id is passed.
@@ -174,6 +177,13 @@ pub struct CreateTransactionInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct FinalizeTransactionInfo {
+    /// Account ID of the receiver will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
+
     /// The transaction ID for the transaction.
     /// The CLI will not throw any errors if a duplicate id is passed.
     /// It will silently overwrite the transaction.
@@ -263,7 +273,7 @@ pub enum CLI {
     FinalizeTransaction(FinalizeTransactionInfo),
 }
 
-pub fn parse_input() -> Result<CLI, confy::ConfyError> {
+pub fn parse_input() -> CLI {
     info!("Parsing input configuration.");
     let args: CLI = CLI::from_args();
 
@@ -277,10 +287,11 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             let cfg = CreateAccountInfo {
                 save_config: cfg.save_config.clone(),
                 seed,
-                account_id: cfg.account_id,
-                ticker_id: cfg.ticker_id,
+                ticker: cfg.ticker,
                 db_dir,
                 user: cfg.user.clone(),
+                cheat: cfg.cheat,
+                tx_id: cfg.tx_id,
             };
 
             info!(
@@ -291,7 +302,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return Ok(CLI::Create(cfg));
+            return CLI::Create(cfg);
         }
 
         CLI::CreateFrom { config } => {
@@ -305,7 +316,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             });
 
             info!("Read the following config from {:?}:\n{:#?}", &config, &cfg);
-            return Ok(CLI::Create(cfg));
+            return CLI::Create(cfg);
         }
 
         CLI::Cleanup { user, db_dir } => {
@@ -319,7 +330,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 "Parsed the following config from the command line:\n{:#?}",
                 args
             );
-            return Ok(args);
+            return args;
         }
 
         CLI::Issue(cfg) => {
@@ -329,7 +340,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             info!("Seed: {:?}", seed.clone().unwrap()); // unwrap won't panic
 
             let cfg = IssueAssetInfo {
-                account_id: cfg.account_id,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 tx_id: cfg.tx_id,
                 seed,
                 amount: cfg.amount,
@@ -341,13 +352,13 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return Ok(CLI::Issue(cfg));
+            return CLI::Issue(cfg);
         }
 
         CLI::CreateTransaction(cfg) => {
@@ -357,7 +368,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             info!("Seed: {:?}", seed.clone().unwrap());
 
             let cfg = CreateTransactionInfo {
-                account_id: cfg.account_id,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 tx_id: cfg.tx_id,
                 seed,
                 amount: cfg.amount,
@@ -376,7 +387,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return Ok(CLI::CreateTransaction(cfg));
+            return CLI::CreateTransaction(cfg);
         }
 
         CLI::FinalizeTransaction(cfg) => {
@@ -387,6 +398,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
             let cfg = FinalizeTransactionInfo {
                 tx_id: cfg.tx_id,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 seed,
                 amount: cfg.amount,
                 db_dir,
@@ -403,7 +415,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return Ok(CLI::FinalizeTransaction(cfg));
+            return CLI::FinalizeTransaction(cfg);
         }
     }
 }

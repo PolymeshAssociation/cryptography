@@ -83,4 +83,30 @@ pub enum Error {
         error: std::io::Error,
         path: PathBuf,
     },
+
+    /// The test case took longer than expected to run.
+    #[fail(
+        display = "Time limit exceeded. Expected a max of {}, got {} ms.",
+        want, got
+    )]
+    TimeLimitExceeded { want: u128, got: u128 },
+
+    /// An error occurred while reading from a file.
+    #[fail(
+        display = "Failed to parse the config file {:?}, because {:?}",
+        path, reason
+    )]
+    ErrorParsingTestHarnessConfig { path: PathBuf, reason: String },
+
+    /// An error occurred while parsing regex.
+    #[fail(display = "Failed to parse the regex: {:?}", reason)]
+    RegexError { reason: String },
+
+    /// Balance great than u32
+    #[fail(display = "balance does not fit u32")]
+    BalanceTooBig,
+
+    /// There can be only one top level transaction
+    #[fail(display = "There can be only one top level transaction")]
+    TopLevelTransaction,
 }

@@ -49,6 +49,13 @@ pub struct CreateMediatorAccountInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct JustifyIssuanceInfo {
+    /// Account ID of the issuer will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
+
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
     /// blockchain. Defaults to the current directory. This directory will have two main
@@ -127,15 +134,20 @@ pub struct JustifyTransactionInfo {
     #[structopt(
         short,
         long,
-        help = "The asset ticker id. String of at most 12 characters."
+        help = "The asset ticker name. String of at most 12 characters."
     )]
-    pub ticker_id: String,
+    pub ticker: String,
 
     /// The name of the sender.
     /// An account must have already been created for this user, using `mercat-account`
     /// CLI.
     #[structopt(long, help = "The name of the sender.")]
     pub sender: String,
+
+    /// An account must have already been created for this user, using `mercat-account`
+    /// CLI.
+    #[structopt(long, help = "The name of the receiver.")]
+    pub receiver: String,
 
     /// The name of the mediator.
     #[structopt(short, long, help = "The name of the mediator.")]
@@ -208,6 +220,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             info!("Seed: {:?}", seed.clone().unwrap());
             let cfg = JustifyIssuanceInfo {
                 db_dir,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 tx_id: cfg.tx_id,
                 issuer: cfg.issuer,
                 mediator: cfg.mediator,
@@ -234,8 +247,9 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             let cfg = JustifyTransactionInfo {
                 db_dir,
                 tx_id: cfg.tx_id,
-                ticker_id: cfg.ticker_id,
+                ticker: cfg.ticker,
                 sender: cfg.sender,
+                receiver: cfg.receiver,
                 mediator: cfg.mediator,
                 reject: cfg.reject,
                 save_config: cfg.save_config.clone(),

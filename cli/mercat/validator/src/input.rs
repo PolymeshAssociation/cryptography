@@ -19,6 +19,13 @@ pub struct ValidateAssetIssuanceInfo {
     )]
     pub db_dir: Option<PathBuf>,
 
+    /// Account ID of the issuer will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
+
     /// The name of the mediator.
     #[structopt(short, long, help = "The mediator's name.")]
     pub mediator: String,
@@ -68,6 +75,10 @@ pub struct AccountCreationInfo {
     #[structopt(short, long, help = "The name of the user.")]
     pub user: String,
 
+    /// The ticker name for the account.
+    #[structopt(short, long, help = "The ticker name for the account.")]
+    pub ticker: String,
+
     /// An optional path to save the config used for this experiment.
     #[structopt(
         parse(from_os_str),
@@ -90,6 +101,13 @@ pub struct ValidateTransactionInfo {
         long
     )]
     pub db_dir: Option<PathBuf>,
+
+    /// Account ID of the issuer will be generated from the username and ticker name pair.
+    #[structopt(
+        long,
+        help = "The ticker name that will be used to generate the unique account id of the user."
+    )]
+    pub account_id_from_ticker: String,
 
     /// The name of the mediator.
     #[structopt(short, long, help = "The mediator's name.")]
@@ -148,6 +166,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
             let cfg = ValidateAssetIssuanceInfo {
                 db_dir,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 mediator: cfg.mediator,
                 issuer: cfg.issuer,
                 tx_id: cfg.tx_id,
@@ -174,6 +193,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
             let cfg = ValidateTransactionInfo {
                 db_dir,
+                account_id_from_ticker: cfg.account_id_from_ticker,
                 mediator: cfg.mediator,
                 sender: cfg.sender,
                 receiver: cfg.receiver,

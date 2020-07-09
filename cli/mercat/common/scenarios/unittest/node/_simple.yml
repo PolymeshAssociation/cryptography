@@ -1,0 +1,45 @@
+--- 
+title: "Mix of concurrent and sequential test"
+
+tickers: 
+  - AAPL
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+    - AAPL
+  - bob:
+    - ACME
+    - AAPL
+  - carol:
+    - ACME
+
+mediators:
+  - Mike
+  - Marry
+  - Moe
+    
+transactions:
+  - concurrent:
+    - sequence:
+      - concurrent:
+        - Alice(cheat) 50 ACME Mike approve
+        - Carol 10 ACME Mike approve
+      - Alice 50 ACME Bob approve Marry approve
+      - Bob 40 ACME Carol approve Marry approve
+    - sequence:
+      - Bob 10 AAPL Moe approve
+      - Bob 5 AAPL Alice approve Moe approve
+
+
+outcome: 
+  - time-limit: 600
+  - alice: 
+      - ACME: 0
+      - AAPL: 50
+  - bob: 
+      - ACME: 10
+      - AAPL: 5
+  - carol: 
+      - ACME: 40

@@ -1,17 +1,28 @@
 //! A common library for utility functions.
-//!
+
+pub mod account_create;
+pub mod account_issue;
+pub mod account_transfer;
+pub mod chain_setup;
+pub mod justify;
+pub mod validate;
 
 pub mod errors;
+mod harness;
 
 use codec::{Decode, Encode};
-use cryptography::mercat::{AssetTxState, ConfidentialTxState};
+use cryptography::mercat::{AssetTxState, TxState};
 use curve25519_dalek::scalar::Scalar;
 use errors::Error;
 use log::info;
 use metrics::Recorder;
 use metrics_core::Key;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
+use std::convert::TryFrom;
+use std::hash::{Hash, Hasher};
 use std::{
     convert::TryInto,
     fs::{create_dir_all, File},
@@ -44,13 +55,13 @@ pub struct Instruction {
 }
 
 #[inline]
-pub fn confidential_transaction_file(tx_id: u32, state: ConfidentialTxState) -> String {
+pub fn confidential_transaction_file(tx_id: u32, state: TxState) -> String {
     format!("tx_{}_{}.json", tx_id, state)
 }
 
 #[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
 pub struct CTXInstruction {
-    pub state: ConfidentialTxState,
+    pub state: TxState,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
@@ -272,8 +283,17 @@ where
 }
 
 /// Helper function to generate a random seed using the thread RNG.
+#[inline]
 pub fn gen_seed() -> String {
     let mut rng = rand::thread_rng();
+    let mut seed = [0u8; 32];
+    rng.fill(&mut seed);
+    base64::encode(seed)
+}
+
+/// Helper function to generate a random seed using the thread RNG.
+#[inline]
+pub fn gen_seed_from<T: RngCore + CryptoRng>(rng: &mut T) -> String {
     let mut seed = [0u8; 32];
     rng.fill(&mut seed);
     base64::encode(seed)
@@ -289,4 +309,21 @@ pub fn create_rng_from_seed(seed: Option<String>) -> Result<StdRng, Error> {
         .map_err(|_| Error::SeedLengthError { length: seed.len() })?;
 
     Ok(StdRng::from_seed(seed))
+}
+
+fn simple_hasher<T>(obj: T) -> u64
+where
+    T: Hash,
+{
+    let mut hasher = DefaultHasher::new();
+    obj.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Helper function to create account id from user and ticker.
+/// This removes the need to maintain a database of account id mappings.
+#[inline]
+pub fn calc_account_id(user: String, ticker: String) -> u32 {
+    let u32_val = simple_hasher(&format!("{}_{}", user, ticker)) % (u32::MAX as u64);
+    u32::try_from(u32_val).unwrap_or_default()
 }
