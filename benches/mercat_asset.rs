@@ -15,9 +15,7 @@ use rand::thread_rng;
 // The issued amount. Will be in:
 // [10^MIN_ISSUER_AMOUNT_ORDER, 10^(MIN_ISSUER_AMOUNT_ORDER+1), ..., 10^MAX_ISSUER_AMOUNT_ORDER]
 const MIN_ISSUED_AMOUNT_ORDER: u32 = 1;
-const MAX_ISSUED_AMOUNT_ORDER: u32 = 5;
-
-// const ISSUED_AMOUNT: u32 = 1000;
+const MAX_ISSUED_AMOUNT_ORDER: u32 = 7;
 
 // The size of the valid asset id set.
 const MAX_ASSET_ID_INDEX: u32 = 1000000;

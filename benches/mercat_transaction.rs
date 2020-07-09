@@ -16,7 +16,7 @@ use rand::thread_rng;
 // [10^MIN_SENDER_BALANCE_ORDER, 10^(MIN_SENDER_BALANCE_ORDER+1), ..., 10^MAX_SENDER_BALANCE_ORDER]
 // The transferred amout on each iteration will be all the balance the sender has: 10^SENDER_BALANCE_ORDER
 const MIN_SENDER_BALANCE_ORDER: u32 = 1;
-const MAX_SENDER_BALANCE_ORDER: u32 = 5;
+const MAX_SENDER_BALANCE_ORDER: u32 = 7;
 
 // The receiver's initial balance.
 const RECEIVER_INIT_BALANCE: u32 = 10000;

@@ -38,23 +38,23 @@ bulletproofs = { git = "https://github.com/fmiguelgarcia/bulletproofs.git", tag 
 wasm-bindgen-test = { version = "0.3.10"}
 
 [features]
-default = ["std", "avx2_backend"] 
+default = ["std", "avx2_backend"]
 
 # Backends
-u32_backend = [ 
-	"curve25519-dalek/u32_backend", 
+u32_backend = [
+	"curve25519-dalek/u32_backend",
 	"schnorrkel/u32_backend",
 	"bulletproofs/u32_backend"
 ]
-u64_backend = [ 
-	"curve25519-dalek/u64_backend", 
+u64_backend = [
+	"curve25519-dalek/u64_backend",
 	"schnorrkel/u64_backend",
 	"bulletproofs/u64_backend"
 ]
-avx2_backend = [ 
-	"curve25519-dalek/avx2_backend", 
+avx2_backend = [
+	"curve25519-dalek/avx2_backend",
 	"schnorrkel/avx2_backend",
-	"bulletproofs/avx2_backend" 
+	"bulletproofs/avx2_backend"
 ]
 
 serde_all = [
@@ -93,4 +93,16 @@ harness = false
 
 [[bench]]
 name = "membership_verification"
+harness = false
+
+[[bench]]
+name = "mercat_account"
+harness = false
+
+[[bench]]
+name = "mercat_asset"
+harness = false
+
+[[bench]]
+name = "mercat_transaction"
 harness = false
