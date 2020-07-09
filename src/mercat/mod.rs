@@ -394,13 +394,13 @@ impl core::fmt::Debug for TxState {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AssetTxContent {
-    account_id: u32,
-    enc_asset_id: EncryptedAssetId,
-    enc_amount: EncryptedAmount,
-    memo: AssetMemo,
-    asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
-    balance_wellformedness_proof: WellformednessProof,
-    balance_correctness_proof: CorrectnessProof,
+    pub account_id: u32,
+    pub enc_asset_id: EncryptedAssetId,
+    pub enc_amount: EncryptedAmount,
+    pub memo: AssetMemo,
+    pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
+    pub balance_wellformedness_proof: WellformednessProof,
+    pub balance_correctness_proof: CorrectnessProof,
 }
 
 #[derive(Clone)]

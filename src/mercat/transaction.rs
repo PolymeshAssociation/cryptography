@@ -387,6 +387,28 @@ impl TransactionVerifier for TransactionValidator {
         mdtr_sign_pub_key: &SigningPubKey,
         rng: &mut R,
     ) -> Fallible<(PubAccount, PubAccount)> {
+        ensure!(
+            sndr_account.content.id
+                == justified_transaction
+                    .content
+                    .content // finalized transaction data
+                    .init_data
+                    .content
+                    .memo
+                    .sndr_account_id,
+            ErrorKind::AccountIdMismatch
+        );
+        ensure!(
+            rcvr_account.content.id
+                == justified_transaction
+                    .content
+                    .content // finalized transaction data
+                    .init_data
+                    .content
+                    .memo
+                    .rcvr_account_id,
+            ErrorKind::AccountIdMismatch
+        );
         let finalized_transaction = &justified_transaction.content;
         let initialized_transaction = &finalized_transaction.content;
         verify_initialized_transaction(
