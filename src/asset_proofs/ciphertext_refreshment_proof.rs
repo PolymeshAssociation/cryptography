@@ -9,6 +9,7 @@ use crate::{
     asset_proofs::{
         encryption_proofs::{
             AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+            ZKProofResponse,
         },
         transcript::{TranscriptProtocol, UpdateTranscript},
         CipherText, ElgamalPublicKey, ElgamalSecretKey,
@@ -124,6 +125,11 @@ impl UpdateTranscript for CipherTextRefreshmentInitialMessage {
         Ok(())
     }
 }
+
+/// Holds the non-interactive proofs of equality using different public keys, equivalent
+/// of L_equal of MERCAT paper.
+pub type CipherEqualSamePubKeyProof =
+    ZKProofResponse<CipherTextRefreshmentInitialMessage, CipherTextRefreshmentFinalResponse>;
 
 pub struct CipherTextRefreshmentProverAwaitingChallenge<'a> {
     /// The public key used for the elgamal encryption.
@@ -335,15 +341,9 @@ mod tests {
         );
         let verifier = CipherTextRefreshmentVerifier::new(elg_pub, cipher, new_cipher, &gens);
 
-        let (initial_message, final_response) =
-            encryption_proofs::single_property_prover(prover, &mut rng).unwrap();
+        let proof = encryption_proofs::single_property_prover(prover, &mut rng).unwrap();
 
-        assert!(encryption_proofs::single_property_verifier(
-            &verifier,
-            initial_message,
-            final_response
-        )
-        .is_ok());
+        assert!(encryption_proofs::single_property_verifier(&verifier, proof).is_ok());
     }
 
     #[test]

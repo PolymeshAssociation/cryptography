@@ -37,8 +37,7 @@ fn bench_membership_verify(
                         elements_set: elements.as_slice(),
                         generators: &generators,
                     },
-                    proof.0.clone(),
-                    proof.1.clone(),
+                    proof.clone(),
                 )
                 .unwrap()
             })
@@ -54,7 +53,7 @@ fn bench_membership_proof(c: &mut Criterion) {
 
     let elements: Vec<Scalar> = (0..SET_SIZE as u32).map(|m| Scalar::from(m)).collect();
 
-    let secret_member = Scalar::from(8u32);
+    let secret_member = Scalar::from(28345u32);
     let blinding = Scalar::random(&mut rng);
 
     let commited_member = generators.com_gens.commit(secret_member, blinding);

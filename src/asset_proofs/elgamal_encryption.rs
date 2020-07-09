@@ -293,12 +293,12 @@ impl ElgamalSecretKey {
         // value * h = Y - X / secret_key
         let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
         // Brute force all possible values to find the one that matches value * h.
+        let mut result = Scalar::zero() * gens.B;
         for v in 0..u32::max_value() {
-            let m_scalar = Scalar::from(v);
-            let result = m_scalar * gens.B;
             if result == value_h {
                 return Ok(v);
             }
+            result += gens.B;
         }
 
         Err(ErrorKind::CipherTextDecryptionError.into())

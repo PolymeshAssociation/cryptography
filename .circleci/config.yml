@@ -51,8 +51,11 @@ jobs:
       - run:
           name: Run tests
           command: >-
-            cargo +nightly test &&
+            RUST_LOG=info cargo +nightly test &&
             cargo +nightly build --bench elgamal_decryption &&
+            cargo +nightly build --bench mercat_account &&
+            cargo +nightly build --bench mercat_asset &&
+            cargo +nightly build --bench mercat_transaction &&
             echo "Wasm build (features 'no_std' & 'u32_backend')"  &&
             cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
             echo "TODO: add wasm tests"
