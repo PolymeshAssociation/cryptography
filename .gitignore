@@ -16,3 +16,6 @@ Cargo.lock
 **/db_dir
 **/on-chain
 **/off-chain
+
+# Ignore the `crypto-framework` submodule
+crypto-framework/
