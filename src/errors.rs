@@ -142,7 +142,7 @@ pub enum ErrorKind {
 
     /// The amount in the initial transaction does not match the amount that receiver expected.
     #[fail(
-        display = "Expected to receive {:?} form the sender, got a different amount.",
+        display = "Expected to receive {:?} from the sender, got a different amount.",
         expected_amount
     )]
     TransactionAmountMismatch { expected_amount: u32 },
