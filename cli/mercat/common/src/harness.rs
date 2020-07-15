@@ -24,7 +24,6 @@ use std::{
     collections::HashSet,
     convert::{From, TryFrom},
     fs, io,
-    time::Instant,
 };
 use yaml_rust::{Yaml, YamlLoader};
 
@@ -207,9 +206,6 @@ pub struct TestCase {
     /// The expected value of the accounts at the end of the scenario.
     accounts_outcome: HashSet<InputAccount>,
 
-    /// Maximum allowable time in Milliseconds
-    timing_limit: u128,
-
     /// The directory that will act as the chain datastore.
     chain_db_dir: PathBuf,
 
@@ -260,6 +256,7 @@ impl Transfer {
         let mediator = self.mediator.name.clone();
         let amount = self.amount;
         let tx_id = self.tx_id;
+        let cheat = self.sender.cheater;
         return Box::new(move || {
             info!("Running: {}", value.clone());
             process_create_tx(
@@ -271,6 +268,7 @@ impl Transfer {
                 ticker.clone(),
                 amount,
                 tx_id,
+                cheat,
             )?;
             Ok(value.clone())
         });
@@ -279,7 +277,8 @@ impl Transfer {
     pub fn receive<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
         let value = format!(
-            "tx-{}: $ mercat-account finalize-transaction --account-id-from-ticker {} --amount {} --sender {} --receiver {} --tx-id {} --seed {} --db-dir {} {}",
+            "tx-{}: $ mercat-account finalize-transaction --account-id-from-ticker {} --amount {} --sender {} --receiver {} --tx-id {} \
+            --seed {} --db-dir {} {}",
             self.tx_id,
             self.ticker,
             self.amount,
@@ -288,13 +287,14 @@ impl Transfer {
             self.tx_id,
             seed,
             path_to_string(&chain_db_dir),
-            cheater_flag(self.sender.cheater)
+            cheater_flag(self.receiver.cheater)
         );
         let ticker = self.ticker.clone();
         let sender = self.sender.name.clone();
         let receiver = self.receiver.name.clone();
         let amount = self.amount;
         let tx_id = self.tx_id;
+        let cheat = self.receiver.cheater;
         return Box::new(move || {
             info!("Running: {}", value.clone());
             process_finalize_tx(
@@ -305,6 +305,7 @@ impl Transfer {
                 ticker.clone(),
                 amount,
                 tx_id,
+                cheat,
             )?;
             Ok(value.clone())
         });
@@ -320,7 +321,7 @@ impl Transfer {
             self.ticker,
             self.tx_id,
             path_to_string(&chain_db_dir),
-            cheater_flag(self.sender.cheater)
+            cheater_flag(self.mediator.cheater)
         );
         let ticker = self.ticker.clone();
         let sender = self.sender.name.clone();
@@ -328,6 +329,7 @@ impl Transfer {
         let mediator = self.mediator.name.clone();
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
+        let cheat = self.mediator.cheater;
         return Box::new(move || {
             info!("Running: {}", value.clone());
             justify_asset_transaction(
@@ -338,6 +340,7 @@ impl Transfer {
                 ticker.clone(),
                 tx_id,
                 reject,
+                cheat,
             )?;
             Ok(value.clone())
         });
@@ -499,6 +502,7 @@ impl Issue {
         let mediator = self.mediator.name.clone();
         let amount = self.amount;
         let tx_id = self.tx_id;
+        let cheat = self.issuer.cheater;
         return Box::new(move || {
             info!("Running: {}", value.clone());
             process_issue_asset(
@@ -509,6 +513,7 @@ impl Issue {
                 ticker.clone(),
                 amount,
                 tx_id,
+                cheat,
             )?;
             Ok(value.clone())
         });
@@ -523,13 +528,14 @@ impl Issue {
             self.mediator.name,
             self.tx_id,
             path_to_string(&chain_db_dir),
-            cheater_flag(self.issuer.cheater)
+            cheater_flag(self.mediator.cheater)
         );
         let issuer = self.issuer.name.clone();
         let mediator = self.mediator.name.clone();
         let ticker = self.ticker.clone();
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
+        let cheat = self.mediator.cheater;
         return Box::new(move || {
             info!("Running: {}", value.clone());
             justify_asset_issuance(
@@ -539,6 +545,7 @@ impl Issue {
                 ticker.clone(),
                 tx_id,
                 reject,
+                cheat,
             )?;
             Ok(value.clone())
         });
@@ -644,7 +651,6 @@ impl TestCase {
         let mut rng = create_rng_from_seed(Some(seed))?;
 
         self.chain_setup()?;
-        let start = Instant::now();
         for transaction in self
             .transactions
             .sequence(&mut rng, self.chain_db_dir.clone())
@@ -652,14 +658,7 @@ impl TestCase {
             let _command = transaction()?;
             info!("Success!");
         }
-        let duration = start.elapsed();
 
-        if duration.as_millis() > self.timing_limit {
-            return Err(Error::TimeLimitExceeded {
-                want: self.timing_limit,
-                got: duration.as_millis(),
-            });
-        }
         self.resulting_accounts()
     }
 
@@ -959,17 +958,12 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
 
     let mut accounts_outcome: HashSet<InputAccount> = HashSet::new();
     let outcomes = to_array(&config["outcome"], path.clone(), "outcome")?;
-    let mut timing_limit: u128 = 0;
     let mut should_fail = false;
     for outcome in outcomes {
         let outcome_type = to_hash(&outcome, path.clone(), "outcome.key")?;
         for (key, value) in outcome_type {
             let key = to_string(key, path.clone(), "outcome.key")?;
-            if key == "time-limit" {
-                if let Some(expected_time_limit) = value.as_i64() {
-                    timing_limit = expected_time_limit as u128;
-                }
-            } else if key == "should-fail" {
+            if key == "should-fail" {
                 should_fail = true
             } else {
                 let accounts_for_user =
@@ -1032,7 +1026,6 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         ticker_names,
         transactions,
         accounts_outcome,
-        timing_limit,
         chain_db_dir,
         should_fail,
     })
@@ -1088,12 +1081,25 @@ fn run_from(mode: &str) {
                     assert!(false, "Test succeed, but it was expected to fail.");
                 }
             } else {
-                // TODO: CRYP-124: enable this one the transaction processing is done.
-                //let got = got.unwrap();
-                //assert!(
-                //    accounts_are_equal(want, got),
-                //    format!("want: {:#?}, got: {:#?}", want, got)
-                //);
+                // TODO: CRYP-124: enable `_simple.yml` and make sure the following works once the transaction processing is done.
+                if let Err(error) = got {
+                    assert!(
+                        false,
+                        format!(
+                            "Test was expected to succeed, but failed with {:#?}.",
+                            error
+                        )
+                    );
+                } else {
+                    let got = got.unwrap();
+                    assert!(
+                        accounts_are_equal(want, &got),
+                        format!(
+                            "Test failed due to account value mismatch.\nWant: {:#?}, got: {:#?}",
+                            want, got
+                        )
+                    );
+                }
             }
         }
     }

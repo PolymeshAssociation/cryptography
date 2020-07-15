@@ -6,7 +6,7 @@ use crate::{
 use codec::{Decode, Encode};
 use cryptography::{
     asset_id_from_ticker,
-    asset_proofs::ElgamalSecretKey,
+    asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
         asset::AssetMediator, transaction::CtxMediator, AccountMemo, AssetTransactionMediator,
         AssetTxState, EncryptionKeys, FinalizedTx, InitializedAssetTx, MediatorAccount, PubAccount,
@@ -14,10 +14,17 @@ use cryptography::{
     },
 };
 use curve25519_dalek::scalar::Scalar;
+use lazy_static::lazy_static;
+use log::info;
 use metrics::timing;
 use rand::{CryptoRng, RngCore};
-use schnorrkel::{ExpansionMode, MiniSecretKey};
+use schnorrkel::{context::SigningContext, signing_context, ExpansionMode, MiniSecretKey};
 use std::{path::PathBuf, time::Instant};
+
+lazy_static! {
+    static ref SIG_CTXT_ISSUE: SigningContext = signing_context(b"mercat/asset");
+    static ref SIG_CTXT_TRANSACTION: SigningContext = signing_context(b"mercat/transaction");
+}
 
 fn generate_mediator_keys<R: RngCore + CryptoRng>(rng: &mut R) -> (AccountMemo, MediatorAccount) {
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
@@ -79,12 +86,13 @@ pub fn justify_asset_issuance(
     ticker: String,
     tx_id: u32,
     reject: bool,
+    cheat: bool,
 ) -> Result<(), Error> {
     // Load the transaction, mediator's credentials, and issuer's public account.
     let justify_load_objects_timer = Instant::now();
 
     let instruction_path =
-        asset_transaction_file(tx_id, AssetTxState::Initialization(TxSubstate::Validated));
+        asset_transaction_file(tx_id, AssetTxState::Initialization(TxSubstate::Started));
 
     let instruction: Instruction =
         load_object(db_dir.clone(), ON_CHAIN_DIR, &issuer, &instruction_path)?;
@@ -119,7 +127,7 @@ pub fn justify_asset_issuance(
     // Justification.
     let justify_library_timer = Instant::now();
     let mediator = AssetMediator {};
-    let justified_tx = mediator
+    let mut justified_tx = mediator
         .justify_asset_transaction(
             asset_tx.clone(),
             &issuer_account,
@@ -127,6 +135,30 @@ pub fn justify_asset_issuance(
             &mediator_account.signing_key,
         )
         .map_err(|error| Error::LibraryError { error })?;
+
+    if cheat {
+        info!(
+            "CLI log: tx-{}: Cheating by overwriting the asset id of the account.",
+            tx_id
+        );
+        let cheat_asset_id =
+            asset_id_from_ticker("CHEAT").map_err(|error| Error::LibraryError { error })?;
+        let cheat_asset_id_witness =
+            CommitmentWitness::new(cheat_asset_id.clone().into(), Scalar::one());
+        let cheat_enc_asset_id = mediator_account
+            .clone()
+            .encryption_key
+            .pblc
+            .encrypt(&cheat_asset_id_witness);
+
+        justified_tx.content.content.enc_asset_id = cheat_enc_asset_id;
+        let message = justified_tx.content.encode();
+        justified_tx.sig = mediator_account
+            .clone()
+            .signing_key
+            .sign(SIG_CTXT_ISSUE.bytes(&message));
+    }
+
     timing!(
         "mediator.justify_library",
         justify_library_timer,
@@ -183,12 +215,13 @@ pub fn justify_asset_transaction(
     ticker: String,
     tx_id: u32,
     reject: bool,
+    cheat: bool,
 ) -> Result<(), Error> {
     // Load the transaction, mediator's credentials, and issuer's public account.
     let justify_load_objects_timer = Instant::now();
 
     let instruction_path =
-        confidential_transaction_file(tx_id, TxState::Finalization(TxSubstate::Validated));
+        confidential_transaction_file(tx_id, TxState::Finalization(TxSubstate::Started));
     let instruction: CTXInstruction =
         load_object(db_dir.clone(), ON_CHAIN_DIR, &sender, &instruction_path)?;
 
@@ -210,14 +243,14 @@ pub fn justify_asset_transaction(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &sender.clone(),
-        VALIDATED_PUBLIC_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
     )?;
 
     let receiver_account: PubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &receiver.clone(),
-        VALIDATED_PUBLIC_ACCOUNT_FILE,
+        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
     )?;
 
     timing!(
@@ -230,7 +263,7 @@ pub fn justify_asset_transaction(
     let justify_library_timer = Instant::now();
     let mediator = CtxMediator {};
     let asset_id = asset_id_from_ticker(&ticker).map_err(|error| Error::LibraryError { error })?;
-    let justified_tx = mediator
+    let mut justified_tx = mediator
         .justify_transaction(
             asset_tx.clone(),
             &mediator_account.encryption_key,
@@ -240,6 +273,26 @@ pub fn justify_asset_transaction(
             asset_id,
         )
         .map_err(|error| Error::LibraryError { error })?;
+
+    if cheat {
+        info!(
+            "CLI log: tx-{}: Cheating by overwriting the sender's account id.",
+            tx_id
+        );
+
+        justified_tx
+            .content
+            .content
+            .init_data
+            .content
+            .memo
+            .sndr_account_id += 1;
+        let message = justified_tx.content.encode();
+        justified_tx.sig = mediator_account
+            .clone()
+            .signing_key
+            .sign(SIG_CTXT_TRANSACTION.bytes(&message));
+    }
 
     timing!(
         "mediator.justify_tx.library",

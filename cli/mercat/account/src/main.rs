@@ -42,6 +42,7 @@ fn main() {
             cfg.account_id_from_ticker,
             cfg.amount,
             cfg.tx_id,
+            cfg.cheat,
         )
         .unwrap(),
         CLI::CreateTransaction(cfg) => process_create_tx(
@@ -53,6 +54,7 @@ fn main() {
             cfg.account_id_from_ticker,
             cfg.amount,
             cfg.tx_id,
+            cfg.cheat,
         )
         .unwrap(),
         CLI::FinalizeTransaction(cfg) => process_finalize_tx(
@@ -63,6 +65,7 @@ fn main() {
             cfg.account_id_from_ticker,
             cfg.amount,
             cfg.tx_id,
+            cfg.cheat,
         )
         .unwrap(),
     };

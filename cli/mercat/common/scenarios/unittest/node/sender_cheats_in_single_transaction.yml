@@ -1,0 +1,22 @@
+--- 
+title: "Sender cheats in a single confidential transaction"
+
+tickers: 
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+  - bob:
+    - ACME
+
+mediators:
+  - Mike
+    
+transactions:
+  - sequence:
+    - Alice 50 ACME Mike approve
+    - Alice(cheat) 30 ACME Bob approve Mike approve
+
+outcome: 
+  - should-fail: true

@@ -1,0 +1,19 @@
+--- 
+title: "Issue tokens to a single account"
+
+tickers: 
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+
+mediators:
+  - Mike
+    
+transactions:
+  - Alice 10 ACME Mike approve
+
+outcome: 
+  - alice: 
+      - ACME: 10

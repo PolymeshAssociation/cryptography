@@ -32,10 +32,10 @@ pub fn process_create_account(
     cheat: bool,
     tx_id: u32,
 ) -> Result<(), Error> {
-    // Setup the rng
+    // Setup the rng.
     let mut rng = create_rng_from_seed(seed)?;
 
-    // Create the account
+    // Create the account.
     let secret_account = create_secret_account(&mut rng, ticker.clone())?;
     let valid_asset_ids = get_asset_ids(db_dir.clone())?;
     let account_id = calc_account_id(user.clone(), ticker.clone());
@@ -54,7 +54,7 @@ pub fn process_create_account(
     if cheat {
         // To simplify the cheating selection process, we randomly choose a cheating strategy,
         // instead of requiring the caller to know of all the different cheating strategies.
-        let n: u32 = rng.gen_range(0, 1);
+        let n: u32 = rng.gen_range(0, 2);
         match n {
             0 => {
                 info!("CLI log: tx-{}: Cheating by overwriting the asset id of the account. Correct ticker: {} and asset id: {:?}",

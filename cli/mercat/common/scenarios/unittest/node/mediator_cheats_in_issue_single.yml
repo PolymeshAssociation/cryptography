@@ -1,0 +1,18 @@
+--- 
+title: "Cheat in issuing tokens to a single account"
+
+tickers: 
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+
+mediators:
+  - Mike
+    
+transactions:
+  - Alice 10 ACME Mike(cheat) approve
+
+outcome: 
+  - should-fail: true
