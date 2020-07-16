@@ -10,7 +10,7 @@ exclude = [".gitignore"]
 
 [dependencies]
 # Substrate
-sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, rev = "a439a7aa5a9a3df2a42d9b25ea04288d3a0866e8" }
+sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, rev = "c771821cae2dcb5a8808a19fae8122c0b9ae8499" }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 
 # Common
@@ -32,7 +32,8 @@ getrandom = { version = "0.1.14", default-features = false, optional = true}
 curve25519-dalek = { version = "2", default-features = false, features = ["nightly"] }
 schnorrkel = { version = "0.9.1", default-features = false }
 merlin = { version = "2.0.0", default-features = false }
-bulletproofs = { git = "https://github.com/fmiguelgarcia/bulletproofs.git", tag = "2.0.0-polymath-1", default-features = false }
+bulletproofs = { git = "https://github.com/PolymathNetwork/bulletproofs.git", branch = "main", default-features = false, features = ["zeroize"] }
+
 
 [dev-dependencies]
 wasm-bindgen-test = { version = "0.3.10"}
