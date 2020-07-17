@@ -33,6 +33,7 @@ use lazy_static::lazy_static;
 use rand_core::{CryptoRng, RngCore};
 use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
+use sp_std::vec::Vec;
 
 lazy_static! {
     static ref SIG_CTXT: SigningContext = signing_context(b"mercat/transaction");
