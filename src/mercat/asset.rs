@@ -89,7 +89,7 @@ impl AssetTransactionIssuer for AssetIssuer {
         issr_account: &Account,
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
-        pending_tx_counter: u32,
+        pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<InitializedAssetTx> {
         let gens = PedersenGens::default();
@@ -307,7 +307,7 @@ mod tests {
         };
 
         let account_id = 1234u32;
-        let pending_tx_counter = 0;
+        let pending_tx_counter: i32 = 0;
         let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
             .iter()
             .map(|id| AssetId::from(id.clone()))

@@ -30,6 +30,7 @@ use bulletproofs::PedersenGens;
 use codec::Encode;
 use curve25519_dalek::scalar::Scalar;
 use lazy_static::lazy_static;
+use log::debug;
 use rand_core::{CryptoRng, RngCore};
 use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
@@ -56,7 +57,7 @@ impl TransactionSender for CtxSender {
         mdtr_pub_key: &EncryptionPubKey,
         pending_enc_balance: Option<EncryptedAmount>,
         amount: Balance,
-        sndr_pending_tx_counter: u32,
+        sndr_pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<InitializedTx> {
         let gens = PedersenGens::default();
@@ -70,6 +71,7 @@ impl TransactionSender for CtxSender {
 
         let pending_enc_balance = pending_enc_balance.unwrap_or(sndr_account.pblc.enc_balance);
         let balance = sndr_enc_keys.scrt.decrypt(&pending_enc_balance)?;
+        debug!("---------> balance is {}", balance);
         ensure!(
             balance >= amount,
             ErrorKind::NotEnoughFund {
@@ -245,7 +247,7 @@ impl TransactionReceiver for CtxReceiver {
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
         amount: Balance,
-        rcvr_pending_tx_counter: u32,
+        rcvr_pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<FinalizedTx> {
         // Verify sender's signature.
@@ -271,7 +273,7 @@ impl CtxReceiver {
         transaction_init_data: InitializedTx,
         rcvr_account: Account,
         expected_amount: Balance,
-        rcvr_pending_tx_counter: u32,
+        rcvr_pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<FinalizedTx> {
         let rcvr_enc_sec = &rcvr_account.scrt.enc_keys.scrt;
@@ -737,7 +739,7 @@ mod tests {
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
-        let rcvr_pending_tx_counter = 0;
+        let rcvr_pending_tx_counter: i32 = 0;
 
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
@@ -787,7 +789,7 @@ mod tests {
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
-        let rcvr_pending_tx_counter = 0;
+        let rcvr_pending_tx_counter: i32 = 0;
 
         let result = ctx_rcvr.finalize_by_receiver(
             ctx_init_data,
@@ -816,8 +818,8 @@ mod tests {
         let sndr_balance = 40;
         let rcvr_balance = 0;
         let amount = 30;
-        let sndr_pending_tx_counter = 0;
-        let rcvr_pending_tx_counter = 0;
+        let sndr_pending_tx_counter: i32 = 0;
+        let rcvr_pending_tx_counter: i32 = 0;
 
         let mut rng = StdRng::from_seed([17u8; 32]);
 

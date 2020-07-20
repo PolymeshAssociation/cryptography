@@ -61,7 +61,7 @@ pub struct EncryptionKeys {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct OrderingState {
     pub last_processed_tx_counter: i32,
-    pub last_pending_tx_counter: u32,
+    pub last_pending_tx_counter: i32,
 }
 
 impl Default for OrderingState {
@@ -77,7 +77,7 @@ impl Encode for OrderingState {
     #[inline]
     fn size_hint(&self) -> usize {
         mem::size_of::<i32>() // last_processed_tx_counter
-        + mem::size_of::<u32>() // last_pending_tx_counter
+        + mem::size_of::<i32>() // last_pending_tx_counter
     }
 
     #[inline]
@@ -90,7 +90,7 @@ impl Encode for OrderingState {
 impl Decode for OrderingState {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let last_processed_tx_counter = <i32>::decode(input)?;
-        let last_pending_tx_counter = <u32>::decode(input)?;
+        let last_pending_tx_counter = <i32>::decode(input)?;
 
         Ok(OrderingState {
             last_processed_tx_counter,
@@ -568,7 +568,7 @@ pub trait AssetTransactionIssuer {
         issr_account: &Account,
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
-        pending_tx_counter: u32,
+        pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<InitializedAssetTx>;
 }
@@ -762,7 +762,7 @@ pub trait TransactionSender {
         // is the first outgoing transaction of this account.
         pending_enc_balance: Option<EncryptedAmount>,
         amount: Balance,
-        sndr_pending_tx_counter: u32,
+        sndr_pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<InitializedTx>;
 }
@@ -777,7 +777,7 @@ pub trait TransactionReceiver {
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
         amount: Balance,
-        rcvr_pending_tx_counter: u32,
+        rcvr_pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<FinalizedTx>;
 }
