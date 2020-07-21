@@ -214,3 +214,5 @@ pub mod one_out_of_many_proof;
 pub mod range_proof;
 pub mod transcript;
 pub mod wellformedness_proof;
+
+mod untwisted_elgamal_encryption;
