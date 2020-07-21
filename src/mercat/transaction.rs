@@ -151,15 +151,15 @@ impl TransactionSender for CtxSender {
 
         // Prove the new refreshed encrytped asset id is the same as the one
         // encrypted by the receiver's pub key.
-        let asset_id_witness =
+        let asset_id_witness_for_rcvr =
             CommitmentWitness::new(asset_id.clone().into(), asset_id_refresh_enc_blinding);
-        let enc_asset_id_using_rcvr = rcvr_pub_key.encrypt(&asset_id_witness);
+        let enc_asset_id_using_rcvr = rcvr_pub_key.encrypt(&asset_id_witness_for_rcvr);
         let asset_id_equal_cipher_with_sndr_rcvr_keys_proof =
             CipherEqualDifferentPubKeyProof::from(single_property_prover(
                 EncryptingSameValueProverAwaitingChallenge {
                     pub_key1: sndr_enc_keys.pblc,
                     pub_key2: rcvr_pub_key,
-                    w: Zeroizing::new(asset_id_witness),
+                    w: Zeroizing::new(asset_id_witness_for_rcvr.clone()),
                     pc_gens: &gens,
                 },
                 rng,
@@ -176,11 +176,10 @@ impl TransactionSender for CtxSender {
             CommitmentWitness::new(amount.into(), amount_witness_blinding_for_mdtr);
         let enc_amount_for_mdtr = mdtr_pub_key.encrypt(&amount_witness_for_mdtr);
 
-        // todo shouldn't this be made to receiver's public key?
         let asset_id_correctness_proof = CorrectnessProof::from(single_property_prover(
             CorrectnessProverAwaitingChallenge {
-                pub_key: mdtr_pub_key.clone(),
-                w: asset_id_witness_for_mdtr,
+                pub_key: rcvr_pub_key.clone(),
+                w: asset_id_witness_for_rcvr,
                 pc_gens: &gens,
             },
             rng,
@@ -407,8 +406,8 @@ impl TransactionMediator for CtxMediator {
         single_property_verifier(
             &CorrectnessVerifier {
                 value: asset_id.into(),
-                pub_key: mdtr_enc_keys.pblc,
-                cipher: tx_data.memo.enc_asset_id_for_mdtr,
+                pub_key: rcvr_account.content.memo.owner_enc_pub_key,
+                cipher: tx_data.memo.enc_asset_id_using_rcvr,
                 pc_gens: &gens,
             },
             tx_data.asset_id_correctness_proof,
@@ -703,8 +702,8 @@ impl TransactionAuditor for CtxAuditor {
     fn audit_transaction(
         &self,
         justified_transaction: &JustifiedTx,
-        sndr_account: PubAccount,
-        rcvr_account: PubAccount,
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
         auditor_enc_key: &(u32, EncryptionKeys),
     ) -> Fallible<()> {
@@ -1245,8 +1244,8 @@ mod tests {
                 assert!(transaction_auditor
                     .audit_transaction(
                         &ctx_just,
-                        sndr_account.pblc.clone(),
-                        rcvr_account.pblc.clone(),
+                        &sndr_account.pblc,
+                        &rcvr_account.pblc,
                         &mdtr_sign_keys.public,
                         auditor,
                     )
