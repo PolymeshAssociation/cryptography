@@ -30,6 +30,7 @@ use codec::Encode;
 use lazy_static::lazy_static;
 use rand_core::{CryptoRng, RngCore};
 use schnorrkel::{context::SigningContext, signing_context};
+use sp_std::vec::Vec;
 use zeroize::Zeroizing;
 
 lazy_static! {
