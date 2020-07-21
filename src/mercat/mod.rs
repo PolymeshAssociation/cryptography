@@ -509,6 +509,15 @@ pub trait AssetTransactionVerifier {
 // -                            Confidential Transaction                               -
 // -------------------------------------------------------------------------------------
 
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct AuditorPayload {
+    pub auditor_id: u32,
+    pub encrypted_amount: EncryptedAmount,
+    pub amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
+}
+
 /// Holds the memo for confidential transaction sent by the sender.
 #[derive(Default, Clone, Copy, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -539,6 +548,7 @@ pub struct InititializedTxContent {
     pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_correctness_proof: CorrectnessProof,
     pub amount_correctness_proof: CorrectnessProof,
+    pub auditors_payload: Option<Vec<AuditorPayload>>,
 }
 
 /// Wrapper for the initial transaction data and its signature.
@@ -615,7 +625,7 @@ impl Decode for FinalizedTx {
     }
 }
 
-/// Wrapper for the contents and the signature of the justified and finalized
+/// Wrapper for the contents, auditors' payload, and the signature of the justified and finalized
 /// transaction.
 #[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -657,6 +667,7 @@ pub trait TransactionSender {
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
+        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedTx>;
@@ -678,15 +689,16 @@ pub trait TransactionReceiver {
 
 pub trait TransactionMediator {
     /// Justify the transaction by mediator.
-    fn justify_transaction(
+    fn justify_transaction<R: RngCore + CryptoRng>(
         &self,
         finalized_transaction: FinalizedTx,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
-        sndr_sign_pub_key: &SigningPubKey,
-        rcvr_sign_pub_key: &SigningPubKey,
-        // NOTE: without this, decryption takes a very long time. Since asset id to scalar takes the hash of the asset id array.
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
+        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
         asset_id_hint: AssetId,
+        rng: &mut R,
     ) -> Fallible<JustifiedTx>;
 }
 
@@ -699,8 +711,22 @@ pub trait TransactionVerifier {
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
+        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
         rng: &mut R,
     ) -> Fallible<(PubAccount, PubAccount)>;
+}
+
+pub trait TransactionAuditor {
+    /// Verify the intialized, finalized, and justified transactions.
+    /// Audit the sender's encrypted amount.
+    fn audit_transaction(
+        &self,
+        justified_transaction: &JustifiedTx,
+        sndr_account: PubAccount,
+        rcvr_account: PubAccount,
+        mdtr_sign_pub_key: &SigningPubKey,
+        auditor_enc_keys: &(u32, EncryptionKeys),
+    ) -> Fallible<()>;
 }
 
 // -------------------------------------------------------------------------------------

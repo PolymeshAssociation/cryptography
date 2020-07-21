@@ -18,10 +18,10 @@ use crate::{
     },
     errors::{ErrorKind, Fallible},
     mercat::{
-        Account, EncryptionKeys, EncryptionPubKey, FinalizedTx, FinalizedTxContent, InitializedTx,
-        InititializedTxContent, JustifiedTx, PubAccount, SigningKeys, SigningPubKey,
-        TransactionMediator, TransactionReceiver, TransactionSender, TransactionVerifier, TxMemo,
-        TxState, TxSubstate,
+        Account, AuditorPayload, EncryptedAmount, EncryptionKeys, EncryptionPubKey, FinalizedTx,
+        FinalizedTxContent, InitializedTx, InititializedTxContent, JustifiedTx, PubAccount,
+        SigningKeys, SigningPubKey, TransactionAuditor, TransactionMediator, TransactionReceiver,
+        TransactionSender, TransactionVerifier, TxMemo, TxState, TxSubstate,
     },
     AssetId, Balance, BALANCE_RANGE,
 };
@@ -32,6 +32,7 @@ use curve25519_dalek::scalar::Scalar;
 use lazy_static::lazy_static;
 use rand_core::{CryptoRng, RngCore};
 use schnorrkel::{context::SigningContext, signing_context};
+use sp_std::vec::Vec;
 use zeroize::Zeroizing;
 
 lazy_static! {
@@ -54,6 +55,7 @@ impl TransactionSender for CtxSender {
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
+        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedTx> {
@@ -76,7 +78,7 @@ impl TransactionSender for CtxSender {
             }
         );
 
-        // Prove that the amount is not negative
+        // Prove that the amount is not negative.
         let witness = CommitmentWitness::new(amount.into(), Scalar::random(rng));
         let amount_enc_blinding = witness.blinding();
 
@@ -87,7 +89,7 @@ impl TransactionSender for CtxSender {
             rng,
         )?);
 
-        // Prove that the amount encrypted under different public keys are the same
+        // Prove that the amount encrypted under different public keys are the same.
         let (sndr_new_enc_amount, rcvr_new_enc_amount) =
             encrypt_using_two_pub_keys(&witness, sndr_enc_keys.pblc, rcvr_pub_key);
 
@@ -103,7 +105,7 @@ impl TransactionSender for CtxSender {
             )?);
 
         // Refresh the encrypted balance and prove that the refreshment was done
-        // correctly
+        // correctly.
         let balance_refresh_enc_blinding = Scalar::random(rng);
         let refreshed_enc_balance = sndr_pub_account
             .enc_balance
@@ -119,7 +121,7 @@ impl TransactionSender for CtxSender {
             rng,
         )?;
 
-        // Prove that the sender has enough funds
+        // Prove that the sender has enough funds.
         let blinding = balance_refresh_enc_blinding - amount_enc_blinding;
         let enough_fund_proof = InRangeProof::from(prove_within_range(
             (balance - amount).into(),
@@ -129,7 +131,7 @@ impl TransactionSender for CtxSender {
         )?);
 
         // Refresh the encrypted asset id of the sender account and prove that the
-        // refreshment was done correctly
+        // refreshment was done correctly.
         let asset_id_refresh_enc_blinding = Scalar::random(rng);
         let refreshed_enc_asset_id = sndr_pub_account.enc_asset_id.refresh_with_hint(
             &sndr_enc_keys.scrt,
@@ -148,7 +150,7 @@ impl TransactionSender for CtxSender {
         )?;
 
         // Prove the new refreshed encrytped asset id is the same as the one
-        // encrypted by the receiver's pub key
+        // encrypted by the receiver's pub key.
         let asset_id_witness =
             CommitmentWitness::new(asset_id.clone().into(), asset_id_refresh_enc_blinding);
         let enc_asset_id_using_rcvr = rcvr_pub_key.encrypt(&asset_id_witness);
@@ -163,7 +165,7 @@ impl TransactionSender for CtxSender {
                 rng,
             )?);
 
-        // Prepare the correctness proofs for the mediator
+        // Prepare the correctness proofs for the mediator.
         let asset_id_witness_blinding_for_mdtr = Scalar::random(rng);
         let asset_id_witness_for_mdtr =
             CommitmentWitness::new(asset_id.into(), asset_id_witness_blinding_for_mdtr);
@@ -174,6 +176,7 @@ impl TransactionSender for CtxSender {
             CommitmentWitness::new(amount.into(), amount_witness_blinding_for_mdtr);
         let enc_amount_for_mdtr = mdtr_pub_key.encrypt(&amount_witness_for_mdtr);
 
+        // todo shouldn't this be made to receiver's public key?
         let asset_id_correctness_proof = CorrectnessProof::from(single_property_prover(
             CorrectnessProverAwaitingChallenge {
                 pub_key: mdtr_pub_key.clone(),
@@ -185,14 +188,18 @@ impl TransactionSender for CtxSender {
 
         let amount_correctness_proof = CorrectnessProof::from(single_property_prover(
             CorrectnessProverAwaitingChallenge {
-                pub_key: mdtr_pub_key.clone(),
-                w: amount_witness_for_mdtr,
+                pub_key: sndr_enc_keys.pblc.clone(),
+                w: witness.clone(),
                 pc_gens: &gens,
             },
             rng,
         )?);
 
-        // Gather the content and sign it
+        // Add the necessary payload for auditors.
+        let auditors_payload =
+            add_transaction_auditor(auditors_enc_pub_keys, &sndr_enc_keys.pblc, &witness, rng)?;
+
+        // Gather the content and sign it.
         let content = InititializedTxContent {
             amount_equal_cipher_proof,
             non_neg_amount_proof,
@@ -213,12 +220,55 @@ impl TransactionSender for CtxSender {
                 enc_asset_id_for_mdtr: enc_asset_id_for_mdtr.into(),
                 enc_amount_for_mdtr: enc_amount_for_mdtr.into(),
             },
+            auditors_payload: auditors_payload,
         };
 
         let message = content.encode();
         let sig = sndr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
         Ok(InitializedTx { content, sig })
+    }
+}
+
+fn add_transaction_auditor<T: RngCore + CryptoRng>(
+    auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+    sender_enc_pub_key: &EncryptionPubKey,
+    amount_witness: &CommitmentWitness,
+    rng: &mut T,
+) -> Fallible<Option<Vec<AuditorPayload>>> {
+    let gens = PedersenGens::default();
+
+    // Add the required payload for the auditors.
+    if let Some(auditors_enc_pub_keys) = auditors_enc_pub_keys {
+        let mut payload_vec: Vec<AuditorPayload> = Vec::with_capacity(auditors_enc_pub_keys.len());
+        for (auditor_id, auditor_enc_pub_key) in auditors_enc_pub_keys.iter() {
+            let encrypted_amount = auditor_enc_pub_key.encrypt(amount_witness);
+
+            // Prove that the sender and auditor's ciphertexts are encrypting the same
+            // commitment witness.
+            let amount_equal_cipher_proof =
+                CipherEqualDifferentPubKeyProof::from(single_property_prover(
+                    EncryptingSameValueProverAwaitingChallenge {
+                        pub_key1: sender_enc_pub_key.clone(),
+                        pub_key2: auditor_enc_pub_key.clone(),
+                        w: Zeroizing::new(amount_witness.clone()),
+                        pc_gens: &gens,
+                    },
+                    rng,
+                )?);
+
+            let payload = AuditorPayload {
+                auditor_id: auditor_id.clone(),
+                encrypted_amount,
+                amount_equal_cipher_proof,
+            };
+
+            payload_vec.push(payload);
+        }
+
+        Ok(Some(payload_vec))
+    } else {
+        Ok(None)
     }
 }
 
@@ -285,7 +335,7 @@ impl CtxReceiver {
 
         let proof = single_property_prover(prover, rng)?;
 
-        // gather the content and sign it
+        // Gather the content and sign it
         let content = FinalizedTxContent {
             init_data: transaction_init_data,
             asset_id_from_sndr_equal_to_rcvr_proof: proof,
@@ -305,44 +355,49 @@ impl CtxReceiver {
 pub struct CtxMediator {}
 
 impl TransactionMediator for CtxMediator {
-    fn justify_transaction(
+    fn justify_transaction<R: RngCore + CryptoRng>(
         &self,
         finalized_transaction: FinalizedTx,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
-        sndr_sign_pub_key: &SigningPubKey,
-        rcvr_sign_pub_key: &SigningPubKey,
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
+        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
         asset_id_hint: AssetId,
+        rng: &mut R,
     ) -> Fallible<JustifiedTx> {
-        // TODO: may need to change the signature CRYP-111
+        // Verify receiver's part of the transaction.
+        let _ = verify_finalized_transaction(&finalized_transaction, rcvr_account)?;
 
-        // Verify receiver's signature on the transaction.
-        let message = finalized_transaction.content.encode();
-        let _ = rcvr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &finalized_transaction.sig)?;
-
-        // Verify sender's signature on the transaction.
+        // Verify sender's part of the transaction.
+        // This includes checking the auditors' payload.
         let init_tx_data = &finalized_transaction.content.init_data;
-        let message = init_tx_data.content.encode();
-        let _ = sndr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &init_tx_data.sig)?;
+        let _ = verify_initialized_transaction(
+            &init_tx_data,
+            sndr_account,
+            rcvr_account,
+            auditors_enc_pub_keys,
+            rng,
+        )?;
 
         let gens = &PedersenGens::default();
-        let tx_data = &finalized_transaction.content.init_data.content;
+        let tx_data = &init_tx_data.content;
 
-        // Verify that the encrypted amount is correct
+        // Verify that the encrypted amount is correct.
         let amount = mdtr_enc_keys
             .scrt
             .decrypt(&tx_data.memo.enc_amount_for_mdtr)?;
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),
-                pub_key: mdtr_enc_keys.pblc,
-                cipher: tx_data.memo.enc_amount_for_mdtr,
+                pub_key: sndr_account.content.memo.owner_enc_pub_key,
+                cipher: tx_data.memo.enc_amount_using_sndr,
                 pc_gens: &gens,
             },
             tx_data.amount_correctness_proof,
         )?;
 
-        // Verify that the encrypted asset_id is correct
+        // Verify that the encrypted asset_id is correct.
         mdtr_enc_keys.scrt.verify(
             &tx_data.memo.enc_asset_id_for_mdtr,
             &asset_id_hint.clone().into(),
@@ -385,6 +440,7 @@ impl TransactionVerifier for TransactionValidator {
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
+        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
         rng: &mut R,
     ) -> Fallible<(PubAccount, PubAccount)> {
         ensure!(
@@ -415,9 +471,11 @@ impl TransactionVerifier for TransactionValidator {
             &initialized_transaction.init_data,
             &sndr_account,
             &rcvr_account,
+            auditors_enc_pub_keys,
             rng,
         )?;
-        verify_finalized_transaction(&finalized_transaction, &sndr_account, &rcvr_account, rng)?;
+
+        verify_finalized_transaction(&finalized_transaction, &rcvr_account)?;
         verify_justified_transaction(&justified_transaction, mdtr_sign_pub_key)?;
 
         // All verifications were successful, update the sender and receiver balances.
@@ -446,6 +504,7 @@ fn verify_initialized_transaction<R: RngCore + CryptoRng>(
     transaction: &InitializedTx,
     sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
+    auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
     rng: &mut R,
 ) -> Fallible<TxState> {
     let message = transaction.content.encode();
@@ -455,16 +514,20 @@ fn verify_initialized_transaction<R: RngCore + CryptoRng>(
         .owner_sign_pub_key
         .verify(SIG_CTXT.bytes(&message), &transaction.sig)?;
 
-    verify_initital_transaction_proofs(transaction, sndr_account, rcvr_account, rng)?;
+    verify_initital_transaction_proofs(
+        transaction,
+        sndr_account,
+        rcvr_account,
+        auditors_enc_pub_keys,
+        rng,
+    )?;
 
     Ok(TxState::Initialization(TxSubstate::Validated))
 }
 
-fn verify_finalized_transaction<R: RngCore + CryptoRng>(
+fn verify_finalized_transaction(
     transaction_final_data: &FinalizedTx,
-    sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
-    rng: &mut R,
 ) -> Fallible<TxState> {
     let message = transaction_final_data.content.encode();
     let _ = rcvr_account
@@ -474,10 +537,7 @@ fn verify_finalized_transaction<R: RngCore + CryptoRng>(
         .verify(SIG_CTXT.bytes(&message), &transaction_final_data.sig)?;
 
     let memo = &transaction_final_data.content.init_data.content.memo;
-    let init_data = &transaction_final_data.content.init_data;
     let final_content = &transaction_final_data.content;
-
-    verify_initital_transaction_proofs(init_data, &sndr_account, &rcvr_account, rng)?;
 
     // In the inital transaction, the sender has encrypted the asset id
     // using the receiver pub key. We verify that this encrypted asset id
@@ -510,6 +570,7 @@ fn verify_initital_transaction_proofs<R: RngCore + CryptoRng>(
     transaction: &InitializedTx,
     sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
+    auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
     rng: &mut R,
 ) -> Fallible<()> {
     let memo = &transaction.content.memo;
@@ -517,7 +578,7 @@ fn verify_initital_transaction_proofs<R: RngCore + CryptoRng>(
     let sndr_account = &sndr_account.content;
     let gens = &PedersenGens::default();
 
-    // Verify that the encrypted amounts are equal
+    // Verify that the encrypted amounts are equal.
     single_property_verifier(
         &EncryptingSameValueVerifier {
             pub_key1: sndr_account.memo.owner_enc_pub_key,
@@ -529,10 +590,10 @@ fn verify_initital_transaction_proofs<R: RngCore + CryptoRng>(
         init_data.amount_equal_cipher_proof,
     )?;
 
-    // Verify that the amount is not negative
+    // Verify that the amount is not negative.
     verify_within_range(&init_data.non_neg_amount_proof, rng)?;
 
-    // verify that the balance refreshment was done correctly
+    // verify that the balance refreshment was done correctly.
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
             sndr_account.memo.owner_enc_pub_key,
@@ -543,10 +604,10 @@ fn verify_initital_transaction_proofs<R: RngCore + CryptoRng>(
         init_data.balance_refreshed_same_proof,
     )?;
 
-    // Verify that the balance has enough fund
+    // Verify that the balance has enough fund.
     verify_within_range(&init_data.enough_fund_proof, rng)?;
 
-    // Verify that the asset id refreshment was done correctly
+    // Verify that the asset id refreshment was done correctly.
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
             sndr_account.memo.owner_enc_pub_key,
@@ -571,7 +632,152 @@ fn verify_initital_transaction_proofs<R: RngCore + CryptoRng>(
         init_data.asset_id_equal_cipher_with_sndr_rcvr_keys_proof,
     )?;
 
+    // Verify that all auditors' payload is included, and
+    // that the auditors' ciphertexts encrypt the same amount as sender's ciphertext.
+    verify_auditor_payload(
+        &init_data.auditors_payload,
+        auditors_enc_pub_keys,
+        sndr_account.memo.owner_enc_pub_key.clone(),
+        init_data.memo.enc_amount_using_sndr.clone(),
+    )?;
+
     Ok(())
+}
+
+fn verify_auditor_payload(
+    auditors_payload: &Option<Vec<AuditorPayload>>,
+    auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+    sender_enc_pub_key: EncryptionPubKey,
+    sender_enc_amount: EncryptedAmount,
+) -> Fallible<()> {
+    let gens = &PedersenGens::default();
+    ensure!(
+        !(auditors_payload.is_none() ^ auditors_enc_pub_keys.is_none()),
+        ErrorKind::AuditorPayloadError
+    );
+
+    if let Some(auditors) = auditors_enc_pub_keys {
+        match auditors_payload {
+            Some(auditor_payload) => {
+                for (auditor_id, auditor_pub_key) in auditors {
+                    let mut found_auditor = false;
+                    for payload in auditor_payload.iter() {
+                        if *auditor_id == payload.auditor_id {
+                            // Verify that the encrypted amounts are equal.
+                            single_property_verifier(
+                                &EncryptingSameValueVerifier {
+                                    pub_key1: sender_enc_pub_key,
+                                    pub_key2: auditor_pub_key.clone(),
+                                    cipher1: sender_enc_amount,
+                                    cipher2: payload.encrypted_amount,
+                                    pc_gens: &gens,
+                                },
+                                payload.amount_equal_cipher_proof,
+                            )?;
+                            found_auditor = true;
+                            break;
+                        }
+                    }
+                    ensure!(found_auditor, ErrorKind::AuditorPayloadError);
+                }
+            }
+            None => return Err(ErrorKind::AuditorPayloadError.into()),
+        }
+    };
+
+    Ok(())
+}
+
+// ------------------------------------------------------------------------------------------------
+// -                                          Auditor                                           -
+// ------------------------------------------------------------------------------------------------
+
+/// Transaction Validator.
+#[derive(Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct CtxAuditor {}
+
+impl TransactionAuditor for CtxAuditor {
+    /// Verify the intialized, finalized, and justified transactions.
+    /// Audit the sender's encrypted amount.
+    fn audit_transaction(
+        &self,
+        justified_transaction: &JustifiedTx,
+        sndr_account: PubAccount,
+        rcvr_account: PubAccount,
+        mdtr_sign_pub_key: &SigningPubKey,
+        auditor_enc_key: &(u32, EncryptionKeys),
+    ) -> Fallible<()> {
+        ensure!(
+            sndr_account.content.id
+                == justified_transaction
+                    .content
+                    .content // finalized transaction data
+                    .init_data
+                    .content
+                    .memo
+                    .sndr_account_id,
+            ErrorKind::AccountIdMismatch
+        );
+        ensure!(
+            rcvr_account.content.id
+                == justified_transaction
+                    .content
+                    .content // finalized transaction data
+                    .init_data
+                    .content
+                    .memo
+                    .rcvr_account_id,
+            ErrorKind::AccountIdMismatch
+        );
+
+        let gens = &PedersenGens::default();
+        let finalized_transaction = &justified_transaction.content;
+        let initialized_transaction = &finalized_transaction.content;
+
+        // Checks sender's signature on the transaction.
+        let message = initialized_transaction.init_data.content.encode();
+        let _ = sndr_account.content.memo.owner_sign_pub_key.verify(
+            SIG_CTXT.bytes(&message),
+            &initialized_transaction.init_data.sig,
+        )?;
+
+        verify_finalized_transaction(&finalized_transaction, &rcvr_account)?;
+        verify_justified_transaction(&justified_transaction, mdtr_sign_pub_key)?;
+
+        // If all checks pass, decrypt the encrypted amount and verify sender's correctness proof.
+        match &initialized_transaction.init_data.content.auditors_payload {
+            Some(p) => {
+                for payload in p.iter() {
+                    if payload.auditor_id == auditor_enc_key.0 {
+                        let amount = auditor_enc_key.1.scrt.decrypt(&payload.encrypted_amount)?;
+
+                        single_property_verifier(
+                            &CorrectnessVerifier {
+                                value: amount.into(),
+                                pub_key: sndr_account.content.memo.owner_enc_pub_key,
+                                cipher: initialized_transaction
+                                    .init_data
+                                    .content
+                                    .memo
+                                    .enc_amount_using_sndr,
+                                pc_gens: &gens,
+                            },
+                            initialized_transaction
+                                .init_data
+                                .content
+                                .amount_correctness_proof,
+                        )?;
+
+                        return Ok(());
+                    }
+                }
+            }
+            None => return Err(ErrorKind::AuditorPayloadError.into()),
+        }
+
+        Err(ErrorKind::AuditorPayloadError.into())
+    }
 }
 
 // ------------------------------------------------------------------------
@@ -681,6 +887,7 @@ mod tests {
                 asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
                 amount_correctness_proof: CorrectnessProof::default(),
                 asset_id_correctness_proof: CorrectnessProof::default(),
+                auditors_payload: None,
             },
             sig,
         }
@@ -840,6 +1047,7 @@ mod tests {
             &sndr_account,
             &rcvr_account.pblc,
             &mdtr_enc_keys.pblc,
+            &None,
             amount,
             &mut rng,
         );
@@ -855,9 +1063,11 @@ mod tests {
             ctx_finalized_data,
             &mdtr_enc_keys,
             &mdtr_sign_keys,
-            &sndr_sign_keys.public.clone(),
-            &rcvr_sign_keys.public.clone(),
+            &sndr_account.pblc.clone(),
+            &rcvr_account.pblc.clone(),
+            &None,
             asset_id,
+            &mut rng,
         );
         let justified_finalized_ctx_data = result.unwrap();
 
@@ -867,6 +1077,7 @@ mod tests {
                 sndr_account.pblc,
                 rcvr_account.pblc,
                 &mdtr_sign_keys.public,
+                &None,
                 &mut rng,
             )
             .unwrap();
@@ -888,5 +1099,268 @@ mod tests {
                 &Scalar::from(rcvr_balance + amount)
             )
             .is_ok());
+    }
+
+    // ------------------------------ Test Auditing Logic
+    fn account_create_helper(
+        seed0: [u8; 32],
+        seed1: u8,
+        seed2: u8,
+        balance: Balance,
+        asset_id: AssetId,
+    ) -> Account {
+        let mut rng = StdRng::from_seed(seed0);
+
+        let enc_keys = mock_gen_enc_key_pair(seed1);
+        let sign_keys = mock_gen_sign_key_pair(seed2);
+
+        Account {
+            pblc: mock_gen_account(
+                enc_keys.pblc,
+                sign_keys.public.clone(),
+                asset_id.clone(),
+                balance,
+                &mut rng,
+            )
+            .unwrap(),
+            scrt: SecAccount {
+                enc_keys: enc_keys,
+                sign_keys: sign_keys,
+                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
+            },
+        }
+    }
+
+    fn test_transaction_auditor_helper(
+        sender_auditor_list: &Option<Vec<(u32, EncryptionPubKey)>>,
+        mediator_auditor_list: &Option<Vec<(u32, EncryptionPubKey)>>,
+        mediator_check_fails: bool,
+        validator_auditor_list: &Option<Vec<(u32, EncryptionPubKey)>>,
+        validator_check_fails: bool,
+        auditors_list: &Option<Vec<(u32, EncryptionKeys)>>,
+    ) {
+        let sndr = CtxSender {};
+        let rcvr = CtxReceiver {};
+        let mdtr = CtxMediator {};
+        let validator = TransactionValidator {};
+        let asset_id = AssetId::from(20);
+        let sndr_balance = 500;
+        let rcvr_balance = 0;
+        let amount = 400;
+
+        let mut rng = StdRng::from_seed([19u8; 32]);
+
+        let mdtr_enc_keys = mock_gen_enc_key_pair(140u8);
+        let mdtr_sign_keys = mock_gen_sign_key_pair(150u8);
+
+        let rcvr_account =
+            account_create_helper([18u8; 32], 120u8, 130u8, rcvr_balance, asset_id.clone());
+
+        let sndr_account =
+            account_create_helper([17u8; 32], 100u8, 110u8, sndr_balance, asset_id.clone());
+
+        // Create the trasaction and check its result and state
+        let ctx_init = sndr
+            .create_transaction(
+                &sndr_account,
+                &rcvr_account.pblc,
+                &mdtr_enc_keys.pblc,
+                sender_auditor_list,
+                amount,
+                &mut rng,
+            )
+            .unwrap();
+
+        // Finalize the transaction and check its state
+        let ctx_final = rcvr
+            .finalize_transaction(
+                ctx_init,
+                &sndr_account.pblc.content.memo.owner_sign_pub_key.clone(),
+                rcvr_account.clone(),
+                amount,
+                &mut rng,
+            )
+            .unwrap();
+
+        // Justify the transaction
+        let result = mdtr.justify_transaction(
+            ctx_final,
+            &mdtr_enc_keys,
+            &mdtr_sign_keys,
+            &sndr_account.pblc.clone(),
+            &rcvr_account.pblc.clone(),
+            mediator_auditor_list,
+            asset_id,
+            &mut rng,
+        );
+
+        if mediator_check_fails {
+            assert_err!(result, ErrorKind::AuditorPayloadError);
+            return;
+        }
+
+        let ctx_just = result.unwrap();
+        let result = validator.verify_transaction(
+            &ctx_just,
+            sndr_account.pblc.clone(),
+            rcvr_account.pblc.clone(),
+            &mdtr_sign_keys.public,
+            validator_auditor_list,
+            &mut rng,
+        );
+
+        if validator_check_fails {
+            assert_err!(result, ErrorKind::AuditorPayloadError);
+            return;
+        }
+
+        let (updated_sender_account, updated_receiver_account) = result.unwrap();
+
+        // ----------------------- Processing
+        // Check that the transferred amount is added to the receiver's account balance
+        // and subtracted from sender's balance.
+        assert!(sndr_account
+            .scrt
+            .enc_keys
+            .scrt
+            .verify(
+                &updated_sender_account.content.enc_balance,
+                &Scalar::from(sndr_balance - amount)
+            )
+            .is_ok());
+        assert!(rcvr_account
+            .scrt
+            .enc_keys
+            .scrt
+            .verify(
+                &updated_receiver_account.content.enc_balance,
+                &Scalar::from(rcvr_balance + amount)
+            )
+            .is_ok());
+
+        // ----------------------- Auditing
+        if let Some(auditors) = auditors_list {
+            let _ = auditors.iter().map(|auditor| {
+                let transaction_auditor = CtxAuditor {};
+                assert!(transaction_auditor
+                    .audit_transaction(
+                        &ctx_just,
+                        sndr_account.pblc.clone(),
+                        rcvr_account.pblc.clone(),
+                        &mdtr_sign_keys.public,
+                        auditor,
+                    )
+                    .is_ok());
+            });
+        }
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn test_transaction_auditor() {
+        // Make imaginary auditors.
+        let auditors_num = 5u32;
+        let auditors_secert_vec: Vec<(u32, EncryptionKeys)> = (0..auditors_num)
+            .map(|index| {
+                let auditor_keys = mock_gen_enc_key_pair(index as u8);
+                (index, auditor_keys)
+            })
+            .collect();
+        let auditors_secert_vec_option = Some(auditors_secert_vec.clone());
+
+        let auditors_vec: Vec<(u32, EncryptionPubKey)> = auditors_secert_vec
+            .iter()
+            .map(|a| (a.0, a.1.pblc))
+            .collect();
+
+        let auditors_vec_option = Some(auditors_vec.clone());
+
+        // Positive tests.
+
+        // Include `auditors_num` auditors.
+        test_transaction_auditor_helper(
+            &auditors_vec_option,
+            &auditors_vec_option,
+            false,
+            &auditors_vec_option,
+            false,
+            &auditors_secert_vec_option,
+        );
+
+        // Change the order of auditors lists on the mediator and validator sides.
+        // The tests still must pass.
+        let mediator_auditor_list = Some(vec![
+            auditors_vec[1].clone(),
+            auditors_vec[0].clone(),
+            auditors_vec[3].clone(),
+            auditors_vec[2].clone(),
+            auditors_vec[4].clone(),
+        ]);
+        let validator_auditor_list = Some(vec![
+            auditors_vec[4].clone(),
+            auditors_vec[3].clone(),
+            auditors_vec[2].clone(),
+            auditors_vec[1].clone(),
+            auditors_vec[0].clone(),
+        ]);
+        test_transaction_auditor_helper(
+            &auditors_vec_option,
+            &mediator_auditor_list,
+            false,
+            &validator_auditor_list,
+            false,
+            &auditors_secert_vec_option,
+        );
+
+        // Asset doesn't have any auditors.
+        test_transaction_auditor_helper(&None, &None, false, &None, false, &None);
+
+        // Negative tests.
+
+        // Sender misses an auditor. Mediator catches it.
+        let four_auditor_list = Some(vec![
+            auditors_vec[1].clone(),
+            auditors_vec[0].clone(),
+            auditors_vec[3].clone(),
+            auditors_vec[2].clone(),
+        ]);
+        test_transaction_auditor_helper(
+            &four_auditor_list,
+            &mediator_auditor_list,
+            true,
+            &validator_auditor_list,
+            true,
+            &auditors_secert_vec_option,
+        );
+
+        // Sender and mediator miss an auditor, but validator catches them.
+        test_transaction_auditor_helper(
+            &four_auditor_list,
+            &four_auditor_list,
+            false,
+            &validator_auditor_list,
+            true,
+            &auditors_secert_vec_option,
+        );
+
+        // Sender doesn't include any auditors. Mediator catches it.
+        test_transaction_auditor_helper(
+            &None,
+            &mediator_auditor_list,
+            true,
+            &validator_auditor_list,
+            true,
+            &auditors_secert_vec_option,
+        );
+
+        // Sender and mediator don't believe in auditors but validator does.
+        test_transaction_auditor_helper(
+            &None,
+            &None,
+            false,
+            &validator_auditor_list,
+            true,
+            &auditors_secert_vec_option,
+        );
     }
 }

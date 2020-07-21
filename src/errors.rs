@@ -184,6 +184,10 @@ pub enum ErrorKind {
         want, got
     )]
     TickerIdLengthError { want: usize, got: usize },
+
+    /// The auditors' payload does not match the compliance rules.
+    #[fail(display = "The auditors' payload does not match the compliance rules.")]
+    AuditorPayloadError,
 }
 
 pub type Fallible<T, E = Error> = Result<T, E>;
