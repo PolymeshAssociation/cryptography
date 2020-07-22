@@ -154,7 +154,7 @@ pub enum ErrorKind {
 
     /// The sender has attempted to send more that their balance.
     #[fail(
-        display = "Transaction amount {} must be equal or greater than {}",
+        display = "Transaction amount {} must be less than or equal to {}",
         transaction_amount, balance
     )]
     NotEnoughFund {

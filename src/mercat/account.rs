@@ -50,6 +50,7 @@ pub struct AccountCreator {}
 impl AccountCreatorInitializer for AccountCreator {
     fn create<T: RngCore + CryptoRng>(
         &self,
+        tx_id: u32,
         scrt: SecAccount,
         valid_asset_ids: &Vec<Scalar>,
         account_id: u32,
@@ -107,28 +108,26 @@ impl AccountCreatorInitializer for AccountCreator {
                 id: account_id,
                 enc_asset_id: enc_asset_id.into(),
                 enc_balance,
-                asset_wellformedness_proof,
-                asset_membership_proof,
-                initial_balance_correctness_proof,
                 memo: AccountMemo::new(
                     scrt.enc_keys.pblc,
                     scrt.sign_keys.public,
                     last_processed_tx_counter,
                 ),
             },
+            asset_wellformedness_proof,
+            asset_membership_proof,
+            initial_balance_correctness_proof,
             ordering_state: OrderingState {
                 last_pending_tx_counter: 0,
                 last_processed_tx_counter,
+                current_tx_id: tx_id,
             },
         };
 
         let message = content.encode();
-        let initial_sig = scrt.sign_keys.sign(SIG_CTXT.bytes(&message));
+        let sig = scrt.sign_keys.sign(SIG_CTXT.bytes(&message));
 
-        Ok(PubAccountTx {
-            content,
-            initial_sig,
-        })
+        Ok(PubAccountTx { content, sig })
     }
 }
 
@@ -138,9 +137,6 @@ fn set_enc_balance(account: PubAccount, enc_balance: EncryptedAmount) -> PubAcco
         id: account.id,
         enc_asset_id: account.enc_asset_id,
         enc_balance, // the new balance
-        asset_wellformedness_proof: account.asset_wellformedness_proof,
-        asset_membership_proof: account.asset_membership_proof,
-        initial_balance_correctness_proof: account.initial_balance_correctness_proof,
         memo: account.memo,
     }
 }
@@ -171,7 +167,7 @@ impl AccountCreatorVerifier for AccountValidator {
             .pub_account
             .memo
             .owner_sign_pub_key
-            .verify(SIG_CTXT.bytes(&message), &account.initial_sig)?;
+            .verify(SIG_CTXT.bytes(&message), &account.sig)?;
 
         // Verify that the encrypted asset id is wellformed
         single_property_verifier(
@@ -180,7 +176,7 @@ impl AccountCreatorVerifier for AccountValidator {
                 cipher: account.content.pub_account.enc_asset_id,
                 pc_gens: &gens,
             },
-            account.content.pub_account.asset_wellformedness_proof,
+            account.content.asset_wellformedness_proof,
         )?;
 
         // Verify that the encrypted balance is correct
@@ -192,14 +188,11 @@ impl AccountCreatorVerifier for AccountValidator {
                 cipher: account.content.pub_account.enc_balance,
                 pc_gens: &gens,
             },
-            account
-                .content
-                .pub_account
-                .initial_balance_correctness_proof,
+            account.content.initial_balance_correctness_proof,
         )?;
 
         // Verify that the asset is from the proper asset list
-        let membership_proof = account.content.pub_account.asset_membership_proof.clone();
+        let membership_proof = account.content.asset_membership_proof.clone();
         let generators = &OooNProofGenerators::new(BASE, EXPONENT);
         single_property_verifier(
             &MembershipProofVerifier {
@@ -264,9 +257,16 @@ mod tests {
 
         // ----------------------- test
 
+        let tx_id = 0;
         let account_creator = AccountCreator {};
         let sndr_account = account_creator
-            .create(scrt_account.clone(), &valid_asset_ids, account_id, &mut rng)
+            .create(
+                tx_id,
+                scrt_account.clone(),
+                &valid_asset_ids,
+                account_id,
+                &mut rng,
+            )
             .unwrap();
 
         let decrypted_balance = Account {
@@ -313,9 +313,16 @@ mod tests {
 
         // ----------------------- test
 
+        let tx_id = 0;
         let account_creator = AccountCreator {};
         let pub_account_tx = account_creator
-            .create(scrt_account.clone(), &valid_asset_ids, account_id, &mut rng)
+            .create(
+                tx_id,
+                scrt_account.clone(),
+                &valid_asset_ids,
+                account_id,
+                &mut rng,
+            )
             .unwrap();
         let account = Account {
             scrt: scrt_account.clone(),

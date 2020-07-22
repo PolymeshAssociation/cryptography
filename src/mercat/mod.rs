@@ -62,6 +62,7 @@ pub struct EncryptionKeys {
 pub struct OrderingState {
     pub last_processed_tx_counter: i32,
     pub last_pending_tx_counter: i32,
+    pub current_tx_id: u32,
 }
 
 impl Default for OrderingState {
@@ -69,6 +70,7 @@ impl Default for OrderingState {
         Self {
             last_processed_tx_counter: -1,
             last_pending_tx_counter: 0,
+            current_tx_id: 0,
         }
     }
 }
@@ -78,12 +80,14 @@ impl Encode for OrderingState {
     fn size_hint(&self) -> usize {
         mem::size_of::<i32>() // last_processed_tx_counter
         + mem::size_of::<i32>() // last_pending_tx_counter
+        + mem::size_of::<u32>() // current_tx_id
     }
 
     #[inline]
     fn encode_to<W: Output>(&self, dest: &mut W) {
         self.last_processed_tx_counter.encode_to(dest);
         self.last_pending_tx_counter.encode_to(dest);
+        self.current_tx_id.encode_to(dest);
     }
 }
 
@@ -91,10 +95,12 @@ impl Decode for OrderingState {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let last_processed_tx_counter = <i32>::decode(input)?;
         let last_pending_tx_counter = <i32>::decode(input)?;
+        let current_tx_id = <u32>::decode(input)?;
 
         Ok(OrderingState {
             last_processed_tx_counter,
             last_pending_tx_counter,
+            current_tx_id,
         })
     }
 }
@@ -256,9 +262,6 @@ pub struct PubAccount {
     pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
     pub enc_balance: EncryptedAmount,
-    pub asset_wellformedness_proof: WellformednessProof,
-    pub asset_membership_proof: MembershipProof,
-    pub initial_balance_correctness_proof: CorrectnessProof,
     pub memo: AccountMemo,
 }
 
@@ -268,6 +271,9 @@ pub struct PubAccount {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccountContent {
     pub pub_account: PubAccount,
+    pub asset_wellformedness_proof: WellformednessProof,
+    pub asset_membership_proof: MembershipProof,
+    pub initial_balance_correctness_proof: CorrectnessProof,
     pub ordering_state: OrderingState,
 }
 
@@ -277,33 +283,30 @@ pub struct PubAccountContent {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccountTx {
     pub content: PubAccountContent,
-    pub initial_sig: Signature, // TODO change to sig
+    pub sig: Signature,
 }
 
 impl Encode for PubAccountTx {
     #[inline]
     fn size_hint(&self) -> usize {
-        self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH // initial_sig
+        self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH // sig
     }
 
     #[inline]
     fn encode_to<W: Output>(&self, dest: &mut W) {
         self.content.encode_to(dest);
-        self.initial_sig.to_bytes().encode_to(dest);
+        self.sig.to_bytes().encode_to(dest);
     }
 }
 
 impl Decode for PubAccountTx {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let content = PubAccountContent::decode(input)?;
-        let initial_sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
-        let initial_sig = Signature::from_bytes(&initial_sig)
-            .map_err(|_| CodecError::from("PubAccount.initial_sig is invalid"))?;
+        let sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
+        let sig = Signature::from_bytes(&sig)
+            .map_err(|_| CodecError::from("PubAccount.sig is invalid"))?;
 
-        Ok(PubAccountTx {
-            content,
-            initial_sig,
-        })
+        Ok(PubAccountTx { content, sig })
     }
 }
 
@@ -373,6 +376,7 @@ pub trait AccountCreatorInitializer {
     /// This function assumes that the given input `account_id` is unique.
     fn create<T: RngCore + CryptoRng>(
         &self,
+        tx_id: u32,
         scrt: SecAccount,
         valid_asset_ids: &Vec<Scalar>,
         account_id: u32,
@@ -489,6 +493,7 @@ impl core::fmt::Debug for TxState {
 pub struct AssetTxContent {
     pub account_id: u32,
     pub enc_asset_id: EncryptedAssetId,
+    // TODO: confusing name. Cannot tell from the name what is the difference from the mem.enc_issued_amount
     pub enc_amount: EncryptedAmount,
     pub memo: AssetMemo,
     pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
@@ -565,6 +570,7 @@ pub trait AssetTransactionIssuer {
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
     fn initialize_asset_transaction<T: RngCore + CryptoRng>(
         &self,
+        tx_id: u32,
         issr_account: &Account,
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
@@ -754,13 +760,14 @@ pub trait TransactionSender {
     /// MERCAT paper.
     fn create_transaction<T: RngCore + CryptoRng>(
         &self,
+        tx_id: u32,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
         // The pending balance from the point of view of the sender. Sender should keep track of
-        // this internally, or calculate it from the chain data. A None value indicates that this
-        // is the first outgoing transaction of this account.
-        pending_enc_balance: Option<EncryptedAmount>,
+        // this internally, or calculate it from the chain data. It is the responsibility of the
+        // caller to set it to the account balance if there are no pending transactions.
+        pending_enc_balance: EncryptedAmount,
         amount: Balance,
         sndr_pending_tx_counter: i32,
         rng: &mut T,
@@ -773,6 +780,7 @@ pub trait TransactionReceiver {
     /// of the MERCAT paper.
     fn finalize_transaction<T: RngCore + CryptoRng>(
         &self,
+        tx_id: u32,
         initialized_transaction: InitializedTx,
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
@@ -805,6 +813,7 @@ pub trait TransactionVerifier {
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
+        pending_balance: EncryptedAmount,
         rng: &mut R,
     ) -> Fallible<(PubAccount, PubAccount)>;
 }

@@ -86,6 +86,7 @@ pub struct AssetIssuer {}
 impl AssetTransactionIssuer for AssetIssuer {
     fn initialize_asset_transaction<T: RngCore + CryptoRng>(
         &self,
+        tx_id: u32,
         issr_account: &Account,
         mdtr_pub_key: &EncryptionPubKey,
         amount: Balance,
@@ -111,6 +112,7 @@ impl AssetTransactionIssuer for AssetIssuer {
             ordering_state: OrderingState {
                 last_processed_tx_counter: issr_account.pblc.memo.last_processed_tx_counter,
                 last_pending_tx_counter: pending_tx_counter,
+                current_tx_id: tx_id,
             },
         };
 
@@ -315,8 +317,10 @@ mod tests {
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
         let account_creator = AccountCreator {};
+        let tx_id = 0;
         let issuer_account_tx = account_creator
             .create(
+                tx_id,
                 issuer_secret_account.clone(),
                 &valid_asset_ids,
                 account_id,
@@ -344,9 +348,11 @@ mod tests {
             .expand_to_keypair(ExpansionMode::Ed25519);
 
         // ----------------------- Initialization
+        let tx_id = tx_id + 1;
         let issuer = AssetIssuer {};
         let asset_tx = issuer
             .initialize_asset_transaction(
+                tx_id,
                 &issuer_account,
                 &mediator_enc_key.pblc,
                 issued_amount,

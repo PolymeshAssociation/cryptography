@@ -52,10 +52,11 @@ pub struct CtxSender {}
 impl TransactionSender for CtxSender {
     fn create_transaction<T: RngCore + CryptoRng>(
         &self,
+        tx_id: u32,
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
-        pending_enc_balance: Option<EncryptedAmount>,
+        pending_enc_balance: EncryptedAmount,
         amount: Balance,
         sndr_pending_tx_counter: i32,
         rng: &mut T,
@@ -69,7 +70,6 @@ impl TransactionSender for CtxSender {
         let sndr_pub_account = &sndr_account.pblc;
         let rcvr_pub_key = rcvr_pub_account.memo.owner_enc_pub_key;
 
-        let pending_enc_balance = pending_enc_balance.unwrap_or(sndr_account.pblc.enc_balance);
         let balance = sndr_enc_keys.scrt.decrypt(&pending_enc_balance)?;
         debug!("---------> balance is {}", balance);
         ensure!(
@@ -109,14 +109,13 @@ impl TransactionSender for CtxSender {
         // Refresh the encrypted balance and prove that the refreshment was done
         // correctly
         let balance_refresh_enc_blinding = Scalar::random(rng);
-        let refreshed_enc_balance = sndr_pub_account
-            .enc_balance
-            .refresh(&sndr_enc_keys.scrt, balance_refresh_enc_blinding)?;
+        let refreshed_enc_balance =
+            pending_enc_balance.refresh(&sndr_enc_keys.scrt, balance_refresh_enc_blinding)?;
 
         let balance_refreshed_same_proof = single_property_prover(
             CipherTextRefreshmentProverAwaitingChallenge::new(
                 sndr_enc_keys.scrt.clone(),
-                sndr_pub_account.enc_balance,
+                pending_enc_balance,
                 refreshed_enc_balance,
                 &gens,
             ),
@@ -219,6 +218,7 @@ impl TransactionSender for CtxSender {
                 sndr_ordering_state: OrderingState {
                     last_processed_tx_counter: sndr_pub_account.memo.last_processed_tx_counter,
                     last_pending_tx_counter: sndr_pending_tx_counter,
+                    current_tx_id: tx_id,
                 },
             },
         };
@@ -243,6 +243,7 @@ pub struct CtxReceiver {}
 impl TransactionReceiver for CtxReceiver {
     fn finalize_transaction<T: RngCore + CryptoRng>(
         &self,
+        tx_id: u32,
         initialized_transaction: InitializedTx,
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
@@ -256,6 +257,7 @@ impl TransactionReceiver for CtxReceiver {
         let _ = sndr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &ctx_data.sig)?;
 
         self.finalize_by_receiver(
+            tx_id,
             initialized_transaction,
             rcvr_account,
             amount,
@@ -270,6 +272,7 @@ impl CtxReceiver {
     /// transaction. It corresponds to `FinalizeCTX` function of the MERCAT paper.
     fn finalize_by_receiver<T: RngCore + CryptoRng>(
         &self,
+        tx_id: u32,
         transaction_init_data: InitializedTx,
         rcvr_account: Account,
         expected_amount: Balance,
@@ -308,6 +311,7 @@ impl CtxReceiver {
             rcvr_ordering_state: OrderingState {
                 last_processed_tx_counter: rcvr_account.pblc.memo.last_processed_tx_counter,
                 last_pending_tx_counter: rcvr_pending_tx_counter,
+                current_tx_id: tx_id,
             },
         };
 
@@ -317,9 +321,11 @@ impl CtxReceiver {
         Ok(FinalizedTx { content, sig })
     }
 }
+
 // ------------------------------------------------------------------------------------------------
 // -                                           Mediator                                           -
 // ------------------------------------------------------------------------------------------------
+
 #[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CtxMediator {}
@@ -405,6 +411,7 @@ impl TransactionVerifier for TransactionValidator {
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
+        pending_balance: EncryptedAmount,
         rng: &mut R,
     ) -> Fallible<(PubAccount, PubAccount)> {
         ensure!(
@@ -435,9 +442,16 @@ impl TransactionVerifier for TransactionValidator {
             &initialized_transaction.init_data,
             &sndr_account,
             &rcvr_account,
+            pending_balance,
             rng,
         )?;
-        verify_finalized_transaction(&finalized_transaction, &sndr_account, &rcvr_account, rng)?;
+        verify_finalized_transaction(
+            &finalized_transaction,
+            &sndr_account,
+            &rcvr_account,
+            pending_balance,
+            rng,
+        )?;
         verify_justified_transaction(&justified_transaction, mdtr_sign_pub_key)?;
 
         // All verifications were successful, update the sender and receiver balances.
@@ -466,6 +480,7 @@ fn verify_initialized_transaction<R: RngCore + CryptoRng>(
     transaction: &InitializedTx,
     sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
+    pending_balance: EncryptedAmount,
     rng: &mut R,
 ) -> Fallible<TxState> {
     let message = transaction.content.encode();
@@ -474,7 +489,14 @@ fn verify_initialized_transaction<R: RngCore + CryptoRng>(
         .owner_sign_pub_key
         .verify(SIG_CTXT.bytes(&message), &transaction.sig)?;
 
-    verify_initial_transaction_proofs(transaction, sndr_account, rcvr_account, rng)?;
+    debug!("------------> called from the initialized transaction.");
+    verify_initial_transaction_proofs(
+        transaction,
+        sndr_account,
+        rcvr_account,
+        pending_balance,
+        rng,
+    )?;
 
     Ok(TxState::Initialization(TxSubstate::Validated))
 }
@@ -483,6 +505,7 @@ fn verify_finalized_transaction<R: RngCore + CryptoRng>(
     transaction_final_data: &FinalizedTx,
     sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
+    pending_balance: EncryptedAmount,
     rng: &mut R,
 ) -> Fallible<TxState> {
     let message = transaction_final_data.content.encode();
@@ -495,7 +518,14 @@ fn verify_finalized_transaction<R: RngCore + CryptoRng>(
     let init_data = &transaction_final_data.content.init_data;
     let final_content = &transaction_final_data.content;
 
-    verify_initial_transaction_proofs(init_data, &sndr_account, &rcvr_account, rng)?;
+    debug!("------------> called from the finalized transaction.");
+    verify_initial_transaction_proofs(
+        init_data,
+        &sndr_account,
+        &rcvr_account,
+        pending_balance,
+        rng,
+    )?;
 
     // In the initial transaction, the sender has encrypted the asset id
     // using the receiver pub key. We verify that this encrypted asset id
@@ -528,6 +558,7 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     transaction: &InitializedTx,
     sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
+    pending_balance: EncryptedAmount,
     rng: &mut R,
 ) -> Fallible<()> {
     let memo = &transaction.content.memo;
@@ -553,7 +584,7 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
             sndr_account.memo.owner_enc_pub_key,
-            sndr_account.enc_balance,
+            pending_balance,
             memo.refreshed_enc_balance,
             &gens,
         ),
@@ -602,8 +633,7 @@ mod tests {
     use crate::{
         asset_proofs::{
             ciphertext_refreshment_proof::CipherEqualSamePubKeyProof,
-            correctness_proof::CorrectnessProof, membership_proof::MembershipProof,
-            wellformedness_proof::WellformednessProof, ElgamalSecretKey,
+            correctness_proof::CorrectnessProof, ElgamalSecretKey,
         },
         mercat::{
             AccountMemo, EncryptedAmount, EncryptedAssetId, EncryptionKeys, EncryptionPubKey,
@@ -670,9 +700,6 @@ mod tests {
             id: 1,
             enc_asset_id: enc_asset_id.into(),
             enc_balance: enc_balance.into(),
-            asset_wellformedness_proof: WellformednessProof::default(),
-            asset_membership_proof: MembershipProof::default(),
-            initial_balance_correctness_proof: CorrectnessProof::default(),
             memo: AccountMemo::new(rcvr_enc_pub_key, rcvr_sign_pub_key, 2),
         })
     }
@@ -741,7 +768,9 @@ mod tests {
         };
         let rcvr_pending_tx_counter: i32 = 0;
 
+        let tx_id = 0;
         let result = ctx_rcvr.finalize_by_receiver(
+            tx_id,
             ctx_init_data,
             rcvr_account,
             expected_amount,
@@ -791,7 +820,9 @@ mod tests {
         };
         let rcvr_pending_tx_counter: i32 = 0;
 
+        let tx_id = 0;
         let result = ctx_rcvr.finalize_by_receiver(
+            tx_id,
             ctx_init_data,
             rcvr_account,
             expected_amount,
@@ -865,11 +896,13 @@ mod tests {
         };
 
         // Create the transaction and check its result and state
+        let tx_id = 0;
         let result = sndr.create_transaction(
+            tx_id,
             &sndr_account,
             &rcvr_account.pblc,
             &mdtr_enc_keys.pblc,
-            None,
+            sndr_account.pblc.enc_balance,
             amount,
             sndr_pending_tx_counter,
             &mut rng,
@@ -877,7 +910,9 @@ mod tests {
         let ctx_init_data = result.unwrap();
 
         // Finalize the transaction and check its state
+        let tx_id = tx_id + 1;
         let result = rcvr.finalize_by_receiver(
+            tx_id,
             ctx_init_data,
             rcvr_account.clone(),
             amount,
@@ -900,9 +935,11 @@ mod tests {
         let (updated_sender_account, updated_receiver_account) = tx_validator
             .verify_transaction(
                 &justified_finalized_ctx_data,
-                sndr_account.pblc,
+                sndr_account.pblc.clone(),
                 rcvr_account.pblc,
                 &mdtr_sign_keys.public,
+                // in the simple case, the pending balance is the same as the account balance
+                sndr_account.pblc.enc_balance,
                 &mut rng,
             )
             .unwrap();
