@@ -45,7 +45,7 @@ fn bench_transaction_issuer(
                         ISSUER_ACCOUNT_ID,
                         &issuer_account_cloned.clone(),
                         &mdtr_pub_key.clone(),
-                        &None,
+                        &[],
                         amount,
                         &mut rng,
                     )
@@ -64,7 +64,7 @@ fn bench_transaction_issuer(
                     ISSUER_ACCOUNT_ID,
                     &issuer_account.clone(),
                     &mdtr_pub_key.clone(),
-                    &None,
+                    &[],
                     amount,
                     &mut rng,
                 )
@@ -100,7 +100,7 @@ fn bench_transaction_mediator(
                         &issuer_account_cloned.clone(),
                         &mediator_account_cloned.encryption_key.clone(),
                         &mediator_account_cloned.signing_key.clone(),
-                        &None,
+                        &[],
                     )
                     .unwrap()
             })
@@ -118,7 +118,7 @@ fn bench_transaction_mediator(
                     &issuer_account.clone(),
                     &mediator_account.encryption_key.clone(),
                     &mediator_account.signing_key.clone(),
-                    &None,
+                    &[],
                 )
                 .unwrap()
         })
@@ -151,7 +151,7 @@ fn bench_transaction_validator(
                         issuer_account.clone(),
                         &mediator_enc_pub_key,
                         &mediator_sign_pub_key,
-                        &None,
+                        &[],
                     )
                     .unwrap()
             })

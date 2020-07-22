@@ -55,7 +55,7 @@ impl TransactionSender for CtxSender {
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
-        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedTx> {
@@ -230,17 +230,18 @@ impl TransactionSender for CtxSender {
 }
 
 fn add_transaction_auditor<T: RngCore + CryptoRng>(
-    auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     sender_enc_pub_key: &EncryptionPubKey,
     amount_witness: &CommitmentWitness,
     rng: &mut T,
-) -> Fallible<Option<Vec<AuditorPayload>>> {
+) -> Fallible<Vec<AuditorPayload>> {
     let gens = PedersenGens::default();
 
+    let mut payload_vec: Vec<AuditorPayload> = Vec::with_capacity(auditors_enc_pub_keys.len());
     // Add the required payload for the auditors.
-    if let Some(auditors_enc_pub_keys) = auditors_enc_pub_keys {
-        let mut payload_vec: Vec<AuditorPayload> = Vec::with_capacity(auditors_enc_pub_keys.len());
-        for (auditor_id, auditor_enc_pub_key) in auditors_enc_pub_keys.iter() {
+    let _: Fallible<()> = auditors_enc_pub_keys
+        .iter()
+        .map(|(auditor_id, auditor_enc_pub_key)| {
             let encrypted_amount = auditor_enc_pub_key.encrypt(amount_witness);
 
             // Prove that the sender and auditor's ciphertexts are encrypting the same
@@ -263,12 +264,11 @@ fn add_transaction_auditor<T: RngCore + CryptoRng>(
             };
 
             payload_vec.push(payload);
-        }
+            Ok(())
+        })
+        .collect();
 
-        Ok(Some(payload_vec))
-    } else {
-        Ok(None)
-    }
+    Ok(payload_vec)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -361,7 +361,7 @@ impl TransactionMediator for CtxMediator {
         mdtr_sign_keys: &SigningKeys,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
-        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         asset_id_hint: AssetId,
         rng: &mut R,
     ) -> Fallible<JustifiedTx> {
@@ -439,7 +439,7 @@ impl TransactionVerifier for TransactionValidator {
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
-        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         rng: &mut R,
     ) -> Fallible<(PubAccount, PubAccount)> {
         ensure!(
@@ -503,7 +503,7 @@ fn verify_initialized_transaction<R: RngCore + CryptoRng>(
     transaction: &InitializedTx,
     sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
-    auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     rng: &mut R,
 ) -> Fallible<TxState> {
     let message = transaction.content.encode();
@@ -569,7 +569,7 @@ fn verify_initital_transaction_proofs<R: RngCore + CryptoRng>(
     transaction: &InitializedTx,
     sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
-    auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     rng: &mut R,
 ) -> Fallible<()> {
     let memo = &transaction.content.memo;
@@ -644,45 +644,45 @@ fn verify_initital_transaction_proofs<R: RngCore + CryptoRng>(
 }
 
 fn verify_auditor_payload(
-    auditors_payload: &Option<Vec<AuditorPayload>>,
-    auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+    auditors_payload: &[AuditorPayload],
+    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     sender_enc_pub_key: EncryptionPubKey,
     sender_enc_amount: EncryptedAmount,
 ) -> Fallible<()> {
-    let gens = &PedersenGens::default();
     ensure!(
-        !(auditors_payload.is_none() ^ auditors_enc_pub_keys.is_none()),
+        auditors_payload.len() == auditors_enc_pub_keys.len(),
         ErrorKind::AuditorPayloadError
     );
 
-    if let Some(auditors) = auditors_enc_pub_keys {
-        match auditors_payload {
-            Some(auditor_payload) => {
-                for (auditor_id, auditor_pub_key) in auditors {
-                    let mut found_auditor = false;
-                    for payload in auditor_payload.iter() {
-                        if *auditor_id == payload.auditor_id {
-                            // Verify that the encrypted amounts are equal.
-                            single_property_verifier(
-                                &EncryptingSameValueVerifier {
-                                    pub_key1: sender_enc_pub_key,
-                                    pub_key2: auditor_pub_key.clone(),
-                                    cipher1: sender_enc_amount,
-                                    cipher2: payload.encrypted_amount,
-                                    pc_gens: &gens,
-                                },
-                                payload.amount_equal_cipher_proof,
-                            )?;
-                            found_auditor = true;
-                            break;
-                        }
+    let gens = &PedersenGens::default();
+    let _: Fallible<()> = auditors_enc_pub_keys
+        .iter()
+        .map(|(auditor_id, auditor_pub_key)| {
+            let mut found_auditor = false;
+            let _: Fallible<()> = auditors_payload
+                .iter()
+                .map(|payload| {
+                    if *auditor_id == payload.auditor_id {
+                        // Verify that the encrypted amounts are equal.
+                        single_property_verifier(
+                            &EncryptingSameValueVerifier {
+                                pub_key1: sender_enc_pub_key,
+                                pub_key2: auditor_pub_key.clone(),
+                                cipher1: sender_enc_amount,
+                                cipher2: payload.encrypted_amount,
+                                pc_gens: &gens,
+                            },
+                            payload.amount_equal_cipher_proof,
+                        )?;
+                        found_auditor |= true;
                     }
-                    ensure!(found_auditor, ErrorKind::AuditorPayloadError);
-                }
-            }
-            None => return Err(ErrorKind::AuditorPayloadError.into()),
-        }
-    };
+                    Ok(())
+                })
+                .collect();
+            ensure!(found_auditor, ErrorKind::AuditorPayloadError);
+            Ok(())
+        })
+        .collect();
 
     Ok(())
 }
@@ -745,35 +745,36 @@ impl TransactionAuditor for CtxAuditor {
         verify_justified_transaction(&justified_transaction, mdtr_sign_pub_key)?;
 
         // If all checks pass, decrypt the encrypted amount and verify sender's correctness proof.
-        match &initialized_transaction.init_data.content.auditors_payload {
-            Some(p) => {
-                for payload in p.iter() {
-                    if payload.auditor_id == auditor_enc_key.0 {
-                        let amount = auditor_enc_key.1.scrt.decrypt(&payload.encrypted_amount)?;
+        let _: Fallible<()> = initialized_transaction
+            .init_data
+            .content
+            .auditors_payload
+            .iter()
+            .map(|payload| {
+                if payload.auditor_id == auditor_enc_key.0 {
+                    let amount = auditor_enc_key.1.scrt.decrypt(&payload.encrypted_amount)?;
 
-                        single_property_verifier(
-                            &CorrectnessVerifier {
-                                value: amount.into(),
-                                pub_key: sndr_account.content.memo.owner_enc_pub_key,
-                                cipher: initialized_transaction
-                                    .init_data
-                                    .content
-                                    .memo
-                                    .enc_amount_using_sndr,
-                                pc_gens: &gens,
-                            },
-                            initialized_transaction
+                    let result = single_property_verifier(
+                        &CorrectnessVerifier {
+                            value: amount.into(),
+                            pub_key: sndr_account.content.memo.owner_enc_pub_key,
+                            cipher: initialized_transaction
                                 .init_data
                                 .content
-                                .amount_correctness_proof,
-                        )?;
-
-                        return Ok(());
-                    }
+                                .memo
+                                .enc_amount_using_sndr,
+                            pc_gens: &gens,
+                        },
+                        initialized_transaction
+                            .init_data
+                            .content
+                            .amount_correctness_proof,
+                    );
+                    return result;
                 }
-            }
-            None => return Err(ErrorKind::AuditorPayloadError.into()),
-        }
+                Ok(())
+            })
+            .collect();
 
         Err(ErrorKind::AuditorPayloadError.into())
     }
@@ -886,7 +887,7 @@ mod tests {
                 asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
                 amount_correctness_proof: CorrectnessProof::default(),
                 asset_id_correctness_proof: CorrectnessProof::default(),
-                auditors_payload: None,
+                auditors_payload: [].to_vec(),
             },
             sig,
         }
@@ -1046,7 +1047,7 @@ mod tests {
             &sndr_account,
             &rcvr_account.pblc,
             &mdtr_enc_keys.pblc,
-            &None,
+            &[],
             amount,
             &mut rng,
         );
@@ -1064,7 +1065,7 @@ mod tests {
             &mdtr_sign_keys,
             &sndr_account.pblc.clone(),
             &rcvr_account.pblc.clone(),
-            &None,
+            &[],
             asset_id,
             &mut rng,
         );
@@ -1076,7 +1077,7 @@ mod tests {
                 sndr_account.pblc,
                 rcvr_account.pblc,
                 &mdtr_sign_keys.public,
-                &None,
+                &[],
                 &mut rng,
             )
             .unwrap();
@@ -1131,12 +1132,12 @@ mod tests {
     }
 
     fn test_transaction_auditor_helper(
-        sender_auditor_list: &Option<Vec<(u32, EncryptionPubKey)>>,
-        mediator_auditor_list: &Option<Vec<(u32, EncryptionPubKey)>>,
+        sender_auditor_list: &[(u32, EncryptionPubKey)],
+        mediator_auditor_list: &[(u32, EncryptionPubKey)],
         mediator_check_fails: bool,
-        validator_auditor_list: &Option<Vec<(u32, EncryptionPubKey)>>,
+        validator_auditor_list: &[(u32, EncryptionPubKey)],
         validator_check_fails: bool,
-        auditors_list: &Option<Vec<(u32, EncryptionKeys)>>,
+        auditors_list: &[(u32, EncryptionKeys)],
     ) {
         let sndr = CtxSender {};
         let rcvr = CtxReceiver {};
@@ -1238,20 +1239,18 @@ mod tests {
             .is_ok());
 
         // ----------------------- Auditing
-        if let Some(auditors) = auditors_list {
-            let _ = auditors.iter().map(|auditor| {
-                let transaction_auditor = CtxAuditor {};
-                assert!(transaction_auditor
-                    .audit_transaction(
-                        &ctx_just,
-                        &sndr_account.pblc,
-                        &rcvr_account.pblc,
-                        &mdtr_sign_keys.public,
-                        auditor,
-                    )
-                    .is_ok());
-            });
-        }
+        let _ = auditors_list.iter().map(|auditor| {
+            let transaction_auditor = CtxAuditor {};
+            assert!(transaction_auditor
+                .audit_transaction(
+                    &ctx_just,
+                    &sndr_account.pblc,
+                    &rcvr_account.pblc,
+                    &mdtr_sign_keys.public,
+                    auditor,
+                )
+                .is_ok());
+        });
     }
 
     #[test]
@@ -1265,101 +1264,107 @@ mod tests {
                 (index, auditor_keys)
             })
             .collect();
-        let auditors_secert_vec_option = Some(auditors_secert_vec.clone());
+        let auditors_secert_list = auditors_secert_vec.as_slice();
 
         let auditors_vec: Vec<(u32, EncryptionPubKey)> = auditors_secert_vec
             .iter()
             .map(|a| (a.0, a.1.pblc))
             .collect();
 
-        let auditors_vec_option = Some(auditors_vec.clone());
+        let auditors_list = auditors_vec.as_slice();
 
         // Positive tests.
 
         // Include `auditors_num` auditors.
         test_transaction_auditor_helper(
-            &auditors_vec_option,
-            &auditors_vec_option,
+            auditors_list,
+            auditors_list,
             false,
-            &auditors_vec_option,
+            auditors_list,
             false,
-            &auditors_secert_vec_option,
+            auditors_secert_list,
         );
 
         // Change the order of auditors lists on the mediator and validator sides.
         // The tests still must pass.
-        let mediator_auditor_list = Some(vec![
+        let mediator_auditor_list = vec![
             auditors_vec[1].clone(),
             auditors_vec[0].clone(),
             auditors_vec[3].clone(),
             auditors_vec[2].clone(),
             auditors_vec[4].clone(),
-        ]);
-        let validator_auditor_list = Some(vec![
+        ];
+        let validator_auditor_list = vec![
             auditors_vec[4].clone(),
             auditors_vec[3].clone(),
             auditors_vec[2].clone(),
             auditors_vec[1].clone(),
             auditors_vec[0].clone(),
-        ]);
+        ];
+
+        let mediator_auditor_list = mediator_auditor_list.as_slice();
+        let validator_auditor_list = validator_auditor_list.as_slice();
+
         test_transaction_auditor_helper(
-            &auditors_vec_option,
-            &mediator_auditor_list,
+            auditors_list,
+            mediator_auditor_list.clone(),
             false,
-            &validator_auditor_list,
+            validator_auditor_list.clone(),
             false,
-            &auditors_secert_vec_option,
+            auditors_secert_list,
         );
 
         // Asset doesn't have any auditors.
-        test_transaction_auditor_helper(&None, &None, false, &None, false, &None);
+        test_transaction_auditor_helper(&[], &[], false, &[], false, &[]);
 
         // Negative tests.
 
         // Sender misses an auditor. Mediator catches it.
-        let four_auditor_list = Some(vec![
+        let four_auditor_list = vec![
             auditors_vec[1].clone(),
             auditors_vec[0].clone(),
             auditors_vec[3].clone(),
             auditors_vec[2].clone(),
-        ]);
+        ];
+        let four_auditor_list = four_auditor_list.as_slice();
+
         test_transaction_auditor_helper(
-            &four_auditor_list,
-            &mediator_auditor_list,
+            four_auditor_list,
+            mediator_auditor_list,
             true,
-            &validator_auditor_list,
+            validator_auditor_list,
             true,
-            &auditors_secert_vec_option,
+            auditors_secert_list,
         );
 
         // Sender and mediator miss an auditor, but validator catches them.
         test_transaction_auditor_helper(
-            &four_auditor_list,
-            &four_auditor_list,
+            four_auditor_list,
+            four_auditor_list,
             false,
-            &validator_auditor_list,
+            validator_auditor_list,
             true,
-            &auditors_secert_vec_option,
+            auditors_secert_list,
         );
 
         // Sender doesn't include any auditors. Mediator catches it.
         test_transaction_auditor_helper(
-            &None,
-            &mediator_auditor_list,
+            &[],
+            mediator_auditor_list,
             true,
-            &validator_auditor_list,
+            validator_auditor_list,
             true,
-            &auditors_secert_vec_option,
+            auditors_secert_list,
         );
 
         // Sender and mediator don't believe in auditors but validator does.
         test_transaction_auditor_helper(
-            &None,
-            &None,
+            &[],
+            &[],
             false,
-            &validator_auditor_list,
+            validator_auditor_list,
             true,
-            &auditors_secert_vec_option,
+            auditors_secert_list,
         );
     }
 }

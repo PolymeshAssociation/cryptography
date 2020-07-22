@@ -401,7 +401,7 @@ pub struct AssetTxContent {
     pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub balance_wellformedness_proof: WellformednessProof,
     pub balance_correctness_proof: CorrectnessProof,
-    pub auditors_payload: Option<Vec<AuditorPayload>>,
+    pub auditors_payload: Vec<AuditorPayload>,
 }
 
 #[derive(Clone)]
@@ -476,7 +476,7 @@ pub trait AssetTransactionIssuer {
         issr_account_id: u32,
         issr_account: &SecAccount,
         mdtr_pub_key: &EncryptionPubKey,
-        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedAssetTx>;
@@ -492,7 +492,7 @@ pub trait AssetTransactionMediator {
         issr_pub_account: &PubAccount,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
-        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     ) -> Fallible<JustifiedAssetTx>;
 }
 
@@ -504,7 +504,7 @@ pub trait AssetTransactionVerifier {
         issr_account: PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
-        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     ) -> Fallible<PubAccount>;
 }
 
@@ -564,7 +564,7 @@ pub struct InititializedTxContent {
     pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_correctness_proof: CorrectnessProof,
     pub amount_correctness_proof: CorrectnessProof,
-    pub auditors_payload: Option<Vec<AuditorPayload>>,
+    pub auditors_payload: Vec<AuditorPayload>,
 }
 
 /// Wrapper for the initial transaction data and its signature.
@@ -683,7 +683,7 @@ pub trait TransactionSender {
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
-        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedTx>;
@@ -712,7 +712,7 @@ pub trait TransactionMediator {
         mdtr_sign_keys: &SigningKeys,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
-        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         asset_id_hint: AssetId,
         rng: &mut R,
     ) -> Fallible<JustifiedTx>;
@@ -727,7 +727,7 @@ pub trait TransactionVerifier {
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
-        auditors_enc_pub_keys: &Option<Vec<(u32, EncryptionPubKey)>>,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         rng: &mut R,
     ) -> Fallible<(PubAccount, PubAccount)>;
 }
