@@ -44,38 +44,54 @@ fn bench_transaction_sender(
         .zip(sender_accounts.clone())
         .collect();
 
+    let mut tx_id = 0;
+    let mut pending_tx_counter = 0;
     c.bench_function_over_inputs(
         &label,
         move |b, (amount, sender_account)| {
             b.iter(|| {
                 let sender = CtxSender {};
-                sender
+                let ret = sender
                     .create_transaction(
+                        tx_id,
                         &sender_account.clone(),
                         &rcvr_pub_account_cloned.clone(),
                         &mdtr_pub_key.clone(),
+                        sender_account.pblc.enc_balance,
                         amount.clone(),
+                        pending_tx_counter,
                         &mut rng,
                     )
-                    .unwrap()
+                    .unwrap();
+                tx_id += 1;
+                pending_tx_counter += 1;
+                ret
             })
         },
         indexed_transaction.clone(),
     );
 
+    let mut tx_id = 0;
+    let mut pending_tx_counter = 0;
     indexed_transaction
         .iter()
         .map(|(amount, sender_account)| {
             let ctx_sender = CtxSender {};
-            ctx_sender
+            let ret = ctx_sender
                 .create_transaction(
+                    tx_id,
                     &sender_account.clone(),
                     &rcvr_pub_account.clone(),
                     &mdtr_pub_key.clone(),
+                    sender_account.pblc.enc_balance,
                     amount.clone(),
+                    pending_tx_counter,
                     &mut rng,
                 )
-                .unwrap()
+                .unwrap();
+            tx_id += 1;
+            pending_tx_counter += 1;
+            ret
         })
         .collect()
 }
@@ -97,38 +113,52 @@ fn bench_transaction_receiver(
         .zip(transactions.clone())
         .collect();
 
+    let mut tx_id = 0;
+    let mut pending_tx_counter = 0;
     c.bench_function_over_inputs(
         &label,
         move |b, (amount, tx)| {
             b.iter(|| {
                 let receiver = CtxReceiver {};
-                receiver
+                let ret = receiver
                     .finalize_transaction(
+                        tx_id,
                         tx.clone(),
                         &sender_pub_key.clone(),
                         receiver_account.clone(),
                         amount.clone(),
+                        pending_tx_counter,
                         &mut rng,
                     )
                     .unwrap();
+                tx_id += 1;
+                pending_tx_counter += 1;
+                ret
             })
         },
         indexed_transaction.clone(),
     );
 
+    let mut tx_id = 0;
+    let mut pending_tx_counter = 0;
     indexed_transaction
         .iter()
         .map(|(amount, tx)| {
             let receiver = CtxReceiver {};
-            receiver
+            let ret = receiver
                 .finalize_transaction(
+                    tx_id,
                     tx.clone(),
                     &sender_pub_key_cloned.clone(),
                     receiver_account_cloned.clone(),
                     amount.clone(),
+                    pending_tx_counter,
                     &mut rng,
                 )
-                .unwrap()
+                .unwrap();
+            tx_id += 1;
+            pending_tx_counter += 1;
+            ret
         })
         .collect()
 }
@@ -217,6 +247,7 @@ fn bench_transaction_validator(
                         sender.clone(),
                         rcvr_pub_account.clone(),
                         &mediator_pub_key,
+                        sender.enc_balance,
                         &mut rng,
                     )
                     .unwrap();

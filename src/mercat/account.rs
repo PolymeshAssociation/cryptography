@@ -51,7 +51,7 @@ impl AccountCreatorInitializer for AccountCreator {
     fn create<T: RngCore + CryptoRng>(
         &self,
         tx_id: u32,
-        scrt: SecAccount,
+        scrt: &SecAccount,
         valid_asset_ids: &Vec<Scalar>,
         account_id: u32,
         rng: &mut T,
@@ -260,13 +260,7 @@ mod tests {
         let tx_id = 0;
         let account_creator = AccountCreator {};
         let sndr_account = account_creator
-            .create(
-                tx_id,
-                scrt_account.clone(),
-                &valid_asset_ids,
-                account_id,
-                &mut rng,
-            )
+            .create(tx_id, &scrt_account, &valid_asset_ids, account_id, &mut rng)
             .unwrap();
 
         let decrypted_balance = Account {
@@ -316,13 +310,7 @@ mod tests {
         let tx_id = 0;
         let account_creator = AccountCreator {};
         let pub_account_tx = account_creator
-            .create(
-                tx_id,
-                scrt_account.clone(),
-                &valid_asset_ids,
-                account_id,
-                &mut rng,
-            )
+            .create(tx_id, &scrt_account, &valid_asset_ids, account_id, &mut rng)
             .unwrap();
         let account = Account {
             scrt: scrt_account.clone(),

@@ -377,7 +377,7 @@ pub trait AccountCreatorInitializer {
     fn create<T: RngCore + CryptoRng>(
         &self,
         tx_id: u32,
-        scrt: SecAccount,
+        scrt: &SecAccount,
         valid_asset_ids: &Vec<Scalar>,
         account_id: u32,
         rng: &mut T,
@@ -493,8 +493,7 @@ impl core::fmt::Debug for TxState {
 pub struct AssetTxContent {
     pub account_id: u32,
     pub enc_asset_id: EncryptedAssetId,
-    // TODO: confusing name. Cannot tell from the name what is the difference from the mem.enc_issued_amount
-    pub enc_amount: EncryptedAmount,
+    pub enc_amount_for_mdtr: EncryptedAmount,
     pub memo: AssetMemo,
     pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub balance_wellformedness_proof: WellformednessProof,

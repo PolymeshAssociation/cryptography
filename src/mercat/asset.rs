@@ -152,7 +152,7 @@ impl AssetTransactionIssuer for AssetIssuer {
         let content = AssetTxContent {
             account_id: issr_account.pblc.id,
             enc_asset_id: mdtr_enc_asset_id.into(),
-            enc_amount: mdtr_enc_amount.into(),
+            enc_amount_for_mdtr: mdtr_enc_amount.into(),
             memo: memo,
             asset_id_equal_cipher_proof: same_asset_id_cipher_proof,
             balance_wellformedness_proof: memo_wellformedness_proof,
@@ -240,7 +240,7 @@ impl AssetTransactionMediator for AssetMediator {
         // Mediator decrypts the encrypted amount and uses it to verify the correctness proof.
         let amount = mdtr_enc_keys
             .scrt
-            .decrypt(&initialized_asset_tx.content.enc_amount)?;
+            .decrypt(&initialized_asset_tx.content.enc_amount_for_mdtr)?;
 
         single_property_verifier(
             &CorrectnessVerifier {
@@ -321,7 +321,7 @@ mod tests {
         let issuer_account_tx = account_creator
             .create(
                 tx_id,
-                issuer_secret_account.clone(),
+                &issuer_secret_account,
                 &valid_asset_ids,
                 account_id,
                 &mut rng,
