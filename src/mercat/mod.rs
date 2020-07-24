@@ -117,38 +117,12 @@ pub type EncryptedAssetId = CipherText;
 pub type EncryptedAmount = CipherText;
 
 /// Asset memo holds the contents of an asset issuance transaction.
-#[derive(Clone)]
+#[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AssetMemo {
     pub enc_issued_amount: EncryptedAmount,
     pub ordering_state: OrderingState,
-}
-
-impl Encode for AssetMemo {
-    #[inline]
-    fn size_hint(&self) -> usize {
-        self.enc_issued_amount.size_hint() + self.ordering_state.size_hint()
-    }
-
-    #[inline]
-    fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.enc_issued_amount.encode_to(dest);
-        self.ordering_state.encode_to(dest);
-    }
-}
-
-impl Decode for AssetMemo {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let enc_issued_amount = <EncryptedAmount>::decode(input)?;
-
-        let ordering_state = <OrderingState>::decode(input)?;
-
-        Ok(AssetMemo {
-            enc_issued_amount,
-            ordering_state,
-        })
-    }
 }
 
 // -------------------------------------------------------------------------------------
@@ -199,7 +173,6 @@ pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
     pub owner_sign_pub_key: SigningPubKey,
     pub last_processed_tx_counter: i32,
-    pub timestamp: u64,
 }
 
 impl AccountMemo {
@@ -211,7 +184,6 @@ impl AccountMemo {
         AccountMemo {
             owner_enc_pub_key,
             owner_sign_pub_key,
-            timestamp: 0,
             last_processed_tx_counter,
         }
     }
@@ -230,7 +202,6 @@ impl Encode for AccountMemo {
     fn encode_to<W: Output>(&self, dest: &mut W) {
         self.owner_enc_pub_key.encode_to(dest);
         self.owner_sign_pub_key.to_bytes().encode_to(dest);
-        self.timestamp.encode_to(dest);
         self.last_processed_tx_counter.encode_to(dest);
     }
 }
@@ -243,13 +214,11 @@ impl Decode for AccountMemo {
         let owner_sign_pub_key = SigningPubKey::from_bytes(&owner_sign_pub_key)
             .map_err(|_| CodecError::from("AccountMemo.owner_sign_pub_key is invalid"))?;
 
-        let timestamp = <u64>::decode(input)?;
         let last_processed_tx_counter = <i32>::decode(input)?;
 
         Ok(AccountMemo {
             owner_enc_pub_key,
             owner_sign_pub_key,
-            timestamp,
             last_processed_tx_counter,
         })
     }
@@ -604,14 +573,14 @@ pub trait AssetTransactionVerifier {
 }
 
 // -------------------------------------------------------------------------------------
-// -                            Confidential Transaction                               -
+// -                       Confidential Transfer Transaction                           -
 // -------------------------------------------------------------------------------------
 
 /// Holds the memo for confidential transaction sent by the sender.
 #[derive(Default, Clone, Copy, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct TxMemo {
+pub struct TransferTxMemo {
     pub sndr_account_id: u32,
     pub rcvr_account_id: u32,
     pub enc_amount_using_sndr: EncryptedAmount,
@@ -628,11 +597,11 @@ pub struct TxMemo {
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct InitializedTxContent {
+pub struct InitializedTransferTxContent {
     pub amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub non_neg_amount_proof: InRangeProof,
     pub enough_fund_proof: InRangeProof,
-    pub memo: TxMemo,
+    pub memo: TransferTxMemo,
     pub asset_id_equal_cipher_with_sndr_rcvr_keys_proof: CipherEqualDifferentPubKeyProof,
     pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
@@ -644,12 +613,12 @@ pub struct InitializedTxContent {
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct InitializedTx {
-    pub content: InitializedTxContent,
+pub struct InitializedTransferTx {
+    pub content: InitializedTransferTxContent,
     pub sig: Signature,
 }
 
-impl Encode for InitializedTx {
+impl Encode for InitializedTransferTx {
     #[inline]
     fn size_hint(&self) -> usize {
         self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH
@@ -661,14 +630,14 @@ impl Encode for InitializedTx {
     }
 }
 
-impl Decode for InitializedTx {
+impl Decode for InitializedTransferTx {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let content = <InitializedTxContent>::decode(input)?;
+        let content = <InitializedTransferTxContent>::decode(input)?;
         let sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
         let sig = Signature::from_bytes(&sig)
             .map_err(|_| CodecError::from("InitializedTx::sig is invalid"))?;
 
-        Ok(InitializedTx { content, sig })
+        Ok(InitializedTransferTx { content, sig })
     }
 }
 
@@ -677,8 +646,8 @@ impl Decode for InitializedTx {
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct FinalizedTxContent {
-    pub init_data: InitializedTx,
+pub struct FinalizedTransferTxContent {
+    pub init_data: InitializedTransferTx,
     pub rcvr_ordering_state: OrderingState,
     pub asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof,
 }
@@ -687,12 +656,12 @@ pub struct FinalizedTxContent {
 /// receiver of the transaction.
 #[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct FinalizedTx {
-    pub content: FinalizedTxContent,
+pub struct FinalizedTransferTx {
+    pub content: FinalizedTransferTxContent,
     pub sig: Signature,
 }
 
-impl Encode for FinalizedTx {
+impl Encode for FinalizedTransferTx {
     #[inline]
     fn size_hint(&self) -> usize {
         self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH
@@ -704,14 +673,14 @@ impl Encode for FinalizedTx {
     }
 }
 
-impl Decode for FinalizedTx {
+impl Decode for FinalizedTransferTx {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let content = <FinalizedTxContent>::decode(input)?;
+        let content = <FinalizedTransferTxContent>::decode(input)?;
         let sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
         let sig = Signature::from_bytes(&sig)
             .map_err(|_| CodecError::from("FinalizedTx::sig is invalid"))?;
 
-        Ok(FinalizedTx { content, sig })
+        Ok(FinalizedTransferTx { content, sig })
     }
 }
 
@@ -719,12 +688,12 @@ impl Decode for FinalizedTx {
 /// transaction.
 #[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct JustifiedTx {
-    pub content: FinalizedTx,
+pub struct JustifiedTransferTx {
+    pub content: FinalizedTransferTx,
     pub sig: Signature,
 }
 
-impl Encode for JustifiedTx {
+impl Encode for JustifiedTransferTx {
     #[inline]
     fn size_hint(&self) -> usize {
         self.content.size_hint() + schnorrkel::SIGNATURE_LENGTH
@@ -736,24 +705,19 @@ impl Encode for JustifiedTx {
     }
 }
 
-impl Decode for JustifiedTx {
+impl Decode for JustifiedTransferTx {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let content = <FinalizedTx>::decode(input)?;
+        let content = <FinalizedTransferTx>::decode(input)?;
         let sig = <[u8; schnorrkel::SIGNATURE_LENGTH]>::decode(input)?;
         let sig = Signature::from_bytes(&sig)
             .map_err(|_| CodecError::from("JustifiedTx::sig is invalid"))?;
 
-        Ok(JustifiedTx { content, sig })
+        Ok(JustifiedTransferTx { content, sig })
     }
 }
 
-// TODO: global rename:
-//       - Account creation -> Account creation transaction
-//       - Issuance -> Issuance transaction
-//       - Transaction -> Transfer transaction
-
 /// The interface for confidential transaction.
-pub trait TransactionSender {
+pub trait TransferTransactionSender {
     /// This is called by the sender of a confidential transaction. The outputs
     /// can be safely placed on the chain. It corresponds to `CreateCTX` function of
     /// MERCAT paper.
@@ -770,45 +734,45 @@ pub trait TransactionSender {
         amount: Balance,
         sndr_pending_tx_counter: i32,
         rng: &mut T,
-    ) -> Fallible<InitializedTx>;
+    ) -> Fallible<InitializedTransferTx>;
 }
 
-pub trait TransactionReceiver {
+pub trait TransferTransactionReceiver {
     /// This function is called the receiver of the transaction to finalize and process
     /// the transaction. It corresponds to `FinalizeCTX` and `ProcessCTX` functions
     /// of the MERCAT paper.
     fn finalize_transaction<T: RngCore + CryptoRng>(
         &self,
         tx_id: u32,
-        initialized_transaction: InitializedTx,
+        initialized_transaction: InitializedTransferTx,
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
         amount: Balance,
         rcvr_pending_tx_counter: i32,
         rng: &mut T,
-    ) -> Fallible<FinalizedTx>;
+    ) -> Fallible<FinalizedTransferTx>;
 }
 
-pub trait TransactionMediator {
+pub trait TransferTransactionMediator {
     /// Justify the transaction by mediator.
     fn justify_transaction(
         &self,
-        finalized_transaction: FinalizedTx,
+        finalized_transaction: FinalizedTransferTx,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_sign_pub_key: &SigningPubKey,
         // NOTE: without this, decryption takes a very long time. Since asset id to scalar takes the hash of the asset id array.
         asset_id_hint: AssetId,
-    ) -> Fallible<JustifiedTx>;
+    ) -> Fallible<JustifiedTransferTx>;
 }
 
-pub trait TransactionVerifier {
+pub trait TransferTransactionVerifier {
     /// Verify the initialized, finalized, and justified transactions.
     /// Returns the updated sender and receiver accounts.
     fn verify_transaction<R: RngCore + CryptoRng>(
         &self,
-        justified_transaction: &JustifiedTx,
+        justified_transaction: &JustifiedTransferTx,
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
@@ -822,37 +786,37 @@ pub trait TransactionVerifier {
 // -------------------------------------------------------------------------------------
 
 /// Holds the public portion of the reversal transaction.
-pub struct ReversedTx {
-    _final_data: InitializedTx,
-    _memo: ReversedTxMemo,
+pub struct ReversedTransferTx {
+    _final_data: InitializedTransferTx,
+    _memo: ReversedTransferTxMemo,
     _sig: Signature,
 }
 
 /// Holds the memo for reversal of the confidential transaction sent by the mediator.
-pub struct ReversedTxMemo {
+pub struct ReversedTransferTxMemo {
     _enc_amount_using_rcvr: EncryptedAmount,
     _enc_refreshed_amount: EncryptedAmount,
     _enc_asset_id_using_rcvr: EncryptedAssetId,
 }
 
-pub trait ReversedTransactionMediator {
+pub trait ReversedTransferTransactionMediator {
     /// This function is called by the mediator to reverse and process the reversal of
     /// the transaction. It corresponds to `ReverseCTX` of the MERCAT paper.
     fn create(
         &self,
-        transaction_final_data: FinalizedTx,
+        transaction_final_data: FinalizedTransferTx,
         mdtr_enc_keys: EncryptionSecKey,
         mdtr_sign_keys: SigningKeys,
         state: TxState,
-    ) -> Fallible<(ReversedTx, TxState)>;
+    ) -> Fallible<(ReversedTransferTx, TxState)>;
 }
 
-pub trait ReversedTransactionVerifier {
+pub trait ReversedTransferTransactionVerifier {
     /// This function is called by validators to verify the reversal and processing of the
     /// reversal transaction.
     fn verify(
         &self,
-        reverse_transaction_data: ReversedTx,
+        reverse_transaction_data: ReversedTransferTx,
         mdtr_sign_pub_key: SigningPubKey,
         state: TxState,
     ) -> Fallible<TxState>;

@@ -32,15 +32,15 @@ fn bench_transaction_issuer(
     let label = format!("MERCAT Transaction: Issuer");
     let mut rng = thread_rng();
     let issuer_account_cloned = issuer_account.clone();
+    let tx_id = 0;
+    let pending_tx_counter = 0;
 
-    let mut tx_id = 0;
-    let mut pending_tx_counter = 0;
     c.bench_function_over_inputs(
         &label,
         move |b, &amount| {
             b.iter(|| {
                 let issuer = AssetIssuer {};
-                let ret = issuer
+                issuer
                     .initialize_asset_transaction(
                         tx_id,
                         &issuer_account_cloned.clone(),
@@ -49,22 +49,17 @@ fn bench_transaction_issuer(
                         pending_tx_counter,
                         &mut rng,
                     )
-                    .unwrap();
-                tx_id += 1;
-                pending_tx_counter += 1;
-                ret
+                    .unwrap()
             })
         },
         amounts.clone(),
     );
 
-    let mut tx_id = 0;
-    let mut pending_tx_counter = 0;
     amounts
         .iter()
         .map(|&amount| {
             let issuer = AssetIssuer {};
-            let ret = issuer
+            issuer
                 .initialize_asset_transaction(
                     tx_id,
                     &issuer_account.clone(),
@@ -73,10 +68,7 @@ fn bench_transaction_issuer(
                     pending_tx_counter,
                     &mut rng,
                 )
-                .unwrap();
-            tx_id += 1;
-            pending_tx_counter += 1;
-            ret
+                .unwrap()
         })
         .collect()
 }

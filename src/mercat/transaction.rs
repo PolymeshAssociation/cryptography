@@ -18,10 +18,11 @@ use crate::{
     },
     errors::{ErrorKind, Fallible},
     mercat::{
-        Account, EncryptedAmount, EncryptionKeys, EncryptionPubKey, FinalizedTx,
-        FinalizedTxContent, InitializedTx, InitializedTxContent, JustifiedTx, OrderingState,
-        PubAccount, SigningKeys, SigningPubKey, TransactionMediator, TransactionReceiver,
-        TransactionSender, TransactionVerifier, TxMemo, TxState, TxSubstate,
+        Account, EncryptedAmount, EncryptionKeys, EncryptionPubKey, FinalizedTransferTx,
+        FinalizedTransferTxContent, InitializedTransferTx, InitializedTransferTxContent,
+        JustifiedTransferTx, OrderingState, PubAccount, SigningKeys, SigningPubKey,
+        TransferTransactionMediator, TransferTransactionReceiver, TransferTransactionSender,
+        TransferTransactionVerifier, TransferTxMemo, TxState, TxSubstate,
     },
     AssetId, Balance, BALANCE_RANGE,
 };
@@ -49,7 +50,7 @@ lazy_static! {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CtxSender {}
 
-impl TransactionSender for CtxSender {
+impl TransferTransactionSender for CtxSender {
     fn create_transaction<T: RngCore + CryptoRng>(
         &self,
         tx_id: u32,
@@ -60,7 +61,7 @@ impl TransactionSender for CtxSender {
         amount: Balance,
         sndr_pending_tx_counter: i32,
         rng: &mut T,
-    ) -> Fallible<InitializedTx> {
+    ) -> Fallible<InitializedTransferTx> {
         let gens = PedersenGens::default();
         // NOTE: If this decryption ends up being too slow, we can pass in the balance
         // as input.
@@ -196,7 +197,7 @@ impl TransactionSender for CtxSender {
         )?);
 
         // Gather the content and sign it
-        let content = InitializedTxContent {
+        let content = InitializedTransferTxContent {
             amount_equal_cipher_proof,
             non_neg_amount_proof,
             enough_fund_proof,
@@ -205,7 +206,7 @@ impl TransactionSender for CtxSender {
             asset_id_refreshed_same_proof,
             asset_id_correctness_proof,
             amount_correctness_proof,
-            memo: TxMemo {
+            memo: TransferTxMemo {
                 sndr_account_id: sndr_pub_account.id,
                 rcvr_account_id: rcvr_pub_account.id,
                 enc_amount_using_sndr: sndr_new_enc_amount.into(),
@@ -226,7 +227,7 @@ impl TransactionSender for CtxSender {
         let message = content.encode();
         let sig = sndr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
-        Ok(InitializedTx { content, sig })
+        Ok(InitializedTransferTx { content, sig })
     }
 }
 
@@ -240,17 +241,17 @@ impl TransactionSender for CtxSender {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CtxReceiver {}
 
-impl TransactionReceiver for CtxReceiver {
+impl TransferTransactionReceiver for CtxReceiver {
     fn finalize_transaction<T: RngCore + CryptoRng>(
         &self,
         tx_id: u32,
-        initialized_transaction: InitializedTx,
+        initialized_transaction: InitializedTransferTx,
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
         amount: Balance,
         rcvr_pending_tx_counter: i32,
         rng: &mut T,
-    ) -> Fallible<FinalizedTx> {
+    ) -> Fallible<FinalizedTransferTx> {
         // Verify sender's signature.
         let ctx_data = &initialized_transaction;
         let message = ctx_data.content.encode();
@@ -273,12 +274,12 @@ impl CtxReceiver {
     fn finalize_by_receiver<T: RngCore + CryptoRng>(
         &self,
         tx_id: u32,
-        transaction_init_data: InitializedTx,
+        transaction_init_data: InitializedTransferTx,
         rcvr_account: Account,
         expected_amount: Balance,
         rcvr_pending_tx_counter: i32,
         rng: &mut T,
-    ) -> Fallible<FinalizedTx> {
+    ) -> Fallible<FinalizedTransferTx> {
         let rcvr_enc_sec = &rcvr_account.scrt.enc_keys.scrt;
         let rcvr_sign_keys = &rcvr_account.scrt.sign_keys;
         let rcvr_pub_account = &rcvr_account.pblc;
@@ -305,7 +306,7 @@ impl CtxReceiver {
         let proof = single_property_prover(prover, rng)?;
 
         // gather the content and sign it
-        let content = FinalizedTxContent {
+        let content = FinalizedTransferTxContent {
             init_data: transaction_init_data,
             asset_id_from_sndr_equal_to_rcvr_proof: proof,
             rcvr_ordering_state: OrderingState {
@@ -318,7 +319,7 @@ impl CtxReceiver {
         let message = content.encode();
         let sig = rcvr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
-        Ok(FinalizedTx { content, sig })
+        Ok(FinalizedTransferTx { content, sig })
     }
 }
 
@@ -330,16 +331,16 @@ impl CtxReceiver {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CtxMediator {}
 
-impl TransactionMediator for CtxMediator {
+impl TransferTransactionMediator for CtxMediator {
     fn justify_transaction(
         &self,
-        finalized_transaction: FinalizedTx,
+        finalized_transaction: FinalizedTransferTx,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_sign_pub_key: &SigningPubKey,
         asset_id_hint: AssetId,
-    ) -> Fallible<JustifiedTx> {
+    ) -> Fallible<JustifiedTransferTx> {
         // TODO: may need to change the signature CRYP-111
 
         // Verify receiver's signature on the transaction.
@@ -388,7 +389,7 @@ impl TransactionMediator for CtxMediator {
         let message = finalized_transaction.encode();
         let sig = mdtr_sign_keys.sign(SIG_CTXT.bytes(&message));
 
-        Ok(JustifiedTx {
+        Ok(JustifiedTransferTx {
             content: finalized_transaction,
             sig,
         })
@@ -404,10 +405,10 @@ impl TransactionMediator for CtxMediator {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct TransactionValidator {}
 
-impl TransactionVerifier for TransactionValidator {
+impl TransferTransactionVerifier for TransactionValidator {
     fn verify_transaction<R: RngCore + CryptoRng>(
         &self,
-        justified_transaction: &JustifiedTx,
+        justified_transaction: &JustifiedTransferTx,
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
@@ -477,7 +478,7 @@ impl TransactionVerifier for TransactionValidator {
 }
 
 fn verify_initialized_transaction<R: RngCore + CryptoRng>(
-    transaction: &InitializedTx,
+    transaction: &InitializedTransferTx,
     sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
     pending_balance: EncryptedAmount,
@@ -502,7 +503,7 @@ fn verify_initialized_transaction<R: RngCore + CryptoRng>(
 }
 
 fn verify_finalized_transaction<R: RngCore + CryptoRng>(
-    transaction_final_data: &FinalizedTx,
+    transaction_final_data: &FinalizedTransferTx,
     sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
     pending_balance: EncryptedAmount,
@@ -544,7 +545,7 @@ fn verify_finalized_transaction<R: RngCore + CryptoRng>(
 }
 
 fn verify_justified_transaction(
-    transaction_justified_final_data: &JustifiedTx,
+    transaction_justified_final_data: &JustifiedTransferTx,
     mdtr_sign_pub_key: &SigningPubKey,
 ) -> Fallible<TxState> {
     let ctx_data = &transaction_justified_final_data;
@@ -555,7 +556,7 @@ fn verify_justified_transaction(
 }
 
 fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
-    transaction: &InitializedTx,
+    transaction: &InitializedTransferTx,
     sndr_account: &PubAccount,
     rcvr_account: &PubAccount,
     pending_balance: EncryptedAmount,
@@ -637,7 +638,7 @@ mod tests {
         },
         mercat::{
             AccountMemo, EncryptedAmount, EncryptedAssetId, EncryptionKeys, EncryptionPubKey,
-            SecAccount, Signature, SigningKeys, SigningPubKey, TxMemo,
+            SecAccount, Signature, SigningKeys, SigningPubKey, TransferTxMemo,
         },
         AssetId,
     };
@@ -669,10 +670,10 @@ mod tests {
         amount: Balance,
         asset_id: AssetId,
         rng: &mut R,
-    ) -> TxMemo {
+    ) -> TransferTxMemo {
         let (_, enc_amount_using_rcvr) = rcvr_pub_key.encrypt_value(amount.into(), rng);
         let (_, enc_asset_id_using_rcvr) = rcvr_pub_key.encrypt_value(asset_id.into(), rng);
-        TxMemo {
+        TransferTxMemo {
             sndr_account_id: 0,
             rcvr_account_id: 0,
             enc_amount_using_sndr: EncryptedAmount::default(),
@@ -710,9 +711,9 @@ mod tests {
         asset_id: AssetId,
         sig: Signature,
         rng: &mut R,
-    ) -> InitializedTx {
-        InitializedTx {
-            content: InitializedTxContent {
+    ) -> InitializedTransferTx {
+        InitializedTransferTx {
+            content: InitializedTransferTxContent {
                 memo: mock_ctx_init_memo(rcvr_pub_key, expected_amount, asset_id, rng),
                 asset_id_equal_cipher_with_sndr_rcvr_keys_proof:
                     CipherEqualDifferentPubKeyProof::default(),
