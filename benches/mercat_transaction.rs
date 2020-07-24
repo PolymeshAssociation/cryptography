@@ -54,7 +54,7 @@ fn bench_transaction_sender(
                         &sender_account.clone(),
                         &rcvr_pub_account_cloned.clone(),
                         &mdtr_pub_key.clone(),
-                        &None,
+                        &[],
                         amount.clone(),
                         &mut rng,
                     )
@@ -73,7 +73,7 @@ fn bench_transaction_sender(
                     &sender_account.clone(),
                     &rcvr_pub_account.clone(),
                     &mdtr_pub_key.clone(),
-                    &None,
+                    &[],
                     amount.clone(),
                     &mut rng,
                 )
@@ -169,7 +169,7 @@ fn bench_transaction_mediator(
                         &mediator_account_cloned.signing_key,
                         &sender.clone(),
                         &receiver_pub_account_cloned,
-                        &None,
+                        &[],
                         asset_id_cloned.clone(),
                         &mut rng,
                     )
@@ -190,7 +190,7 @@ fn bench_transaction_mediator(
                     &mediator_account.signing_key,
                     &sender,
                     &receiver_pub_account,
-                    &None,
+                    &[],
                     asset_id.clone(),
                     &mut rng,
                 )
@@ -227,7 +227,7 @@ fn bench_transaction_validator(
                         sender.clone(),
                         rcvr_pub_account.clone(),
                         &mediator_pub_key,
-                        &None,
+                        &[],
                         &mut rng,
                     )
                     .unwrap();
