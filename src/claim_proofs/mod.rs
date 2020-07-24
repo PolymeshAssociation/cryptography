@@ -11,6 +11,7 @@ pub use claim_proofs::{
 pub mod pedersen_commitments;
 pub use pedersen_commitments::PedersenGenerators;
 
+use curve25519_dalek::scalar::Scalar;
 use rand_core::{CryptoRng, RngCore};
 
 pub fn random_claim<R: RngCore + CryptoRng + ?Sized>(
@@ -24,13 +25,15 @@ pub fn random_claim<R: RngCore + CryptoRng + ?Sized>(
     rng.fill_bytes(&mut investor_unique_id.0);
     rng.fill_bytes(&mut scope_did.0);
 
+    let investor_unique_id = Scalar::from_bits(investor_unique_id.0);
+
     (
         CDDClaimData {
-            investor_did,
+            investor_did: Scalar::from_bits(investor_did.0),
             investor_unique_id,
         },
         ScopeClaimData {
-            scope_did,
+            scope_did: Scalar::from_bits(scope_did.0),
             investor_unique_id,
         },
     )

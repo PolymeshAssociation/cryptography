@@ -16,11 +16,11 @@
 //! // Investor side:
 //! let message = b"some asset ownership claims!";
 //!
-//! let investor_did = RawData([1u8; 32]);
-//! let investor_unique_id = RawData([2u8; 32]);
+//! let investor_did = Scalar::from_bits([1u8; 32]);
+//! let investor_unique_id = Scalar::from_bits([2u8; 32]);
 //! let cdd_claim = CDDClaimData {investor_did, investor_unique_id};
 //!
-//! let scope_did = RawData([4u8; 32]);
+//! let scope_did = Scalar::from_bits([4u8; 32]);
 //! let scope_claim = ScopeClaimData {scope_did, investor_unique_id};
 //!
 //! let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
@@ -46,12 +46,9 @@ use lazy_static::lazy_static;
 use schnorrkel::{context::SigningContext, signing_context, Keypair, PublicKey, Signature};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use sha3::{
-    digest::{FixedOutput, Input},
-    Sha3_256, Sha3_512,
-};
+use blake2::{Blake2b, Blake2s, Digest};
 
-use sp_std::prelude::*;
+use sp_std::{convert::TryInto, prelude::*};
 
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
@@ -70,36 +67,29 @@ impl AsRef<[u8; 32]> for RawData {
     }
 }
 
-fn concat(a: RawData, b: RawData) -> Vec<u8> {
-    let mut t = Vec::with_capacity(a.0.len() + b.0.len());
-    t.extend_from_slice(a.as_ref());
-    t.extend_from_slice(b.as_ref());
-    t
-}
-
 /// The data needed to generate a CDD ID
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CDDClaimData {
-    pub investor_did: RawData,
-    pub investor_unique_id: RawData,
+    pub investor_did: Scalar,
+    pub investor_unique_id: Scalar,
 }
 
 /// The data needed to generate a SCOPE ID
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ScopeClaimData {
-    pub scope_did: RawData,
-    pub investor_unique_id: RawData,
+    pub scope_did: Scalar,
+    pub investor_unique_id: Scalar,
 }
 
 /// The data needed to generate a proof that a SCOPE ID matches a CDD ID
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ScopeClaimProofData {
-    pub scope_did: RawData,
-    pub investor_did: RawData,
-    pub investor_unique_id: RawData,
+    pub scope_did: Scalar,
+    pub investor_did: Scalar,
+    pub investor_unique_id: Scalar,
 }
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
@@ -118,6 +108,22 @@ pub struct ProofPublicKey {
     pub_key: PublicKey,
 }
 
+fn generate_pedersen_commit( a: Scalar, b: Scalar) -> RistrettoPoint {
+    // 0. Generate the blind factor as concatenation of `a` and `b`.
+    let blind_hash = Blake2b::default()
+            .chain(a.as_bytes())
+            .chain(b.as_bytes())
+            .finalize();
+    // NOTE: The output of Blake2b is fixed side to [u8;32], so `unwrap` is not going to fail.
+    let blind_plain: [u8; 32] = blind_hash.as_ref().try_into().unwrap_or_else(|_| [0u8; 32]);
+    let blind = Scalar::from_bits(blind_plain);
+
+    // Calculate the output commit.
+    let pg = PedersenGenerators::default();
+    pg.commit(&[a, b, blind])
+}
+
+
 /// Compute the CDD_ID. \
 /// CDD_ID = PedersenCommitment(INVESTOR_DID, INVESTOR_UNIQUE_ID, [INVESTOR_DID | INVESTOR_UNIQUE_ID]) \
 ///
@@ -127,14 +133,7 @@ pub struct ProofPublicKey {
 /// # Output
 /// The Pedersen commitment result.
 pub fn compute_cdd_id(cdd_claim: &CDDClaimData) -> RistrettoPoint {
-    let pg = PedersenGenerators::default();
-    pg.commit(&[
-        Scalar::hash_from_bytes::<Sha3_512>(cdd_claim.investor_did.as_ref()),
-        Scalar::hash_from_bytes::<Sha3_512>(cdd_claim.investor_unique_id.as_ref()),
-        Scalar::hash_from_bytes::<Sha3_512>(
-            concat(cdd_claim.investor_did, cdd_claim.investor_unique_id).as_ref(),
-        ),
-    ])
+    generate_pedersen_commit(cdd_claim.investor_did, cdd_claim.investor_unique_id)
 }
 
 /// Compute the SCOPE_ID \
@@ -147,14 +146,7 @@ pub fn compute_cdd_id(cdd_claim: &CDDClaimData) -> RistrettoPoint {
 /// # Output
 /// The Pedersen commitment result.
 pub fn compute_scope_id(scope_claim: &ScopeClaimData) -> RistrettoPoint {
-    let pg = PedersenGenerators::default();
-    pg.commit(&[
-        Scalar::hash_from_bytes::<Sha3_512>(scope_claim.scope_did.as_ref()),
-        Scalar::hash_from_bytes::<Sha3_512>(scope_claim.investor_unique_id.as_ref()),
-        Scalar::hash_from_bytes::<Sha3_512>(
-            concat(scope_claim.scope_did, scope_claim.investor_unique_id).as_ref(),
-        ),
-    ])
+    generate_pedersen_commit( scope_claim.scope_did, scope_claim.investor_unique_id)
 }
 
 pub fn build_scope_claim_proof_data(
@@ -178,16 +170,24 @@ impl From<ScopeClaimProofData> for ProofKeyPair {
     fn from(d: ScopeClaimProofData) -> Self {
         // Investor's secret key is:
         // Hash([INVESTOR_DID | INVESTOR_UNIQUE_ID]) - Hash([SCOPE_DID | INVESTOR_UNIQUE_ID])
-        let first_term = concat(d.investor_did, d.investor_unique_id);
-        let second_term = concat(d.scope_did, d.investor_unique_id);
-        let secret_key_scalar = Scalar::hash_from_bytes::<Sha3_512>(first_term.as_ref())
-            - Scalar::hash_from_bytes::<Sha3_512>(&second_term);
+        let first_term :[u8;32] = Blake2s::default()
+            .chain( d.investor_did.as_bytes())
+            .chain( d.investor_unique_id.as_bytes())
+            .finalize().into();
+
+        let second_term :[u8;32] = Blake2s::default()
+            .chain(d.scope_did.as_bytes())
+            .chain(d.investor_unique_id.as_bytes())
+            .finalize().into();
+
+        let secret_key_scalar = Scalar::from_bits(first_term)
+            - Scalar::from_bits(second_term);
 
         // Set the secret key's nonce to : ["nonce" | secret_key]
-        let mut h = Sha3_256::default();
-        h.input("nonce");
-        h.input(&secret_key_scalar.as_bytes());
-        let nonce = h.fixed_result();
+        let nonce = Blake2s::default()
+            .chain("nonce")
+            .chain( &secret_key_scalar.as_bytes())
+            .finalize();
 
         let mut exported_private_key = Vec::with_capacity(64);
         exported_private_key.extend_from_slice(secret_key_scalar.as_bytes());
@@ -226,19 +226,13 @@ impl ProofPublicKey {
     /// * `scope_did`: the scope DID
     pub fn new(
         cdd_id: RistrettoPoint,
-        investor_did: &RawData,
+        investor_did: Scalar,
         scope_id: RistrettoPoint,
-        scope_did: &RawData,
+        scope_did: Scalar,
     ) -> Self {
         let pg = PedersenGenerators::default();
-        let cdd_label_prime = pg.label_prime(
-            cdd_id,
-            Scalar::hash_from_bytes::<Sha3_512>(investor_did.as_ref()),
-        );
-        let scope_label_prime = pg.label_prime(
-            scope_id,
-            Scalar::hash_from_bytes::<Sha3_512>(scope_did.as_ref()),
-        );
+        let cdd_label_prime = pg.label_prime( cdd_id, investor_did);
+        let scope_label_prime = pg.label_prime( scope_id, scope_did);
 
         let pub_key = PublicKey::from_point(cdd_label_prime - scope_label_prime);
         ProofPublicKey { pub_key }
@@ -291,9 +285,9 @@ mod tests {
         // Verifier side.
         let verifier_pub = ProofPublicKey::new(
             cdd_id,
-            &cdd_claim.investor_did,
+            cdd_claim.investor_did,
             scope_id,
-            &scope_claim.scope_did,
+            scope_claim.scope_did,
         );
 
         // Make sure both sides get the same public key.
@@ -326,9 +320,9 @@ mod tests {
         // Verifier side.
         let verifier_pub = ProofPublicKey::new(
             cdd_id,
-            &cdd_claim.investor_did,
+            cdd_claim.investor_did,
             scope_id,
-            &scope_claim.scope_did,
+            scope_claim.scope_did,
         );
 
         // Positive tests.
