@@ -31,7 +31,6 @@ use bulletproofs::PedersenGens;
 use codec::Encode;
 use curve25519_dalek::scalar::Scalar;
 use lazy_static::lazy_static;
-use log::debug;
 use rand_core::{CryptoRng, RngCore};
 use schnorrkel::{context::SigningContext, signing_context};
 use zeroize::Zeroizing;
@@ -72,7 +71,6 @@ impl TransferTransactionSender for CtxSender {
         let rcvr_pub_key = rcvr_pub_account.memo.owner_enc_pub_key;
 
         let balance = sndr_enc_keys.scrt.decrypt(&pending_enc_balance)?;
-        debug!("---------> balance is {}", balance);
         ensure!(
             balance >= amount,
             ErrorKind::NotEnoughFund {
@@ -490,7 +488,6 @@ fn verify_initialized_transaction<R: RngCore + CryptoRng>(
         .owner_sign_pub_key
         .verify(SIG_CTXT.bytes(&message), &transaction.sig)?;
 
-    debug!("------------> called from the initialized transaction.");
     verify_initial_transaction_proofs(
         transaction,
         sndr_account,
@@ -519,7 +516,6 @@ fn verify_finalized_transaction<R: RngCore + CryptoRng>(
     let init_data = &transaction_final_data.content.init_data;
     let final_content = &transaction_final_data.content;
 
-    debug!("------------> called from the finalized transaction.");
     verify_initial_transaction_proofs(
         init_data,
         &sndr_account,
