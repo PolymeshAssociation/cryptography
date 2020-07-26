@@ -467,6 +467,7 @@ pub struct AssetTxContent {
     pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub balance_wellformedness_proof: WellformednessProof,
     pub balance_correctness_proof: CorrectnessProof,
+    pub auditors_payload: Vec<AuditorPayload>,
 }
 
 #[derive(Clone)]
@@ -541,6 +542,7 @@ pub trait AssetTransactionIssuer {
         tx_id: u32,
         issr_account: &Account,
         mdtr_pub_key: &EncryptionPubKey,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         pending_tx_counter: i32,
         rng: &mut T,
@@ -548,16 +550,16 @@ pub trait AssetTransactionIssuer {
 }
 
 pub trait AssetTransactionMediator {
-    /// Justifies and processes a confidential asset issue transaction. This method is called
-    /// by mediator. Corresponds to `JustifyAssetTx` and `ProcessCTx` of MERCAT paper.
-    /// If the transaction is justified, it will be processed immediately and the updated account
-    /// is returned.
+    /// Justifies and processes a confidential asset issue transaction. This includes checking
+    /// the transaction for proper auditors payload. This method is called
+    /// by mediator. Corresponds to `JustifyAssetTx` of MERCAT paper.
     fn justify_asset_transaction(
         &self,
         initialized_asset_tx: InitializedAssetTx,
         issr_pub_account: &PubAccount,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     ) -> Fallible<JustifiedAssetTx>;
 }
 
@@ -569,12 +571,35 @@ pub trait AssetTransactionVerifier {
         issr_account: PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     ) -> Fallible<PubAccount>;
+}
+
+pub trait AssetTransactionAuditor {
+    /// Verify the initialized, and justified transactions.
+    /// Audit the sender's encrypted amount.
+    fn audit_asset_transaction(
+        &self,
+        justified_asset_tx: &JustifiedAssetTx,
+        issuer_account: &PubAccount,
+        mdtr_enc_pub_key: &EncryptionPubKey,
+        mdtr_sign_pub_key: &SigningPubKey,
+        auditor_enc_keys: &(u32, EncryptionKeys),
+    ) -> Fallible<()>;
 }
 
 // -------------------------------------------------------------------------------------
 // -                       Confidential Transfer Transaction                           -
 // -------------------------------------------------------------------------------------
+
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct AuditorPayload {
+    pub auditor_id: u32,
+    pub encrypted_amount: EncryptedAmount,
+    pub amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
+}
 
 /// Holds the memo for confidential transaction sent by the sender.
 #[derive(Default, Clone, Copy, Encode, Decode)]
@@ -607,6 +632,7 @@ pub struct InitializedTransferTxContent {
     pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_correctness_proof: CorrectnessProof,
     pub amount_correctness_proof: CorrectnessProof,
+    pub auditors_payload: Vec<AuditorPayload>,
 }
 
 /// Wrapper for the initial transaction data and its signature.
@@ -684,7 +710,7 @@ impl Decode for FinalizedTransferTx {
     }
 }
 
-/// Wrapper for the contents and the signature of the justified and finalized
+/// Wrapper for the contents, auditors' payload, and the signature of the justified and finalized
 /// transaction.
 #[derive(Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -731,6 +757,7 @@ pub trait TransferTransactionSender {
         // this internally, or calculate it from the chain data. It is the responsibility of the
         // caller to set it to the account balance if there are no pending transactions.
         pending_enc_balance: EncryptedAmount,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         sndr_pending_tx_counter: i32,
         rng: &mut T,
@@ -755,15 +782,17 @@ pub trait TransferTransactionReceiver {
 
 pub trait TransferTransactionMediator {
     /// Justify the transaction by mediator.
-    fn justify_transaction(
+    fn justify_transaction<R: RngCore + CryptoRng>(
         &self,
         finalized_transaction: FinalizedTransferTx,
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
-        sndr_sign_pub_key: &SigningPubKey,
-        rcvr_sign_pub_key: &SigningPubKey,
-        // NOTE: without this, decryption takes a very long time. Since asset id to scalar takes the hash of the asset id array.
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
+        pending_balance: EncryptedAmount,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         asset_id_hint: AssetId,
+        rng: &mut R,
     ) -> Fallible<JustifiedTransferTx>;
 }
 
@@ -777,8 +806,22 @@ pub trait TransferTransactionVerifier {
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
         pending_balance: EncryptedAmount,
+        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         rng: &mut R,
     ) -> Fallible<(PubAccount, PubAccount)>;
+}
+
+pub trait TransferTransactionAuditor {
+    /// Verify the initialized, finalized, and justified transactions.
+    /// Audit the sender's encrypted amount.
+    fn audit_transaction(
+        &self,
+        justified_transaction: &JustifiedTransferTx,
+        sndr_account: &PubAccount,
+        rcvr_account: &PubAccount,
+        mdtr_sign_pub_key: &SigningPubKey,
+        auditor_enc_keys: &(u32, EncryptionKeys),
+    ) -> Fallible<()>;
 }
 
 // -------------------------------------------------------------------------------------

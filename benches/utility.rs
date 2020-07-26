@@ -29,6 +29,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
             0,
             &account,
             &mediator_pub_account.owner_enc_pub_key,
+            &[],
             amount,
             pending_tx_counter,
             rng,
@@ -43,6 +44,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
             &account.pblc,
             &mediator_account.encryption_key,
             &mediator_account.signing_key,
+            &[],
         )
         .unwrap();
 
@@ -53,6 +55,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
             account.pblc.clone(),
             &mediator_pub_account.owner_enc_pub_key,
             &mediator_pub_account.owner_sign_pub_key,
+            &[],
         )
         .unwrap();
     updated_issuer_account
