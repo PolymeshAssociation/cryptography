@@ -22,7 +22,7 @@ use crate::{
         FinalizedTransferTx, FinalizedTransferTxContent, InitializedTransferTx,
         InitializedTransferTxContent, JustifiedTransferTx, PubAccount, SigningKeys, SigningPubKey,
         TransferTransactionAuditor, TransferTransactionMediator, TransferTransactionReceiver,
-        TransferTransactionSender, TransferTransactionVerifier, TransferTxMemo, TxState,
+        TransferTransactionSender, TransferTransactionVerifier, TransferTxMemo, TransferTxState,
         TxSubstate,
     },
     AssetId, Balance, BALANCE_RANGE,
@@ -518,7 +518,7 @@ fn verify_initialized_transaction<R: RngCore + CryptoRng>(
     pending_balance: EncryptedAmount,
     auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     rng: &mut R,
-) -> Fallible<TxState> {
+) -> Fallible<TransferTxState> {
     let message = transaction.content.encode();
     let _ = sndr_account
         .memo
@@ -534,13 +534,13 @@ fn verify_initialized_transaction<R: RngCore + CryptoRng>(
         rng,
     )?;
 
-    Ok(TxState::Initialization(TxSubstate::Validated))
+    Ok(TransferTxState::Initialization(TxSubstate::Validated))
 }
 
 fn verify_finalized_transaction(
     transaction_final_data: &FinalizedTransferTx,
     rcvr_account: &PubAccount,
-) -> Fallible<TxState> {
+) -> Fallible<TransferTxState> {
     let message = transaction_final_data.content.encode();
     let _ = rcvr_account
         .memo
@@ -563,18 +563,18 @@ fn verify_finalized_transaction(
         final_content.asset_id_from_sndr_equal_to_rcvr_proof,
     )?;
 
-    Ok(TxState::Finalization(TxSubstate::Validated))
+    Ok(TransferTxState::Finalization(TxSubstate::Validated))
 }
 
 fn verify_justified_transaction(
     transaction_justified_final_data: &JustifiedTransferTx,
     mdtr_sign_pub_key: &SigningPubKey,
-) -> Fallible<TxState> {
+) -> Fallible<TransferTxState> {
     let ctx_data = &transaction_justified_final_data;
     let message = ctx_data.content.encode();
     let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &ctx_data.sig)?;
 
-    Ok(TxState::Justification(TxSubstate::Validated))
+    Ok(TransferTxState::Justification(TxSubstate::Validated))
 }
 
 fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(

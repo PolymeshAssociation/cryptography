@@ -359,31 +359,37 @@ impl core::fmt::Debug for AssetTxState {
 /// confidential transaction.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum TxState {
+pub enum TransferTxState {
     Initialization(TxSubstate),
     Finalization(TxSubstate),
     Justification(TxSubstate),
     Reversal(TxSubstate),
 }
 
-impl fmt::Display for TxState {
+impl fmt::Display for TransferTxState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TxState::Initialization(substate) => write!(f, "transfer-initialization-{}", substate),
-            TxState::Finalization(substate) => write!(f, "transfer-finalization-{}", substate),
-            TxState::Justification(substate) => write!(f, "transfer-justification-{}", substate),
-            TxState::Reversal(substate) => write!(f, "transfer-reversal-{}", substate),
+            TransferTxState::Initialization(substate) => {
+                write!(f, "transfer-initialization-{}", substate)
+            }
+            TransferTxState::Finalization(substate) => {
+                write!(f, "transfer-finalization-{}", substate)
+            }
+            TransferTxState::Justification(substate) => {
+                write!(f, "transfer-justification-{}", substate)
+            }
+            TransferTxState::Reversal(substate) => write!(f, "transfer-reversal-{}", substate),
         }
     }
 }
 
-impl core::fmt::Debug for TxState {
+impl core::fmt::Debug for TransferTxState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TxState::Initialization(substate) => write!(f, "initialization_{}", substate),
-            TxState::Finalization(substate) => write!(f, "finalization_{}", substate),
-            TxState::Justification(substate) => write!(f, "justification_{}", substate),
-            TxState::Reversal(substate) => write!(f, "reversal_{}", substate),
+            TransferTxState::Initialization(substate) => write!(f, "initialization_{}", substate),
+            TransferTxState::Finalization(substate) => write!(f, "finalization_{}", substate),
+            TransferTxState::Justification(substate) => write!(f, "justification_{}", substate),
+            TransferTxState::Reversal(substate) => write!(f, "reversal_{}", substate),
         }
     }
 }
@@ -785,8 +791,8 @@ pub trait ReversedTransferTransactionMediator {
         transaction_final_data: FinalizedTransferTx,
         mdtr_enc_keys: EncryptionSecKey,
         mdtr_sign_keys: SigningKeys,
-        state: TxState,
-    ) -> Fallible<(ReversedTransferTx, TxState)>;
+        state: TransferTxState,
+    ) -> Fallible<(ReversedTransferTx, TransferTxState)>;
 }
 
 pub trait ReversedTransferTransactionVerifier {
@@ -796,6 +802,6 @@ pub trait ReversedTransferTransactionVerifier {
         &self,
         reverse_transaction_data: ReversedTransferTx,
         mdtr_sign_pub_key: SigningPubKey,
-        state: TxState,
-    ) -> Fallible<TxState>;
+        state: TransferTxState,
+    ) -> Fallible<TransferTxState>;
 }
