@@ -12,6 +12,7 @@
 //! ```
 //! use cryptography::claim_proofs::{compute_cdd_id, compute_scope_id, build_scope_claim_proof_data,
 //!     CDDClaimData, ScopeClaimData, ProofKeyPair, RawData};
+//! use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 //!
 //! // Investor side:
 //! let message = b"some asset ownership claims!";
@@ -33,7 +34,7 @@
 //! // Verifier side:
 //! use cryptography::claim_proofs::ProofPublicKey;
 //!
-//! let verifier_pub = ProofPublicKey::new(cdd_id, &investor_did, scope_id, &scope_did);
+//! let verifier_pub = ProofPublicKey::new(cdd_id, investor_did, scope_id, scope_did);
 //! let result = verifier_pub.verify_id_match_proof(message, &proof);
 //!
 //! assert!(result);
@@ -46,9 +47,8 @@ use lazy_static::lazy_static;
 use schnorrkel::{context::SigningContext, signing_context, Keypair, PublicKey, Signature};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use blake2::{Blake2b, Blake2s, Digest};
-
-use sp_std::{convert::TryInto, prelude::*};
+use sha3::{ Digest, Sha3_256, Sha3_512, digest::FixedOutput };
+use sp_std::prelude::*;
 
 /// Signing context.
 const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
@@ -110,13 +110,10 @@ pub struct ProofPublicKey {
 
 fn generate_pedersen_commit( a: Scalar, b: Scalar) -> RistrettoPoint {
     // 0. Generate the blind factor as concatenation of `a` and `b`.
-    let blind_hash = Blake2b::default()
+    let hash = Sha3_512::default()
             .chain(a.as_bytes())
-            .chain(b.as_bytes())
-            .finalize();
-    // NOTE: The output of Blake2b is fixed side to [u8;32], so `unwrap` is not going to fail.
-    let blind_plain: [u8; 32] = blind_hash.as_ref().try_into().unwrap_or_else(|_| [0u8; 32]);
-    let blind = Scalar::from_bits(blind_plain);
+            .chain(b.as_bytes());
+    let blind = Scalar::from_hash(hash);
 
     // Calculate the output commit.
     let pg = PedersenGenerators::default();
@@ -170,28 +167,27 @@ impl From<ScopeClaimProofData> for ProofKeyPair {
     fn from(d: ScopeClaimProofData) -> Self {
         // Investor's secret key is:
         // Hash([INVESTOR_DID | INVESTOR_UNIQUE_ID]) - Hash([SCOPE_DID | INVESTOR_UNIQUE_ID])
-        let first_term :[u8;32] = Blake2s::default()
-            .chain( d.investor_did.as_bytes())
-            .chain( d.investor_unique_id.as_bytes())
-            .finalize().into();
+        let first_term = Scalar::from_hash(
+            Sha3_512::default()
+                .chain( d.investor_did.as_bytes())
+                .chain( d.investor_unique_id.as_bytes()));
 
-        let second_term :[u8;32] = Blake2s::default()
-            .chain(d.scope_did.as_bytes())
-            .chain(d.investor_unique_id.as_bytes())
-            .finalize().into();
+        let second_term = Scalar::from_hash(
+            Sha3_512::default()
+                .chain(d.scope_did.as_bytes())
+                .chain(d.investor_unique_id.as_bytes()));
 
-        let secret_key_scalar = Scalar::from_bits(first_term)
-            - Scalar::from_bits(second_term);
+        let secret_key_scalar = first_term - second_term;
 
         // Set the secret key's nonce to : ["nonce" | secret_key]
-        let nonce = Blake2s::default()
+        let nonce = Sha3_256::default()
             .chain("nonce")
             .chain( &secret_key_scalar.as_bytes())
-            .finalize();
+            .fixed_result();
 
-        let mut exported_private_key = Vec::with_capacity(64);
-        exported_private_key.extend_from_slice(secret_key_scalar.as_bytes());
-        exported_private_key.extend_from_slice(&nonce);
+        let mut exported_private_key = [0u8;64];
+        exported_private_key[..32].copy_from_slice(secret_key_scalar.as_bytes());
+        exported_private_key[32..].copy_from_slice(&nonce);
 
         let secret = schnorrkel::SecretKey::from_bytes(&exported_private_key)
             .expect("key is always the correct size");
@@ -233,8 +229,9 @@ impl ProofPublicKey {
         let pg = PedersenGenerators::default();
         let cdd_label_prime = pg.label_prime( cdd_id, investor_did);
         let scope_label_prime = pg.label_prime( scope_id, scope_did);
+        let diff = cdd_label_prime - scope_label_prime;
 
-        let pub_key = PublicKey::from_point(cdd_label_prime - scope_label_prime);
+        let pub_key = PublicKey::from_point(diff);
         ProofPublicKey { pub_key }
     }
 
@@ -269,8 +266,8 @@ mod tests {
     #[test]
     fn match_pub_key_both_sides() {
         let expected_public_key = [
-            48, 37, 28, 128, 48, 60, 182, 218, 99, 119, 36, 30, 184, 242, 122, 224, 253, 90, 103,
-            203, 187, 234, 53, 49, 45, 116, 56, 211, 135, 72, 214, 68,
+            84, 187, 123, 240, 45, 40, 230, 87, 26, 0, 180, 230, 181, 65, 112, 176, 228, 180, 167,
+            76, 81, 254, 147, 102, 152, 251, 26, 99, 100, 215, 129, 62
         ];
 
         let mut rng = StdRng::from_seed(SEED_1);
