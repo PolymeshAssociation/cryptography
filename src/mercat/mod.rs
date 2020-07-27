@@ -194,7 +194,6 @@ impl Encode for AccountMemo {
     fn size_hint(&self) -> usize {
         self.owner_enc_pub_key.size_hint()
             + schnorrkel::PUBLIC_KEY_LENGTH  // owner_sign_pub_key
-            + mem::size_of::<i64>() // timestamp
             + mem::size_of::<i32>() // last_processed_tx_counter
     }
 
