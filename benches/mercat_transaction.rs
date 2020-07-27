@@ -44,7 +44,6 @@ fn bench_transaction_sender(
         .zip(sender_accounts.clone())
         .collect();
     let tx_id = 0;
-    let pending_tx_counter = 0;
 
     c.bench_function_over_inputs(
         &label,
@@ -60,7 +59,6 @@ fn bench_transaction_sender(
                         sender_account.pblc.enc_balance,
                         &[],
                         amount.clone(),
-                        pending_tx_counter,
                         &mut rng,
                     )
                     .unwrap()
@@ -82,7 +80,6 @@ fn bench_transaction_sender(
                     sender_account.pblc.enc_balance,
                     &[],
                     amount.clone(),
-                    pending_tx_counter,
                     &mut rng,
                 )
                 .unwrap()
@@ -107,7 +104,6 @@ fn bench_transaction_receiver(
         .zip(transactions.clone())
         .collect();
     let tx_id = 0;
-    let pending_tx_counter = 0;
 
     c.bench_function_over_inputs(
         &label,
@@ -121,7 +117,6 @@ fn bench_transaction_receiver(
                         &sender_pub_key.clone(),
                         receiver_account.clone(),
                         amount.clone(),
-                        pending_tx_counter,
                         &mut rng,
                     )
                     .unwrap()
@@ -141,7 +136,6 @@ fn bench_transaction_receiver(
                     &sender_pub_key_cloned.clone(),
                     receiver_account_cloned.clone(),
                     amount.clone(),
-                    pending_tx_counter,
                     &mut rng,
                 )
                 .unwrap()

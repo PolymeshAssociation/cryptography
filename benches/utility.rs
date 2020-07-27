@@ -22,7 +22,6 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
     amount: u32,
 ) -> PubAccount {
     // Issuer side.
-    let pending_tx_counter = 0;
     let issuer = AssetIssuer {};
     let asset_tx = issuer
         .initialize_asset_transaction(
@@ -31,7 +30,6 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
             &mediator_pub_account.owner_enc_pub_key,
             &[],
             amount,
-            pending_tx_counter,
             rng,
         )
         .unwrap();
@@ -74,13 +72,8 @@ pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
     let mediator_signing_pair =
         MiniSecretKey::generate_with(rng).expand_to_keypair(ExpansionMode::Ed25519);
 
-    let last_processed_tx_counter = 0;
     (
-        AccountMemo::new(
-            mediator_enc_key.pblc,
-            mediator_signing_pair.public,
-            last_processed_tx_counter,
-        ),
+        AccountMemo::new(mediator_enc_key.pblc, mediator_signing_pair.public),
         MediatorAccount {
             encryption_key: mediator_enc_key,
             signing_key: mediator_signing_pair,

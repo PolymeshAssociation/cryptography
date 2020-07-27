@@ -20,8 +20,7 @@ use crate::{
         Account, AssetMemo, AssetTransactionAuditor, AssetTransactionIssuer,
         AssetTransactionMediator, AssetTransactionVerifier, AssetTxContent, AuditorPayload,
         CipherEqualDifferentPubKeyProof, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
-        InitializedAssetTx, JustifiedAssetTx, OrderingState, PubAccount, SigningKeys,
-        SigningPubKey,
+        InitializedAssetTx, JustifiedAssetTx, PubAccount, SigningKeys, SigningPubKey,
     },
     Balance,
 };
@@ -155,7 +154,6 @@ impl AssetTransactionIssuer for AssetIssuer {
         mdtr_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
-        pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<InitializedAssetTx> {
         let gens = PedersenGens::default();
@@ -174,11 +172,7 @@ impl AssetTransactionIssuer for AssetIssuer {
             .encrypt_value(amount.into(), rng);
         let memo = AssetMemo {
             enc_issued_amount: issr_enc_amount,
-            ordering_state: OrderingState {
-                last_processed_tx_counter: issr_account.pblc.memo.last_processed_tx_counter,
-                last_pending_tx_counter: pending_tx_counter,
-                current_tx_id: tx_id,
-            },
+            tx_id,
         };
 
         // Proof of encrypting the same asset type as the account type.
@@ -499,7 +493,6 @@ mod tests {
         };
 
         let account_id = 1234u32;
-        let pending_tx_counter: i32 = 0;
         let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
             .iter()
             .map(|id| AssetId::from(id.clone()))
@@ -547,7 +540,6 @@ mod tests {
                 &mediator_enc_key.pblc,
                 &[],
                 issued_amount,
-                pending_tx_counter,
                 &mut rng,
             )
             .unwrap();
@@ -645,8 +637,6 @@ mod tests {
         auditors_list: &[(u32, EncryptionKeys)],
     ) {
         // ----------------------- Setup
-        let last_processed_tx_counter: i32 = 0;
-        let pending_tx_counter: i32 = 0;
         let mut rng = StdRng::from_seed([10u8; 32]);
         let issued_amount: Balance = 20u32.into();
 
@@ -677,11 +667,7 @@ mod tests {
             enc_asset_id: pub_account_enc_asset_id,
             // Set the initial encrypted balance to 0.
             enc_balance: EncryptedAmount::default(),
-            memo: AccountMemo::new(
-                issuer_enc_key.pblc,
-                sign_keys.public.into(),
-                last_processed_tx_counter,
-            ),
+            memo: AccountMemo::new(issuer_enc_key.pblc, sign_keys.public.into()),
         };
         let issuer_account = Account {
             pblc: issuer_public_account.clone(),
@@ -710,7 +696,6 @@ mod tests {
                 &mediator_enc_key.pblc,
                 issuer_auditor_list,
                 issued_amount,
-                pending_tx_counter,
                 &mut rng,
             )
             .unwrap();

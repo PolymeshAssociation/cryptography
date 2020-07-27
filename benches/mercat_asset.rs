@@ -33,7 +33,6 @@ fn bench_transaction_issuer(
     let mut rng = thread_rng();
     let issuer_account_cloned = issuer_account.clone();
     let tx_id = 0;
-    let pending_tx_counter = 0;
 
     c.bench_function_over_inputs(
         &label,
@@ -47,7 +46,6 @@ fn bench_transaction_issuer(
                         &mdtr_pub_key.clone(),
                         &[],
                         amount,
-                        pending_tx_counter,
                         &mut rng,
                     )
                     .unwrap()
@@ -67,7 +65,6 @@ fn bench_transaction_issuer(
                     &mdtr_pub_key.clone(),
                     &[],
                     amount,
-                    pending_tx_counter,
                     &mut rng,
                 )
                 .unwrap()

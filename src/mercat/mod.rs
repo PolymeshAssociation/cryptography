@@ -25,7 +25,7 @@ use schnorrkel::keys::{Keypair, PublicKey};
 use serde::{Deserialize, Serialize};
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
-use sp_std::{convert::From, fmt, mem, vec::Vec};
+use sp_std::{convert::From, fmt, vec::Vec};
 
 // -------------------------------------------------------------------------------------
 // -                                  Constants                                        -
@@ -56,55 +56,6 @@ pub struct EncryptionKeys {
     pub scrt: EncryptionSecKey,
 }
 
-#[derive(Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct OrderingState {
-    pub last_processed_tx_counter: i32,
-    pub last_pending_tx_counter: i32,
-    pub current_tx_id: u32,
-}
-
-impl Default for OrderingState {
-    fn default() -> Self {
-        Self {
-            last_processed_tx_counter: -1,
-            last_pending_tx_counter: 0,
-            current_tx_id: 0,
-        }
-    }
-}
-
-impl Encode for OrderingState {
-    #[inline]
-    fn size_hint(&self) -> usize {
-        mem::size_of::<i32>() // last_processed_tx_counter
-        + mem::size_of::<i32>() // last_pending_tx_counter
-        + mem::size_of::<u32>() // current_tx_id
-    }
-
-    #[inline]
-    fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.last_processed_tx_counter.encode_to(dest);
-        self.last_pending_tx_counter.encode_to(dest);
-        self.current_tx_id.encode_to(dest);
-    }
-}
-
-impl Decode for OrderingState {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let last_processed_tx_counter = <i32>::decode(input)?;
-        let last_pending_tx_counter = <i32>::decode(input)?;
-        let current_tx_id = <u32>::decode(input)?;
-
-        Ok(OrderingState {
-            last_processed_tx_counter,
-            last_pending_tx_counter,
-            current_tx_id,
-        })
-    }
-}
-
 /// Holds the SR25519 signature scheme public key.
 pub type SigningPubKey = PublicKey;
 pub type SigningKeys = Keypair;
@@ -122,7 +73,7 @@ pub type EncryptedAmount = CipherText;
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AssetMemo {
     pub enc_issued_amount: EncryptedAmount,
-    pub ordering_state: OrderingState,
+    pub tx_id: u32,
 }
 
 // -------------------------------------------------------------------------------------
@@ -172,19 +123,13 @@ impl Decode for MediatorAccount {
 pub struct AccountMemo {
     pub owner_enc_pub_key: EncryptionPubKey,
     pub owner_sign_pub_key: SigningPubKey,
-    pub last_processed_tx_counter: i32,
 }
 
 impl AccountMemo {
-    pub fn new(
-        owner_enc_pub_key: EncryptionPubKey,
-        owner_sign_pub_key: SigningPubKey,
-        last_processed_tx_counter: i32,
-    ) -> Self {
+    pub fn new(owner_enc_pub_key: EncryptionPubKey, owner_sign_pub_key: SigningPubKey) -> Self {
         AccountMemo {
             owner_enc_pub_key,
             owner_sign_pub_key,
-            last_processed_tx_counter,
         }
     }
 }
@@ -192,16 +137,13 @@ impl AccountMemo {
 impl Encode for AccountMemo {
     #[inline]
     fn size_hint(&self) -> usize {
-        self.owner_enc_pub_key.size_hint()
-            + schnorrkel::PUBLIC_KEY_LENGTH  // owner_sign_pub_key
-            + mem::size_of::<i32>() // last_processed_tx_counter
+        self.owner_enc_pub_key.size_hint() + schnorrkel::PUBLIC_KEY_LENGTH // owner_sign_pub_key
     }
 
     #[inline]
     fn encode_to<W: Output>(&self, dest: &mut W) {
         self.owner_enc_pub_key.encode_to(dest);
         self.owner_sign_pub_key.to_bytes().encode_to(dest);
-        self.last_processed_tx_counter.encode_to(dest);
     }
 }
 
@@ -213,12 +155,9 @@ impl Decode for AccountMemo {
         let owner_sign_pub_key = SigningPubKey::from_bytes(&owner_sign_pub_key)
             .map_err(|_| CodecError::from("AccountMemo.owner_sign_pub_key is invalid"))?;
 
-        let last_processed_tx_counter = <i32>::decode(input)?;
-
         Ok(AccountMemo {
             owner_enc_pub_key,
             owner_sign_pub_key,
-            last_processed_tx_counter,
         })
     }
 }
@@ -242,7 +181,7 @@ pub struct PubAccountContent {
     pub asset_wellformedness_proof: WellformednessProof,
     pub asset_membership_proof: MembershipProof,
     pub initial_balance_correctness_proof: CorrectnessProof,
-    pub ordering_state: OrderingState,
+    pub tx_id: u32,
 }
 
 /// Wrapper for the account content and signature.
@@ -543,7 +482,6 @@ pub trait AssetTransactionIssuer {
         mdtr_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
-        pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<InitializedAssetTx>;
 }
@@ -614,7 +552,7 @@ pub struct TransferTxMemo {
     pub enc_asset_id_using_rcvr: EncryptedAssetId,
     pub enc_asset_id_for_mdtr: EncryptedAssetId,
     pub enc_amount_for_mdtr: EncryptedAmount,
-    pub sndr_ordering_state: OrderingState,
+    pub tx_id: u32,
 }
 
 /// Holds the proofs and memo of the confidential transaction sent by the sender.
@@ -673,7 +611,7 @@ impl Decode for InitializedTransferTx {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct FinalizedTransferTxContent {
     pub init_data: InitializedTransferTx,
-    pub rcvr_ordering_state: OrderingState,
+    pub tx_id: u32,
     pub asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof,
 }
 
@@ -758,7 +696,6 @@ pub trait TransferTransactionSender {
         pending_enc_balance: EncryptedAmount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
-        sndr_pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<InitializedTransferTx>;
 }
@@ -774,7 +711,6 @@ pub trait TransferTransactionReceiver {
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
         amount: Balance,
-        rcvr_pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<FinalizedTransferTx>;
 }

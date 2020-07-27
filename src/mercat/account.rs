@@ -15,7 +15,7 @@ use crate::{
     errors::Fallible,
     mercat::{
         AccountCreatorInitializer, AccountCreatorVerifier, AccountMemo, EncryptedAmount,
-        OrderingState, PubAccount, PubAccountContent, PubAccountTx, SecAccount, BASE, EXPONENT,
+        PubAccount, PubAccountContent, PubAccountTx, SecAccount, BASE, EXPONENT,
     },
     AssetId, Balance,
 };
@@ -102,26 +102,17 @@ impl AccountCreatorInitializer for AccountCreator {
 
         // Gather content and sign it
         // Account creation is the first transaction. Therefore, nothing has been processed before it.
-        let last_processed_tx_counter: i32 = -1;
         let content = PubAccountContent {
             pub_account: PubAccount {
                 id: account_id,
                 enc_asset_id: enc_asset_id.into(),
                 enc_balance,
-                memo: AccountMemo::new(
-                    scrt.enc_keys.pblc,
-                    scrt.sign_keys.public,
-                    last_processed_tx_counter,
-                ),
+                memo: AccountMemo::new(scrt.enc_keys.pblc, scrt.sign_keys.public),
             },
             asset_wellformedness_proof,
             asset_membership_proof,
             initial_balance_correctness_proof,
-            ordering_state: OrderingState {
-                last_pending_tx_counter: 0,
-                last_processed_tx_counter,
-                current_tx_id: tx_id,
-            },
+            tx_id,
         };
 
         let message = content.encode();

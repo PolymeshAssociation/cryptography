@@ -20,10 +20,10 @@ use crate::{
     mercat::{
         Account, AuditorPayload, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
         FinalizedTransferTx, FinalizedTransferTxContent, InitializedTransferTx,
-        InitializedTransferTxContent, JustifiedTransferTx, OrderingState, PubAccount, SigningKeys,
-        SigningPubKey, TransferTransactionAuditor, TransferTransactionMediator,
-        TransferTransactionReceiver, TransferTransactionSender, TransferTransactionVerifier,
-        TransferTxMemo, TxState, TxSubstate,
+        InitializedTransferTxContent, JustifiedTransferTx, PubAccount, SigningKeys, SigningPubKey,
+        TransferTransactionAuditor, TransferTransactionMediator, TransferTransactionReceiver,
+        TransferTransactionSender, TransferTransactionVerifier, TransferTxMemo, TxState,
+        TxSubstate,
     },
     AssetId, Balance, BALANCE_RANGE,
 };
@@ -61,7 +61,6 @@ impl TransferTransactionSender for CtxSender {
         pending_enc_balance: EncryptedAmount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
-        sndr_pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<InitializedTransferTx> {
         let gens = PedersenGens::default();
@@ -221,11 +220,7 @@ impl TransferTransactionSender for CtxSender {
                 enc_asset_id_using_rcvr: enc_asset_id_using_rcvr.into(),
                 enc_asset_id_for_mdtr: enc_asset_id_for_mdtr.into(),
                 enc_amount_for_mdtr: enc_amount_for_mdtr.into(),
-                sndr_ordering_state: OrderingState {
-                    last_processed_tx_counter: sndr_pub_account.memo.last_processed_tx_counter,
-                    last_pending_tx_counter: sndr_pending_tx_counter,
-                    current_tx_id: tx_id,
-                },
+                tx_id,
             },
             auditors_payload: auditors_payload,
         };
@@ -297,7 +292,6 @@ impl TransferTransactionReceiver for CtxReceiver {
         sndr_sign_pub_key: &SigningPubKey,
         rcvr_account: Account,
         amount: Balance,
-        rcvr_pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<FinalizedTransferTx> {
         // Verify sender's signature.
@@ -305,14 +299,7 @@ impl TransferTransactionReceiver for CtxReceiver {
         let message = ctx_data.content.encode();
         let _ = sndr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &ctx_data.sig)?;
 
-        self.finalize_by_receiver(
-            tx_id,
-            initialized_transaction,
-            rcvr_account,
-            amount,
-            rcvr_pending_tx_counter,
-            rng,
-        )
+        self.finalize_by_receiver(tx_id, initialized_transaction, rcvr_account, amount, rng)
     }
 }
 
@@ -325,7 +312,6 @@ impl CtxReceiver {
         transaction_init_data: InitializedTransferTx,
         rcvr_account: Account,
         expected_amount: Balance,
-        rcvr_pending_tx_counter: i32,
         rng: &mut T,
     ) -> Fallible<FinalizedTransferTx> {
         let rcvr_enc_sec = &rcvr_account.scrt.enc_keys.scrt;
@@ -357,11 +343,7 @@ impl CtxReceiver {
         let content = FinalizedTransferTxContent {
             init_data: transaction_init_data,
             asset_id_from_sndr_equal_to_rcvr_proof: proof,
-            rcvr_ordering_state: OrderingState {
-                last_processed_tx_counter: rcvr_account.pblc.memo.last_processed_tx_counter,
-                last_pending_tx_counter: rcvr_pending_tx_counter,
-                current_tx_id: tx_id,
-            },
+            tx_id,
         };
 
         let message = content.encode();
@@ -870,7 +852,7 @@ mod tests {
             enc_asset_id_using_rcvr: EncryptedAssetId::from(enc_asset_id_using_rcvr),
             enc_amount_for_mdtr: EncryptedAmount::default(),
             enc_asset_id_for_mdtr: EncryptedAssetId::default(),
-            sndr_ordering_state: OrderingState::default(),
+            tx_id: 0,
         }
     }
 
@@ -888,7 +870,7 @@ mod tests {
             id: 1,
             enc_asset_id: enc_asset_id.into(),
             enc_balance: enc_balance.into(),
-            memo: AccountMemo::new(rcvr_enc_pub_key, rcvr_sign_pub_key, 2),
+            memo: AccountMemo::new(rcvr_enc_pub_key, rcvr_sign_pub_key),
         })
     }
 
@@ -955,7 +937,6 @@ mod tests {
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
-        let rcvr_pending_tx_counter: i32 = 0;
 
         let tx_id = 0;
         let result = ctx_rcvr.finalize_by_receiver(
@@ -963,7 +944,6 @@ mod tests {
             ctx_init_data,
             rcvr_account,
             expected_amount,
-            rcvr_pending_tx_counter,
             &mut rng,
         );
 
@@ -1007,7 +987,6 @@ mod tests {
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
-        let rcvr_pending_tx_counter: i32 = 0;
 
         let tx_id = 0;
         let result = ctx_rcvr.finalize_by_receiver(
@@ -1015,7 +994,6 @@ mod tests {
             ctx_init_data,
             rcvr_account,
             expected_amount,
-            rcvr_pending_tx_counter,
             &mut rng,
         );
 
@@ -1038,8 +1016,6 @@ mod tests {
         let sndr_balance = 40;
         let rcvr_balance = 0;
         let amount = 30;
-        let sndr_pending_tx_counter: i32 = 0;
-        let rcvr_pending_tx_counter: i32 = 0;
 
         let mut rng = StdRng::from_seed([17u8; 32]);
 
@@ -1094,21 +1070,14 @@ mod tests {
             sndr_account.pblc.enc_balance,
             &[],
             amount,
-            sndr_pending_tx_counter,
             &mut rng,
         );
         let ctx_init_data = result.unwrap();
 
         // Finalize the transaction and check its state
         let tx_id = tx_id + 1;
-        let result = rcvr.finalize_by_receiver(
-            tx_id,
-            ctx_init_data,
-            rcvr_account.clone(),
-            amount,
-            rcvr_pending_tx_counter,
-            &mut rng,
-        );
+        let result =
+            rcvr.finalize_by_receiver(tx_id, ctx_init_data, rcvr_account.clone(), amount, &mut rng);
         let ctx_finalized_data = result.unwrap();
 
         // Justify the transaction
@@ -1217,7 +1186,6 @@ mod tests {
 
         // Create the transaction and check its result and state
         let tx_id = 0;
-        let pending_tx_counter = 0;
         let ctx_init = sndr
             .create_transaction(
                 tx_id,
@@ -1227,7 +1195,6 @@ mod tests {
                 sndr_account.pblc.enc_balance,
                 sender_auditor_list,
                 amount,
-                pending_tx_counter,
                 &mut rng,
             )
             .unwrap();
@@ -1240,7 +1207,6 @@ mod tests {
                 &sndr_account.pblc.memo.owner_sign_pub_key.clone(),
                 rcvr_account.clone(),
                 amount,
-                pending_tx_counter,
                 &mut rng,
             )
             .unwrap();
