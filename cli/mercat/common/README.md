@@ -47,16 +47,13 @@ transactions: # List of all transactions. This config must have exactly one
               # child, either a `sequence` or a `concurrent`.
   - sequence: # Runs its children sequentially.
     - validate # This validates the account creation steps.
-    - Alice 100 ACME Mike approve # A transaction that have two names in it, is an
-                                  # asset issuance transaction. TODO: changeme
+    - issue Alice 100 ACME Mike approve # An asset issuance transaction.
     - validate # without this, the account is not deposited at the time of the
                # next transaction
     - concurrent: # Runs its children concurrently.
-      - Alice 10 ACME Bob approve Mike approve # A transaction that has three names
-                                               # in it, is an asset transfer
-                                               # transaction. TODO: changeme
-      - Alice 20 ACME Bob approve Mike approve
-      - Alice 30 ACME Bob approve Mike approve
+      - transfer Alice 10 ACME Bob approve Mike approve # An asset transfer transaction.
+      - transfer Alice 20 ACME Bob approve Mike approve
+      - transfer Alice 30 ACME Bob approve Mike approve
     - validate
 
 outcome: # Defines the expected value of each account after running all the transactions.
@@ -114,7 +111,7 @@ mediators:
 transactions:
   - sequence:
     - validate
-    - Alice(cheat) 10 ACME Mike approve # name(cheat) indicates that the party will cheat.
+    - issue Alice(cheat) 10 ACME Mike approve # name(cheat) indicates that the party will cheat.
     - validate
 
 outcome: 
