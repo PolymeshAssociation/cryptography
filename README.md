@@ -74,4 +74,4 @@ wasm-pack test --node
 [wasm-bindgen-test]: https://rustwasm.github.io/docs/wasm-bindgen/wasm-bindgen-test/usage.html
 [wiki_main_design]: https://polymath.atlassian.net/wiki/spaces/PC/pages/172523576/Asset+Granularity+Unique+Identity
 [wiki_crypto_design]: https://polymath.atlassian.net/wiki/spaces/CE/pages/202571817/Claim+Proof+Prototype
-[cryptography-framework] https://github.com/PolymathNetwork/crypto-framework
+[cryptography-framework]: https://github.com/PolymathNetwork/crypto-framework
