@@ -9,7 +9,7 @@
 //! Project.
 //!
 //! For a full description of these proofs see section 5 of the
-//! whitepaper. [todo: Add a link to the whitepaper.]
+//! whitepaper.
 //!
 //! # Interactive Proofs
 //! MERCAT's Sigma protocols are a 3 round interactive protocols
