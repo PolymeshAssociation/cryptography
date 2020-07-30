@@ -696,10 +696,6 @@ pub trait TransferTransactionSender {
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
-        // The pending balance from the point of view of the sender. Sender should keep track of
-        // this internally, or calculate it from the chain data. It is the responsibility of the
-        // caller to set it to the account balance if there are no pending transactions.
-        pending_enc_balance: EncryptedAmount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,

@@ -58,7 +58,6 @@ impl TransferTransactionSender for CtxSender {
         sndr_account: &Account,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
-        pending_enc_balance: EncryptedAmount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
@@ -72,7 +71,7 @@ impl TransferTransactionSender for CtxSender {
         let sndr_pub_account = &sndr_account.pblc;
         let rcvr_pub_key = rcvr_pub_account.memo.owner_enc_pub_key;
 
-        let balance = sndr_enc_keys.scrt.decrypt(&pending_enc_balance)?;
+        let balance = sndr_enc_keys.scrt.decrypt(&sndr_account.pblc.enc_balance)?;
         ensure!(
             balance >= amount,
             ErrorKind::NotEnoughFund {
@@ -110,13 +109,15 @@ impl TransferTransactionSender for CtxSender {
         // Refresh the encrypted balance and prove that the refreshment was done
         // correctly.
         let balance_refresh_enc_blinding = Scalar::random(rng);
-        let refreshed_enc_balance =
-            pending_enc_balance.refresh(&sndr_enc_keys.scrt, balance_refresh_enc_blinding)?;
+        let refreshed_enc_balance = sndr_account
+            .pblc
+            .enc_balance
+            .refresh(&sndr_enc_keys.scrt, balance_refresh_enc_blinding)?;
 
         let balance_refreshed_same_proof = single_property_prover(
             CipherTextRefreshmentProverAwaitingChallenge::new(
                 sndr_enc_keys.scrt.clone(),
-                pending_enc_balance,
+                sndr_account.pblc.enc_balance,
                 refreshed_enc_balance,
                 &gens,
             ),
@@ -1067,7 +1068,6 @@ mod tests {
             &sndr_account,
             &rcvr_account.pblc,
             &mdtr_enc_keys.pblc,
-            sndr_account.pblc.enc_balance,
             &[],
             amount,
             &mut rng,
@@ -1192,7 +1192,6 @@ mod tests {
                 &sndr_account,
                 &rcvr_account.pblc,
                 &mdtr_enc_keys.pblc,
-                sndr_account.pblc.enc_balance,
                 sender_auditor_list,
                 amount,
                 &mut rng,
