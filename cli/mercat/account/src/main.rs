@@ -11,11 +11,10 @@ use mercat_common::{
     account_issue::process_issue_asset,
     account_transfer::{process_create_tx, process_finalize_tx},
     errors::Error,
-    init_print_logger, remove_file, OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE,
-    SECRET_ACCOUNT_FILE,
+    init_print_logger,
 };
 use metrics::timing;
-use std::{path::PathBuf, time::Instant};
+use std::time::Instant;
 
 fn main() {
     env_logger::init();
@@ -32,7 +31,6 @@ fn main() {
             process_create_account(cfg.seed, db_dir, cfg.ticker, cfg.user, cfg.cheat, cfg.tx_id)
                 .unwrap()
         }
-        CLI::Cleanup { user, db_dir } => process_destroy_account(user, db_dir).unwrap(),
         CLI::CreateFrom { config: _ } => panic!("This should not happen!"),
         CLI::Issue(cfg) => process_issue_asset(
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),
@@ -70,19 +68,4 @@ fn main() {
         .unwrap(),
     };
     info!("The program finished successfully.");
-}
-
-fn process_destroy_account(user: String, db_dir: Option<PathBuf>) -> Result<(), Error> {
-    let account_removal_timer = Instant::now();
-    let db_dir = db_dir.ok_or(Error::EmptyDatabaseDir)?;
-
-    remove_file(db_dir.clone(), OFF_CHAIN_DIR, &user, SECRET_ACCOUNT_FILE)?;
-    remove_file(db_dir, ON_CHAIN_DIR, &user, PUBLIC_ACCOUNT_FILE)?;
-
-    timing!(
-        "account.remove_account",
-        account_removal_timer,
-        Instant::now()
-    );
-    Ok(())
 }

@@ -1,6 +1,7 @@
 use crate::{
-    calc_account_id, create_rng_from_seed, errors::Error, get_asset_ids, save_object,
-    OFF_CHAIN_DIR, ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE,
+    account_create_transaction_file, calc_account_id, create_rng_from_seed, errors::Error,
+    get_asset_ids, save_object, update_account_map, user_secret_account_file, OrderedPubAccountTx,
+    OrderingState, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::Encode;
 use cryptography::{
@@ -42,15 +43,16 @@ pub fn process_create_account(
 
     let create_account_timer = Instant::now();
     let account_creator = AccountCreator {};
-    let mut account = account_creator
+    let mut account_tx = account_creator
         .create(
-            secret_account.clone(),
+            tx_id,
+            &secret_account,
             &valid_asset_ids,
             account_id,
             &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })?;
-    timing!("account.call_library", create_account_timer, Instant::now());
+    timing!("account.call_library", create_account_timer, Instant::now(), "tx_id" => tx_id.to_string());
     if cheat {
         // To simplify the cheating selection process, we randomly choose a cheating strategy,
         // instead of requiring the caller to know of all the different cheating strategies.
@@ -58,7 +60,7 @@ pub fn process_create_account(
         match n {
             0 => {
                 info!("CLI log: tx-{}: Cheating by overwriting the asset id of the account. Correct ticker: {} and asset id: {:?}",
-                      tx_id, ticker, account.scrt.asset_id_witness.value());
+                      tx_id, ticker, secret_account.asset_id_witness.value());
                 let cheat_asset_id =
                     asset_id_from_ticker("CHEAT").map_err(|error| Error::LibraryError { error })?;
                 let cheat_asset_id_witness =
@@ -69,17 +71,18 @@ pub fn process_create_account(
                     .pblc
                     .encrypt(&cheat_asset_id_witness);
                 // the encrypted asset id and update the signature
-                account.pblc.content.enc_asset_id = EncryptedAssetId::from(cheat_enc_asset_id);
-                let message = account.pblc.content.encode();
-                account.pblc.initial_sig = secret_account
+                account_tx.content.pub_account.enc_asset_id =
+                    EncryptedAssetId::from(cheat_enc_asset_id);
+                let message = account_tx.content.pub_account.encode();
+                account_tx.sig = secret_account
                     .clone()
                     .sign_keys
                     .sign(SIG_CTXT.bytes(&message));
             }
             1 => {
                 info!("CLI log: tx-{}: Cheating by overwriting the account id but not the signature. Correct account id: {}",
-                      tx_id, account.pblc.content.id);
-                account.pblc.content.id += 1;
+                      tx_id, account_tx.content.pub_account.id);
+                account_tx.content.pub_account.id += 1;
             }
             _ => error!("CLI log: tx-{}: This should never happen!", tx_id),
         }
@@ -91,19 +94,25 @@ pub fn process_create_account(
         db_dir.clone(),
         OFF_CHAIN_DIR,
         &user,
-        &format!("{}_{}", ticker, SECRET_ACCOUNT_FILE),
-        &account.scrt,
+        &user_secret_account_file(&ticker),
+        &secret_account,
     )?;
 
+    let instruction = OrderedPubAccountTx {
+        account_tx,
+        ordering_state: OrderingState::new(tx_id),
+    };
     save_object(
-        db_dir,
+        db_dir.clone(),
         ON_CHAIN_DIR,
-        &user,
-        &format!("{}_{}", ticker, PUBLIC_ACCOUNT_FILE),
-        &account.pblc,
+        COMMON_OBJECTS_DIR,
+        &account_create_transaction_file(tx_id, &user, &ticker),
+        &instruction,
     )?;
 
-    timing!("account.save_output", save_to_file_timer, Instant::now());
+    update_account_map(db_dir, user, ticker, account_id, tx_id)?;
+
+    timing!("account.save_output", save_to_file_timer, Instant::now(), "tx_id" => tx_id.to_string());
 
     Ok(())
 }

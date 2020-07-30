@@ -256,25 +256,6 @@ pub enum CLI {
         config: PathBuf,
     },
 
-    /// Remove a previously generated MERCAT account.
-    Cleanup {
-        /// The name of the user whose account will be removed.
-        #[structopt(short, long, help = "The name of the user.")]
-        user: String,
-
-        /// The directory that will serve as the database of the on/off-chain data and will be used
-        /// to save and load the data that in a real execution would be written to the on/off the
-        /// blockchain. Defaults to the current directory. This directory will have two main
-        /// sub-directories: `on-chain` and `off-chain`.
-        #[structopt(
-            parse(from_os_str),
-            help = "The directory to load and save the input and output files. Defaults to current directory.",
-            short,
-            long
-        )]
-        db_dir: Option<PathBuf>,
-    },
-
     /// Issue an asset to a MERCAT account.
     Issue(IssueAssetInfo),
 
@@ -329,20 +310,6 @@ pub fn parse_input() -> CLI {
 
             info!("Read the following config from {:?}:\n{:#?}", &config, &cfg);
             return CLI::Create(cfg);
-        }
-
-        CLI::Cleanup { user, db_dir } => {
-            // Set the default directory for db_dir
-            let db_dir = db_dir.clone().or_else(|| std::env::current_dir().ok());
-            let args = CLI::Cleanup {
-                user: user.clone(),
-                db_dir,
-            };
-            info!(
-                "Parsed the following config from the command line:\n{:#?}",
-                args
-            );
-            return args;
         }
 
         CLI::Issue(cfg) => {

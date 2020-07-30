@@ -9,5 +9,9 @@ accounts:
   - alice(cheat):
     - ACME
 
+transactions:
+  - validate
+
 outcome: 
-  - should-fail: true
+  - alice:
+    - NONE: 0

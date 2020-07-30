@@ -19,6 +19,9 @@ mediators:
   - Mike
   - Marry
   - Moe
+
+transactions:
+  - validate
     
 outcome: 
   - alice: 

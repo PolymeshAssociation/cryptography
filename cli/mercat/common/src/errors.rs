@@ -1,3 +1,4 @@
+use crate::CoreTransaction;
 use failure::Fail;
 use std::path::PathBuf;
 
@@ -102,4 +103,55 @@ pub enum Error {
     /// There can be only one top level transaction
     #[fail(display = "There can be only one top level transaction")]
     TopLevelTransaction,
+
+    /// Could not convert a PathBuf to string
+    #[fail(display = "Could not convert a PathBuf to string")]
+    PathBufConversionError,
+
+    /// Error accessing the glob pattern.
+    #[fail(display = "Error accessing the glob pattern")]
+    GlobPatternError,
+
+    /// Error in decoding the object.
+    #[fail(display = "Error in decoding the object.")]
+    DecodeError,
+
+    /// Could not find account id in the validators local map.
+    #[fail(
+        display = "Could not find account id {} in the validator's local map.",
+        account_id
+    )]
+    AccountIdNotFound { account_id: u32 },
+
+    /// Invalid transaction file
+    #[fail(display = "Invalid transaction file: {}.", path)]
+    InvalidTransactionFile { path: String },
+
+    /// Transaction is not ready for validation
+    #[fail(display = "Transaction is not ready for validation: {:?}.", tx)]
+    TransactionIsNotReadyForValidation { tx: CoreTransaction },
+
+    /// Last transaction could not be found for user.
+    #[fail(display = "Last transaction could not be found for user: {:?}.", user)]
+    LastTransactionNotFound { user: String },
+
+    /// Last processed tx error.
+    #[fail(
+        display = "Last processed tx counter in the transaction cannot be less than the last processed tx counter in the account. Want {:?} > {:?}",
+        current, earliest
+    )]
+    MismatchInProcessedCounter {
+        current: Option<u32>,
+        earliest: Option<u32>,
+    },
+
+    /// Last processed tx counter should not be less than -1
+    #[fail(
+        display = "Last processed tx counter should not be less than -1, got {}.",
+        value
+    )]
+    InvalidLastProcessedTxCounter { value: i32 },
+
+    #[fail(display = "Not implemented, story: {}", story)]
+    NotImplemented { story: String },
 }

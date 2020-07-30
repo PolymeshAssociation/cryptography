@@ -12,7 +12,11 @@ mediators:
   - Mike
     
 transactions:
-  - Alice 10 ACME Mike(cheat) approve
+  - sequence:
+    - validate
+    - issue Alice 10 ACME Mike(cheat) approve
+    - validate
 
 outcome: 
-  - should-fail: true
+  - alice:
+    - ACME: 0

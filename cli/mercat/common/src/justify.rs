@@ -1,7 +1,9 @@
 use crate::{
-    asset_transaction_file, confidential_transaction_file, construct_path, create_rng_from_seed,
-    errors::Error, load_object, save_object, CTXInstruction, Instruction, OFF_CHAIN_DIR,
-    ON_CHAIN_DIR, PUBLIC_ACCOUNT_FILE, SECRET_ACCOUNT_FILE, VALIDATED_PUBLIC_ACCOUNT_FILE,
+    asset_transaction_file, compute_enc_pending_balance, confidential_transaction_file,
+    construct_path, create_rng_from_seed, errors::Error, last_ordering_state, load_object,
+    save_object, user_public_account_file, AssetInstruction, OrderedAssetInstruction,
+    OrderedPubAccount, OrderedTransferInstruction, TransferInstruction, COMMON_OBJECTS_DIR,
+    MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
 };
 use codec::{Decode, Encode};
 use cryptography::{
@@ -9,8 +11,8 @@ use cryptography::{
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
         asset::AssetMediator, transaction::CtxMediator, AccountMemo, AssetTransactionMediator,
-        AssetTxState, EncryptionKeys, FinalizedTx, InitializedAssetTx, MediatorAccount, PubAccount,
-        TransactionMediator, TxState, TxSubstate,
+        AssetTxState, EncryptionKeys, FinalizedTransferTx, InitializedAssetTx, MediatorAccount,
+        TransferTransactionMediator, TransferTxState, TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -52,14 +54,19 @@ pub fn process_create_mediator(seed: String, db_dir: PathBuf, user: String) -> R
     // Generate keys for the mediator.
     let mediator_key_gen_timer = Instant::now();
     let (public_account, private_account) = generate_mediator_keys(&mut rng);
-    timing!("mediator.key_gen", mediator_key_gen_timer, Instant::now());
+    timing!(
+        "mediator.key_gen",
+        mediator_key_gen_timer,
+        Instant::now(),
+        "tx_id" => "N/A"
+    );
 
     let mediator_save_keys_timer = Instant::now();
     save_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &user,
-        PUBLIC_ACCOUNT_FILE,
+        MEDIATOR_PUBLIC_ACCOUNT_FILE,
         &public_account,
     )?;
 
@@ -73,13 +80,14 @@ pub fn process_create_mediator(seed: String, db_dir: PathBuf, user: String) -> R
     timing!(
         "mediator.save_keys",
         mediator_save_keys_timer,
-        Instant::now()
+        Instant::now(),
+        "tx_id" => "N/A"
     );
 
     Ok(())
 }
 
-pub fn justify_asset_issuance(
+pub fn justify_asset_issuance_transaction(
     db_dir: PathBuf,
     issuer: String,
     mediator: String,
@@ -91,16 +99,28 @@ pub fn justify_asset_issuance(
     // Load the transaction, mediator's credentials, and issuer's public account.
     let justify_load_objects_timer = Instant::now();
 
-    let instruction_path =
-        asset_transaction_file(tx_id, AssetTxState::Initialization(TxSubstate::Started));
+    let instruction_file_name = asset_transaction_file(
+        tx_id,
+        &issuer,
+        AssetTxState::Initialization(TxSubstate::Started),
+    );
 
-    let instruction: Instruction =
-        load_object(db_dir.clone(), ON_CHAIN_DIR, &issuer, &instruction_path)?;
+    let instruction: OrderedAssetInstruction = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        COMMON_OBJECTS_DIR,
+        &instruction_file_name,
+    )?;
 
     let asset_tx = InitializedAssetTx::decode(&mut &instruction.data[..]).map_err(|error| {
         Error::ObjectLoadError {
             error,
-            path: construct_path(db_dir.clone(), ON_CHAIN_DIR, &issuer, &instruction_path),
+            path: construct_path(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                COMMON_OBJECTS_DIR,
+                &instruction_file_name,
+            ),
         }
     })?;
 
@@ -111,28 +131,29 @@ pub fn justify_asset_issuance(
         SECRET_ACCOUNT_FILE,
     )?;
 
-    let issuer_account: PubAccount = load_object(
+    let issuer_ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
-        &issuer.clone(),
-        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
+        &issuer,
+        &user_public_account_file(&ticker),
     )?;
 
     timing!(
         "mediator.justify_load_objects",
         justify_load_objects_timer,
-        Instant::now()
+        Instant::now(),
+        "tx_id" => tx_id.to_string()
     );
 
     // Justification.
     let justify_library_timer = Instant::now();
-    let mediator = AssetMediator {};
-    let mut justified_tx = mediator
+    let mut justified_tx = AssetMediator {}
         .justify_asset_transaction(
             asset_tx.clone(),
-            &issuer_account,
+            &issuer_ordered_pub_account.pub_account,
             &mediator_account.encryption_key,
             &mediator_account.signing_key,
+            &[],
         )
         .map_err(|error| Error::LibraryError { error })?;
 
@@ -162,15 +183,20 @@ pub fn justify_asset_issuance(
     timing!(
         "mediator.justify_library",
         justify_library_timer,
-        Instant::now()
+        Instant::now(),
+        "tx_id" => tx_id.to_string()
     );
 
     let next_instruction;
     let justify_save_objects_timer = Instant::now();
     // If the `reject` flag is set, save the transaction as rejected.
     if reject {
+        info!(
+            "CLI log: tx-{}: Rejecting the transaction as instructed.",
+            tx_id
+        );
         let rejected_state = AssetTxState::Justification(TxSubstate::Rejected);
-        next_instruction = Instruction {
+        next_instruction = AssetInstruction {
             data: asset_tx.encode().to_vec(),
             state: rejected_state,
         };
@@ -178,13 +204,13 @@ pub fn justify_asset_issuance(
         save_object(
             db_dir,
             ON_CHAIN_DIR,
-            &issuer,
-            &asset_transaction_file(tx_id, rejected_state),
+            COMMON_OBJECTS_DIR,
+            &asset_transaction_file(tx_id, &issuer, rejected_state),
             &next_instruction,
         )?;
     } else {
-        // Save the updated_issuer_account, and the justified transaction.
-        next_instruction = Instruction {
+        // Save the justified transaction.
+        next_instruction = AssetInstruction {
             data: justified_tx.encode().to_vec(),
             state: AssetTxState::Justification(TxSubstate::Started),
         };
@@ -192,8 +218,12 @@ pub fn justify_asset_issuance(
         save_object(
             db_dir,
             ON_CHAIN_DIR,
-            &issuer,
-            &asset_transaction_file(tx_id, AssetTxState::Justification(TxSubstate::Started)),
+            COMMON_OBJECTS_DIR,
+            &asset_transaction_file(
+                tx_id,
+                &mediator,
+                AssetTxState::Justification(TxSubstate::Started),
+            ),
             &next_instruction,
         )?;
     }
@@ -201,34 +231,49 @@ pub fn justify_asset_issuance(
     timing!(
         "mediator.justify_save_objects",
         justify_save_objects_timer,
-        Instant::now()
+        Instant::now(),
+        "tx_id" => tx_id.to_string()
     );
 
     Ok(())
 }
 
-pub fn justify_asset_transaction(
+pub fn justify_asset_transfer_transaction(
     db_dir: PathBuf,
     sender: String,
     receiver: String,
     mediator: String,
     ticker: String,
+    seed: String,
     tx_id: u32,
     reject: bool,
     cheat: bool,
 ) -> Result<(), Error> {
     // Load the transaction, mediator's credentials, and issuer's public account.
     let justify_load_objects_timer = Instant::now();
+    let mut rng = create_rng_from_seed(Some(seed))?;
 
-    let instruction_path =
-        confidential_transaction_file(tx_id, TxState::Finalization(TxSubstate::Started));
-    let instruction: CTXInstruction =
-        load_object(db_dir.clone(), ON_CHAIN_DIR, &sender, &instruction_path)?;
+    let instruction_path = confidential_transaction_file(
+        tx_id,
+        &sender,
+        TransferTxState::Finalization(TxSubstate::Started),
+    );
+    let instruction: OrderedTransferInstruction = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        COMMON_OBJECTS_DIR,
+        &instruction_path,
+    )?;
 
-    let asset_tx = FinalizedTx::decode(&mut &instruction.data[..]).map_err(|error| {
+    let asset_tx = FinalizedTransferTx::decode(&mut &instruction.data[..]).map_err(|error| {
         Error::ObjectLoadError {
             error,
-            path: construct_path(db_dir.clone(), ON_CHAIN_DIR, &sender, &instruction_path),
+            path: construct_path(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                COMMON_OBJECTS_DIR,
+                &instruction_path,
+            ),
         }
     })?;
 
@@ -239,38 +284,60 @@ pub fn justify_asset_transaction(
         SECRET_ACCOUNT_FILE,
     )?;
 
-    let sender_account: PubAccount = load_object(
+    let sender_ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &sender.clone(),
-        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
+        &user_public_account_file(&ticker),
     )?;
 
-    let receiver_account: PubAccount = load_object(
+    let receiver_ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &receiver.clone(),
-        &format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE),
+        &user_public_account_file(&ticker),
     )?;
 
     timing!(
         "mediator.justify_tx.load_objects",
         justify_load_objects_timer,
-        Instant::now()
+        Instant::now(),
+        "tx_id" => tx_id.to_string()
     );
 
     // Justification.
     let justify_library_timer = Instant::now();
-    let mediator = CtxMediator {};
+
+    // Calculate the pending
+    let last_processed_tx_counter = sender_ordered_pub_account.last_processed_tx_counter;
+    let last_processed_account_balance = sender_ordered_pub_account.pub_account.enc_balance;
+    let ordering_state = last_ordering_state(
+        sender.clone(),
+        last_processed_tx_counter,
+        tx_id,
+        db_dir.clone(),
+    )?;
+
+    let pending_balance = compute_enc_pending_balance(
+        &sender,
+        ordering_state,
+        last_processed_tx_counter,
+        last_processed_account_balance,
+        db_dir.clone(),
+    )?;
+
     let asset_id = asset_id_from_ticker(&ticker).map_err(|error| Error::LibraryError { error })?;
-    let mut justified_tx = mediator
+    let mut justified_tx = CtxMediator {}
         .justify_transaction(
             asset_tx.clone(),
             &mediator_account.encryption_key,
             &mediator_account.signing_key,
-            &sender_account.content.memo.owner_sign_pub_key,
-            &receiver_account.content.memo.owner_sign_pub_key,
+            &sender_ordered_pub_account.pub_account,
+            &receiver_ordered_pub_account.pub_account,
+            pending_balance,
+            &[],
             asset_id,
+            &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })?;
 
@@ -297,15 +364,16 @@ pub fn justify_asset_transaction(
     timing!(
         "mediator.justify_tx.library",
         justify_library_timer,
-        Instant::now()
+        Instant::now(),
+        "tx_id" => tx_id.to_string()
     );
 
     let next_instruction;
     let justify_save_objects_timer = Instant::now();
     // If the `reject` flag is set, save the transaction as rejected.
     if reject {
-        let rejected_state = TxState::Justification(TxSubstate::Rejected);
-        next_instruction = CTXInstruction {
+        let rejected_state = TransferTxState::Justification(TxSubstate::Rejected);
+        next_instruction = TransferInstruction {
             data: asset_tx.encode().to_vec(),
             state: rejected_state,
         };
@@ -313,14 +381,14 @@ pub fn justify_asset_transaction(
         save_object(
             db_dir.clone(),
             ON_CHAIN_DIR,
-            &sender,
-            &confidential_transaction_file(tx_id, rejected_state),
+            COMMON_OBJECTS_DIR,
+            &confidential_transaction_file(tx_id, &sender, rejected_state),
             &next_instruction,
         )?;
     } else {
-        let new_state = TxState::Justification(TxSubstate::Started);
+        let new_state = TransferTxState::Justification(TxSubstate::Started);
         // Save the updated_issuer_account, and the justified transaction.
-        next_instruction = CTXInstruction {
+        next_instruction = TransferInstruction {
             data: justified_tx.encode().to_vec(),
             state: new_state,
         };
@@ -328,8 +396,8 @@ pub fn justify_asset_transaction(
         save_object(
             db_dir,
             ON_CHAIN_DIR,
-            &sender,
-            &confidential_transaction_file(tx_id, new_state),
+            COMMON_OBJECTS_DIR,
+            &confidential_transaction_file(tx_id, &mediator, new_state),
             &next_instruction,
         )?;
     }
@@ -337,7 +405,8 @@ pub fn justify_asset_transaction(
     timing!(
         "mediator.justify_tx.save_objects",
         justify_save_objects_timer,
-        Instant::now()
+        Instant::now(),
+        "tx_id" => tx_id.to_string()
     );
 
     Ok(())

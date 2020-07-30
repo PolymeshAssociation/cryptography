@@ -114,7 +114,7 @@ pub struct JustifyIssuanceInfo {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
-pub struct JustifyTransactionInfo {
+pub struct JustifyTransferInfo {
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
     /// blockchain. Defaults to the current directory. This directory will have two main
@@ -157,6 +157,15 @@ pub struct JustifyTransactionInfo {
     #[structopt(short, long, help = "The name of the mediator.")]
     pub mediator: String,
 
+    /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
+    /// The seed can be found inside the logs.
+    #[structopt(
+        short,
+        long,
+        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+    )]
+    pub seed: Option<String>,
+
     /// Whether to reject a transaction.
     #[structopt(
         short,
@@ -184,10 +193,10 @@ pub enum CLI {
     Create(CreateMediatorAccountInfo),
 
     /// Justify a MERCAT asset issuance transaction.
-    JustifyIssuance(JustifyIssuanceInfo),
+    JustifyIssuanceTransaction(JustifyIssuanceInfo),
 
-    /// Justify a MERCAT transaction.
-    JustifyTransaction(JustifyTransactionInfo),
+    /// Justify a MERCAT transfer transaction.
+    JustifyTransferTransaction(JustifyTransferInfo),
 }
 
 pub fn parse_input() -> Result<CLI, confy::ConfyError> {
@@ -220,7 +229,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             return Ok(CLI::Create(cfg));
         }
 
-        CLI::JustifyIssuance(cfg) => {
+        CLI::JustifyIssuanceTransaction(cfg) => {
             // Set the default seed and db_dir if needed.
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
 
@@ -246,20 +255,21 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return Ok(CLI::JustifyIssuance(cfg));
+            return Ok(CLI::JustifyIssuanceTransaction(cfg));
         }
 
-        CLI::JustifyTransaction(cfg) => {
+        CLI::JustifyTransferTransaction(cfg) => {
             // Set the default seed and db_dir if needed.
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
 
-            let cfg = JustifyTransactionInfo {
+            let cfg = JustifyTransferInfo {
                 db_dir,
                 tx_id: cfg.tx_id,
                 ticker: cfg.ticker,
                 sender: cfg.sender,
                 receiver: cfg.receiver,
                 mediator: cfg.mediator,
+                seed: cfg.seed,
                 reject: cfg.reject,
                 save_config: cfg.save_config.clone(),
                 cheat: cfg.cheat,
@@ -273,7 +283,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return Ok(CLI::JustifyTransaction(cfg));
+            return Ok(CLI::JustifyTransferTransaction(cfg));
         }
     }
 }

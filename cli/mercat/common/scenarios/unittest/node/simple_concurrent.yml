@@ -1,0 +1,44 @@
+--- 
+title: "Mix of concurrent and sequential test: account creation, issuance, and transfer are separate."
+
+tickers: 
+  - AAPL
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+    - AAPL
+  - bob:
+    - ACME
+    - AAPL
+  - carol:
+    - ACME
+
+mediators:
+  - Mike
+  - Marry
+  - Moe
+    
+transactions:
+  - sequence:
+    - validate # validate the account creation phase
+    - concurrent:
+      - issue Alice 50 ACME Mike approve
+      - issue Carol 10 ACME Mike approve
+      - issue Bob 10 AAPL Moe approve
+    - validate # validate the asset issuance phase
+    - concurrent:
+      - transfer Alice 50 ACME Carol approve Marry approve
+      - transfer Bob 5 AAPL Alice approve Moe approve
+    - validate # validate the transfer phase
+
+outcome: 
+  - alice: 
+      - ACME: 0
+      - AAPL: 5
+  - bob: 
+      - ACME: 0
+      - AAPL: 5
+  - carol: 
+      - ACME: 60
