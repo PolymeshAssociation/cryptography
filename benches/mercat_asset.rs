@@ -4,9 +4,9 @@ use cryptography::{
     mercat::{
         account::convert_asset_ids,
         asset::{AssetIssuer, AssetMediator, AssetValidator},
-        AssetTransactionIssuer, AssetTransactionMediator, AssetTransactionVerifier,
+        Account, AssetTransactionIssuer, AssetTransactionMediator, AssetTransactionVerifier,
         EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx, MediatorAccount, PubAccount,
-        SecAccount, SigningPubKey,
+        SigningPubKey,
     },
     AssetId, Balance,
 };
@@ -23,17 +23,16 @@ const MAX_ASSET_ID_INDEX: u32 = 1000000;
 // Must be in [0, MAX_ASSET_ID_INDEX)
 const ASSET_ID: u32 = 1;
 
-const ISSUER_ACCOUNT_ID: u32 = 1234;
-
 fn bench_transaction_issuer(
     c: &mut Criterion,
-    issuer_account: SecAccount,
+    issuer_account: Account,
     mdtr_pub_key: EncryptionPubKey,
     amounts: Vec<Balance>,
 ) -> Vec<InitializedAssetTx> {
     let label = format!("MERCAT Transaction: Issuer");
     let mut rng = thread_rng();
     let issuer_account_cloned = issuer_account.clone();
+    let tx_id = 0;
 
     c.bench_function_over_inputs(
         &label,
@@ -42,7 +41,7 @@ fn bench_transaction_issuer(
                 let issuer = AssetIssuer {};
                 issuer
                     .initialize_asset_transaction(
-                        ISSUER_ACCOUNT_ID,
+                        tx_id,
                         &issuer_account_cloned.clone(),
                         &mdtr_pub_key.clone(),
                         &[],
@@ -61,7 +60,7 @@ fn bench_transaction_issuer(
             let issuer = AssetIssuer {};
             issuer
                 .initialize_asset_transaction(
-                    ISSUER_ACCOUNT_ID,
+                    tx_id,
                     &issuer_account.clone(),
                     &mdtr_pub_key.clone(),
                     &[],
@@ -185,7 +184,7 @@ fn bench_asset_transaction(c: &mut Criterion) {
     // Initialization
     let transactions = bench_transaction_issuer(
         c,
-        issuer_account.scrt,
+        issuer_account.clone(),
         public_account.owner_enc_pub_key,
         issued_amounts,
     );

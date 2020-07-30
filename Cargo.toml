@@ -21,6 +21,7 @@ zeroize = { version = "1.1", default-features = false }
 criterion = { version = "0.3", optional = true }
 lazy_static = { version = "1.4.0", default-features = false, features = ["spin_no_std"] }
 failure = { version = "0.1.7", default-features = false, features = ["derive"] }
+log = { version = "0.4.8" }
 
 # Crypto
 sha3 = { version = "0.8", default-features = false }
