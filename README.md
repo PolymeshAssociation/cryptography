@@ -1,5 +1,11 @@
 # Cryptography
-Repository for cryptographic libraries used in Polymath products.
+Repository for cryptographic libraries used in Polymath products. While these libraries could in theory be used by other projects, the design and tradeoffs made are in many cases specifically tailored for Polymesh. See https://github.com/PolymathNetwork/Polymesh for more details about Polymesh.
+
+The libraries are divided as per the below headings.
+
+There is a technical whitepaper for the the largest part of this work, the MERCAT library (which stands for Mediated, Encrypted, Reversible, SeCure Asset Transfers and is the name of our asset privacy protocol), however it is still in private review. It will be released publicly in fall 2020 and linked here. 
+
+It's important to note that MERCAT is still in a pre-release state, and protocol implementation will likely be adjusted before release on a Polymesh testnet.
 
 ### Claim Proofs Library
 This library implements the Asset Granularity Unique Identity protocol, as described [here][wiki_main_design]. The cryptographic building blocks are described [here][wiki_crypto_design].
