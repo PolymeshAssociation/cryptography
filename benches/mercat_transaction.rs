@@ -4,9 +4,9 @@ use cryptography::{
     mercat::{
         account::convert_asset_ids,
         transaction::{CtxMediator, CtxReceiver, CtxSender, TransactionValidator},
-        Account, EncryptionPubKey, FinalizedTx, InitializedTx, JustifiedTx, MediatorAccount,
-        PubAccount, SigningPubKey, TransactionMediator, TransactionReceiver, TransactionSender,
-        TransactionVerifier,
+        Account, EncryptionPubKey, FinalizedTransferTx, InitializedTransferTx, JustifiedTransferTx,
+        MediatorAccount, PubAccount, SigningPubKey, TransferTransactionMediator,
+        TransferTransactionReceiver, TransferTransactionSender, TransferTransactionVerifier,
     },
     AssetId,
 };
@@ -32,7 +32,7 @@ fn bench_transaction_sender(
     sender_accounts: Vec<Account>,
     rcvr_pub_account: &PubAccount,
     mdtr_pub_key: EncryptionPubKey,
-) -> Vec<InitializedTx> {
+) -> Vec<InitializedTransferTx> {
     let label = format!("MERCAT Transaction: Sender");
     let mut rng = thread_rng();
     let rcvr_pub_account = rcvr_pub_account.clone();
@@ -43,6 +43,7 @@ fn bench_transaction_sender(
         .map(|i| 10u32.pow(i))
         .zip(sender_accounts.clone())
         .collect();
+    let tx_id = 0;
 
     c.bench_function_over_inputs(
         &label,
@@ -51,9 +52,11 @@ fn bench_transaction_sender(
                 let sender = CtxSender {};
                 sender
                     .create_transaction(
+                        tx_id,
                         &sender_account.clone(),
                         &rcvr_pub_account_cloned.clone(),
                         &mdtr_pub_key.clone(),
+                        &[],
                         amount.clone(),
                         &mut rng,
                     )
@@ -69,9 +72,11 @@ fn bench_transaction_sender(
             let ctx_sender = CtxSender {};
             ctx_sender
                 .create_transaction(
+                    tx_id,
                     &sender_account.clone(),
                     &rcvr_pub_account.clone(),
                     &mdtr_pub_key.clone(),
+                    &[],
                     amount.clone(),
                     &mut rng,
                 )
@@ -84,18 +89,19 @@ fn bench_transaction_receiver(
     c: &mut Criterion,
     receiver_account: Account,
     sender_pub_key: SigningPubKey,
-    transactions: Vec<InitializedTx>,
-) -> Vec<FinalizedTx> {
+    transactions: Vec<InitializedTransferTx>,
+) -> Vec<FinalizedTransferTx> {
     let label = format!("MERCAT Transaction: Receiver");
     let mut rng = thread_rng();
     let sender_pub_key_cloned = sender_pub_key.clone();
     let receiver_account_cloned = receiver_account.clone();
 
-    let indexed_transaction: Vec<(u32, InitializedTx)> = (MIN_SENDER_BALANCE_ORDER
+    let indexed_transaction: Vec<(u32, InitializedTransferTx)> = (MIN_SENDER_BALANCE_ORDER
         ..MAX_SENDER_BALANCE_ORDER)
         .map(|i| 10u32.pow(i))
         .zip(transactions.clone())
         .collect();
+    let tx_id = 0;
 
     c.bench_function_over_inputs(
         &label,
@@ -104,13 +110,14 @@ fn bench_transaction_receiver(
                 let receiver = CtxReceiver {};
                 receiver
                     .finalize_transaction(
+                        tx_id,
                         tx.clone(),
                         &sender_pub_key.clone(),
                         receiver_account.clone(),
                         amount.clone(),
                         &mut rng,
                     )
-                    .unwrap();
+                    .unwrap()
             })
         },
         indexed_transaction.clone(),
@@ -122,6 +129,7 @@ fn bench_transaction_receiver(
             let receiver = CtxReceiver {};
             receiver
                 .finalize_transaction(
+                    tx_id,
                     tx.clone(),
                     &sender_pub_key_cloned.clone(),
                     receiver_account_cloned.clone(),
@@ -136,24 +144,28 @@ fn bench_transaction_receiver(
 fn bench_transaction_mediator(
     c: &mut Criterion,
     mediator_account: MediatorAccount,
-    sender_pub_key: SigningPubKey,
-    receiver_pub_key: SigningPubKey,
-    transactions: Vec<FinalizedTx>,
+    sender_pub_accounts: Vec<PubAccount>,
+    receiver_pub_account: PubAccount,
+    transactions: Vec<FinalizedTransferTx>,
     asset_id: AssetId,
-) -> Vec<JustifiedTx> {
+) -> Vec<JustifiedTransferTx> {
     let label = format!("MERCAT Transaction: Mediator");
+    let mut rng = thread_rng();
     let mediator_account_cloned = mediator_account.clone();
+    let receiver_pub_account_cloned = receiver_pub_account.clone();
     let asset_id_cloned = asset_id.clone();
 
-    let indexed_transaction: Vec<(String, FinalizedTx)> = (MIN_SENDER_BALANCE_ORDER
-        ..MAX_SENDER_BALANCE_ORDER)
-        .map(|i| format!("initial_balance ({:?})", 10u32.pow(i)))
-        .zip(transactions.clone())
-        .collect();
+    let indexed_transaction: Vec<((String, PubAccount), FinalizedTransferTx)> =
+        (MIN_SENDER_BALANCE_ORDER..MAX_SENDER_BALANCE_ORDER)
+            .map(|i| format!("initial_balance ({:?})", 10u32.pow(i)))
+            .zip(sender_pub_accounts.clone())
+            .zip(transactions.clone())
+            .collect();
+    let indexed_transaction_cloned = indexed_transaction.clone();
 
     c.bench_function_over_inputs(
         &label,
-        move |b, (_label, tx)| {
+        move |b, ((_label, sender), tx)| {
             b.iter(|| {
                 let mediator = CtxMediator {};
                 mediator
@@ -161,28 +173,34 @@ fn bench_transaction_mediator(
                         tx.clone(),
                         &mediator_account_cloned.encryption_key,
                         &mediator_account_cloned.signing_key,
-                        &sender_pub_key,
-                        &receiver_pub_key,
+                        &sender.clone(),
+                        &receiver_pub_account_cloned,
+                        sender.enc_balance,
+                        &[],
                         asset_id_cloned.clone(),
+                        &mut rng,
                     )
                     .unwrap();
             })
         },
-        indexed_transaction,
+        indexed_transaction_cloned,
     );
 
-    transactions
+    indexed_transaction
         .iter()
-        .map(|tx| {
+        .map(|((_, sender), tx)| {
             let mediator = CtxMediator {};
             mediator
                 .justify_transaction(
                     tx.clone(),
                     &mediator_account.encryption_key,
                     &mediator_account.signing_key,
-                    &sender_pub_key,
-                    &receiver_pub_key,
+                    &sender,
+                    &receiver_pub_account,
+                    sender.enc_balance,
+                    &[],
                     asset_id.clone(),
+                    &mut rng,
                 )
                 .unwrap()
         })
@@ -194,17 +212,17 @@ fn bench_transaction_validator(
     mediator_pub_key: SigningPubKey,
     sender_pub_accounts: Vec<PubAccount>,
     rcvr_pub_account: PubAccount,
-    transactions: Vec<JustifiedTx>,
+    transactions: Vec<JustifiedTransferTx>,
 ) {
     let label = format!("MERCAT Transaction: Validator");
     let mut rng = thread_rng();
 
-    let indexed_transaction: Vec<((String, PubAccount), JustifiedTx)> = (MIN_SENDER_BALANCE_ORDER
-        ..MAX_SENDER_BALANCE_ORDER)
-        .map(|i| format!("initial_balance ({:?})", 10u32.pow(i)))
-        .zip(sender_pub_accounts.clone())
-        .zip(transactions.clone())
-        .collect();
+    let indexed_transaction: Vec<((String, PubAccount), JustifiedTransferTx)> =
+        (MIN_SENDER_BALANCE_ORDER..MAX_SENDER_BALANCE_ORDER)
+            .map(|i| format!("initial_balance ({:?})", 10u32.pow(i)))
+            .zip(sender_pub_accounts.clone())
+            .zip(transactions.clone())
+            .collect();
 
     c.bench_function_over_inputs(
         &label,
@@ -217,6 +235,8 @@ fn bench_transaction_validator(
                         sender.clone(),
                         rcvr_pub_account.clone(),
                         &mediator_pub_key,
+                        sender.enc_balance,
+                        &[],
                         &mut rng,
                     )
                     .unwrap();
@@ -272,7 +292,7 @@ fn bench_transaction(c: &mut Criterion) {
         .collect();
 
     // Initialization
-    let transactions: Vec<InitializedTx> = bench_transaction_sender(
+    let transactions: Vec<InitializedTransferTx> = bench_transaction_sender(
         c,
         sender_accounts.clone(),
         &receiver_account.pblc,
@@ -280,7 +300,7 @@ fn bench_transaction(c: &mut Criterion) {
     );
 
     // Finalization
-    let finalized_transactions: Vec<FinalizedTx> = bench_transaction_receiver(
+    let finalized_transactions: Vec<FinalizedTransferTx> = bench_transaction_receiver(
         c,
         receiver_account.clone(),
         sender_account.scrt.sign_keys.public,
@@ -288,20 +308,21 @@ fn bench_transaction(c: &mut Criterion) {
     );
 
     // Justification
-    let justified_transaction: Vec<JustifiedTx> = bench_transaction_mediator(
+    let sender_pub_accounts: Vec<PubAccount> = sender_accounts
+        .iter()
+        .map(|account| account.pblc.clone())
+        .collect();
+
+    let justified_transaction: Vec<JustifiedTransferTx> = bench_transaction_mediator(
         c,
         private_account,
-        sender_account.scrt.sign_keys.public,
-        receiver_account.scrt.sign_keys.public,
+        sender_pub_accounts.clone(),
+        receiver_account.pblc.clone(),
         finalized_transactions,
         asset_id,
     );
 
     // Validation
-    let sender_pub_accounts = sender_accounts
-        .iter()
-        .map(|account| account.pblc.clone())
-        .collect();
     bench_transaction_validator(
         c,
         public_account.owner_sign_pub_key,

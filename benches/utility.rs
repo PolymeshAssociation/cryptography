@@ -5,7 +5,7 @@ use cryptography::{
         asset::{AssetIssuer, AssetMediator, AssetValidator},
         Account, AccountCreatorInitializer, AccountMemo, AssetTransactionIssuer,
         AssetTransactionMediator, AssetTransactionVerifier, EncryptionKeys, MediatorAccount,
-        PubAccount, SecAccount,
+        PubAccount, PubAccountTx, SecAccount,
     },
     AssetId,
 };
@@ -26,8 +26,9 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
     let asset_tx = issuer
         .initialize_asset_transaction(
             0,
-            &account.scrt,
+            &account,
             &mediator_pub_account.owner_enc_pub_key,
+            &[],
             amount,
             rng,
         )
@@ -41,6 +42,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
             &account.pblc,
             &mediator_account.encryption_key,
             &mediator_account.signing_key,
+            &[],
         )
         .unwrap();
 
@@ -51,6 +53,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
             account.pblc.clone(),
             &mediator_pub_account.owner_enc_pub_key,
             &mediator_pub_account.owner_sign_pub_key,
+            &[],
         )
         .unwrap();
     updated_issuer_account
@@ -89,14 +92,19 @@ pub fn create_account_with_amount<R: RngCore + CryptoRng>(
 ) -> Account {
     let secret_account = gen_keys(rng, asset_id);
 
+    let tx_id = 0;
     let account_creator = AccountCreator {};
-    let account = account_creator
-        .create(secret_account, valid_asset_ids, 0, rng)
+    let pub_account = account_creator
+        .create(tx_id, &secret_account, valid_asset_ids, 0, rng)
         .unwrap();
+    let account = Account {
+        scrt: secret_account.clone(),
+        pblc: pub_account.content.pub_account,
+    };
     // If a non-zero initial amount is given issue some assets to this account.
     if initial_amount > 0 {
         Account {
-            scrt: account.scrt.clone(),
+            scrt: secret_account.clone(),
             pblc: issue_assets(
                 rng,
                 account,
@@ -116,12 +124,13 @@ pub fn create_account<R: RngCore + CryptoRng>(
     asset_id: &AssetId,
     valid_asset_ids: &Vec<Scalar>,
     account_id: u32,
-) -> Account {
+    tx_id: u32,
+) -> PubAccountTx {
     let secret_account = gen_keys(rng, asset_id);
 
     let account_creator = AccountCreator {};
     account_creator
-        .create(secret_account, valid_asset_ids, account_id, rng)
+        .create(tx_id, &secret_account, valid_asset_ids, account_id, rng)
         .unwrap()
 }
 

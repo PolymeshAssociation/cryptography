@@ -154,7 +154,7 @@ pub enum ErrorKind {
 
     /// The sender has attempted to send more that their balance.
     #[fail(
-        display = "Transaction amount {} must be equal or greater than {}",
+        display = "Transaction amount {} must be less than or equal to {}",
         transaction_amount, balance
     )]
     NotEnoughFund {
@@ -184,6 +184,10 @@ pub enum ErrorKind {
         want, got
     )]
     TickerIdLengthError { want: usize, got: usize },
+
+    /// The auditors' payload does not match the compliance rules.
+    #[fail(display = "The auditors' payload does not match the compliance rules.")]
+    AuditorPayloadError,
 }
 
 pub type Fallible<T, E = Error> = Result<T, E>;

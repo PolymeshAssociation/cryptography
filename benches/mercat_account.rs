@@ -3,7 +3,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use cryptography::{
     mercat::{
         account::{convert_asset_ids, AccountValidator},
-        AccountCreatorVerifier, PubAccount,
+        AccountCreatorVerifier, PubAccountTx,
     },
     AssetId,
 };
@@ -22,12 +22,13 @@ fn bench_account_creation(c: &mut Criterion) {
     let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
     let mut rng = thread_rng();
-    let public_accounts: Vec<(String, PubAccount)> = ASSET_IDS
+    let tx_id = 0;
+    let public_accounts: Vec<(String, PubAccountTx)> = ASSET_IDS
         .iter()
         .map(|&id| {
             (
                 format!("asset_id: {:?}", id),
-                utility::create_account(&mut rng, &AssetId::from(id), &valid_asset_ids, 0).pblc,
+                utility::create_account(&mut rng, &AssetId::from(id), &valid_asset_ids, 0, tx_id),
             )
         })
         .collect();
