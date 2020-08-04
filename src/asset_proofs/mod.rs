@@ -203,6 +203,8 @@ mod elgamal_encryption;
 pub use elgamal_encryption::{
     encrypt_using_two_pub_keys, CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
 };
+pub mod const_time_elgamal_encryption;
+pub use const_time_elgamal_encryption::CipherTextWithHint;
 
 pub mod encryption_proofs;
 

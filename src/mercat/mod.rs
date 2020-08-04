@@ -11,8 +11,8 @@ use crate::{
         correctness_proof::CorrectnessProof,
         encrypting_same_value_proof::CipherEqualDifferentPubKeyProof,
         membership_proof::MembershipProof, range_proof::InRangeProof,
-        wellformedness_proof::WellformednessProof, CipherText, CommitmentWitness, ElgamalPublicKey,
-        ElgamalSecretKey,
+        wellformedness_proof::WellformednessProof, CipherText, CipherTextWithHint,
+        CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     },
     errors::Fallible,
     AssetId, Balance,
@@ -65,6 +65,7 @@ pub type Signature = schnorrkel::sign::Signature;
 pub type EncryptedAssetId = CipherText;
 
 /// New type for Twisted ElGamal ciphertext of account amounts/balances.
+// pub type EncryptedAmount = CipherTextWithHint;
 pub type EncryptedAmount = CipherText;
 
 /// Asset memo holds the contents of an asset issuance transaction.
