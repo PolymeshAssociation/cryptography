@@ -31,7 +31,7 @@ pub struct CommitmentWitness {
     /// balance value or the asset id in Scalar format.
     value: Scalar,
 
-    // A random blinding factor.
+    /// A random blinding factor.
     blinding: Scalar,
 }
 
