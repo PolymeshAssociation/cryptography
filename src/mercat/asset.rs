@@ -68,7 +68,7 @@ fn asset_issuance_init_verify_proofs(
     single_property_verifier(
         &WellformednessVerifier {
             pub_key: issr_pub_account.memo.owner_enc_pub_key,
-            cipher: asset_tx.content.memo.enc_issued_amount,
+            cipher: asset_tx.content.memo.enc_issued_amount.elgamal_cipher,
             pc_gens: &gens,
         },
         asset_tx.content.balance_wellformedness_proof,
@@ -119,8 +119,8 @@ fn verify_auditor_payload(
                             &EncryptingSameValueVerifier {
                                 pub_key1: issuer_enc_pub_key,
                                 pub_key2: auditor_pub_key.clone(),
-                                cipher1: issuer_enc_amount,
-                                cipher2: payload.encrypted_amount,
+                                cipher1: issuer_enc_amount.elgamal_cipher,
+                                cipher2: payload.encrypted_amount.elgamal_cipher,
                                 pc_gens: &gens,
                             },
                             payload.amount_equal_cipher_proof,
@@ -162,14 +162,14 @@ impl AssetTransactionIssuer for AssetIssuer {
         let mdtr_enc_asset_id = mdtr_pub_key.encrypt(&issr_account.scrt.asset_id_witness);
 
         // Encrypt the balance issued to mediator's public key.
-        let (_, mdtr_enc_amount) = mdtr_pub_key.encrypt_value(amount.into(), rng);
+        let (_, mdtr_enc_amount) = mdtr_pub_key.const_time_encrypt_value(amount.into(), rng);
 
         // Encrypt the balance to issuer's public key (memo).
         let (issr_amount_witness, issr_enc_amount) = issr_account
             .scrt
             .enc_keys
             .pblc
-            .encrypt_value(amount.into(), rng);
+            .const_time_encrypt_value(amount.into(), rng);
         let memo = AssetMemo {
             enc_issued_amount: issr_enc_amount,
             tx_id,
@@ -248,7 +248,7 @@ fn add_asset_transaction_auditor<T: RngCore + CryptoRng>(
     let _: Fallible<()> = auditors_enc_pub_keys
         .iter()
         .map(|(auditor_id, auditor_enc_pub_key)| {
-            let encrypted_amount = auditor_enc_pub_key.encrypt(amount_witness);
+            let encrypted_amount = auditor_enc_pub_key.const_time_encrypt(amount_witness, rng);
 
             // Prove that the sender and auditor's ciphertexts are encrypting the same
             // commitment witness.
@@ -364,13 +364,17 @@ impl AssetTransactionMediator for AssetMediator {
         // Mediator decrypts the encrypted amount and uses it to verify the correctness proof.
         let amount = mdtr_enc_keys
             .scrt
-            .decrypt(&initialized_asset_tx.content.enc_amount_for_mdtr)?;
+            .const_time_decrypt(&initialized_asset_tx.content.enc_amount_for_mdtr)?;
 
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),
                 pub_key: issr_pub_account.memo.owner_enc_pub_key,
-                cipher: initialized_asset_tx.content.memo.enc_issued_amount,
+                cipher: initialized_asset_tx
+                    .content
+                    .memo
+                    .enc_issued_amount
+                    .elgamal_cipher,
                 pc_gens: &gens,
             },
             initialized_asset_tx.content.balance_correctness_proof,
@@ -424,13 +428,20 @@ impl AssetTransactionAuditor for AssetAuditor {
             .iter()
             .map(|payload| {
                 if payload.auditor_id == auditor_enc_key.0 {
-                    let amount = auditor_enc_key.1.scrt.decrypt(&payload.encrypted_amount)?;
+                    let amount = auditor_enc_key
+                        .1
+                        .scrt
+                        .const_time_decrypt(&payload.encrypted_amount)?;
 
                     let result = single_property_verifier(
                         &CorrectnessVerifier {
                             value: amount.into(),
                             pub_key: issuer_account.memo.owner_enc_pub_key,
-                            cipher: initialized_asset_tx.content.memo.enc_issued_amount,
+                            cipher: initialized_asset_tx
+                                .content
+                                .memo
+                                .enc_issued_amount
+                                .elgamal_cipher,
                             pc_gens: &gens,
                         },
                         initialized_asset_tx.content.balance_correctness_proof,
@@ -616,8 +627,8 @@ mod tests {
         assert!(issuer_enc_key
             .scrt
             .verify(
-                &updated_issuer_account.enc_balance,
-                &Scalar::from(issued_amount)
+                &updated_issuer_account.enc_balance.elgamal_cipher,
+                &issued_amount.into()
             )
             .is_ok());
 
@@ -735,8 +746,8 @@ mod tests {
         assert!(issuer_enc_key
             .scrt
             .verify(
-                &updated_issuer_account.enc_balance,
-                &Scalar::from(issued_amount)
+                &updated_issuer_account.enc_balance.elgamal_cipher,
+                &issued_amount.into()
             )
             .is_ok());
 

@@ -65,8 +65,7 @@ pub type Signature = schnorrkel::sign::Signature;
 pub type EncryptedAssetId = CipherText;
 
 /// New type for Twisted ElGamal ciphertext of account amounts/balances.
-// pub type EncryptedAmount = CipherTextWithHint;
-pub type EncryptedAmount = CipherText;
+pub type EncryptedAmount = CipherTextWithHint;
 
 /// Asset memo holds the contents of an asset issuance transaction.
 #[derive(Clone, Encode, Decode)]
@@ -270,8 +269,13 @@ pub struct Account {
 
 impl Account {
     /// Utility method that can decrypt the the balance of an account.
+    /// Note that this decryption is not constant time.
     pub fn decrypt_balance(&self) -> Fallible<Balance> {
-        let balance = self.scrt.enc_keys.scrt.decrypt(&self.pblc.enc_balance)?;
+        let balance = self
+            .scrt
+            .enc_keys
+            .scrt
+            .decrypt(&self.pblc.enc_balance.elgamal_cipher)?;
 
         Ok(Balance::from(balance))
     }
