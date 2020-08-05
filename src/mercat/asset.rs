@@ -304,11 +304,12 @@ impl AssetTransactionVerifier for AssetValidator {
     fn verify_asset_transaction(
         &self,
         justified_asset_tx: &JustifiedAssetTx,
-        issr_account: PubAccount,
+        issr_account: &PubAccount,
+        issr_init_balance: &EncryptedAmount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
-    ) -> Fallible<PubAccount> {
+    ) -> Fallible<EncryptedAmount> {
         // Verify mediator's signature on the transaction.
         let message = justified_asset_tx.content.encode();
         let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &justified_asset_tx.sig)?;
@@ -324,12 +325,12 @@ impl AssetTransactionVerifier for AssetValidator {
 
         // After successfully verifying the transaction, validator deposits the amount
         // to issuer's account (aka processing phase).
-        let updated_issr_account = crate::mercat::account::deposit(
-            issr_account,
-            initialized_asset_tx.content.memo.enc_issued_amount,
+        let updated_issr_balance = crate::mercat::account::deposit(
+            issr_init_balance,
+            &initialized_asset_tx.content.memo.enc_issued_amount,
         );
 
-        Ok(updated_issr_account)
+        Ok(updated_issr_balance)
     }
 }
 
@@ -514,11 +515,11 @@ mod tests {
             )
             .unwrap();
         let issuer_public_account = issuer_account_tx.content.pub_account;
+        let issuer_init_balance = issuer_account_tx.content.initial_balance;
         let issuer_account = Account {
             pblc: issuer_public_account.clone(),
             scrt: issuer_secret_account,
         };
-        let pub_account_enc_asset_id = issuer_public_account.enc_asset_id;
 
         // Generate keys for the mediator.
         let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
@@ -561,10 +562,11 @@ mod tests {
 
         // Positive test.
         let validator = AssetValidator {};
-        let updated_issuer_account = validator
+        let updated_issuer_balance = validator
             .verify_asset_transaction(
                 &justified_tx,
-                issuer_public_account.clone(),
+                &issuer_public_account,
+                &issuer_init_balance,
                 &mediator_enc_key.pblc,
                 &mediator_signing_pair.public.into(),
                 &[],
@@ -593,7 +595,8 @@ mod tests {
 
         let result = validator.verify_asset_transaction(
             &invalid_justified_tx,
-            issuer_public_account.clone(),
+            &issuer_public_account,
+            &issuer_init_balance,
             &mediator_enc_key.pblc,
             &mediator_signing_pair.public.into(),
             &[],
@@ -607,7 +610,8 @@ mod tests {
 
         let result = validator.verify_asset_transaction(
             &invalid_justified_tx,
-            issuer_public_account,
+            &issuer_public_account,
+            &issuer_init_balance,
             &mediator_enc_key.pblc,
             &mediator_signing_pair.public.into(),
             &[],
@@ -618,14 +622,8 @@ mod tests {
         // Check that the issued amount is added to the account balance.
         assert!(issuer_enc_key
             .scrt
-            .verify(&updated_issuer_account.enc_balance, &issued_amount.into())
+            .verify(&updated_issuer_balance, &issued_amount.into())
             .is_ok());
-
-        // Check that the asset_id is still the same.
-        assert_eq!(
-            updated_issuer_account.enc_asset_id,
-            pub_account_enc_asset_id
-        );
     }
 
     fn asset_issuance_auditing_helper(
@@ -665,10 +663,10 @@ mod tests {
         let issuer_public_account = PubAccount {
             id: 1,
             enc_asset_id: pub_account_enc_asset_id,
-            // Set the initial encrypted balance to 0.
-            enc_balance: EncryptedAmount::default(),
             memo: AccountMemo::new(issuer_enc_key.pblc, sign_keys.public.into()),
         };
+        // Set the initial encrypted balance to 0.
+        let issuer_init_balance = EncryptedAmount::default();
         let issuer_account = Account {
             pblc: issuer_public_account.clone(),
             scrt: issuer_secret_account,
@@ -719,7 +717,8 @@ mod tests {
         let validator = AssetValidator {};
         let result = validator.verify_asset_transaction(
             &justified_tx,
-            issuer_public_account.clone(),
+            &issuer_public_account,
+            &issuer_init_balance,
             &mediator_enc_key.pblc,
             &mediator_signing_pair.public.into(),
             validator_auditor_list,
@@ -729,19 +728,13 @@ mod tests {
             return;
         }
 
-        let updated_issuer_account = result.unwrap();
+        let updated_issuer_balance = result.unwrap();
         // ----------------------- Processing
         // Check that the issued amount is added to the account balance.
         assert!(issuer_enc_key
             .scrt
-            .verify(&updated_issuer_account.enc_balance, &issued_amount.into())
+            .verify(&updated_issuer_balance, &issued_amount.into())
             .is_ok());
-
-        // Check that the asset_id is still the same.
-        assert_eq!(
-            updated_issuer_account.enc_asset_id,
-            pub_account_enc_asset_id
-        );
 
         // ----------------------- Auditing
         let _ = auditors_list.iter().map(|auditor| {

@@ -56,22 +56,22 @@ impl TransferTransactionSender for CtxSender {
         &self,
         tx_id: u32,
         sndr_account: &Account,
+        sndr_init_balance: &EncryptedAmount,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedTransferTx> {
-        let gens = PedersenGens::default();
-        // NOTE: If this decryption ends up being too slow, we can pass in the balance
-        // as input.
         let sndr_enc_keys = &sndr_account.scrt.enc_keys;
         let sndr_sign_keys = &sndr_account.scrt.sign_keys;
         let asset_id = sndr_account.scrt.asset_id_witness.value();
         let sndr_pub_account = &sndr_account.pblc;
         let rcvr_pub_key = rcvr_pub_account.memo.owner_enc_pub_key;
 
-        let balance = sndr_enc_keys.scrt.decrypt(&sndr_account.pblc.enc_balance)?;
+        // NOTE: If this decryption ends up being too slow, we can pass in the balance
+        // as input.
+        let balance = sndr_enc_keys.scrt.decrypt(sndr_init_balance)?;
         ensure!(
             balance >= amount,
             ErrorKind::NotEnoughFund {
@@ -94,7 +94,7 @@ impl TransferTransactionSender for CtxSender {
         // Prove that the amount encrypted under different public keys are the same.
         let (sndr_new_enc_amount, rcvr_new_enc_amount) =
             encrypt_using_two_pub_keys(&witness, sndr_enc_keys.pblc, rcvr_pub_key);
-
+        let gens = PedersenGens::default();
         let amount_equal_cipher_proof =
             CipherEqualDifferentPubKeyProof::from(single_property_prover(
                 EncryptingSameValueProverAwaitingChallenge {
@@ -109,15 +109,13 @@ impl TransferTransactionSender for CtxSender {
         // Refresh the encrypted balance and prove that the refreshment was done
         // correctly.
         let balance_refresh_enc_blinding = Scalar::random(rng);
-        let refreshed_enc_balance = sndr_account
-            .pblc
-            .enc_balance
-            .refresh(&sndr_enc_keys.scrt, balance_refresh_enc_blinding)?;
+        let refreshed_enc_balance =
+            sndr_init_balance.refresh(&sndr_enc_keys.scrt, balance_refresh_enc_blinding)?;
 
         let balance_refreshed_same_proof = single_property_prover(
             CipherTextRefreshmentProverAwaitingChallenge::new(
                 sndr_enc_keys.scrt.clone(),
-                sndr_account.pblc.enc_balance,
+                sndr_init_balance.clone(),
                 refreshed_enc_balance,
                 &gens,
             ),
@@ -369,8 +367,8 @@ impl TransferTransactionMediator for CtxMediator {
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
         sndr_account: &PubAccount,
+        sndr_init_balance: &EncryptedAmount,
         rcvr_account: &PubAccount,
-        pending_balance: EncryptedAmount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         asset_id_hint: AssetId,
         rng: &mut R,
@@ -384,8 +382,8 @@ impl TransferTransactionMediator for CtxMediator {
         let _ = verify_initialized_transaction(
             &init_tx_data,
             sndr_account,
+            sndr_init_balance,
             rcvr_account,
-            pending_balance,
             auditors_enc_pub_keys,
             rng,
         )?;
@@ -447,13 +445,14 @@ impl TransferTransactionVerifier for TransactionValidator {
     fn verify_transaction<R: RngCore + CryptoRng>(
         &self,
         justified_transaction: &JustifiedTransferTx,
-        sndr_account: PubAccount,
-        rcvr_account: PubAccount,
+        sndr_account: &PubAccount,
+        sndr_init_balance: &EncryptedAmount,
+        rcvr_account: &PubAccount,
+        rcvr_init_balance: &EncryptedAmount,
         mdtr_sign_pub_key: &SigningPubKey,
-        pending_balance: EncryptedAmount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         rng: &mut R,
-    ) -> Fallible<(PubAccount, PubAccount)> {
+    ) -> Fallible<(EncryptedAmount, EncryptedAmount)> {
         ensure!(
             sndr_account.id
                 == justified_transaction
@@ -480,43 +479,43 @@ impl TransferTransactionVerifier for TransactionValidator {
         let initialized_transaction = &finalized_transaction.content;
         verify_initialized_transaction(
             &initialized_transaction.init_data,
-            &sndr_account,
-            &rcvr_account,
-            pending_balance,
+            sndr_account,
+            sndr_init_balance,
+            rcvr_account,
             auditors_enc_pub_keys,
             rng,
         )?;
 
-        verify_finalized_transaction(&finalized_transaction, &rcvr_account)?;
+        verify_finalized_transaction(&finalized_transaction, rcvr_account)?;
         verify_justified_transaction(&justified_transaction, mdtr_sign_pub_key)?;
 
         // All verifications were successful, update the sender and receiver balances.
-        let updated_sndr_account = crate::mercat::account::withdraw(
-            sndr_account,
-            initialized_transaction
+        let updated_sndr_balance = crate::mercat::account::withdraw(
+            sndr_init_balance,
+            &initialized_transaction
                 .init_data
                 .content
                 .memo
                 .enc_amount_using_sndr,
         );
-        let updated_rcvr_account = crate::mercat::account::deposit(
-            rcvr_account,
-            initialized_transaction
+        let updated_rcvr_balance = crate::mercat::account::deposit(
+            rcvr_init_balance,
+            &initialized_transaction
                 .init_data
                 .content
                 .memo
                 .enc_amount_using_rcvr,
         );
 
-        Ok((updated_sndr_account, updated_rcvr_account))
+        Ok((updated_sndr_balance, updated_rcvr_balance))
     }
 }
 
 fn verify_initialized_transaction<R: RngCore + CryptoRng>(
     transaction: &InitializedTransferTx,
     sndr_account: &PubAccount,
+    sndr_init_balance: &EncryptedAmount,
     rcvr_account: &PubAccount,
-    pending_balance: EncryptedAmount,
     auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     rng: &mut R,
 ) -> Fallible<TransferTxState> {
@@ -529,8 +528,8 @@ fn verify_initialized_transaction<R: RngCore + CryptoRng>(
     verify_initial_transaction_proofs(
         transaction,
         sndr_account,
+        sndr_init_balance,
         rcvr_account,
-        pending_balance,
         auditors_enc_pub_keys,
         rng,
     )?;
@@ -581,8 +580,8 @@ fn verify_justified_transaction(
 fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     transaction: &InitializedTransferTx,
     sndr_account: &PubAccount,
+    sndr_init_balance: &EncryptedAmount,
     rcvr_account: &PubAccount,
-    pending_balance: EncryptedAmount,
     auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     rng: &mut R,
 ) -> Fallible<()> {
@@ -609,7 +608,7 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
             sndr_account.memo.owner_enc_pub_key,
-            pending_balance,
+            sndr_init_balance.clone(),
             memo.refreshed_enc_balance,
             &gens,
         ),
@@ -867,16 +866,18 @@ mod tests {
         asset_id: AssetId,
         balance: Balance,
         rng: &mut R,
-    ) -> Fallible<PubAccount> {
+    ) -> Fallible<(PubAccount, EncryptedAmount)> {
         let (_, enc_asset_id) = rcvr_enc_pub_key.encrypt_value(asset_id.into(), rng);
         let (_, enc_balance) = rcvr_enc_pub_key.encrypt_value(Scalar::from(balance), rng);
 
-        Ok(PubAccount {
-            id: 1,
-            enc_asset_id: enc_asset_id.into(),
-            enc_balance: enc_balance.into(),
-            memo: AccountMemo::new(rcvr_enc_pub_key, rcvr_sign_pub_key),
-        })
+        Ok((
+            PubAccount {
+                id: 1,
+                enc_asset_id: enc_asset_id.into(),
+                memo: AccountMemo::new(rcvr_enc_pub_key, rcvr_sign_pub_key),
+            },
+            enc_balance.into(),
+        ))
     }
 
     fn mock_ctx_init_data<R: RngCore + CryptoRng>(
@@ -927,15 +928,16 @@ mod tests {
             sign,
             &mut rng,
         );
+        let (pub_account, _enc_balance) = mock_gen_account(
+            rcvr_enc_keys.pblc,
+            rcvr_sign_keys.public,
+            asset_id.clone(),
+            balance,
+            &mut rng,
+        )
+        .unwrap();
         let rcvr_account = Account {
-            pblc: mock_gen_account(
-                rcvr_enc_keys.pblc,
-                rcvr_sign_keys.public,
-                asset_id.clone(),
-                balance,
-                &mut rng,
-            )
-            .unwrap(),
+            pblc: pub_account,
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
@@ -985,7 +987,8 @@ mod tests {
                 balance,
                 &mut rng,
             )
-            .unwrap(),
+            .unwrap()
+            .0,
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys,
                 sign_keys: rcvr_sign_keys,
@@ -1033,15 +1036,16 @@ mod tests {
         let mdtr_enc_keys = mock_gen_enc_key_pair(14u8);
         let mdtr_sign_keys = mock_gen_sign_key_pair(15u8);
 
+        let (rcvr_pub_account, rcvr_init_balance) = mock_gen_account(
+            rcvr_enc_keys.pblc,
+            rcvr_sign_keys.public.clone(),
+            asset_id.clone(),
+            rcvr_balance,
+            &mut rng,
+        )
+        .unwrap();
         let rcvr_account = Account {
-            pblc: mock_gen_account(
-                rcvr_enc_keys.pblc,
-                rcvr_sign_keys.public.clone(),
-                asset_id.clone(),
-                rcvr_balance,
-                &mut rng,
-            )
-            .unwrap(),
+            pblc: rcvr_pub_account,
             scrt: SecAccount {
                 enc_keys: rcvr_enc_keys.clone(),
                 sign_keys: rcvr_sign_keys.clone(),
@@ -1049,15 +1053,16 @@ mod tests {
             },
         };
 
+        let (sndr_pub_account, sndr_init_balance) = mock_gen_account(
+            sndr_enc_keys.pblc,
+            sndr_sign_keys.public.clone(),
+            asset_id.clone(),
+            sndr_balance,
+            &mut rng,
+        )
+        .unwrap();
         let sndr_account = Account {
-            pblc: mock_gen_account(
-                sndr_enc_keys.pblc,
-                sndr_sign_keys.public.clone(),
-                asset_id.clone(),
-                sndr_balance,
-                &mut rng,
-            )
-            .unwrap(),
+            pblc: sndr_pub_account,
             scrt: SecAccount {
                 enc_keys: sndr_enc_keys.clone(),
                 sign_keys: sndr_sign_keys.clone(),
@@ -1070,6 +1075,7 @@ mod tests {
         let result = sndr.create_transaction(
             tx_id,
             &sndr_account,
+            &sndr_init_balance,
             &rcvr_account.pblc,
             &mdtr_enc_keys.pblc,
             &[],
@@ -1089,23 +1095,23 @@ mod tests {
             ctx_finalized_data,
             &mdtr_enc_keys,
             &mdtr_sign_keys,
-            &sndr_account.pblc.clone(),
-            &rcvr_account.pblc.clone(),
-            sndr_account.pblc.enc_balance,
+            &sndr_account.pblc,
+            &sndr_init_balance,
+            &rcvr_account.pblc,
             &[],
             asset_id,
             &mut rng,
         );
         let justified_finalized_ctx_data = result.unwrap();
 
-        let (updated_sender_account, updated_receiver_account) = tx_validator
+        let (updated_sender_balance, updated_receiver_balance) = tx_validator
             .verify_transaction(
                 &justified_finalized_ctx_data,
-                sndr_account.pblc.clone(),
-                rcvr_account.pblc,
+                &sndr_account.pblc,
+                &sndr_init_balance,
+                &rcvr_account.pblc,
+                &rcvr_init_balance,
                 &mdtr_sign_keys.public,
-                // in the simple case, the pending balance is the same as the account balance
-                sndr_account.pblc.enc_balance,
                 &[],
                 &mut rng,
             )
@@ -1116,17 +1122,11 @@ mod tests {
         // and subtracted from sender's balance.
         assert!(sndr_enc_keys
             .scrt
-            .verify(
-                &updated_sender_account.enc_balance,
-                &(sndr_balance - amount).into()
-            )
+            .verify(&updated_sender_balance, &(sndr_balance - amount).into())
             .is_ok());
         assert!(rcvr_enc_keys
             .scrt
-            .verify(
-                &updated_receiver_account.enc_balance,
-                &(rcvr_balance + amount).into()
-            )
+            .verify(&updated_receiver_balance, &(rcvr_balance + amount).into())
             .is_ok());
     }
 
@@ -1137,27 +1137,32 @@ mod tests {
         seed2: u8,
         balance: Balance,
         asset_id: AssetId,
-    ) -> Account {
+    ) -> (Account, EncryptedAmount) {
         let mut rng = StdRng::from_seed(seed0);
 
         let enc_keys = mock_gen_enc_key_pair(seed1);
         let sign_keys = mock_gen_sign_key_pair(seed2);
 
-        Account {
-            pblc: mock_gen_account(
-                enc_keys.pblc,
-                sign_keys.public.clone(),
-                asset_id.clone(),
-                balance,
-                &mut rng,
-            )
-            .unwrap(),
-            scrt: SecAccount {
-                enc_keys: enc_keys,
-                sign_keys: sign_keys,
-                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
+        let (pub_account, init_balance) = mock_gen_account(
+            enc_keys.pblc,
+            sign_keys.public.clone(),
+            asset_id.clone(),
+            balance,
+            &mut rng,
+        )
+        .unwrap();
+
+        (
+            Account {
+                pblc: pub_account,
+                scrt: SecAccount {
+                    enc_keys: enc_keys,
+                    sign_keys: sign_keys,
+                    asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
+                },
             },
-        }
+            init_balance,
+        )
     }
 
     fn test_transaction_auditor_helper(
@@ -1182,10 +1187,10 @@ mod tests {
         let mdtr_enc_keys = mock_gen_enc_key_pair(140u8);
         let mdtr_sign_keys = mock_gen_sign_key_pair(150u8);
 
-        let rcvr_account =
+        let (rcvr_account, rcvr_init_balance) =
             account_create_helper([18u8; 32], 120u8, 130u8, rcvr_balance, asset_id.clone());
 
-        let sndr_account =
+        let (sndr_account, sndr_init_balance) =
             account_create_helper([17u8; 32], 100u8, 110u8, sndr_balance, asset_id.clone());
 
         // Create the transaction and check its result and state
@@ -1194,6 +1199,7 @@ mod tests {
             .create_transaction(
                 tx_id,
                 &sndr_account,
+                &sndr_init_balance,
                 &rcvr_account.pblc,
                 &mdtr_enc_keys.pblc,
                 sender_auditor_list,
@@ -1219,9 +1225,9 @@ mod tests {
             ctx_final,
             &mdtr_enc_keys,
             &mdtr_sign_keys,
-            &sndr_account.pblc.clone(),
-            &rcvr_account.pblc.clone(),
-            sndr_account.pblc.enc_balance,
+            &sndr_account.pblc,
+            &sndr_init_balance,
+            &rcvr_account.pblc,
             mediator_auditor_list,
             asset_id,
             &mut rng,
@@ -1235,10 +1241,11 @@ mod tests {
         let ctx_just = result.unwrap();
         let result = validator.verify_transaction(
             &ctx_just,
-            sndr_account.pblc.clone(),
-            rcvr_account.pblc.clone(),
+            &sndr_account.pblc,
+            &sndr_init_balance,
+            &rcvr_account.pblc,
+            &rcvr_init_balance,
             &mdtr_sign_keys.public,
-            sndr_account.pblc.enc_balance,
             validator_auditor_list,
             &mut rng,
         );
@@ -1248,7 +1255,7 @@ mod tests {
             return;
         }
 
-        let (updated_sender_account, updated_receiver_account) = result.unwrap();
+        let (updated_sender_balance, updated_receiver_balance) = result.unwrap();
 
         // ----------------------- Processing
         // Check that the transferred amount is added to the receiver's account balance
@@ -1257,19 +1264,13 @@ mod tests {
             .scrt
             .enc_keys
             .scrt
-            .verify(
-                &updated_sender_account.enc_balance,
-                &(sndr_balance - amount).into()
-            )
+            .verify(&updated_sender_balance, &(sndr_balance - amount).into())
             .is_ok());
         assert!(rcvr_account
             .scrt
             .enc_keys
             .scrt
-            .verify(
-                &updated_receiver_account.enc_balance,
-                &(rcvr_balance + amount).into()
-            )
+            .verify(&updated_receiver_balance, &(rcvr_balance + amount).into())
             .is_ok());
 
         // ----------------------- Auditing

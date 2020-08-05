@@ -5,8 +5,8 @@ use cryptography::{
         account::convert_asset_ids,
         asset::{AssetIssuer, AssetMediator, AssetValidator},
         Account, AssetTransactionIssuer, AssetTransactionMediator, AssetTransactionVerifier,
-        EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx, MediatorAccount, PubAccount,
-        SigningPubKey,
+        EncryptedAmount, EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx, MediatorAccount,
+        PubAccount, SigningPubKey,
     },
     AssetId, Balance,
 };
@@ -128,6 +128,7 @@ fn bench_transaction_validator(
     c: &mut Criterion,
     transactions: Vec<JustifiedAssetTx>,
     issuer_account: PubAccount,
+    issuer_init_balance: EncryptedAmount,
     mediator_enc_pub_key: EncryptionPubKey,
     mediator_sign_pub_key: SigningPubKey,
 ) {
@@ -147,7 +148,8 @@ fn bench_transaction_validator(
                 validator
                     .verify_asset_transaction(
                         &tx,
-                        issuer_account.clone(),
+                        &issuer_account,
+                        &issuer_init_balance,
                         &mediator_enc_pub_key,
                         &mediator_sign_pub_key,
                         &[],
@@ -168,14 +170,8 @@ fn bench_asset_transaction(c: &mut Criterion) {
 
     let mut rng = thread_rng();
     let (public_account, private_account) = utility::generate_mediator_keys(&mut rng);
-    let issuer_account = utility::create_account_with_amount(
-        &mut rng,
-        &asset_id,
-        &valid_asset_ids,
-        &private_account,
-        &public_account,
-        0,
-    );
+    let (issuer_account, issuer_init_balance) =
+        utility::create_account_with_amount(&mut rng, &asset_id, &valid_asset_ids, 0);
 
     let issued_amounts: Vec<u32> = (MIN_ISSUED_AMOUNT_ORDER..MAX_ISSUED_AMOUNT_ORDER)
         .map(|i| 10u32.pow(i))
@@ -202,6 +198,7 @@ fn bench_asset_transaction(c: &mut Criterion) {
         c,
         transactions,
         issuer_account.pblc,
+        issuer_init_balance,
         public_account.owner_enc_pub_key,
         public_account.owner_sign_pub_key,
     );
