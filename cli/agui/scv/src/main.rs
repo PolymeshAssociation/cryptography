@@ -43,9 +43,9 @@ fn main() {
         .unwrap_or_else(|error| panic!("Failed to deserialize the proof: {}", error));
     let verifier_pub = ProofPublicKey::new(
         proof.cdd_id,
-        &proof.investor_did,
+        proof.investor_did,
         proof.scope_id,
-        &proof.scope_did,
+        proof.scope_did,
     );
 
     if verifier_pub.verify_id_match_proof(

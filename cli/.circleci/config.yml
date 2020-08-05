@@ -8,6 +8,9 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Checkout Cryptography submodule
+          command: git submodule update --init
+      - run:
           name: Check formatting
           command: ./scripts/lint
   build:
@@ -17,6 +20,9 @@ jobs:
       VERBOSE: "1"
     steps:
       - checkout
+      - run:
+          name: Checkout Cryptography submodule
+          command: git submodule update --init
       - run:
           name: Store rust version in an environment var for cache key
           command: rustc --version > rust.version
@@ -42,6 +48,9 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Checkout Cryptography submodule
+          command: git submodule update --init
+      - run:
           name: Store rust version in a file for cache key
           command: rustc --version > rust.version
       - restore_cache:
@@ -51,34 +60,10 @@ jobs:
       - run:
           name: Run tests
           command: >-
-            cargo +nightly test &&
-            cargo +nightly build --bench elgamal_decryption
+            RUST_LOG=info cargo +nightly test
           no_output_timeout: 30m
       - save_cache:
           key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
-          paths:
-            - "~/.cargo"
-            - "./target"
-  bench:
-    docker:
-      - image: maxsam4/rust
-    environment:
-      VERBOSE: "1"
-    steps:
-      - checkout
-      - run:
-          name: Store rust version in a file for cache key
-          command: rustc --version > rust.version
-      - restore_cache:
-          keys:
-            - v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
-            - v6-bench-cache-{{ checksum "./rust.version" }}
-      - run:
-          name: Run tests
-          command: cargo +nightly bench
-          no_output_timeout: 30m
-      - save_cache:
-          key: v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
           paths:
             - "~/.cargo"
             - "./target"
@@ -97,7 +82,7 @@ workflows:
               only:
                 - develop
                 - master
-  benchmark:
+  nightly:
     triggers:
       - schedule:
           cron: "0 0 * * *"
@@ -107,4 +92,4 @@ workflows:
                 - develop
                 - master
     jobs:
-      - bench
+      - test
