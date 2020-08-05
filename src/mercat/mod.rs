@@ -274,11 +274,7 @@ impl Account {
     /// Utility method that can decrypt the the balance of an account.
     /// Note that this decryption is not constant time.
     pub fn decrypt_balance(&self) -> Fallible<Balance> {
-        let balance = self
-            .scrt
-            .enc_keys
-            .scrt
-            .decrypt(&self.pblc.enc_balance)?;
+        let balance = self.scrt.enc_keys.scrt.decrypt(&self.pblc.enc_balance)?;
 
         Ok(Balance::from(balance))
     }

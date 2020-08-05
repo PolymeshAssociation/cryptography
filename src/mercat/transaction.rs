@@ -6,6 +6,7 @@ use crate::{
         correctness_proof::{
             CorrectnessProof, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
         },
+        elgamal_encryption::encrypt_using_two_pub_keys,
         encrypting_same_value_proof::{
             CipherEqualDifferentPubKeyProof, EncryptingSameValueProverAwaitingChallenge,
             EncryptingSameValueVerifier,
@@ -14,7 +15,6 @@ use crate::{
         encryption_proofs::single_property_verifier,
         range_proof::{prove_within_range, verify_within_range, InRangeProof},
         CommitmentWitness,
-        elgamal_encryption::encrypt_using_two_pub_keys,
     },
     errors::{ErrorKind, Fallible},
     mercat::{
@@ -71,9 +71,7 @@ impl TransferTransactionSender for CtxSender {
         let sndr_pub_account = &sndr_account.pblc;
         let rcvr_pub_key = rcvr_pub_account.memo.owner_enc_pub_key;
 
-        let balance = sndr_enc_keys
-            .scrt
-            .decrypt(&sndr_account.pblc.enc_balance)?;
+        let balance = sndr_enc_keys.scrt.decrypt(&sndr_account.pblc.enc_balance)?;
         ensure!(
             balance >= amount,
             ErrorKind::NotEnoughFund {
@@ -111,10 +109,10 @@ impl TransferTransactionSender for CtxSender {
         // Refresh the encrypted balance and prove that the refreshment was done
         // correctly.
         let balance_refresh_enc_blinding = Scalar::random(rng);
-        let refreshed_enc_balance = sndr_account.pblc.enc_balance.refresh(
-            &sndr_enc_keys.scrt,
-            balance_refresh_enc_blinding,
-        )?;
+        let refreshed_enc_balance = sndr_account
+            .pblc
+            .enc_balance
+            .refresh(&sndr_enc_keys.scrt, balance_refresh_enc_blinding)?;
 
         let balance_refreshed_same_proof = single_property_prover(
             CipherTextRefreshmentProverAwaitingChallenge::new(
@@ -812,8 +810,9 @@ mod tests {
             correctness_proof::CorrectnessProof, ElgamalSecretKey,
         },
         mercat::{
-            AccountMemo, EncryptedAmount, EncryptedAssetId, EncryptionKeys, EncryptionPubKey,
-            SecAccount, Signature, SigningKeys, SigningPubKey, TransferTxMemo, EncryptedAmountWithHint,
+            AccountMemo, EncryptedAmount, EncryptedAmountWithHint, EncryptedAssetId,
+            EncryptionKeys, EncryptionPubKey, SecAccount, Signature, SigningKeys, SigningPubKey,
+            TransferTxMemo,
         },
         AssetId,
     };
@@ -870,8 +869,7 @@ mod tests {
         rng: &mut R,
     ) -> Fallible<PubAccount> {
         let (_, enc_asset_id) = rcvr_enc_pub_key.encrypt_value(asset_id.into(), rng);
-        let (_, enc_balance) =
-            rcvr_enc_pub_key.encrypt_value(Scalar::from(balance), rng);
+        let (_, enc_balance) = rcvr_enc_pub_key.encrypt_value(Scalar::from(balance), rng);
 
         Ok(PubAccount {
             id: 1,

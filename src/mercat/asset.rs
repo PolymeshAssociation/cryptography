@@ -370,10 +370,7 @@ impl AssetTransactionMediator for AssetMediator {
             &CorrectnessVerifier {
                 value: amount.into(),
                 pub_key: issr_pub_account.memo.owner_enc_pub_key,
-                cipher: initialized_asset_tx
-                    .content
-                    .memo
-                    .enc_issued_amount,
+                cipher: initialized_asset_tx.content.memo.enc_issued_amount,
                 pc_gens: &gens,
             },
             initialized_asset_tx.content.balance_correctness_proof,
@@ -436,10 +433,7 @@ impl AssetTransactionAuditor for AssetAuditor {
                         &CorrectnessVerifier {
                             value: amount.into(),
                             pub_key: issuer_account.memo.owner_enc_pub_key,
-                            cipher: initialized_asset_tx
-                                .content
-                                .memo
-                                .enc_issued_amount,
+                            cipher: initialized_asset_tx.content.memo.enc_issued_amount,
                             pc_gens: &gens,
                         },
                         initialized_asset_tx.content.balance_correctness_proof,
@@ -624,10 +618,7 @@ mod tests {
         // Check that the issued amount is added to the account balance.
         assert!(issuer_enc_key
             .scrt
-            .verify(
-                &updated_issuer_account.enc_balance,
-                &issued_amount.into()
-            )
+            .verify(&updated_issuer_account.enc_balance, &issued_amount.into())
             .is_ok());
 
         // Check that the asset_id is still the same.
@@ -743,10 +734,7 @@ mod tests {
         // Check that the issued amount is added to the account balance.
         assert!(issuer_enc_key
             .scrt
-            .verify(
-                &updated_issuer_account.enc_balance,
-                &issued_amount.into()
-            )
+            .verify(&updated_issuer_account.enc_balance, &issued_amount.into())
             .is_ok());
 
         // Check that the asset_id is still the same.
