@@ -167,26 +167,6 @@ impl ElgamalSecretKey {
 }
 
 // ------------------------------------------------------------------------
-// CipherTextWithHint Refreshment Method
-// ------------------------------------------------------------------------
-
-impl CipherTextWithHint {
-    pub fn refresh<R: RngCore + CryptoRng>(
-        &self,
-        secret_key: &ElgamalSecretKey,
-        blinding: Scalar,
-        rng: &mut R,
-    ) -> Fallible<CipherTextWithHint> {
-        let value: Scalar = secret_key.const_time_decrypt(self)?.into();
-        let pub_key = secret_key.get_public_key();
-        let new_witness = CommitmentWitness::new(value, blinding);
-        let new_ciphertext = pub_key.const_time_encrypt(&new_witness, rng);
-
-        Ok(new_ciphertext)
-    }
-}
-
-// ------------------------------------------------------------------------
 // Tests
 // ------------------------------------------------------------------------
 

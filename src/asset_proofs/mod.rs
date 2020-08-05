@@ -199,7 +199,7 @@
 #[macro_use]
 pub(crate) mod macros;
 
-mod elgamal_encryption;
+pub mod elgamal_encryption;
 pub use elgamal_encryption::{CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey};
 pub mod const_time_elgamal_encryption;
 pub use const_time_elgamal_encryption::CipherTextWithHint;

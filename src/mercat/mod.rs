@@ -65,7 +65,10 @@ pub type Signature = schnorrkel::sign::Signature;
 pub type EncryptedAssetId = CipherText;
 
 /// New type for Twisted ElGamal ciphertext of account amounts/balances.
-pub type EncryptedAmount = CipherTextWithHint;
+pub type EncryptedAmount = CipherText;
+
+/// New type for ElGamal ciphertext of a transferred amount.
+pub type EncryptedAmountWithHint = CipherTextWithHint;
 
 /// Asset memo holds the contents of an asset issuance transaction.
 #[derive(Clone, Encode, Decode)]
@@ -275,7 +278,7 @@ impl Account {
             .scrt
             .enc_keys
             .scrt
-            .decrypt(&self.pblc.enc_balance.elgamal_cipher)?;
+            .decrypt(&self.pblc.enc_balance)?;
 
         Ok(Balance::from(balance))
     }
@@ -411,7 +414,7 @@ impl core::fmt::Debug for TransferTxState {
 pub struct AssetTxContent {
     pub account_id: u32,
     pub enc_asset_id: EncryptedAssetId,
-    pub enc_amount_for_mdtr: EncryptedAmount,
+    pub enc_amount_for_mdtr: EncryptedAmountWithHint,
     pub memo: AssetMemo,
     pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub balance_wellformedness_proof: WellformednessProof,
@@ -545,7 +548,7 @@ pub trait AssetTransactionAuditor {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuditorPayload {
     pub auditor_id: u32,
-    pub encrypted_amount: EncryptedAmount,
+    pub encrypted_amount: EncryptedAmountWithHint,
     pub amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
 }
 
@@ -562,7 +565,7 @@ pub struct TransferTxMemo {
     pub refreshed_enc_asset_id: EncryptedAssetId,
     pub enc_asset_id_using_rcvr: EncryptedAssetId,
     pub enc_asset_id_for_mdtr: EncryptedAssetId,
-    pub enc_amount_for_mdtr: EncryptedAmount,
+    pub enc_amount_for_mdtr: EncryptedAmountWithHint,
     pub tx_id: u32,
 }
 
@@ -731,7 +734,7 @@ pub trait TransferTransactionMediator {
         mdtr_sign_keys: &SigningKeys,
         sndr_account: &PubAccount,
         rcvr_account: &PubAccount,
-        pending_balance: EncryptedAmount,
+        pending_balance: EncryptedAmount, // todo
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         asset_id_hint: AssetId,
         rng: &mut R,
@@ -747,7 +750,7 @@ pub trait TransferTransactionVerifier {
         sndr_account: PubAccount,
         rcvr_account: PubAccount,
         mdtr_sign_pub_key: &SigningPubKey,
-        pending_balance: EncryptedAmount,
+        pending_balance: EncryptedAmount, // todo
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         rng: &mut R,
     ) -> Fallible<(PubAccount, PubAccount)>;
