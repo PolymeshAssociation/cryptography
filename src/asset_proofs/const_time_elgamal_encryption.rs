@@ -1,5 +1,30 @@
 //! The `const_time_elgamal_encryption` library implements the
 //! Constant Time Elgamal encryption over the Ristretto 25519 curve.
+//!
+//! Here's a brief overview of this scheme:
+//! Elgamal key pair:
+//! secret_key := scalar
+//! public_key := secret_key * g
+//!
+//! Constant time encryption:
+//! plaintext := (`value`, random_1, random_2)
+//! cipher_text := (X, Y, Z)
+//! X := random_1 * public_key
+//! Y := random_1 * g + random_2 * h
+//! Make a one-time-pad from Hash(random_2 * h) and use it to encrypt the `value`:
+//! Z := Hash(random_2 * h) ^ value
+//!
+//! Decryption:
+//! Given (secret_key, X, Y, Z) find `value` such that:
+//! random_2 * h := Y - X / secret_key
+//! Calculate the one-time-pad with Hash(random_2 * h) and use it to decrypt the
+//! `value`:
+//! decrypted_value := Hash(random_2 * h) ^ Z
+//!
+//! Where g and h are 2 orthogonal generators.
+//! In this implementation, we set `random_1` to the blinding factor used for the
+//! twisted Elgamal encryption. This way the twisted Elgamal and regular Elgamal
+//! ciphertexts can share the same `X`.
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
@@ -21,6 +46,13 @@ use crate::asset_proofs::elgamal_encryption::{
 
 use crate::errors::Fallible;
 
+/// This data structure wraps a twisted Elgamal cipher text with the
+/// regular Elgamal cipher text.
+/// Since regular Elgamal decryption is constant time, its result is
+/// used as a hint to verify the twisted elgamal encryption.
+/// Note that we can not only rely on regular Elgamal encryption since
+/// 1. it is not homomorphic. 2. all asset proofs prove properties of
+/// a twisted Elgamal cipher text.
 #[derive(PartialEq, Copy, Clone, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -63,25 +95,10 @@ impl Decode for CipherTextWithHint {
 }
 
 // ------------------------------------------------------------------------
-// Constant Time Elgamal Encryption.
+// Constant Time Elgamal Encryption
 // ------------------------------------------------------------------------
 
-/// Elgamal key pair:
-/// secret_key := scalar
-/// public_key := secret_key * g
-///
-/// Encryption:
-/// plaintext := (value, blinding_factor)
-/// cipher_text := (X, Y)
-/// X := blinding_factor * public_key
-/// Y := blinding_factor * g + value * h
-///
-/// Decryption:
-/// Given (secret_key, X, Y) find value such that:
-/// value * h = Y - X / secret_key
-///
-/// where g and h are 2 orthogonal generators.
-
+// Generate a one-time-pad from Hash(key) and byte-wise xor it with the data.
 fn xor_with_one_time_pad(key: RistrettoPoint, data: &[u8; 32]) -> [u8; 32] {
     let key_bytes: [u8; 32] = key.compress().to_bytes();
     let hashed_key = Sha3_256::default().chain(key_bytes).fixed_result();
@@ -95,17 +112,16 @@ fn xor_with_one_time_pad(key: RistrettoPoint, data: &[u8; 32]) -> [u8; 32] {
 }
 
 impl ElgamalPublicKey {
-    // todo this could be renamed to constant_time_encrypt
     pub fn const_time_encrypt<R: RngCore + CryptoRng>(
         &self,
         witness: &CommitmentWitness,
         rng: &mut R,
     ) -> CipherTextWithHint {
-        // Elgamal Encryption.
+        // Twisted Elgamal encryption.
         let elgamal_cipher = self.encrypt(witness);
         let r1 = witness.blinding();
 
-        // Constant Time Elgamal.
+        // Constant Time Elgamal encryption.
         let message_bytes: [u8; 32] = witness.value().to_bytes();
         let r2 = Scalar::random(rng);
         let gens = PedersenGens::default();
@@ -136,17 +152,37 @@ impl ElgamalPublicKey {
 impl ElgamalSecretKey {
     /// Decrypt a cipher text that is known to encrypt a u32.
     pub fn const_time_decrypt(&self, cipher_text: &CipherTextWithHint) -> Fallible<u32> {
-        // value * h = Y - X / secret_key
-        let value_h = cipher_text.y - self.secret.invert() * cipher_text.elgamal_cipher.x;
+        // random_2 * h = Y - X / secret_key
+        let random_2_h = cipher_text.y - self.secret.invert() * cipher_text.elgamal_cipher.x;
 
         use byteorder::{ByteOrder, LittleEndian};
 
-        let decrypted_msg = xor_with_one_time_pad(value_h, &cipher_text.z);
+        let decrypted_msg = xor_with_one_time_pad(random_2_h, &cipher_text.z);
         let decrypted_u32 = LittleEndian::read_u32(&decrypted_msg);
 
         // Verify that the same value was encrypted using twisted Elgamal encryption.
         self.verify(&cipher_text.elgamal_cipher, &decrypted_u32.into())?;
         Ok(decrypted_u32)
+    }
+}
+
+// ------------------------------------------------------------------------
+// CipherTextWithHint Refreshment Method
+// ------------------------------------------------------------------------
+
+impl CipherTextWithHint {
+    pub fn refresh<R: RngCore + CryptoRng>(
+        &self,
+        secret_key: &ElgamalSecretKey,
+        blinding: Scalar,
+        rng: &mut R,
+    ) -> Fallible<CipherTextWithHint> {
+        let value: Scalar = secret_key.const_time_decrypt(self)?.into();
+        let pub_key = secret_key.get_public_key();
+        let new_witness = CommitmentWitness::new(value, blinding);
+        let new_ciphertext = pub_key.const_time_encrypt(&new_witness, rng);
+
+        Ok(new_ciphertext)
     }
 }
 
