@@ -70,15 +70,6 @@ pub type EncryptedAmount = CipherText;
 /// New type for ElGamal ciphertext of a transferred amount.
 pub type EncryptedAmountWithHint = CipherTextWithHint;
 
-/// Asset memo holds the contents of an asset issuance transaction.
-#[derive(Clone, Encode, Decode)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct AssetMemo {
-    pub enc_issued_amount: EncryptedAmount,
-    pub tx_id: u32,
-}
-
 // -------------------------------------------------------------------------------------
 // -                                    Account                                        -
 // -------------------------------------------------------------------------------------
@@ -171,7 +162,6 @@ impl Decode for AccountMemo {
 pub struct PubAccount {
     pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
-    pub enc_balance: EncryptedAmount,
     pub memo: AccountMemo,
 }
 
@@ -181,6 +171,7 @@ pub struct PubAccount {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccountContent {
     pub pub_account: PubAccount,
+    pub initial_balance: EncryptedAmount,
     pub asset_wellformedness_proof: WellformednessProof,
     pub asset_membership_proof: MembershipProof,
     pub initial_balance_correctness_proof: CorrectnessProof,
@@ -268,16 +259,6 @@ impl Decode for SecAccount {
 pub struct Account {
     pub pblc: PubAccount,
     pub scrt: SecAccount,
-}
-
-impl Account {
-    /// Utility method that can decrypt the the balance of an account.
-    /// Note that this decryption is not constant time.
-    pub fn decrypt_balance(&self) -> Fallible<Balance> {
-        let balance = self.scrt.enc_keys.scrt.decrypt(&self.pblc.enc_balance)?;
-
-        Ok(Balance::from(balance))
-    }
 }
 
 /// The interface for the account creation.
@@ -402,6 +383,15 @@ impl core::fmt::Debug for TransferTxState {
 // -                                 Asset Issuance                                    -
 // -------------------------------------------------------------------------------------
 
+/// Asset memo holds the contents of an asset issuance transaction.
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct AssetMemo {
+    pub enc_issued_amount: EncryptedAmount,
+    pub tx_id: u32,
+}
+
 /// Holds the public portion of an asset issuance transaction after initialization.
 /// This can be placed on the chain.
 #[derive(Clone, Encode, Decode)]
@@ -515,11 +505,12 @@ pub trait AssetTransactionVerifier {
     fn verify_asset_transaction(
         &self,
         justified_asset_tx: &JustifiedAssetTx,
-        issr_account: PubAccount,
+        issr_account: &PubAccount,
+        issr_init_balance: &EncryptedAmount,
         mdtr_enc_pub_key: &EncryptionPubKey,
         mdtr_sign_pub_key: &SigningPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
-    ) -> Fallible<PubAccount>;
+    ) -> Fallible<EncryptedAmount>;
 }
 
 pub trait AssetTransactionAuditor {
@@ -698,6 +689,7 @@ pub trait TransferTransactionSender {
         &self,
         tx_id: u32,
         sndr_account: &Account,
+        sndr_init_balance: &EncryptedAmount,
         rcvr_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
@@ -729,8 +721,8 @@ pub trait TransferTransactionMediator {
         mdtr_enc_keys: &EncryptionKeys,
         mdtr_sign_keys: &SigningKeys,
         sndr_account: &PubAccount,
+        sndr_init_balance: &EncryptedAmount,
         rcvr_account: &PubAccount,
-        pending_balance: EncryptedAmount, // todo
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         asset_id_hint: AssetId,
         rng: &mut R,
@@ -743,13 +735,14 @@ pub trait TransferTransactionVerifier {
     fn verify_transaction<R: RngCore + CryptoRng>(
         &self,
         justified_transaction: &JustifiedTransferTx,
-        sndr_account: PubAccount,
-        rcvr_account: PubAccount,
+        sndr_account: &PubAccount,
+        sndr_init_balance: &EncryptedAmount,
+        rcvr_account: &PubAccount,
+        rcvr_init_balance: &EncryptedAmount,
         mdtr_sign_pub_key: &SigningPubKey,
-        pending_balance: EncryptedAmount, // todo
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         rng: &mut R,
-    ) -> Fallible<(PubAccount, PubAccount)>;
+    ) -> Fallible<(EncryptedAmount, EncryptedAmount)>;
 }
 
 pub trait TransferTransactionAuditor {

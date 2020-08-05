@@ -74,7 +74,7 @@ impl AccountCreatorInitializer for AccountCreator {
         // Encrypt the balance and prove that the encrypted balance is correct
         let balance: Balance = 0;
         let balance_witness = CommitmentWitness::new(balance.into(), balance_blinding);
-        let enc_balance = EncryptedAmount::from(scrt.enc_keys.pblc.encrypt(&balance_witness));
+        let initial_balance = EncryptedAmount::from(scrt.enc_keys.pblc.encrypt(&balance_witness));
 
         let initial_balance_correctness_proof = CorrectnessProof::from(single_property_prover(
             CorrectnessProverAwaitingChallenge {
@@ -106,9 +106,10 @@ impl AccountCreatorInitializer for AccountCreator {
             pub_account: PubAccount {
                 id: account_id,
                 enc_asset_id: enc_asset_id.into(),
-                enc_balance,
+                // enc_balance,
                 memo: AccountMemo::new(scrt.enc_keys.pblc, scrt.sign_keys.public),
             },
+            initial_balance,
             asset_wellformedness_proof,
             asset_membership_proof,
             initial_balance_correctness_proof,
@@ -122,24 +123,15 @@ impl AccountCreatorInitializer for AccountCreator {
     }
 }
 
-#[inline(always)]
-fn set_enc_balance(account: PubAccount, enc_balance: EncryptedAmount) -> PubAccount {
-    PubAccount {
-        id: account.id,
-        enc_asset_id: account.enc_asset_id,
-        enc_balance, // the new balance
-        memo: account.memo,
-    }
+pub fn deposit(initial_balance: &EncryptedAmount, enc_amount: &EncryptedAmount) -> EncryptedAmount {
+    initial_balance + enc_amount
 }
 
-pub fn deposit(account: PubAccount, enc_amount: EncryptedAmount) -> PubAccount {
-    let enc_balance = account.enc_balance + enc_amount;
-    set_enc_balance(account, enc_balance)
-}
-
-pub fn withdraw(account: PubAccount, enc_amount: EncryptedAmount) -> PubAccount {
-    let enc_balance = account.enc_balance - enc_amount;
-    set_enc_balance(account, enc_balance)
+pub fn withdraw(
+    initial_balance: &EncryptedAmount,
+    enc_amount: &EncryptedAmount,
+) -> EncryptedAmount {
+    initial_balance - enc_amount
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -176,7 +168,7 @@ impl AccountCreatorVerifier for AccountValidator {
             &CorrectnessVerifier {
                 value: balance.into(),
                 pub_key: account.content.pub_account.memo.owner_enc_pub_key,
-                cipher: account.content.pub_account.enc_balance,
+                cipher: account.content.initial_balance,
                 pc_gens: &gens,
             },
             account.content.initial_balance_correctness_proof,
@@ -250,20 +242,19 @@ mod tests {
 
         let tx_id = 0;
         let account_creator = AccountCreator {};
-        let sndr_account = account_creator
+        let sndr_account_tx = account_creator
             .create(tx_id, &scrt_account, &valid_asset_ids, account_id, &mut rng)
             .unwrap();
 
-        let decrypted_balance = Account {
-            scrt: scrt_account.clone(),
-            pblc: sndr_account.content.pub_account.clone(),
-        }
-        .decrypt_balance()
-        .unwrap();
+        let decrypted_balance = scrt_account
+            .enc_keys
+            .scrt
+            .decrypt(&sndr_account_tx.content.initial_balance)
+            .unwrap();
         assert_eq!(decrypted_balance, 0);
 
         let account_vldtr = AccountValidator {};
-        let result = account_vldtr.verify(&sndr_account, &valid_asset_ids);
+        let result = account_vldtr.verify(&sndr_account_tx, &valid_asset_ids);
         result.unwrap();
     }
 
@@ -303,13 +294,12 @@ mod tests {
         let pub_account_tx = account_creator
             .create(tx_id, &scrt_account, &valid_asset_ids, account_id, &mut rng)
             .unwrap();
-        let account = Account {
-            scrt: scrt_account.clone(),
-            pblc: pub_account_tx.content.pub_account.clone(),
-        };
 
-        let balance = account.decrypt_balance().unwrap();
-
+        let balance = scrt_account
+            .enc_keys
+            .scrt
+            .decrypt(&pub_account_tx.content.initial_balance)
+            .unwrap();
         assert_eq!(balance, 0);
 
         let ten: Balance = 10;
@@ -328,20 +318,21 @@ mod tests {
                 .encrypt_value(five.into(), &mut rng)
                 .1,
         );
-        let account = Account {
-            pblc: deposit(account.pblc, ten),
-            scrt: account.scrt,
-        };
 
-        let balance = account.decrypt_balance().unwrap();
+        let new_enc_balance = deposit(&pub_account_tx.content.initial_balance, &ten);
+        let balance = scrt_account
+            .enc_keys
+            .scrt
+            .decrypt(&new_enc_balance)
+            .unwrap();
         assert_eq!(balance, 10);
 
-        let account = Account {
-            pblc: withdraw(account.pblc, five),
-            scrt: account.scrt,
-        };
-
-        let balance = account.decrypt_balance().unwrap();
+        let new_enc_balance = withdraw(&new_enc_balance, &five);
+        let balance = scrt_account
+            .enc_keys
+            .scrt
+            .decrypt(&new_enc_balance)
+            .unwrap();
         assert_eq!(balance, 5);
     }
 }
