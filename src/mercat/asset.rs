@@ -68,7 +68,7 @@ fn asset_issuance_init_verify_proofs(
     single_property_verifier(
         &WellformednessVerifier {
             pub_key: issr_pub_account.memo.owner_enc_pub_key,
-            cipher: asset_tx.content.memo.enc_issued_amount.elgamal_cipher,
+            cipher: asset_tx.content.memo.enc_issued_amount,
             pc_gens: &gens,
         },
         asset_tx.content.balance_wellformedness_proof,
@@ -119,7 +119,7 @@ fn verify_auditor_payload(
                             &EncryptingSameValueVerifier {
                                 pub_key1: issuer_enc_pub_key,
                                 pub_key2: auditor_pub_key.clone(),
-                                cipher1: issuer_enc_amount.elgamal_cipher,
+                                cipher1: issuer_enc_amount,
                                 cipher2: payload.encrypted_amount.elgamal_cipher,
                                 pc_gens: &gens,
                             },
@@ -169,7 +169,7 @@ impl AssetTransactionIssuer for AssetIssuer {
             .scrt
             .enc_keys
             .pblc
-            .const_time_encrypt_value(amount.into(), rng);
+            .encrypt_value(amount.into(), rng);
         let memo = AssetMemo {
             enc_issued_amount: issr_enc_amount,
             tx_id,
@@ -373,8 +373,7 @@ impl AssetTransactionMediator for AssetMediator {
                 cipher: initialized_asset_tx
                     .content
                     .memo
-                    .enc_issued_amount
-                    .elgamal_cipher,
+                    .enc_issued_amount,
                 pc_gens: &gens,
             },
             initialized_asset_tx.content.balance_correctness_proof,
@@ -440,8 +439,7 @@ impl AssetTransactionAuditor for AssetAuditor {
                             cipher: initialized_asset_tx
                                 .content
                                 .memo
-                                .enc_issued_amount
-                                .elgamal_cipher,
+                                .enc_issued_amount,
                             pc_gens: &gens,
                         },
                         initialized_asset_tx.content.balance_correctness_proof,
@@ -627,7 +625,7 @@ mod tests {
         assert!(issuer_enc_key
             .scrt
             .verify(
-                &updated_issuer_account.enc_balance.elgamal_cipher,
+                &updated_issuer_account.enc_balance,
                 &issued_amount.into()
             )
             .is_ok());
@@ -746,7 +744,7 @@ mod tests {
         assert!(issuer_enc_key
             .scrt
             .verify(
-                &updated_issuer_account.enc_balance.elgamal_cipher,
+                &updated_issuer_account.enc_balance,
                 &issued_amount.into()
             )
             .is_ok());

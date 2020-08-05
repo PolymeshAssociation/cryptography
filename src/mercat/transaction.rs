@@ -14,6 +14,7 @@ use crate::{
         encryption_proofs::single_property_verifier,
         range_proof::{prove_within_range, verify_within_range, InRangeProof},
         CommitmentWitness,
+        elgamal_encryption::encrypt_using_two_pub_keys,
     },
     errors::{ErrorKind, Fallible},
     mercat::{
@@ -72,7 +73,7 @@ impl TransferTransactionSender for CtxSender {
 
         let balance = sndr_enc_keys
             .scrt
-            .const_time_decrypt(&sndr_account.pblc.enc_balance)?;
+            .decrypt(&sndr_account.pblc.enc_balance)?;
         ensure!(
             balance >= amount,
             ErrorKind::NotEnoughFund {
@@ -93,8 +94,8 @@ impl TransferTransactionSender for CtxSender {
         )?);
 
         // Prove that the amount encrypted under different public keys are the same.
-        let sndr_new_enc_amount = sndr_enc_keys.pblc.const_time_encrypt(&witness, rng);
-        let rcvr_new_enc_amount = rcvr_pub_key.const_time_encrypt(&witness, rng);
+        let (sndr_new_enc_amount, rcvr_new_enc_amount) =
+            encrypt_using_two_pub_keys(&witness, sndr_enc_keys.pblc, rcvr_pub_key);
 
         let amount_equal_cipher_proof =
             CipherEqualDifferentPubKeyProof::from(single_property_prover(
@@ -113,14 +114,13 @@ impl TransferTransactionSender for CtxSender {
         let refreshed_enc_balance = sndr_account.pblc.enc_balance.refresh(
             &sndr_enc_keys.scrt,
             balance_refresh_enc_blinding,
-            rng,
         )?;
 
         let balance_refreshed_same_proof = single_property_prover(
             CipherTextRefreshmentProverAwaitingChallenge::new(
                 sndr_enc_keys.scrt.clone(),
-                sndr_account.pblc.enc_balance.elgamal_cipher,
-                refreshed_enc_balance.elgamal_cipher,
+                sndr_account.pblc.enc_balance,
+                refreshed_enc_balance,
                 &gens,
             ),
             rng,
@@ -321,13 +321,13 @@ impl CtxReceiver {
         let rcvr_sign_keys = &rcvr_account.scrt.sign_keys;
         let rcvr_pub_account = &rcvr_account.pblc;
 
-        // Check that the amount is as expected.
-        let decrypted_amount = rcvr_enc_sec
-            .const_time_decrypt(&transaction_init_data.content.memo.enc_amount_using_rcvr)?;
-        ensure!(
-            decrypted_amount == expected_amount,
-            ErrorKind::TransactionAmountMismatch { expected_amount }
-        );
+        // Check that the amount is correct.
+        rcvr_enc_sec
+            .verify(
+                &transaction_init_data.content.memo.enc_amount_using_rcvr,
+                &expected_amount.into(),
+            )
+            .map_err(|_| ErrorKind::TransactionAmountMismatch { expected_amount })?;
 
         // Generate proof of equality of asset ids.
         let enc_asset_id_from_sndr = transaction_init_data.content.memo.enc_asset_id_using_rcvr;
@@ -403,7 +403,7 @@ impl TransferTransactionMediator for CtxMediator {
             &CorrectnessVerifier {
                 value: amount.into(),
                 pub_key: sndr_account.memo.owner_enc_pub_key,
-                cipher: tx_data.memo.enc_amount_using_sndr.elgamal_cipher,
+                cipher: tx_data.memo.enc_amount_using_sndr,
                 pc_gens: &gens,
             },
             tx_data.amount_correctness_proof,
@@ -597,8 +597,8 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
         &EncryptingSameValueVerifier {
             pub_key1: sndr_account.memo.owner_enc_pub_key,
             pub_key2: rcvr_account.memo.owner_enc_pub_key,
-            cipher1: memo.enc_amount_using_sndr.elgamal_cipher,
-            cipher2: memo.enc_amount_using_rcvr.elgamal_cipher,
+            cipher1: memo.enc_amount_using_sndr,
+            cipher2: memo.enc_amount_using_rcvr,
             pc_gens: &gens,
         },
         init_data.amount_equal_cipher_proof,
@@ -611,8 +611,8 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
             sndr_account.memo.owner_enc_pub_key,
-            pending_balance.elgamal_cipher,
-            memo.refreshed_enc_balance.elgamal_cipher,
+            pending_balance,
+            memo.refreshed_enc_balance,
             &gens,
         ),
         init_data.balance_refreshed_same_proof,
@@ -683,7 +683,7 @@ fn verify_auditor_payload(
                             &EncryptingSameValueVerifier {
                                 pub_key1: sender_enc_pub_key,
                                 pub_key2: auditor_pub_key.clone(),
-                                cipher1: sender_enc_amount.elgamal_cipher,
+                                cipher1: sender_enc_amount,
                                 cipher2: payload.encrypted_amount.elgamal_cipher,
                                 pc_gens: &gens,
                             },
@@ -780,8 +780,7 @@ impl TransferTransactionAuditor for CtxAuditor {
                                 .init_data
                                 .content
                                 .memo
-                                .enc_amount_using_sndr
-                                .elgamal_cipher,
+                                .enc_amount_using_sndr,
                             pc_gens: &gens,
                         },
                         initialized_transaction
@@ -814,7 +813,7 @@ mod tests {
         },
         mercat::{
             AccountMemo, EncryptedAmount, EncryptedAssetId, EncryptionKeys, EncryptionPubKey,
-            SecAccount, Signature, SigningKeys, SigningPubKey, TransferTxMemo,
+            SecAccount, Signature, SigningKeys, SigningPubKey, TransferTxMemo, EncryptedAmountWithHint,
         },
         AssetId,
     };
@@ -847,7 +846,7 @@ mod tests {
         asset_id: AssetId,
         rng: &mut R,
     ) -> TransferTxMemo {
-        let (_, enc_amount_using_rcvr) = rcvr_pub_key.const_time_encrypt_value(amount.into(), rng);
+        let (_, enc_amount_using_rcvr) = rcvr_pub_key.encrypt_value(amount.into(), rng);
         let (_, enc_asset_id_using_rcvr) = rcvr_pub_key.encrypt_value(asset_id.into(), rng);
         TransferTxMemo {
             sndr_account_id: 0,
@@ -857,7 +856,7 @@ mod tests {
             refreshed_enc_balance: EncryptedAmount::default(),
             refreshed_enc_asset_id: EncryptedAssetId::default(),
             enc_asset_id_using_rcvr: EncryptedAssetId::from(enc_asset_id_using_rcvr),
-            enc_amount_for_mdtr: EncryptedAmount::default(),
+            enc_amount_for_mdtr: EncryptedAmountWithHint::default(),
             enc_asset_id_for_mdtr: EncryptedAssetId::default(),
             tx_id: 0,
         }
@@ -872,7 +871,7 @@ mod tests {
     ) -> Fallible<PubAccount> {
         let (_, enc_asset_id) = rcvr_enc_pub_key.encrypt_value(asset_id.into(), rng);
         let (_, enc_balance) =
-            rcvr_enc_pub_key.const_time_encrypt_value(Scalar::from(balance), rng);
+            rcvr_enc_pub_key.encrypt_value(Scalar::from(balance), rng);
 
         Ok(PubAccount {
             id: 1,
@@ -1120,14 +1119,14 @@ mod tests {
         assert!(sndr_enc_keys
             .scrt
             .verify(
-                &updated_sender_account.enc_balance.elgamal_cipher,
+                &updated_sender_account.enc_balance,
                 &(sndr_balance - amount).into()
             )
             .is_ok());
         assert!(rcvr_enc_keys
             .scrt
             .verify(
-                &updated_receiver_account.enc_balance.elgamal_cipher,
+                &updated_receiver_account.enc_balance,
                 &(rcvr_balance + amount).into()
             )
             .is_ok());
@@ -1261,7 +1260,7 @@ mod tests {
             .enc_keys
             .scrt
             .verify(
-                &updated_sender_account.enc_balance.elgamal_cipher,
+                &updated_sender_account.enc_balance,
                 &(sndr_balance - amount).into()
             )
             .is_ok());
@@ -1270,7 +1269,7 @@ mod tests {
             .enc_keys
             .scrt
             .verify(
-                &updated_receiver_account.enc_balance.elgamal_cipher,
+                &updated_receiver_account.enc_balance,
                 &(rcvr_balance + amount).into()
             )
             .is_ok());

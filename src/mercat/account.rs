@@ -74,8 +74,7 @@ impl AccountCreatorInitializer for AccountCreator {
         // Encrypt the balance and prove that the encrypted balance is correct
         let balance: Balance = 0;
         let balance_witness = CommitmentWitness::new(balance.into(), balance_blinding);
-        let enc_balance =
-            EncryptedAmount::from(scrt.enc_keys.pblc.const_time_encrypt(&balance_witness, rng));
+        let enc_balance = EncryptedAmount::from(scrt.enc_keys.pblc.encrypt(&balance_witness));
 
         let initial_balance_correctness_proof = CorrectnessProof::from(single_property_prover(
             CorrectnessProverAwaitingChallenge {
@@ -134,14 +133,12 @@ fn set_enc_balance(account: PubAccount, enc_balance: EncryptedAmount) -> PubAcco
 }
 
 pub fn deposit(account: PubAccount, enc_amount: EncryptedAmount) -> PubAccount {
-    let mut enc_balance = EncryptedAmount::default();
-    enc_balance.elgamal_cipher = account.enc_balance.elgamal_cipher + enc_amount.elgamal_cipher;
+    let enc_balance = account.enc_balance + enc_amount;
     set_enc_balance(account, enc_balance)
 }
 
 pub fn withdraw(account: PubAccount, enc_amount: EncryptedAmount) -> PubAccount {
-    let mut enc_balance = EncryptedAmount::default();
-    enc_balance.elgamal_cipher = account.enc_balance.elgamal_cipher - enc_amount.elgamal_cipher;
+    let enc_balance = account.enc_balance - enc_amount;
     set_enc_balance(account, enc_balance)
 }
 
@@ -179,7 +176,7 @@ impl AccountCreatorVerifier for AccountValidator {
             &CorrectnessVerifier {
                 value: balance.into(),
                 pub_key: account.content.pub_account.memo.owner_enc_pub_key,
-                cipher: account.content.pub_account.enc_balance.elgamal_cipher,
+                cipher: account.content.pub_account.enc_balance,
                 pc_gens: &gens,
             },
             account.content.initial_balance_correctness_proof,
@@ -320,7 +317,7 @@ mod tests {
             scrt_account
                 .enc_keys
                 .pblc
-                .const_time_encrypt_value(ten.into(), &mut rng)
+                .encrypt_value(ten.into(), &mut rng)
                 .1,
         );
         let five: Balance = 5;
@@ -328,7 +325,7 @@ mod tests {
             scrt_account
                 .enc_keys
                 .pblc
-                .const_time_encrypt_value(five.into(), &mut rng)
+                .encrypt_value(five.into(), &mut rng)
                 .1,
         );
         let account = Account {
