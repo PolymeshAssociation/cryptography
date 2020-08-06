@@ -134,8 +134,8 @@ impl<'a, 'b> Add<&'b CipherText> for &'a CipherText {
 
     fn add(self, other: &'b CipherText) -> CipherText {
         CipherText {
-            x: &self.x + &other.x,
-            y: &self.y + &other.y,
+            x: self.x + other.x,
+            y: self.y + other.y,
         }
     }
 }
@@ -153,8 +153,8 @@ impl<'a, 'b> Sub<&'b CipherText> for &'a CipherText {
 
     fn sub(self, other: &'b CipherText) -> CipherText {
         CipherText {
-            x: &self.x - &other.x,
-            y: &self.y - &other.y,
+            x: self.x - other.x,
+            y: self.y - other.y,
         }
     }
 }

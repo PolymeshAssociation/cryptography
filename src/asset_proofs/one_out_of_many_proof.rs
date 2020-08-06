@@ -115,7 +115,7 @@ impl OooNProofGenerators {
     }
 
     /// Commits to the given vector using the provided blinding randomness.
-    pub fn vector_commit(&self, m_vec: &Vec<Scalar>, blinding: Scalar) -> RistrettoPoint {
+    pub fn vector_commit(&self, m_vec: &[Scalar], blinding: Scalar) -> RistrettoPoint {
         RistrettoPoint::multiscalar_mul(m_vec, &self.h_vec) + (blinding * self.com_gens.B_blinding)
     }
 }
@@ -188,7 +188,7 @@ impl<'a, 'b> Add<&'b Matrix> for &'a Matrix {
             let kb = i * self.columns as usize;
             for j in 0..self.columns as usize {
                 let k = kb + j;
-                sum.elements[k] = &self.elements[k] + &right.elements[k];
+                sum.elements[k] = self.elements[k] + right.elements[k];
             }
         }
 
@@ -204,7 +204,7 @@ impl<'a, 'b> Sub<&'b Matrix> for &'a Matrix {
             let kb = i * self.columns as usize;
             for j in 0..self.columns as usize {
                 let k = kb + j;
-                sub.elements[k] = &self.elements[k] - &right.elements[k];
+                sub.elements[k] = self.elements[k] - right.elements[k];
             }
         }
         sub
