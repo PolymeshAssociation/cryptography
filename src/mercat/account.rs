@@ -198,10 +198,7 @@ impl AccountCreatorVerifier for AccountValidator {
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::{
-        asset_proofs::ElgamalSecretKey,
-        mercat::{Account, EncryptionKeys},
-    };
+    use crate::{asset_proofs::ElgamalSecretKey, mercat::EncryptionKeys};
     use curve25519_dalek::scalar::Scalar;
     use rand::{rngs::StdRng, SeedableRng};
     use schnorrkel::{ExpansionMode, MiniSecretKey};
