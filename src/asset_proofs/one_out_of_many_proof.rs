@@ -242,7 +242,7 @@ impl Polynomial {
         let old_degree = self.degree;
 
         if a != Scalar::zero() {
-            self.degree = self.degree + 1;
+            self.degree += 1;
 
             if self.coeffs.len() < self.degree + 1 {
                 self.coeffs.resize(self.degree + 1, Scalar::zero());
@@ -284,7 +284,7 @@ pub struct R1ProofInitialMessage {
 }
 impl R1ProofInitialMessage {
     pub fn b(&self) -> RistrettoPoint {
-        return self.b;
+        self.b
     }
 }
 
@@ -416,7 +416,7 @@ impl Decode for R1ProofFinalResponse {
 
 impl R1ProofFinalResponse {
     pub fn f_elements(&self) -> Vec<Scalar> {
-        return self.f_elements.clone();
+        self.f_elements.clone()
     }
 }
 
@@ -483,8 +483,8 @@ impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
         let TWO = Matrix::new(rows, columns, Scalar::one() + Scalar::one());
 
         let mut a_matrix = Matrix {
-            rows: rows,
-            columns: columns,
+            rows,
+            columns,
             elements: (0..(rows * columns)).map(|_| Scalar::random(rng)).collect(),
         };
 
@@ -499,10 +499,9 @@ impl<'a> AssetProofProverAwaitingChallenge for R1ProverAwaitingChallenge<'a> {
         }
 
         let c_matrix: Matrix = a_matrix
-            .clone()
             .entrywise_product(&(&ONE - &TWO.entrywise_product(&self.b_matrix).unwrap()))
             .unwrap();
-        let d_matrix: Matrix = -(a_matrix.clone().entrywise_product(&a_matrix).unwrap());
+        let d_matrix: Matrix = -(a_matrix.entrywise_product(&a_matrix).unwrap());
         (
             R1Prover {
                 a_values: a_matrix.elements.clone(),
@@ -701,16 +700,16 @@ pub struct OOONProofFinalResponse {
 
 impl OOONProofFinalResponse {
     pub fn r1_proof_final_response(&self) -> R1ProofFinalResponse {
-        return self.r1_proof_final_response.clone();
+        self.r1_proof_final_response.clone()
     }
     pub fn z(&self) -> Scalar {
-        return self.z;
+        self.z
     }
     pub fn n(&self) -> u32 {
-        return self.n;
+        self.n
     }
     pub fn m(&self) -> u32 {
-        return self.m;
+        self.m
     }
 }
 
@@ -879,7 +878,7 @@ impl AssetProofProver<OOONProofFinalResponse> for OOONProver {
 
         OOONProofFinalResponse {
             r1_proof_final_response: r1_final_response,
-            z: z,
+            z,
             m: self.m,
             n: self.n,
         }

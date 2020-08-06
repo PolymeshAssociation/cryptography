@@ -2,25 +2,21 @@
 
 use crate::{
     asset_proofs::{
-        correctness_proof::{
-            CorrectnessProof, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
-        },
+        correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
         encrypting_same_value_proof::{
             EncryptingSameValueProverAwaitingChallenge, EncryptingSameValueVerifier,
         },
         encryption_proofs::single_property_prover,
         encryption_proofs::single_property_verifier,
-        wellformedness_proof::{
-            WellformednessProof, WellformednessProverAwaitingChallenge, WellformednessVerifier,
-        },
+        wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
         CommitmentWitness,
     },
     errors::{ErrorKind, Fallible},
     mercat::{
         Account, AssetMemo, AssetTransactionAuditor, AssetTransactionIssuer,
         AssetTransactionMediator, AssetTransactionVerifier, AssetTxContent, AuditorPayload,
-        CipherEqualDifferentPubKeyProof, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
-        InitializedAssetTx, JustifiedAssetTx, PubAccount, SigningKeys, SigningPubKey,
+        EncryptedAmount, EncryptionKeys, EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx,
+        PubAccount, SigningKeys, SigningPubKey,
     },
     Balance,
 };
@@ -56,7 +52,7 @@ fn asset_issuance_init_verify_proofs(
     single_property_verifier(
         &EncryptingSameValueVerifier {
             pub_key1: issr_pub_account.memo.owner_enc_pub_key,
-            pub_key2: mdtr_enc_pub_key.clone(),
+            pub_key2: *mdtr_enc_pub_key,
             cipher1: issr_pub_account.enc_asset_id,
             cipher2: asset_tx.content.enc_asset_id,
             pc_gens: &gens,
@@ -89,7 +85,7 @@ fn asset_issuance_init_verify(
     verify_auditor_payload(
         &asset_tx.content.auditors_payload,
         auditors_enc_pub_keys,
-        issr_pub_account.memo.owner_enc_pub_key.clone(),
+        issr_pub_account.memo.owner_enc_pub_key,
         asset_tx.content.memo.enc_issued_amount,
     )
 }
@@ -118,7 +114,7 @@ fn verify_auditor_payload(
                         single_property_verifier(
                             &EncryptingSameValueVerifier {
                                 pub_key1: issuer_enc_pub_key,
-                                pub_key2: auditor_pub_key.clone(),
+                                pub_key2: *auditor_pub_key,
                                 cipher1: issuer_enc_amount,
                                 cipher2: payload.encrypted_amount.elgamal_cipher,
                                 pc_gens: &gens,
@@ -176,36 +172,35 @@ impl AssetTransactionIssuer for AssetIssuer {
         };
 
         // Proof of encrypting the same asset type as the account type.
-        let same_asset_id_cipher_proof =
-            CipherEqualDifferentPubKeyProof::from(single_property_prover(
-                EncryptingSameValueProverAwaitingChallenge {
-                    pub_key1: issr_account.scrt.enc_keys.pblc,
-                    pub_key2: mdtr_pub_key.clone(),
-                    w: Zeroizing::new(issr_account.scrt.asset_id_witness.clone()),
-                    pc_gens: &gens,
-                },
-                rng,
-            )?);
+        let same_asset_id_cipher_proof = single_property_prover(
+            EncryptingSameValueProverAwaitingChallenge {
+                pub_key1: issr_account.scrt.enc_keys.pblc,
+                pub_key2: *mdtr_pub_key,
+                w: Zeroizing::new(issr_account.scrt.asset_id_witness.clone()),
+                pc_gens: &gens,
+            },
+            rng,
+        )?;
 
         // Proof of memo's wellformedness.
-        let memo_wellformedness_proof = WellformednessProof::from(single_property_prover(
+        let memo_wellformedness_proof = single_property_prover(
             WellformednessProverAwaitingChallenge {
                 pub_key: issr_account.scrt.enc_keys.pblc,
                 w: Zeroizing::new(issr_amount_witness.clone()),
                 pc_gens: &gens,
             },
             rng,
-        )?);
+        )?;
 
         // Proof of memo's correctness.
-        let memo_correctness_proof = CorrectnessProof::from(single_property_prover(
+        let memo_correctness_proof = single_property_prover(
             CorrectnessProverAwaitingChallenge {
                 pub_key: issr_account.scrt.enc_keys.pblc,
                 w: issr_amount_witness.clone(),
                 pc_gens: &gens,
             },
             rng,
-        )?);
+        )?;
 
         // Add the necessary payload for auditors.
         let auditors_payload = add_asset_transaction_auditor(
@@ -218,13 +213,13 @@ impl AssetTransactionIssuer for AssetIssuer {
         // Bundle the issuance data.
         let content = AssetTxContent {
             account_id: issr_account.pblc.id,
-            enc_asset_id: mdtr_enc_asset_id.into(),
-            enc_amount_for_mdtr: mdtr_enc_amount.into(),
-            memo: memo,
+            enc_asset_id: mdtr_enc_asset_id,
+            enc_amount_for_mdtr: mdtr_enc_amount,
+            memo,
             asset_id_equal_cipher_proof: same_asset_id_cipher_proof,
             balance_wellformedness_proof: memo_wellformedness_proof,
             balance_correctness_proof: memo_correctness_proof,
-            auditors_payload: auditors_payload,
+            auditors_payload,
         };
 
         // Sign the issuance content.
@@ -252,19 +247,18 @@ fn add_asset_transaction_auditor<T: RngCore + CryptoRng>(
 
             // Prove that the sender and auditor's ciphertexts are encrypting the same
             // commitment witness.
-            let amount_equal_cipher_proof =
-                CipherEqualDifferentPubKeyProof::from(single_property_prover(
-                    EncryptingSameValueProverAwaitingChallenge {
-                        pub_key1: issuer_enc_pub_key.clone(),
-                        pub_key2: auditor_enc_pub_key.clone(),
-                        w: Zeroizing::new(amount_witness.clone()),
-                        pc_gens: &gens,
-                    },
-                    rng,
-                )?);
+            let amount_equal_cipher_proof = single_property_prover(
+                EncryptingSameValueProverAwaitingChallenge {
+                    pub_key1: *issuer_enc_pub_key,
+                    pub_key2: *auditor_enc_pub_key,
+                    w: Zeroizing::new(amount_witness.clone()),
+                    pc_gens: &gens,
+                },
+                rng,
+            )?;
 
             let payload = AuditorPayload {
-                auditor_id: auditor_id.clone(),
+                auditor_id: *auditor_id,
                 encrypted_amount,
                 amount_equal_cipher_proof,
             };

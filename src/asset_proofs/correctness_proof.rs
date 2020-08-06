@@ -207,7 +207,7 @@ impl<'a> AssetProofVerifier for CorrectnessVerifier<'a> {
         z: &Self::ZKFinalResponse,
     ) -> Fallible<()> {
         let generators = self.pc_gens;
-        let y_prime = self.cipher.y - (Scalar::from(self.value) * generators.B);
+        let y_prime = self.cipher.y - (self.value * generators.B);
 
         ensure!(
             z.0 * self.pub_key.pub_key == initial_message.a + challenge.x() * self.cipher.x,

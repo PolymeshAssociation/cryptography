@@ -360,8 +360,8 @@ impl CipherText {
         secret_key.verify(self, hint)?;
         let pub_key = secret_key.get_public_key();
         let new_witness = CommitmentWitness {
-            value: hint.clone().into(),
-            blinding: blinding,
+            value: *hint,
+            blinding,
         };
         let new_ciphertext = pub_key.encrypt(&new_witness);
 

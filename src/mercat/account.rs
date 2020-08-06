@@ -1,15 +1,11 @@
 use crate::{
     asset_proofs::{
-        correctness_proof::{
-            CorrectnessProof, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
-        },
+        correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
         encryption_proofs::single_property_prover,
         encryption_proofs::single_property_verifier,
         membership_proof::{MembershipProofVerifier, MembershipProverAwaitingChallenge},
         one_out_of_many_proof::OooNProofGenerators,
-        wellformedness_proof::{
-            WellformednessProof, WellformednessProverAwaitingChallenge, WellformednessVerifier,
-        },
+        wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
         CommitmentWitness,
     },
     errors::Fallible,
@@ -41,7 +37,7 @@ lazy_static! {
 pub fn convert_asset_ids(valid_asset_ids: Vec<AssetId>) -> Vec<Scalar> {
     valid_asset_ids
         .into_iter()
-        .map(|m| Scalar::from(m))
+        .map(Scalar::from)
         .collect::<Vec<_>>()
 }
 
@@ -62,28 +58,28 @@ impl AccountCreatorInitializer for AccountCreator {
         // Encrypt asset id and prove that the encrypted asset is wellformed
         let enc_asset_id = scrt.enc_keys.pblc.encrypt(&scrt.asset_id_witness);
 
-        let asset_wellformedness_proof = WellformednessProof::from(single_property_prover(
+        let asset_wellformedness_proof = single_property_prover(
             WellformednessProverAwaitingChallenge {
                 pub_key: scrt.enc_keys.pblc,
                 w: Zeroizing::new(scrt.asset_id_witness.clone()),
                 pc_gens: &gens,
             },
             rng,
-        )?);
+        )?;
 
         // Encrypt the balance and prove that the encrypted balance is correct
         let balance: Balance = 0;
         let balance_witness = CommitmentWitness::new(balance.into(), balance_blinding);
-        let initial_balance = EncryptedAmount::from(scrt.enc_keys.pblc.encrypt(&balance_witness));
+        let initial_balance = scrt.enc_keys.pblc.encrypt(&balance_witness);
 
-        let initial_balance_correctness_proof = CorrectnessProof::from(single_property_prover(
+        let initial_balance_correctness_proof = single_property_prover(
             CorrectnessProverAwaitingChallenge {
                 pub_key: scrt.enc_keys.pblc,
                 w: balance_witness,
                 pc_gens: &gens,
             },
             rng,
-        )?);
+        )?;
 
         // Prove that the encrypted asset id that is stored as `enc_asset_id.y` is among the list of publicly known asset ids.
         let generators = &OooNProofGenerators::new(BASE, EXPONENT);
@@ -105,7 +101,7 @@ impl AccountCreatorInitializer for AccountCreator {
         let content = PubAccountContent {
             pub_account: PubAccount {
                 id: account_id,
-                enc_asset_id: enc_asset_id.into(),
+                enc_asset_id,
                 memo: AccountMemo::new(scrt.enc_keys.pblc, scrt.sign_keys.public),
             },
             initial_balance,

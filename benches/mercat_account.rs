@@ -17,7 +17,7 @@ const ASSET_IDS: [u32; 4] = [10, 20, 300, 4000];
 
 fn bench_account_creation(c: &mut Criterion) {
     let valid_asset_ids: Vec<AssetId> = (0..MAX_ASSET_ID_INDEX)
-        .map(|id| AssetId::from(id.clone()))
+        .map(|id| AssetId::from(id))
         .collect();
     let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
@@ -33,7 +33,7 @@ fn bench_account_creation(c: &mut Criterion) {
         })
         .collect();
 
-    let label = format!("MERCAT Transaction: Validator");
+    let label = "MERCAT Transaction: Validator".to_string();
     c.bench_function_over_inputs(
         &label,
         move |b, (_label, account)| {

@@ -30,8 +30,8 @@ pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
 ) -> (AccountMemo, MediatorAccount) {
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
     let mediator_enc_key = EncryptionKeys {
-        pblc: mediator_elg_secret_key.get_public_key().into(),
-        scrt: mediator_elg_secret_key.into(),
+        pblc: mediator_elg_secret_key.get_public_key(),
+        scrt: mediator_elg_secret_key,
     };
 
     let mediator_signing_pair =
@@ -61,7 +61,7 @@ pub fn create_account_with_amount<R: RngCore + CryptoRng>(
         .create(tx_id, &secret_account, valid_asset_ids, 0, rng)
         .unwrap();
     let account = Account {
-        scrt: secret_account.clone(),
+        scrt: secret_account,
         pblc: pub_account_tx.content.pub_account,
     };
     let mut initial_balance = pub_account_tx.content.initial_balance;
@@ -98,8 +98,8 @@ pub fn gen_keys<R: RngCore + CryptoRng>(rng: &mut R, asset_id: &AssetId) -> SecA
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
-        pblc: elg_pub.into(),
-        scrt: elg_secret.into(),
+        pblc: elg_pub,
+        scrt: elg_secret,
     };
 
     let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));

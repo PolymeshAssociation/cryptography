@@ -22,10 +22,10 @@ fn bench_membership_verify(
     secret_element_com: RistrettoPoint,
     proofs: Vec<(MembershipProofInitialMessage, MembershipProofFinalResponse)>,
 ) {
-    let label = format!("membership verification");
+    let label = "membership verification".to_string();
 
     let generators = OooNProofGenerators::new(EXPONENT, BASE);
-    let elements: Vec<Scalar> = (0..SET_SIZE as u32).map(|m| Scalar::from(m)).collect();
+    let elements: Vec<Scalar> = (0..SET_SIZE as u32).map(Scalar::from).collect();
 
     c.bench_function_over_inputs(
         &label,
@@ -51,7 +51,7 @@ fn bench_membership_proof(c: &mut Criterion) {
 
     let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
-    let elements: Vec<Scalar> = (0..SET_SIZE as u32).map(|m| Scalar::from(m)).collect();
+    let elements: Vec<Scalar> = (0..SET_SIZE as u32).map(Scalar::from).collect();
 
     let secret_member = Scalar::from(28345u32);
     let blinding = Scalar::random(&mut rng);

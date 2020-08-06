@@ -3,17 +3,14 @@ use crate::{
         ciphertext_refreshment_proof::{
             CipherTextRefreshmentProverAwaitingChallenge, CipherTextRefreshmentVerifier,
         },
-        correctness_proof::{
-            CorrectnessProof, CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
-        },
+        correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
         elgamal_encryption::encrypt_using_two_pub_keys,
         encrypting_same_value_proof::{
-            CipherEqualDifferentPubKeyProof, EncryptingSameValueProverAwaitingChallenge,
-            EncryptingSameValueVerifier,
+            EncryptingSameValueProverAwaitingChallenge, EncryptingSameValueVerifier,
         },
         encryption_proofs::single_property_prover,
         encryption_proofs::single_property_verifier,
-        range_proof::{prove_within_range, verify_within_range, InRangeProof},
+        range_proof::{prove_within_range, verify_within_range},
         CommitmentWitness,
     },
     errors::{ErrorKind, Fallible},
@@ -84,27 +81,22 @@ impl TransferTransactionSender for CtxSender {
         let witness = CommitmentWitness::new(amount.into(), Scalar::random(rng));
         let amount_enc_blinding = witness.blinding();
 
-        let non_neg_amount_proof = InRangeProof::from(prove_within_range(
-            amount.into(),
-            amount_enc_blinding,
-            BALANCE_RANGE,
-            rng,
-        )?);
+        let non_neg_amount_proof =
+            prove_within_range(amount.into(), amount_enc_blinding, BALANCE_RANGE, rng)?;
 
         // Prove that the amount encrypted under different public keys are the same.
         let (sndr_new_enc_amount, rcvr_new_enc_amount) =
             encrypt_using_two_pub_keys(&witness, sndr_enc_keys.pblc, rcvr_pub_key);
         let gens = PedersenGens::default();
-        let amount_equal_cipher_proof =
-            CipherEqualDifferentPubKeyProof::from(single_property_prover(
-                EncryptingSameValueProverAwaitingChallenge {
-                    pub_key1: sndr_enc_keys.pblc,
-                    pub_key2: rcvr_pub_key,
-                    w: Zeroizing::new(witness.clone()),
-                    pc_gens: &gens,
-                },
-                rng,
-            )?);
+        let amount_equal_cipher_proof = single_property_prover(
+            EncryptingSameValueProverAwaitingChallenge {
+                pub_key1: sndr_enc_keys.pblc,
+                pub_key2: rcvr_pub_key,
+                w: Zeroizing::new(witness.clone()),
+                pc_gens: &gens,
+            },
+            rng,
+        )?;
 
         // Refresh the encrypted balance and prove that the refreshment was done
         // correctly.
@@ -115,7 +107,7 @@ impl TransferTransactionSender for CtxSender {
         let balance_refreshed_same_proof = single_property_prover(
             CipherTextRefreshmentProverAwaitingChallenge::new(
                 sndr_enc_keys.scrt.clone(),
-                sndr_init_balance.clone(),
+                *sndr_init_balance,
                 refreshed_enc_balance,
                 &gens,
             ),
@@ -124,12 +116,8 @@ impl TransferTransactionSender for CtxSender {
 
         // Prove that the sender has enough funds.
         let blinding = balance_refresh_enc_blinding - amount_enc_blinding;
-        let enough_fund_proof = InRangeProof::from(prove_within_range(
-            (balance - amount).into(),
-            blinding,
-            BALANCE_RANGE,
-            rng,
-        )?);
+        let enough_fund_proof =
+            prove_within_range((balance - amount).into(), blinding, BALANCE_RANGE, rng)?;
 
         // Refresh the encrypted asset id of the sender account and prove that the
         // refreshment was done correctly.
@@ -137,7 +125,7 @@ impl TransferTransactionSender for CtxSender {
         let refreshed_enc_asset_id = sndr_pub_account.enc_asset_id.refresh_with_hint(
             &sndr_enc_keys.scrt,
             asset_id_refresh_enc_blinding,
-            &asset_id.clone().into(),
+            &asset_id.clone(),
         )?;
 
         let asset_id_refreshed_same_proof = single_property_prover(
@@ -153,23 +141,22 @@ impl TransferTransactionSender for CtxSender {
         // Prove the new refreshed encrypted asset id is the same as the one
         // encrypted by the receiver's pub key.
         let asset_id_witness_for_rcvr =
-            CommitmentWitness::new(asset_id.clone().into(), asset_id_refresh_enc_blinding);
+            CommitmentWitness::new(asset_id, asset_id_refresh_enc_blinding);
         let enc_asset_id_using_rcvr = rcvr_pub_key.encrypt(&asset_id_witness_for_rcvr);
-        let asset_id_equal_cipher_with_sndr_rcvr_keys_proof =
-            CipherEqualDifferentPubKeyProof::from(single_property_prover(
-                EncryptingSameValueProverAwaitingChallenge {
-                    pub_key1: sndr_enc_keys.pblc,
-                    pub_key2: rcvr_pub_key,
-                    w: Zeroizing::new(asset_id_witness_for_rcvr.clone()),
-                    pc_gens: &gens,
-                },
-                rng,
-            )?);
+        let asset_id_equal_cipher_with_sndr_rcvr_keys_proof = single_property_prover(
+            EncryptingSameValueProverAwaitingChallenge {
+                pub_key1: sndr_enc_keys.pblc,
+                pub_key2: rcvr_pub_key,
+                w: Zeroizing::new(asset_id_witness_for_rcvr.clone()),
+                pc_gens: &gens,
+            },
+            rng,
+        )?;
 
         // Prepare the correctness proofs for the mediator.
         let asset_id_witness_blinding_for_mdtr = Scalar::random(rng);
         let asset_id_witness_for_mdtr =
-            CommitmentWitness::new(asset_id.into(), asset_id_witness_blinding_for_mdtr);
+            CommitmentWitness::new(asset_id, asset_id_witness_blinding_for_mdtr);
         let enc_asset_id_for_mdtr = mdtr_pub_key.encrypt(&asset_id_witness_for_mdtr);
 
         let amount_witness_blinding_for_mdtr = Scalar::random(rng);
@@ -177,23 +164,23 @@ impl TransferTransactionSender for CtxSender {
             CommitmentWitness::new(amount.into(), amount_witness_blinding_for_mdtr);
         let enc_amount_for_mdtr = mdtr_pub_key.const_time_encrypt(&amount_witness_for_mdtr, rng);
 
-        let asset_id_correctness_proof = CorrectnessProof::from(single_property_prover(
+        let asset_id_correctness_proof = single_property_prover(
             CorrectnessProverAwaitingChallenge {
-                pub_key: rcvr_pub_key.clone(),
+                pub_key: rcvr_pub_key,
                 w: asset_id_witness_for_rcvr,
                 pc_gens: &gens,
             },
             rng,
-        )?);
+        )?;
 
-        let amount_correctness_proof = CorrectnessProof::from(single_property_prover(
+        let amount_correctness_proof = single_property_prover(
             CorrectnessProverAwaitingChallenge {
-                pub_key: sndr_enc_keys.pblc.clone(),
+                pub_key: sndr_enc_keys.pblc,
                 w: witness.clone(),
                 pc_gens: &gens,
             },
             rng,
-        )?);
+        )?;
 
         // Add the necessary payload for auditors.
         let auditors_payload =
@@ -212,16 +199,16 @@ impl TransferTransactionSender for CtxSender {
             memo: TransferTxMemo {
                 sndr_account_id: sndr_pub_account.id,
                 rcvr_account_id: rcvr_pub_account.id,
-                enc_amount_using_sndr: sndr_new_enc_amount.into(),
-                enc_amount_using_rcvr: rcvr_new_enc_amount.into(),
-                refreshed_enc_balance: refreshed_enc_balance.into(),
-                refreshed_enc_asset_id: refreshed_enc_asset_id.into(),
-                enc_asset_id_using_rcvr: enc_asset_id_using_rcvr.into(),
-                enc_asset_id_for_mdtr: enc_asset_id_for_mdtr.into(),
-                enc_amount_for_mdtr: enc_amount_for_mdtr.into(),
+                enc_amount_using_sndr: sndr_new_enc_amount,
+                enc_amount_using_rcvr: rcvr_new_enc_amount,
+                refreshed_enc_balance,
+                refreshed_enc_asset_id,
+                enc_asset_id_using_rcvr,
+                enc_asset_id_for_mdtr,
+                enc_amount_for_mdtr,
                 tx_id,
             },
-            auditors_payload: auditors_payload,
+            auditors_payload,
         };
 
         let message = content.encode();
@@ -248,19 +235,18 @@ fn add_transaction_auditor<T: RngCore + CryptoRng>(
 
             // Prove that the sender and auditor's ciphertexts are encrypting the same
             // commitment witness.
-            let amount_equal_cipher_proof =
-                CipherEqualDifferentPubKeyProof::from(single_property_prover(
-                    EncryptingSameValueProverAwaitingChallenge {
-                        pub_key1: sender_enc_pub_key.clone(),
-                        pub_key2: auditor_enc_pub_key.clone(),
-                        w: Zeroizing::new(amount_witness.clone()),
-                        pc_gens: &gens,
-                    },
-                    rng,
-                )?);
+            let amount_equal_cipher_proof = single_property_prover(
+                EncryptingSameValueProverAwaitingChallenge {
+                    pub_key1: *sender_enc_pub_key,
+                    pub_key2: *auditor_enc_pub_key,
+                    w: Zeroizing::new(amount_witness.clone()),
+                    pc_gens: &gens,
+                },
+                rng,
+            )?;
 
             let payload = AuditorPayload {
-                auditor_id: auditor_id.clone(),
+                auditor_id: *auditor_id,
                 encrypted_amount,
                 amount_equal_cipher_proof,
             };
@@ -608,7 +594,7 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
             sndr_account.memo.owner_enc_pub_key,
-            sndr_init_balance.clone(),
+            *sndr_init_balance,
             memo.refreshed_enc_balance,
             &gens,
         ),
@@ -648,8 +634,8 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     verify_auditor_payload(
         &init_data.auditors_payload,
         auditors_enc_pub_keys,
-        sndr_account.memo.owner_enc_pub_key.clone(),
-        init_data.memo.enc_amount_using_sndr.clone(),
+        sndr_account.memo.owner_enc_pub_key,
+        init_data.memo.enc_amount_using_sndr,
     )?;
 
     Ok(())
@@ -679,7 +665,7 @@ fn verify_auditor_payload(
                         single_property_verifier(
                             &EncryptingSameValueVerifier {
                                 pub_key1: sender_enc_pub_key,
-                                pub_key2: auditor_pub_key.clone(),
+                                pub_key2: *auditor_pub_key,
                                 cipher1: sender_enc_amount,
                                 cipher2: payload.encrypted_amount.elgamal_cipher,
                                 pc_gens: &gens,
@@ -806,7 +792,9 @@ mod tests {
     use crate::{
         asset_proofs::{
             ciphertext_refreshment_proof::CipherEqualSamePubKeyProof,
-            correctness_proof::CorrectnessProof, ElgamalSecretKey,
+            correctness_proof::CorrectnessProof,
+            encrypting_same_value_proof::CipherEqualDifferentPubKeyProof,
+            range_proof::InRangeProof, ElgamalSecretKey,
         },
         mercat::{
             AccountMemo, EncryptedAmount, EncryptedAmountWithHint, EncryptedAssetId,

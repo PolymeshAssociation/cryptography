@@ -72,7 +72,8 @@ impl TranscriptProtocol for Transcript {
         use curve25519_dalek::traits::IsIdentity;
 
         ensure!(!message.is_identity(), ErrorKind::VerificationError);
-        Ok(self.append_message(label, message.as_bytes()))
+        self.append_message(label, message.as_bytes());
+        Ok(())
     }
 
     fn append_domain_separator(&mut self, message: &'static [u8]) {

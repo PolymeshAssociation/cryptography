@@ -130,7 +130,7 @@ impl<'a> MembershipProverAwaitingChallenge<'a> {
             .ok_or_else(|| ErrorKind::MembershipProofInvalidAssetError)?
             as u32;
 
-        ensure!(elements_set.len() != 0, ErrorKind::EmptyElementsSet);
+        ensure!(!elements_set.is_empty(), ErrorKind::EmptyElementsSet);
 
         Ok(MembershipProverAwaitingChallenge {
             secret_element: Zeroizing::new(secret_element),
