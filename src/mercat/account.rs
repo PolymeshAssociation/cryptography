@@ -106,7 +106,6 @@ impl AccountCreatorInitializer for AccountCreator {
             pub_account: PubAccount {
                 id: account_id,
                 enc_asset_id: enc_asset_id.into(),
-                // enc_balance,
                 memo: AccountMemo::new(scrt.enc_keys.pblc, scrt.sign_keys.public),
             },
             initial_balance,
