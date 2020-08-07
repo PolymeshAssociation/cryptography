@@ -31,7 +31,7 @@ pub struct CommitmentWitness {
     /// balance value or the asset id in Scalar format.
     value: Scalar,
 
-    // A random blinding factor.
+    /// A random blinding factor.
     blinding: Scalar,
 }
 
@@ -134,8 +134,8 @@ impl<'a, 'b> Add<&'b CipherText> for &'a CipherText {
 
     fn add(self, other: &'b CipherText) -> CipherText {
         CipherText {
-            x: &self.x + &other.x,
-            y: &self.y + &other.y,
+            x: self.x + other.x,
+            y: self.y + other.y,
         }
     }
 }
@@ -153,8 +153,8 @@ impl<'a, 'b> Sub<&'b CipherText> for &'a CipherText {
 
     fn sub(self, other: &'b CipherText) -> CipherText {
         CipherText {
-            x: &self.x - &other.x,
-            y: &self.y - &other.y,
+            x: self.x - other.x,
+            y: self.y - other.y,
         }
     }
 }
@@ -360,8 +360,8 @@ impl CipherText {
         secret_key.verify(self, hint)?;
         let pub_key = secret_key.get_public_key();
         let new_witness = CommitmentWitness {
-            value: hint.clone().into(),
-            blinding: blinding,
+            value: *hint,
+            blinding,
         };
         let new_ciphertext = pub_key.encrypt(&new_witness);
 

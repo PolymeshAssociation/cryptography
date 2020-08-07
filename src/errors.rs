@@ -29,7 +29,7 @@ impl From<ErrorKind> for Error {
 impl From<Context<ErrorKind>> for Error {
     #[inline]
     fn from(inner: Context<ErrorKind>) -> Error {
-        Error { inner: inner }
+        Error { inner }
     }
 }
 

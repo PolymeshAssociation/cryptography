@@ -149,7 +149,7 @@ impl<'a> CipherTextRefreshmentProverAwaitingChallenge<'a> {
         gens: &'a PedersenGens,
     ) -> Self {
         CipherTextRefreshmentProverAwaitingChallenge {
-            secret_key: secret_key,
+            secret_key,
             y: ciphertext1.y - ciphertext2.y,
             pc_gens: gens,
         }
@@ -229,7 +229,7 @@ impl<'a> CipherTextRefreshmentVerifier<'a> {
         gens: &'a PedersenGens,
     ) -> Self {
         CipherTextRefreshmentVerifier {
-            pub_key: pub_key,
+            pub_key,
             x: ciphertext1.x - ciphertext2.x,
             y: ciphertext1.y - ciphertext2.y,
             pc_gens: gens,

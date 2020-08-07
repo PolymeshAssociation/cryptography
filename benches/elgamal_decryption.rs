@@ -9,7 +9,7 @@ fn bench_elgamal_decrypt(
     elg_secret: ElgamalSecretKey,
     ciphers: Vec<(String, CipherText)>,
 ) {
-    let label = format!("elgamal enc/dec bench");
+    let label = "elgamal enc/dec bench".to_string();
 
     c.bench_function_over_inputs(
         &label,
