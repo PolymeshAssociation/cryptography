@@ -13,7 +13,7 @@ use codec::{Decode, Encode};
 use cryptography::mercat::{
     Account, AssetTxState, EncryptedAmount, FinalizedTransferTx, InitializedAssetTx,
     InitializedTransferTx, JustifiedAssetTx, JustifiedTransferTx, PubAccount, PubAccountTx,
-    TransferTxState, TxSubstate,
+    SecAccount, TransferTxState, TxSubstate,
 };
 use curve25519_dalek::scalar::Scalar;
 use errors::Error;
@@ -965,6 +965,32 @@ fn debug_decrypt(
     account
         .scrt
         .enc_keys
+        .scrt
+        .decrypt(&enc_balance)
+        .map_err(|error| Error::LibraryError { error })
+}
+
+/// Use only for debugging purposes.
+#[inline]
+pub fn debug_decrypt_account_balance(
+    user: String,
+    ticker: String,
+    db_dir: PathBuf,
+) -> Result<u32, Error> {
+    let ordered_pub_account: OrderedPubAccount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &user,
+        &user_public_account_file(&ticker),
+    )?;
+    let scrt: SecAccount = load_object(
+        db_dir.clone(),
+        OFF_CHAIN_DIR,
+        &user,
+        &user_secret_account_file(&ticker),
+    )?;
+    let enc_balance = ordered_pub_account.pub_account.enc_balance;
+    scrt.enc_keys
         .scrt
         .decrypt(&enc_balance)
         .map_err(|error| Error::LibraryError { error })

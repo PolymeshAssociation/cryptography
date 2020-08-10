@@ -10,6 +10,7 @@ use mercat_common::{
     account_create::process_create_account,
     account_issue::process_issue_asset,
     account_transfer::{process_create_tx, process_finalize_tx},
+    debug_decrypt_account_balance,
     errors::Error,
     init_print_logger,
 };
@@ -31,7 +32,16 @@ fn main() {
             process_create_account(cfg.seed, db_dir, cfg.ticker, cfg.user, cfg.cheat, cfg.tx_id)
                 .unwrap()
         }
-        CLI::CreateFrom { config: _ } => panic!("This should not happen!"),
+        CLI::CreateFrom { config: _ } => panic!("This should not be called directly!"),
+        CLI::Decrypt(cfg) => info!(
+            "Account balance: {}",
+            debug_decrypt_account_balance(
+                cfg.user,
+                cfg.ticker,
+                cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap()
+            )
+            .unwrap()
+        ),
         CLI::Issue(cfg) => process_issue_asset(
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),

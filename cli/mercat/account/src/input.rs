@@ -58,6 +58,34 @@ pub struct CreateAccountInfo {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
+pub struct DecryptAccountInfo {
+    /// The name of the user. The name can be any valid string that can be used as a file name.
+    #[structopt(short, long, help = "The name of the user. This name must be unique.")]
+    pub user: String,
+
+    /// The directory that will serve as the database of the on/off-chain data and will be used
+    /// to save and load the data that in a real execution would be written to the on/off the
+    /// blockchain. Defaults to the current directory. This directory will have two main
+    /// sub-directories: `on-chain` and `off-chain`.
+    #[structopt(
+        parse(from_os_str),
+        help = "The directory to load and save the input and output files. Defaults to current directory.",
+        short,
+        long
+    )]
+    pub db_dir: Option<PathBuf>,
+
+    /// An asset ticker name which is a string of at most 12 characters.
+    /// In these test CLIs, the unique account id is created from the pair of username and ticker.
+    #[structopt(
+        short,
+        long,
+        help = "The asset ticker name. String of at most 12 characters."
+    )]
+    pub ticker: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct IssueAssetInfo {
     /// Account ID of the issuer will be generated from the username and ticker name pair.
     #[structopt(
@@ -264,6 +292,9 @@ pub enum CLI {
 
     /// Finalize a MERCAT transaction.
     FinalizeTransaction(FinalizeTransactionInfo),
+
+    /// Decrypt the account balance.
+    Decrypt(DecryptAccountInfo),
 }
 
 pub fn parse_input() -> CLI {
@@ -310,6 +341,23 @@ pub fn parse_input() -> CLI {
 
             info!("Read the following config from {:?}:\n{:#?}", &config, &cfg);
             return CLI::Create(cfg);
+        }
+
+        CLI::Decrypt(cfg) => {
+            let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
+
+            let cfg = DecryptAccountInfo {
+                ticker: cfg.ticker,
+                db_dir,
+                user: cfg.user.clone(),
+            };
+
+            info!(
+                "Parsed the following config from the command line:\n{:#?}",
+                cfg.clone()
+            );
+
+            return CLI::Decrypt(cfg);
         }
 
         CLI::Issue(cfg) => {

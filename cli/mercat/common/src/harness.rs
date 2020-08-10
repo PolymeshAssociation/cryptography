@@ -602,6 +602,12 @@ impl TestCase {
         let mut rng = create_rng_from_seed(Some(seed))?;
 
         self.chain_setup()?;
+        info!(
+            "tx-N/A: $ mercat-chain-setup --ticker-names {} --db-dir {}",
+            self.ticker_names.join(" "),
+            path_to_string(&self.chain_db_dir.clone()),
+        );
+
         for transaction in self
             .transactions
             .sequence(&mut rng, self.chain_db_dir.clone())

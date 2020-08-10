@@ -262,6 +262,8 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             // Set the default seed and db_dir if needed.
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
 
+            let seed: Option<String> = cfg.seed.clone().or_else(|| Some(gen_seed()));
+            info!("Seed: {:?}", seed.clone().unwrap());
             let cfg = JustifyTransferInfo {
                 db_dir,
                 tx_id: cfg.tx_id,
@@ -269,7 +271,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 sender: cfg.sender,
                 receiver: cfg.receiver,
                 mediator: cfg.mediator,
-                seed: cfg.seed,
+                seed,
                 reject: cfg.reject,
                 save_config: cfg.save_config.clone(),
                 cheat: cfg.cheat,
