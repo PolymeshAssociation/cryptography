@@ -14,24 +14,16 @@ use crate::{
     errors::{ErrorKind, Fallible},
     mercat::{
         Account, AssetMemo, AssetTransactionAuditor, AssetTransactionIssuer,
-        AssetTransactionMediator, AssetTransactionVerifier, AssetTxContent, AuditorPayload,
-        EncryptedAmount, EncryptionKeys, EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx,
-        PubAccount, SigningKeys, SigningPubKey,
+        AssetTransactionMediator, AssetTransactionVerifier, AuditorPayload, EncryptedAmount,
+        EncryptionKeys, EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx, PubAccount,
     },
     Balance,
 };
 
 use bulletproofs::PedersenGens;
-use codec::Encode;
-use lazy_static::lazy_static;
 use rand_core::{CryptoRng, RngCore};
-use schnorrkel::{context::SigningContext, signing_context};
 use sp_std::vec::Vec;
 use zeroize::Zeroizing;
-
-lazy_static! {
-    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/asset");
-}
 
 /// Helper function to verify the proofs on an asset initialization transaction.
 fn asset_issuance_init_verify_proofs(
@@ -41,33 +33,26 @@ fn asset_issuance_init_verify_proofs(
 ) -> Fallible<()> {
     let gens = PedersenGens::default();
 
-    // Verify the signature on the transaction.
-    let message = asset_tx.content.encode();
-    issr_pub_account
-        .memo
-        .owner_sign_pub_key
-        .verify(SIG_CTXT.bytes(&message), &asset_tx.sig)?;
-
     // Verify the proof of encrypting the same asset type as the account type.
     single_property_verifier(
         &EncryptingSameValueVerifier {
             pub_key1: issr_pub_account.memo.owner_enc_pub_key,
             pub_key2: *mdtr_enc_pub_key,
             cipher1: issr_pub_account.enc_asset_id,
-            cipher2: asset_tx.content.enc_asset_id,
+            cipher2: asset_tx.enc_asset_id,
             pc_gens: &gens,
         },
-        asset_tx.content.asset_id_equal_cipher_proof,
+        asset_tx.asset_id_equal_cipher_proof,
     )?;
 
     // Verify the proof of memo's wellformedness.
     single_property_verifier(
         &WellformednessVerifier {
             pub_key: issr_pub_account.memo.owner_enc_pub_key,
-            cipher: asset_tx.content.memo.enc_issued_amount,
+            cipher: asset_tx.memo.enc_issued_amount,
             pc_gens: &gens,
         },
-        asset_tx.content.balance_wellformedness_proof,
+        asset_tx.balance_wellformedness_proof,
     )?;
 
     Ok(())
@@ -83,10 +68,10 @@ fn asset_issuance_init_verify(
 
     // Verify auditors payload.
     verify_auditor_payload(
-        &asset_tx.content.auditors_payload,
+        &asset_tx.auditors_payload,
         auditors_enc_pub_keys,
         issr_pub_account.memo.owner_enc_pub_key,
-        asset_tx.content.memo.enc_issued_amount,
+        asset_tx.memo.enc_issued_amount,
     )
 }
 
@@ -211,7 +196,7 @@ impl AssetTransactionIssuer for AssetIssuer {
         )?;
 
         // Bundle the issuance data.
-        let content = AssetTxContent {
+        Ok(InitializedAssetTx {
             account_id: issr_account.pblc.id,
             enc_asset_id: mdtr_enc_asset_id,
             enc_amount_for_mdtr: mdtr_enc_amount,
@@ -220,13 +205,7 @@ impl AssetTransactionIssuer for AssetIssuer {
             balance_wellformedness_proof: memo_wellformedness_proof,
             balance_correctness_proof: memo_correctness_proof,
             auditors_payload,
-        };
-
-        // Sign the issuance content.
-        let message = content.encode();
-        let sig = issr_account.scrt.sign_keys.sign(SIG_CTXT.bytes(&message));
-
-        Ok(InitializedAssetTx { content, sig })
+        })
     }
 }
 
@@ -277,8 +256,7 @@ fn add_asset_transaction_auditor<T: RngCore + CryptoRng>(
 
 pub struct AssetValidator {}
 
-/// Called by validators to verify the ZKP of the wellformedness of encrypted balance
-/// and to verify the signature.
+/// Called by validators to verify the ZKP of the wellformedness of encrypted balance.
 fn verify_initialization(
     asset_tx: &InitializedAssetTx,
     issr_pub_account: &PubAccount,
@@ -301,15 +279,10 @@ impl AssetTransactionVerifier for AssetValidator {
         issr_account: &PubAccount,
         issr_init_balance: &EncryptedAmount,
         mdtr_enc_pub_key: &EncryptionPubKey,
-        mdtr_sign_pub_key: &SigningPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     ) -> Fallible<EncryptedAmount> {
-        // Verify mediator's signature on the transaction.
-        let message = justified_asset_tx.content.encode();
-        let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &justified_asset_tx.sig)?;
-
-        // Verify issuer's initialization proofs and signature.
-        let initialized_asset_tx = justified_asset_tx.content.clone();
+        // Verify issuer's initialization proofs.
+        let initialized_asset_tx = justified_asset_tx.init_data.clone();
         verify_initialization(
             &initialized_asset_tx,
             &issr_account,
@@ -321,7 +294,7 @@ impl AssetTransactionVerifier for AssetValidator {
         // to issuer's account (aka processing phase).
         let updated_issr_balance = crate::mercat::account::deposit(
             issr_init_balance,
-            &initialized_asset_tx.content.memo.enc_issued_amount,
+            &initialized_asset_tx.memo.enc_issued_amount,
         );
 
         Ok(updated_issr_balance)
@@ -343,7 +316,6 @@ impl AssetTransactionMediator for AssetMediator {
         initialized_asset_tx: InitializedAssetTx,
         issr_pub_account: &PubAccount,
         mdtr_enc_keys: &EncryptionKeys,
-        mdtr_sign_keys: &SigningKeys,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     ) -> Fallible<JustifiedAssetTx> {
         let gens = PedersenGens::default();
@@ -359,25 +331,20 @@ impl AssetTransactionMediator for AssetMediator {
         // Mediator decrypts the encrypted amount and uses it to verify the correctness proof.
         let amount = mdtr_enc_keys
             .scrt
-            .const_time_decrypt(&initialized_asset_tx.content.enc_amount_for_mdtr)?;
+            .const_time_decrypt(&initialized_asset_tx.enc_amount_for_mdtr)?;
 
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),
                 pub_key: issr_pub_account.memo.owner_enc_pub_key,
-                cipher: initialized_asset_tx.content.memo.enc_issued_amount,
+                cipher: initialized_asset_tx.memo.enc_issued_amount,
                 pc_gens: &gens,
             },
-            initialized_asset_tx.content.balance_correctness_proof,
+            initialized_asset_tx.balance_correctness_proof,
         )?;
 
-        // On successful justification, mediator signs the transaction.
-        let message = initialized_asset_tx.encode();
-        let sig = mdtr_sign_keys.sign(SIG_CTXT.bytes(&message));
-
         Ok(JustifiedAssetTx {
-            content: initialized_asset_tx,
-            sig,
+            init_data: initialized_asset_tx,
         })
     }
 }
@@ -392,29 +359,23 @@ impl AssetTransactionMediator for AssetMediator {
 pub struct AssetAuditor {}
 
 impl AssetTransactionAuditor for AssetAuditor {
-    /// Verify the intialized, and justified transactions.
+    /// Verify the initialized, and justified transactions.
     /// Audit the sender's encrypted amount.
     fn audit_asset_transaction(
         &self,
         justified_asset_tx: &JustifiedAssetTx,
         issuer_account: &PubAccount,
         mdtr_enc_pub_key: &EncryptionPubKey,
-        mdtr_sign_pub_key: &SigningPubKey,
         auditor_enc_key: &(u32, EncryptionKeys),
     ) -> Fallible<()> {
         let gens = PedersenGens::default();
 
-        // Verify mediator's signature on the transaction.
-        let message = justified_asset_tx.content.encode();
-        let _ = mdtr_sign_pub_key.verify(SIG_CTXT.bytes(&message), &justified_asset_tx.sig)?;
-
-        // Verify issuer's initialization proofs and signature.
-        let initialized_asset_tx = justified_asset_tx.content.clone();
+        // Verify issuer's initialization proofs.
+        let initialized_asset_tx = justified_asset_tx.init_data.clone();
         asset_issuance_init_verify_proofs(&initialized_asset_tx, issuer_account, mdtr_enc_pub_key)?;
 
         // If all checks pass, decrypt the encrypted amount and verify issuer's correctness proof.
         let _: Fallible<()> = initialized_asset_tx
-            .content
             .auditors_payload
             .iter()
             .map(|payload| {
@@ -428,10 +389,10 @@ impl AssetTransactionAuditor for AssetAuditor {
                         &CorrectnessVerifier {
                             value: amount.into(),
                             pub_key: issuer_account.memo.owner_enc_pub_key,
-                            cipher: initialized_asset_tx.content.memo.enc_issued_amount,
+                            cipher: initialized_asset_tx.memo.enc_issued_amount,
                             pc_gens: &gens,
                         },
-                        initialized_asset_tx.content.balance_correctness_proof,
+                        initialized_asset_tx.balance_correctness_proof,
                     );
 
                     return result;
@@ -458,14 +419,12 @@ mod tests {
         mercat::{
             account::{convert_asset_ids, AccountCreator},
             AccountCreatorInitializer, AccountMemo, EncryptedAssetId, EncryptionKeys, SecAccount,
-            Signature,
         },
         AssetId,
     };
     use curve25519_dalek::scalar::Scalar;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
-    use schnorrkel::{ExpansionMode, MiniSecretKey};
     use wasm_bindgen_test::*;
 
     #[test]
@@ -481,12 +440,10 @@ mod tests {
             pblc: issuer_elg_secret_key.get_public_key().into(),
             scrt: issuer_elg_secret_key.into(),
         };
-        let sign_keys = schnorrkel::Keypair::generate_with(&mut rng);
         let asset_id = AssetId::from(1);
 
         let issuer_secret_account = SecAccount {
             enc_keys: issuer_enc_key.clone(),
-            sign_keys: sign_keys.clone(),
             asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
         };
 
@@ -508,8 +465,8 @@ mod tests {
                 &mut rng,
             )
             .unwrap();
-        let issuer_public_account = issuer_account_tx.content.pub_account;
-        let issuer_init_balance = issuer_account_tx.content.initial_balance;
+        let issuer_public_account = issuer_account_tx.pub_account;
+        let issuer_init_balance = issuer_account_tx.initial_balance;
         let issuer_account = Account {
             pblc: issuer_public_account.clone(),
             scrt: issuer_secret_account,
@@ -524,9 +481,6 @@ mod tests {
 
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
-        let mediator_signing_pair = MiniSecretKey::from_bytes(&seed)
-            .expect("Invalid seed")
-            .expand_to_keypair(ExpansionMode::Ed25519);
 
         // ----------------------- Initialization
         let tx_id = tx_id + 1;
@@ -549,7 +503,6 @@ mod tests {
                 asset_tx.clone(),
                 &issuer_public_account,
                 &mediator_enc_key,
-                &mediator_signing_pair,
                 &[],
             )
             .unwrap();
@@ -562,55 +515,9 @@ mod tests {
                 &issuer_public_account,
                 &issuer_init_balance,
                 &mediator_enc_key.pblc,
-                &mediator_signing_pair.public.into(),
                 &[],
             )
             .unwrap();
-
-        // Negative tests.
-        // Invalid issuer signature.
-        let mut invalid_tx = asset_tx.clone();
-        invalid_tx.sig = Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature");
-
-        let result = mediator.justify_asset_transaction(
-            invalid_tx,
-            &issuer_public_account,
-            &mediator_enc_key,
-            &mediator_signing_pair,
-            &[],
-        );
-        assert_err!(result, ErrorKind::SignatureValidationFailure);
-
-        // Negative test.
-        // Invalid mediator signature.
-        let mut invalid_justified_tx = justified_tx.clone();
-        invalid_justified_tx.sig =
-            Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature");
-
-        let result = validator.verify_asset_transaction(
-            &invalid_justified_tx,
-            &issuer_public_account,
-            &issuer_init_balance,
-            &mediator_enc_key.pblc,
-            &mediator_signing_pair.public.into(),
-            &[],
-        );
-        assert_err!(result, ErrorKind::SignatureValidationFailure);
-
-        // Invalid issuer signature.
-        let mut invalid_justified_tx = justified_tx.clone();
-        invalid_justified_tx.content.sig =
-            Signature::from_bytes(&[128u8; 64]).expect("Invalid Schnorrkel signature");
-
-        let result = validator.verify_asset_transaction(
-            &invalid_justified_tx,
-            &issuer_public_account,
-            &issuer_init_balance,
-            &mediator_enc_key.pblc,
-            &mediator_signing_pair.public.into(),
-            &[],
-        );
-        assert_err!(result, ErrorKind::SignatureValidationFailure);
 
         // ----------------------- Processing
         // Check that the issued amount is added to the account balance.
@@ -638,12 +545,10 @@ mod tests {
             pblc: issuer_elg_secret_key.get_public_key().into(),
             scrt: issuer_elg_secret_key.into(),
         };
-        let sign_keys = schnorrkel::Keypair::generate_with(&mut rng);
         let asset_id = AssetId::from(1);
 
         let issuer_secret_account = SecAccount {
             enc_keys: issuer_enc_key.clone(),
-            sign_keys: sign_keys.clone(),
             asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
         };
 
@@ -657,7 +562,9 @@ mod tests {
         let issuer_public_account = PubAccount {
             id: 1,
             enc_asset_id: pub_account_enc_asset_id,
-            memo: AccountMemo::new(issuer_enc_key.pblc, sign_keys.public.into()),
+            memo: AccountMemo {
+                owner_enc_pub_key: issuer_enc_key.pblc,
+            },
         };
         // Set the initial encrypted balance to 0.
         let issuer_init_balance = EncryptedAmount::default();
@@ -675,9 +582,6 @@ mod tests {
 
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
-        let mediator_signing_pair = MiniSecretKey::from_bytes(&seed)
-            .expect("Invalid seed")
-            .expand_to_keypair(ExpansionMode::Ed25519);
 
         // ----------------------- Initialization
         let issuer = AssetIssuer {};
@@ -698,7 +602,6 @@ mod tests {
             asset_tx.clone(),
             &issuer_public_account,
             &mediator_enc_key,
-            &mediator_signing_pair,
             mediator_auditor_list,
         );
         if mediator_check_fails {
@@ -714,7 +617,6 @@ mod tests {
             &issuer_public_account,
             &issuer_init_balance,
             &mediator_enc_key.pblc,
-            &mediator_signing_pair.public.into(),
             validator_auditor_list,
         );
         if validator_check_fails {
@@ -738,7 +640,6 @@ mod tests {
                     &justified_tx,
                     &issuer_public_account,
                     &mediator_enc_key.pblc,
-                    &mediator_signing_pair.public.into(),
                     auditor,
                 )
                 .is_ok());

@@ -9,7 +9,6 @@ use cryptography::{
 };
 use curve25519_dalek::scalar::Scalar;
 use rand::{CryptoRng, RngCore};
-use schnorrkel::{ExpansionMode, MiniSecretKey};
 
 pub fn issue_assets<R: RngCore + CryptoRng>(
     rng: &mut R,
@@ -34,14 +33,12 @@ pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
         scrt: mediator_elg_secret_key,
     };
 
-    let mediator_signing_pair =
-        MiniSecretKey::generate_with(rng).expand_to_keypair(ExpansionMode::Ed25519);
-
     (
-        AccountMemo::new(mediator_enc_key.pblc, mediator_signing_pair.public),
+        AccountMemo {
+            owner_enc_pub_key: mediator_enc_key.pblc,
+        },
         MediatorAccount {
             encryption_key: mediator_enc_key,
-            signing_key: mediator_signing_pair,
         },
     )
 }
@@ -62,18 +59,18 @@ pub fn create_account_with_amount<R: RngCore + CryptoRng>(
         .unwrap();
     let account = Account {
         scrt: secret_account,
-        pblc: pub_account_tx.content.pub_account,
+        pblc: pub_account_tx.pub_account,
     };
-    let mut initial_balance = pub_account_tx.content.initial_balance;
-    // If a non-zero initial amount is given issue some assets to this account.
-    if initial_amount > 0 {
-        initial_balance = issue_assets(
+    let initial_balance = if initial_amount > 0 {
+        issue_assets(
             rng,
             &account.pblc,
-            &pub_account_tx.content.initial_balance,
+            &pub_account_tx.initial_balance,
             initial_amount,
-        );
-    }
+        )
+    } else {
+        pub_account_tx.initial_balance
+    };
 
     (account, initial_balance)
 }
@@ -104,11 +101,8 @@ pub fn gen_keys<R: RngCore + CryptoRng>(rng: &mut R, asset_id: &AssetId) -> SecA
 
     let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));
 
-    let sign_keys = MiniSecretKey::generate_with(rng).expand_to_keypair(ExpansionMode::Ed25519);
-
     SecAccount {
         enc_keys,
-        sign_keys,
         asset_id_witness,
     }
 }
