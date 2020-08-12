@@ -709,8 +709,8 @@ mod tests {
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         EncryptionKeys {
-            pblc: elg_pub.into(),
-            scrt: elg_secret.into(),
+            pblc: elg_pub,
+            scrt: elg_secret,
         }
     }
 
@@ -726,12 +726,12 @@ mod tests {
             sndr_account_id: 0,
             rcvr_account_id: 0,
             enc_amount_using_sndr: EncryptedAmount::default(),
-            enc_amount_using_rcvr: EncryptedAmount::from(enc_amount_using_rcvr),
+            enc_amount_using_rcvr,
             refreshed_enc_balance: EncryptedAmount::default(),
             refreshed_enc_asset_id: EncryptedAssetId::default(),
-            enc_asset_id_using_rcvr: EncryptedAssetId::from(enc_asset_id_using_rcvr),
-            enc_amount_for_mdtr: EncryptedAmountWithHint::default(),
+            enc_asset_id_using_rcvr,
             enc_asset_id_for_mdtr: EncryptedAssetId::default(),
+            enc_amount_for_mdtr: EncryptedAmountWithHint::default(),
             tx_id: 0,
         }
     }
@@ -748,12 +748,12 @@ mod tests {
         Ok((
             PubAccount {
                 id: 1,
-                enc_asset_id: enc_asset_id.into(),
+                enc_asset_id,
                 memo: AccountMemo {
                     owner_enc_pub_key: rcvr_enc_pub_key,
                 },
             },
-            enc_balance.into(),
+            enc_balance,
         ))
     }
 
@@ -981,7 +981,7 @@ mod tests {
             Account {
                 pblc: pub_account,
                 scrt: SecAccount {
-                    enc_keys: enc_keys,
+                    enc_keys,
                     asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
                 },
             },
@@ -1131,28 +1131,28 @@ mod tests {
         // Change the order of auditors lists on the mediator and validator sides.
         // The tests still must pass.
         let mediator_auditor_list = vec![
-            auditors_vec[1].clone(),
-            auditors_vec[0].clone(),
-            auditors_vec[3].clone(),
-            auditors_vec[2].clone(),
-            auditors_vec[4].clone(),
+            auditors_vec[1],
+            auditors_vec[0],
+            auditors_vec[3],
+            auditors_vec[2],
+            auditors_vec[4],
         ];
         let validator_auditor_list = vec![
-            auditors_vec[4].clone(),
-            auditors_vec[3].clone(),
-            auditors_vec[2].clone(),
-            auditors_vec[1].clone(),
-            auditors_vec[0].clone(),
+            auditors_vec[4],
+            auditors_vec[3],
+            auditors_vec[2],
+            auditors_vec[1],
+            auditors_vec[0],
         ];
 
-        let mediator_auditor_list = mediator_auditor_list.as_slice();
-        let validator_auditor_list = validator_auditor_list.as_slice();
+        let mediator_auditor_list = mediator_auditor_list;
+        let validator_auditor_list = validator_auditor_list;
 
         test_transaction_auditor_helper(
             auditors_list,
-            mediator_auditor_list.clone(),
+            &mediator_auditor_list,
             false,
-            validator_auditor_list.clone(),
+            &validator_auditor_list,
             false,
             auditors_secret_list,
         );
@@ -1164,18 +1164,18 @@ mod tests {
 
         // Sender misses an auditor. Mediator catches it.
         let four_auditor_list = vec![
-            auditors_vec[1].clone(),
-            auditors_vec[0].clone(),
-            auditors_vec[3].clone(),
-            auditors_vec[2].clone(),
+            auditors_vec[1],
+            auditors_vec[0],
+            auditors_vec[3],
+            auditors_vec[2],
         ];
         let four_auditor_list = four_auditor_list.as_slice();
 
         test_transaction_auditor_helper(
             four_auditor_list,
-            mediator_auditor_list,
+            &mediator_auditor_list,
             true,
-            validator_auditor_list,
+            &validator_auditor_list,
             true,
             auditors_secret_list,
         );
@@ -1185,7 +1185,7 @@ mod tests {
             four_auditor_list,
             four_auditor_list,
             false,
-            validator_auditor_list,
+            &validator_auditor_list,
             true,
             auditors_secret_list,
         );
@@ -1193,9 +1193,9 @@ mod tests {
         // Sender doesn't include any auditors. Mediator catches it.
         test_transaction_auditor_helper(
             &[],
-            mediator_auditor_list,
+            &mediator_auditor_list,
             true,
-            validator_auditor_list,
+            &validator_auditor_list,
             true,
             auditors_secret_list,
         );
@@ -1205,7 +1205,7 @@ mod tests {
             &[],
             &[],
             false,
-            validator_auditor_list,
+            &validator_auditor_list,
             true,
             auditors_secret_list,
         );

@@ -418,7 +418,7 @@ mod tests {
         errors::ErrorKind,
         mercat::{
             account::{convert_asset_ids, AccountCreator},
-            AccountCreatorInitializer, AccountMemo, EncryptedAssetId, EncryptionKeys, SecAccount,
+            AccountCreatorInitializer, AccountMemo, EncryptionKeys, SecAccount,
         },
         AssetId,
     };
@@ -432,26 +432,24 @@ mod tests {
     fn asset_issuance_and_validation() {
         // ----------------------- Setup
         let mut rng = StdRng::from_seed([10u8; 32]);
-        let issued_amount: Balance = 20u32.into();
+        let issued_amount: Balance = 20u32;
 
         // Generate keys for the issuer.
         let issuer_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let issuer_enc_key = EncryptionKeys {
-            pblc: issuer_elg_secret_key.get_public_key().into(),
-            scrt: issuer_elg_secret_key.into(),
+            pblc: issuer_elg_secret_key.get_public_key(),
+            scrt: issuer_elg_secret_key,
         };
         let asset_id = AssetId::from(1);
 
         let issuer_secret_account = SecAccount {
             enc_keys: issuer_enc_key.clone(),
-            asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
+            asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
         };
 
         let account_id = 1234u32;
-        let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
-            .iter()
-            .map(|id| AssetId::from(id.clone()))
-            .collect();
+        let valid_asset_ids: Vec<AssetId> =
+            vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
         let account_creator = AccountCreator {};
@@ -475,8 +473,8 @@ mod tests {
         // Generate keys for the mediator.
         let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let mediator_enc_key = EncryptionKeys {
-            pblc: mediator_elg_secret_key.get_public_key().into(),
-            scrt: mediator_elg_secret_key.into(),
+            pblc: mediator_elg_secret_key.get_public_key(),
+            scrt: mediator_elg_secret_key,
         };
 
         let mut seed = [0u8; 32];
@@ -499,12 +497,7 @@ mod tests {
         // ----------------------- Justification
         let mediator = AssetMediator {};
         let justified_tx = mediator
-            .justify_asset_transaction(
-                asset_tx.clone(),
-                &issuer_public_account,
-                &mediator_enc_key,
-                &[],
-            )
+            .justify_asset_transaction(asset_tx, &issuer_public_account, &mediator_enc_key, &[])
             .unwrap();
 
         // Positive test.
@@ -537,26 +530,24 @@ mod tests {
     ) {
         // ----------------------- Setup
         let mut rng = StdRng::from_seed([10u8; 32]);
-        let issued_amount: Balance = 20u32.into();
+        let issued_amount: Balance = 20u32;
 
         // Generate keys for the issuer.
         let issuer_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let issuer_enc_key = EncryptionKeys {
-            pblc: issuer_elg_secret_key.get_public_key().into(),
-            scrt: issuer_elg_secret_key.into(),
+            pblc: issuer_elg_secret_key.get_public_key(),
+            scrt: issuer_elg_secret_key,
         };
         let asset_id = AssetId::from(1);
 
         let issuer_secret_account = SecAccount {
             enc_keys: issuer_enc_key.clone(),
-            asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
+            asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
         };
 
-        let pub_account_enc_asset_id = EncryptedAssetId::from(
-            issuer_enc_key
-                .pblc
-                .encrypt(&issuer_secret_account.asset_id_witness),
-        );
+        let pub_account_enc_asset_id = issuer_enc_key
+            .pblc
+            .encrypt(&issuer_secret_account.asset_id_witness);
 
         // Note that we use default proof values since we don't reverify these proofs during asset issuance.
         let issuer_public_account = PubAccount {
@@ -576,8 +567,8 @@ mod tests {
         // Generate keys for the mediator.
         let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let mediator_enc_key = EncryptionKeys {
-            pblc: mediator_elg_secret_key.get_public_key().into(),
-            scrt: mediator_elg_secret_key.into(),
+            pblc: mediator_elg_secret_key.get_public_key(),
+            scrt: mediator_elg_secret_key,
         };
 
         let mut seed = [0u8; 32];
@@ -599,7 +590,7 @@ mod tests {
         // ----------------------- Justification
         let mediator = AssetMediator {};
         let result = mediator.justify_asset_transaction(
-            asset_tx.clone(),
+            asset_tx,
             &issuer_public_account,
             &mediator_enc_key,
             mediator_auditor_list,
@@ -651,8 +642,8 @@ mod tests {
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         EncryptionKeys {
-            pblc: elg_pub.into(),
-            scrt: elg_secret.into(),
+            pblc: elg_pub,
+            scrt: elg_secret,
         }
     }
 
@@ -691,20 +682,20 @@ mod tests {
         // Change the order of auditors lists on the mediator and validator sides.
         // The tests still must pass.
         let mediator_auditor_list = vec![
-            auditors_vec[1].clone(),
-            auditors_vec[0].clone(),
-            auditors_vec[3].clone(),
-            auditors_vec[2].clone(),
-            auditors_vec[4].clone(),
+            auditors_vec[1],
+            auditors_vec[0],
+            auditors_vec[3],
+            auditors_vec[2],
+            auditors_vec[4],
         ];
         let mediator_auditor_list = mediator_auditor_list.as_slice();
 
         let validator_auditor_list = vec![
-            auditors_vec[4].clone(),
-            auditors_vec[3].clone(),
-            auditors_vec[2].clone(),
-            auditors_vec[1].clone(),
-            auditors_vec[0].clone(),
+            auditors_vec[4],
+            auditors_vec[3],
+            auditors_vec[2],
+            auditors_vec[1],
+            auditors_vec[0],
         ];
         let validator_auditor_list = validator_auditor_list.as_slice();
 
@@ -724,10 +715,10 @@ mod tests {
 
         // Sender misses an auditor. Mediator catches it.
         let four_auditor_list = vec![
-            auditors_vec[1].clone(),
-            auditors_vec[0].clone(),
-            auditors_vec[3].clone(),
-            auditors_vec[2].clone(),
+            auditors_vec[1],
+            auditors_vec[0],
+            auditors_vec[3],
+            auditors_vec[2],
         ];
         let four_auditor_list = four_auditor_list.as_slice();
 

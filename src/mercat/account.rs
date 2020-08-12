@@ -39,7 +39,7 @@ impl AccountCreatorInitializer for AccountCreator {
         &self,
         tx_id: u32,
         scrt: &SecAccount,
-        valid_asset_ids: &Vec<Scalar>,
+        valid_asset_ids: &[Scalar],
         account_id: u32,
         rng: &mut T,
     ) -> Fallible<PubAccountTx> {
@@ -80,7 +80,7 @@ impl AccountCreatorInitializer for AccountCreator {
                 asset_id,
                 scrt.asset_id_witness.blinding(),
                 generators,
-                valid_asset_ids.as_slice(),
+                valid_asset_ids,
                 BASE,
                 EXPONENT,
             )?,
@@ -122,7 +122,7 @@ pub fn withdraw(
 pub struct AccountValidator {}
 
 impl AccountCreatorVerifier for AccountValidator {
-    fn verify(&self, account: &PubAccountTx, valid_asset_ids: &Vec<Scalar>) -> Fallible<()> {
+    fn verify(&self, account: &PubAccountTx, valid_asset_ids: &[Scalar]) -> Fallible<()> {
         let gens = &PedersenGens::default();
 
         // Verify that the encrypted asset id is wellformed
@@ -174,7 +174,6 @@ mod tests {
     use crate::{asset_proofs::ElgamalSecretKey, mercat::EncryptionKeys};
     use curve25519_dalek::scalar::Scalar;
     use rand::{rngs::StdRng, SeedableRng};
-    use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
     #[test]
@@ -185,17 +184,15 @@ mod tests {
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let enc_keys = EncryptionKeys {
-            pblc: elg_pub.into(),
-            scrt: elg_secret.into(),
+            pblc: elg_pub,
+            scrt: elg_secret,
         };
         let asset_id = AssetId::from(1);
-        let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
-            .iter()
-            .map(|id| AssetId::from(id.clone()))
-            .collect();
+        let valid_asset_ids: Vec<AssetId> =
+            vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
         let account_id = 2;
-        let asset_id_witness = CommitmentWitness::from((asset_id.clone().into(), &mut rng));
+        let asset_id_witness = CommitmentWitness::from((asset_id.into(), &mut rng));
         let scrt_account = SecAccount {
             enc_keys,
             asset_id_witness,
@@ -229,17 +226,15 @@ mod tests {
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let enc_keys = EncryptionKeys {
-            pblc: elg_pub.into(),
-            scrt: elg_secret.into(),
+            pblc: elg_pub,
+            scrt: elg_secret,
         };
         let asset_id = AssetId::from(1);
-        let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
-            .iter()
-            .map(|id| AssetId::from(id.clone()))
-            .collect();
+        let valid_asset_ids: Vec<AssetId> =
+            vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
         let account_id = 2;
-        let asset_id_witness = CommitmentWitness::from((asset_id.clone().into(), &mut rng));
+        let asset_id_witness = CommitmentWitness::from((asset_id.into(), &mut rng));
         let scrt_account = SecAccount {
             enc_keys,
             asset_id_witness,
@@ -261,21 +256,17 @@ mod tests {
         assert_eq!(balance, 0);
 
         let ten: Balance = 10;
-        let ten = EncryptedAmount::from(
-            scrt_account
-                .enc_keys
-                .pblc
-                .encrypt_value(ten.into(), &mut rng)
-                .1,
-        );
+        let ten = scrt_account
+            .enc_keys
+            .pblc
+            .encrypt_value(ten.into(), &mut rng)
+            .1;
         let five: Balance = 5;
-        let five = EncryptedAmount::from(
-            scrt_account
-                .enc_keys
-                .pblc
-                .encrypt_value(five.into(), &mut rng)
-                .1,
-        );
+        let five = scrt_account
+            .enc_keys
+            .pblc
+            .encrypt_value(five.into(), &mut rng)
+            .1;
 
         let new_enc_balance = deposit(&pub_account_tx.initial_balance, &ten);
         let balance = scrt_account

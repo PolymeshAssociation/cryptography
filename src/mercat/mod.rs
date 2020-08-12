@@ -128,7 +128,7 @@ pub trait AccountCreatorInitializer {
         &self,
         tx_id: u32,
         scrt: &SecAccount,
-        valid_asset_ids: &Vec<Scalar>,
+        valid_asset_ids: &[Scalar],
         account_id: u32,
         rng: &mut T,
     ) -> Fallible<PubAccountTx>;
@@ -137,7 +137,7 @@ pub trait AccountCreatorInitializer {
 /// The interface for the verifying the account creation.
 pub trait AccountCreatorVerifier {
     /// Called by the validators to ensure that the account was created correctly.
-    fn verify(&self, account: &PubAccountTx, valid_asset_ids: &Vec<Scalar>) -> Fallible<()>;
+    fn verify(&self, account: &PubAccountTx, valid_asset_ids: &[Scalar]) -> Fallible<()>;
 }
 
 // -------------------------------------------------------------------------------------
