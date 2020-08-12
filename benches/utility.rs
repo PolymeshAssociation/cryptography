@@ -2,7 +2,7 @@ use cryptography::{
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
         account::{deposit, AccountCreator},
-        Account, AccountCreatorInitializer, AccountMemo, EncryptedAmount, EncryptionKeys,
+        Account, AccountCreatorInitializer, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
         MediatorAccount, PubAccount, PubAccountTx, SecAccount,
     },
     AssetId,
@@ -17,7 +17,6 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
     amount: u32,
 ) -> EncryptedAmount {
     let (_, encrypted_amount) = pub_account
-        .memo
         .owner_enc_pub_key
         .encrypt_value(amount.into(), rng);
     deposit(init_balance, &encrypted_amount)
@@ -26,7 +25,7 @@ pub fn issue_assets<R: RngCore + CryptoRng>(
 #[allow(dead_code)]
 pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
     rng: &mut R,
-) -> (AccountMemo, MediatorAccount) {
+) -> (EncryptionPubKey, MediatorAccount) {
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
     let mediator_enc_key = EncryptionKeys {
         pblc: mediator_elg_secret_key.get_public_key(),
@@ -34,9 +33,7 @@ pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
     };
 
     (
-        AccountMemo {
-            owner_enc_pub_key: mediator_enc_key.pblc,
-        },
+        mediator_enc_key.pblc,
         MediatorAccount {
             encryption_key: mediator_enc_key,
         },

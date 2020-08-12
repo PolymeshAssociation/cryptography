@@ -55,7 +55,7 @@ impl TransferTransactionSender for CtxSender {
         let sndr_enc_keys = &sndr_account.scrt.enc_keys;
         let asset_id = sndr_account.scrt.asset_id_witness.value();
         let sndr_pub_account = &sndr_account.pblc;
-        let rcvr_pub_key = rcvr_pub_account.memo.owner_enc_pub_key;
+        let rcvr_pub_key = rcvr_pub_account.owner_enc_pub_key;
 
         // NOTE: If this decryption ends up being too slow, we can pass in the balance
         // as input.
@@ -263,6 +263,11 @@ impl TransferTransactionReceiver for CtxReceiver {
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<FinalizedTransferTx> {
+        ensure!(
+            tx_id == initialized_transaction.memo.tx_id,
+            ErrorKind::TransactionIdMismatch
+        );
+
         let rcvr_enc_sec = &rcvr_account.scrt.enc_keys.scrt;
         let rcvr_pub_account = &rcvr_account.pblc;
 
@@ -292,7 +297,6 @@ impl TransferTransactionReceiver for CtxReceiver {
         Ok(FinalizedTransferTx {
             init_data: initialized_transaction,
             asset_id_from_sndr_equal_to_rcvr_proof: proof,
-            tx_id,
         })
     }
 }
@@ -342,7 +346,7 @@ impl TransferTransactionMediator for CtxMediator {
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),
-                pub_key: sndr_account.memo.owner_enc_pub_key,
+                pub_key: sndr_account.owner_enc_pub_key,
                 cipher: tx_data.memo.enc_amount_using_sndr,
                 pc_gens: &gens,
             },
@@ -359,7 +363,7 @@ impl TransferTransactionMediator for CtxMediator {
         single_property_verifier(
             &CorrectnessVerifier {
                 value: asset_id.into(),
-                pub_key: rcvr_account.memo.owner_enc_pub_key,
+                pub_key: rcvr_account.owner_enc_pub_key,
                 cipher: tx_data.memo.enc_asset_id_using_rcvr,
                 pc_gens: &gens,
             },
@@ -468,7 +472,7 @@ fn verify_finalized_transaction(
     // is the same as the one in the receiver account
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
-            rcvr_account.memo.owner_enc_pub_key,
+            rcvr_account.owner_enc_pub_key,
             rcvr_account.enc_asset_id,
             memo.enc_asset_id_using_rcvr,
             &PedersenGens::default(),
@@ -494,8 +498,8 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     // Verify that the encrypted amounts are equal.
     single_property_verifier(
         &EncryptingSameValueVerifier {
-            pub_key1: sndr_account.memo.owner_enc_pub_key,
-            pub_key2: rcvr_account.memo.owner_enc_pub_key,
+            pub_key1: sndr_account.owner_enc_pub_key,
+            pub_key2: rcvr_account.owner_enc_pub_key,
             cipher1: memo.enc_amount_using_sndr,
             cipher2: memo.enc_amount_using_rcvr,
             pc_gens: &gens,
@@ -509,7 +513,7 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     // verify that the balance refreshment was done correctly.
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
-            sndr_account.memo.owner_enc_pub_key,
+            sndr_account.owner_enc_pub_key,
             *sndr_init_balance,
             memo.refreshed_enc_balance,
             &gens,
@@ -523,7 +527,7 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     // Verify that the asset id refreshment was done correctly.
     single_property_verifier(
         &CipherTextRefreshmentVerifier::new(
-            sndr_account.memo.owner_enc_pub_key,
+            sndr_account.owner_enc_pub_key,
             sndr_account.enc_asset_id,
             memo.refreshed_enc_asset_id,
             &gens,
@@ -536,8 +540,8 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     // is the same as the one in the sender account.
     single_property_verifier(
         &EncryptingSameValueVerifier {
-            pub_key1: sndr_account.memo.owner_enc_pub_key,
-            pub_key2: rcvr_account.memo.owner_enc_pub_key,
+            pub_key1: sndr_account.owner_enc_pub_key,
+            pub_key2: rcvr_account.owner_enc_pub_key,
             cipher1: memo.refreshed_enc_asset_id,
             cipher2: memo.enc_asset_id_using_rcvr,
             pc_gens: &gens,
@@ -550,7 +554,7 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     verify_auditor_payload(
         &init_data.auditors_payload,
         auditors_enc_pub_keys,
-        sndr_account.memo.owner_enc_pub_key,
+        sndr_account.owner_enc_pub_key,
         init_data.memo.enc_amount_using_sndr,
     )?;
 
@@ -659,7 +663,7 @@ impl TransferTransactionAuditor for CtxAuditor {
                     let result = single_property_verifier(
                         &CorrectnessVerifier {
                             value: amount.into(),
-                            pub_key: sndr_account.memo.owner_enc_pub_key,
+                            pub_key: sndr_account.owner_enc_pub_key,
                             cipher: initialized_transaction.memo.enc_amount_using_sndr,
                             pc_gens: &gens,
                         },
@@ -691,8 +695,8 @@ mod tests {
             range_proof::InRangeProof, ElgamalSecretKey,
         },
         mercat::{
-            AccountMemo, EncryptedAmount, EncryptedAmountWithHint, EncryptedAssetId,
-            EncryptionKeys, EncryptionPubKey, SecAccount, TransferTxMemo,
+            EncryptedAmount, EncryptedAmountWithHint, EncryptedAssetId, EncryptionKeys,
+            EncryptionPubKey, SecAccount, TransferTxMemo,
         },
         AssetId,
     };
@@ -749,9 +753,7 @@ mod tests {
             PubAccount {
                 id: 1,
                 enc_asset_id,
-                memo: AccountMemo {
-                    owner_enc_pub_key: rcvr_enc_pub_key,
-                },
+                owner_enc_pub_key: rcvr_enc_pub_key,
             },
             enc_balance,
         ))

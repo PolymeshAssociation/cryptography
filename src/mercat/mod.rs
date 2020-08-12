@@ -72,21 +72,13 @@ pub struct MediatorAccount {
     pub encryption_key: EncryptionKeys,
 }
 
-/// Holds the owner public keys and the creation date of an account.
-#[derive(Clone, Encode, Decode)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct AccountMemo {
-    pub owner_enc_pub_key: EncryptionPubKey,
-}
-
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccount {
     pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
-    pub memo: AccountMemo,
+    pub owner_enc_pub_key: EncryptionPubKey,
 }
 
 /// Holds contents of the public portion of an account which can be safely put on the chain.
@@ -380,7 +372,6 @@ pub struct InitializedTransferTx {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct FinalizedTransferTx {
     pub init_data: InitializedTransferTx,
-    pub tx_id: u32,
     pub asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof,
 }
 

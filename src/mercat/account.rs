@@ -10,8 +10,8 @@ use crate::{
     },
     errors::Fallible,
     mercat::{
-        AccountCreatorInitializer, AccountCreatorVerifier, AccountMemo, EncryptedAmount,
-        PubAccount, PubAccountTx, SecAccount, BASE, EXPONENT,
+        AccountCreatorInitializer, AccountCreatorVerifier, EncryptedAmount, PubAccount,
+        PubAccountTx, SecAccount, BASE, EXPONENT,
     },
     AssetId, Balance,
 };
@@ -91,9 +91,7 @@ impl AccountCreatorInitializer for AccountCreator {
             pub_account: PubAccount {
                 id: account_id,
                 enc_asset_id,
-                memo: AccountMemo {
-                    owner_enc_pub_key: scrt.enc_keys.pblc,
-                },
+                owner_enc_pub_key: scrt.enc_keys.pblc,
             },
             initial_balance,
             asset_wellformedness_proof,
@@ -128,7 +126,7 @@ impl AccountCreatorVerifier for AccountValidator {
         // Verify that the encrypted asset id is wellformed
         single_property_verifier(
             &WellformednessVerifier {
-                pub_key: account.pub_account.memo.owner_enc_pub_key,
+                pub_key: account.pub_account.owner_enc_pub_key,
                 cipher: account.pub_account.enc_asset_id,
                 pc_gens: &gens,
             },
@@ -140,7 +138,7 @@ impl AccountCreatorVerifier for AccountValidator {
         single_property_verifier(
             &CorrectnessVerifier {
                 value: balance.into(),
-                pub_key: account.pub_account.memo.owner_enc_pub_key,
+                pub_key: account.pub_account.owner_enc_pub_key,
                 cipher: account.initial_balance,
                 pc_gens: &gens,
             },

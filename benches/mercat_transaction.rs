@@ -253,7 +253,7 @@ fn bench_transaction(c: &mut Criterion) {
     let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
     let mut rng = thread_rng();
-    let (public_account, private_account) = utility::generate_mediator_keys(&mut rng);
+    let (enc_pub_key, private_account) = utility::generate_mediator_keys(&mut rng);
     let (sender_account, sender_init_balance) =
         utility::create_account_with_amount(&mut rng, &asset_id, &valid_asset_ids, 0);
     let sender_pub_account = sender_account.pblc.clone();
@@ -281,7 +281,7 @@ fn bench_transaction(c: &mut Criterion) {
         sender_account,
         sender_balances.clone(),
         receiver_account.pblc.clone(),
-        public_account.owner_enc_pub_key,
+        enc_pub_key,
     );
 
     // Finalization

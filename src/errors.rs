@@ -159,6 +159,10 @@ pub enum ErrorKind {
     #[fail(display = "The account does not match the account on the transaction")]
     AccountIdMismatch,
 
+    /// The mercat transaction id does not match the one supplied previously.
+    #[fail(display = "The mercat transaction id does not match the one supplied previously.")]
+    TransactionIdMismatch,
+
     /// Error while converting a transaction content to binary format.
     #[fail(display = "Error during the serialization to byte array.")]
     SerializationError,

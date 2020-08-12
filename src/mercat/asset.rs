@@ -36,7 +36,7 @@ fn asset_issuance_init_verify_proofs(
     // Verify the proof of encrypting the same asset type as the account type.
     single_property_verifier(
         &EncryptingSameValueVerifier {
-            pub_key1: issr_pub_account.memo.owner_enc_pub_key,
+            pub_key1: issr_pub_account.owner_enc_pub_key,
             pub_key2: *mdtr_enc_pub_key,
             cipher1: issr_pub_account.enc_asset_id,
             cipher2: asset_tx.enc_asset_id,
@@ -48,7 +48,7 @@ fn asset_issuance_init_verify_proofs(
     // Verify the proof of memo's wellformedness.
     single_property_verifier(
         &WellformednessVerifier {
-            pub_key: issr_pub_account.memo.owner_enc_pub_key,
+            pub_key: issr_pub_account.owner_enc_pub_key,
             cipher: asset_tx.memo.enc_issued_amount,
             pc_gens: &gens,
         },
@@ -70,7 +70,7 @@ fn asset_issuance_init_verify(
     verify_auditor_payload(
         &asset_tx.auditors_payload,
         auditors_enc_pub_keys,
-        issr_pub_account.memo.owner_enc_pub_key,
+        issr_pub_account.owner_enc_pub_key,
         asset_tx.memo.enc_issued_amount,
     )
 }
@@ -336,7 +336,7 @@ impl AssetTransactionMediator for AssetMediator {
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),
-                pub_key: issr_pub_account.memo.owner_enc_pub_key,
+                pub_key: issr_pub_account.owner_enc_pub_key,
                 cipher: initialized_asset_tx.memo.enc_issued_amount,
                 pc_gens: &gens,
             },
@@ -388,7 +388,7 @@ impl AssetTransactionAuditor for AssetAuditor {
                     let result = single_property_verifier(
                         &CorrectnessVerifier {
                             value: amount.into(),
-                            pub_key: issuer_account.memo.owner_enc_pub_key,
+                            pub_key: issuer_account.owner_enc_pub_key,
                             cipher: initialized_asset_tx.memo.enc_issued_amount,
                             pc_gens: &gens,
                         },
@@ -418,7 +418,7 @@ mod tests {
         errors::ErrorKind,
         mercat::{
             account::{convert_asset_ids, AccountCreator},
-            AccountCreatorInitializer, AccountMemo, EncryptionKeys, SecAccount,
+            AccountCreatorInitializer, EncryptionKeys, SecAccount,
         },
         AssetId,
     };
@@ -553,9 +553,7 @@ mod tests {
         let issuer_public_account = PubAccount {
             id: 1,
             enc_asset_id: pub_account_enc_asset_id,
-            memo: AccountMemo {
-                owner_enc_pub_key: issuer_enc_key.pblc,
-            },
+            owner_enc_pub_key: issuer_enc_key.pblc,
         };
         // Set the initial encrypted balance to 0.
         let issuer_init_balance = EncryptedAmount::default();
