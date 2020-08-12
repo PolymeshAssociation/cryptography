@@ -922,6 +922,17 @@ mod tests {
         let ctx_init_data = result.unwrap();
 
         // Finalize the transaction and check its state
+        // Negative test: transaction id mismatch.
+        let result = rcvr.finalize_transaction(
+            tx_id + 1,
+            ctx_init_data.clone(),
+            rcvr_account.clone(),
+            amount,
+            &mut rng,
+        );
+        assert_err!(result, ErrorKind::TransactionIdMismatch);
+
+        // Continue with the positive test.
         let result =
             rcvr.finalize_transaction(tx_id, ctx_init_data, rcvr_account.clone(), amount, &mut rng);
         let ctx_finalized_data = result.unwrap();
