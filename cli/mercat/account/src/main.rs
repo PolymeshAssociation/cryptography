@@ -29,8 +29,10 @@ fn main() {
     match args {
         CLI::Create(cfg) => {
             let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap();
-            process_create_account(cfg.seed, db_dir, cfg.ticker, cfg.user, cfg.cheat, cfg.tx_id)
-                .unwrap()
+            process_create_account(
+                cfg.seed, db_dir, cfg.ticker, cfg.user, cfg.stdout, cfg.tx_id, cfg.cheat,
+            )
+            .unwrap()
         }
         CLI::CreateFrom { config: _ } => panic!("This should not be called directly!"),
         CLI::Decrypt(cfg) => info!(
@@ -49,6 +51,7 @@ fn main() {
             cfg.mediator,
             cfg.account_id_from_ticker,
             cfg.amount,
+            cfg.stdout,
             cfg.tx_id,
             cfg.cheat,
         )
@@ -61,6 +64,7 @@ fn main() {
             cfg.mediator,
             cfg.account_id_from_ticker,
             cfg.amount,
+            cfg.stdout,
             cfg.tx_id,
             cfg.cheat,
         )
@@ -72,6 +76,7 @@ fn main() {
             cfg.receiver,
             cfg.account_id_from_ticker,
             cfg.amount,
+            cfg.stdout,
             cfg.tx_id,
             cfg.cheat,
         )

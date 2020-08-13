@@ -55,6 +55,13 @@ pub struct CreateAccountInfo {
     /// Transaction id.
     #[structopt(long, help = "Transaction id.")]
     pub tx_id: u32,
+
+    /// Instructs the CLI to print the transaction data in stdout.
+    #[structopt(
+        long,
+        help = "Instructs the CLI to print the transaction data in stdout."
+    )]
+    pub stdout: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
@@ -141,6 +148,13 @@ pub struct IssueAssetInfo {
     )]
     pub save_config: Option<PathBuf>,
 
+    /// Instructs the CLI to print the transaction data in stdout.
+    #[structopt(
+        long,
+        help = "Instructs the CLI to print the transaction data in stdout."
+    )]
+    pub stdout: bool,
+
     /// Instructs the CLI to act as a cheater.
     #[structopt(long, help = "Instructs the CLI to act as a cheater.")]
     pub cheat: bool,
@@ -206,6 +220,13 @@ pub struct CreateTransactionInfo {
     )]
     pub save_config: Option<PathBuf>,
 
+    /// Instructs the CLI to print the transaction data in stdout.
+    #[structopt(
+        long,
+        help = "Instructs the CLI to print the transaction data in stdout."
+    )]
+    pub stdout: bool,
+
     /// Instructs the CLI to act as a cheater.
     #[structopt(long, help = "Instructs the CLI to act as a cheater.")]
     pub cheat: bool,
@@ -268,6 +289,13 @@ pub struct FinalizeTransactionInfo {
     )]
     pub save_config: Option<PathBuf>,
 
+    /// Instructs the CLI to print the transaction data in stdout.
+    #[structopt(
+        long,
+        help = "Instructs the CLI to print the transaction data in stdout."
+    )]
+    pub stdout: bool,
+
     /// Instructs the CLI to act as a cheater.
     #[structopt(long, help = "Instructs the CLI to act as a cheater.")]
     pub cheat: bool,
@@ -316,6 +344,7 @@ pub fn parse_input() -> CLI {
                 user: cfg.user.clone(),
                 cheat: cfg.cheat,
                 tx_id: cfg.tx_id,
+                stdout: cfg.stdout,
             };
 
             info!(
@@ -375,6 +404,7 @@ pub fn parse_input() -> CLI {
                 issuer: cfg.issuer,
                 mediator: cfg.mediator,
                 save_config: cfg.save_config.clone(),
+                stdout: cfg.stdout,
                 cheat: cfg.cheat,
             };
 
@@ -405,6 +435,7 @@ pub fn parse_input() -> CLI {
                 receiver: cfg.receiver,
                 mediator: cfg.mediator,
                 save_config: cfg.save_config.clone(),
+                stdout: cfg.stdout,
                 cheat: cfg.cheat,
             };
 
@@ -434,6 +465,7 @@ pub fn parse_input() -> CLI {
                 sender: cfg.sender,
                 receiver: cfg.receiver,
                 save_config: cfg.save_config.clone(),
+                stdout: cfg.stdout,
                 cheat: cfg.cheat,
             };
 

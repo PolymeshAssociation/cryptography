@@ -3,6 +3,7 @@ use crate::{
     get_asset_ids, save_object, update_account_map, user_secret_account_file, OrderedPubAccountTx,
     OrderingState, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
+use base64;
 use codec::Encode;
 use cryptography::{
     asset_id_from_ticker,
@@ -30,8 +31,9 @@ pub fn process_create_account(
     db_dir: PathBuf,
     ticker: String,
     user: String,
-    cheat: bool,
+    stdout: bool,
     tx_id: u32,
+    cheat: bool,
 ) -> Result<(), Error> {
     // Setup the rng.
     let mut rng = create_rng_from_seed(seed)?;
@@ -109,6 +111,14 @@ pub fn process_create_account(
         &account_create_transaction_file(tx_id, &user, &ticker),
         &instruction,
     )?;
+
+    if stdout {
+        info!(
+            "CLI log: tx-{}: Transaction as base64:\n{}\n",
+            tx_id,
+            base64::encode(instruction.encode())
+        );
+    }
 
     update_account_map(db_dir, user, ticker, account_id, tx_id)?;
 

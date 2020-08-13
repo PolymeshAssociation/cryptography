@@ -12,7 +12,7 @@ The repository has following sections:
 Install rust!
 
 Install the nightly version of rust and WASM toolchain.
-```
+```bash
 # In the root directory
 rustup toolchain install nightly
 
@@ -20,6 +20,11 @@ rustup toolchain install nightly
 # then, inside the cryptography sub-directory, add the nightly version as target
 cd cryptography
 rustup target add wasm32-unknown-unknown --toolchain nightly
+```
+Fetch the cryptography submodule.
+
+```bash
+git submodule update --init
 ```
 
 If you use a different command to install a specific nightly version, use the same format for adding WASM.

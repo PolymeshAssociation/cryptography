@@ -285,6 +285,7 @@ impl Transfer {
                 mediator.clone(),
                 ticker.clone(),
                 amount,
+                false, // Do not print the transaction data to stdout.
                 tx_id,
                 cheat,
             )?;
@@ -322,6 +323,7 @@ impl Transfer {
                 receiver.clone(),
                 ticker.clone(),
                 amount,
+                false, // Do not print the transaction data to stdout.
                 tx_id,
                 cheat,
             )?;
@@ -410,8 +412,9 @@ impl Create {
                     chain_db_dir.clone(),
                     ticker.clone(),
                     owner.clone(),
-                    cheat,
+                    false, // Do not print the transaction data to stdout.
                     tx_id,
+                    cheat,
                 )?;
                 Ok(value.clone())
             });
@@ -473,6 +476,7 @@ impl Issue {
                 mediator.clone(),
                 ticker.clone(),
                 amount,
+                false, // Do not print the transaction data to stdout.
                 tx_id,
                 cheat,
             )?;

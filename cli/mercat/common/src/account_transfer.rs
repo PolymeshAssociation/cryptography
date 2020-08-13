@@ -5,6 +5,7 @@ use crate::{
     OrderedTransferInstruction, OrderingState, COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE,
     OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
+use base64;
 use codec::{Decode, Encode};
 use cryptography::mercat::{
     transaction::{CtxReceiver, CtxSender},
@@ -30,6 +31,7 @@ pub fn process_create_tx(
     mediator: String,
     ticker: String,
     amount: u32,
+    stdout: bool,
     tx_id: u32,
     cheat: bool,
 ) -> Result<(), Error> {
@@ -185,6 +187,14 @@ pub fn process_create_tx(
         &instruction,
     )?;
 
+    if stdout {
+        info!(
+            "CLI log: tx-{}: Transaction as base64:\n{}\n",
+            tx_id,
+            base64::encode(instruction.encode())
+        );
+    }
+
     timing!(
         "account.create_tx.save_to_file",
         save_to_file_timer,
@@ -201,6 +211,7 @@ pub fn process_finalize_tx(
     receiver: String,
     ticker: String,
     amount: u32,
+    stdout: bool,
     tx_id: u32,
     cheat: bool,
 ) -> Result<(), Error> {
@@ -348,6 +359,14 @@ pub fn process_finalize_tx(
         &confidential_transaction_file(tx_id, &sender, state),
         &instruction,
     )?;
+
+    if stdout {
+        info!(
+            "CLI log: tx-{}: Transaction as base64:\n{}\n",
+            tx_id,
+            base64::encode(instruction.encode())
+        );
+    }
 
     timing!(
         "account.finalize_tx.save_to_file",
