@@ -33,13 +33,6 @@ impl From<Context<ErrorKind>> for Error {
     }
 }
 
-impl From<schnorrkel::errors::SignatureError> for Error {
-    #[inline]
-    fn from(_inner: schnorrkel::errors::SignatureError) -> Error {
-        Error::from(ErrorKind::SignatureValidationFailure)
-    }
-}
-
 impl Fail for Error {
     fn cause(&self) -> Option<&dyn Fail> {
         self.inner.cause()
@@ -166,13 +159,13 @@ pub enum ErrorKind {
     #[fail(display = "The account does not match the account on the transaction")]
     AccountIdMismatch,
 
+    /// The mercat transaction id does not match the one supplied previously.
+    #[fail(display = "The mercat transaction id does not match the one supplied previously.")]
+    TransactionIdMismatch,
+
     /// Error while converting a transaction content to binary format.
     #[fail(display = "Error during the serialization to byte array.")]
     SerializationError,
-
-    /// Signature verification failure.
-    #[fail(display = "The signature failed to verify.")]
-    SignatureValidationFailure,
 
     /// A range proof error occurred.
     #[fail(display = "A range proof error occurred: {:?}", source)]

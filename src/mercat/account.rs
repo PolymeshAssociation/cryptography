@@ -10,25 +10,16 @@ use crate::{
     },
     errors::Fallible,
     mercat::{
-        AccountCreatorInitializer, AccountCreatorVerifier, AccountMemo, EncryptedAmount,
-        PubAccount, PubAccountContent, PubAccountTx, SecAccount, BASE, EXPONENT,
+        AccountCreatorInitializer, AccountCreatorVerifier, EncryptedAmount, PubAccount,
+        PubAccountTx, SecAccount, BASE, EXPONENT,
     },
     AssetId, Balance,
 };
-
 use bulletproofs::PedersenGens;
-use codec::Encode;
 use curve25519_dalek::scalar::Scalar;
-use lazy_static::lazy_static;
 use rand_core::{CryptoRng, RngCore};
-use schnorrkel::{context::SigningContext, signing_context};
-use zeroize::Zeroizing;
-
 use sp_std::vec::Vec;
-
-lazy_static! {
-    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/account");
-}
+use zeroize::Zeroizing;
 
 // ------------------------------------------------------------------------------------------------
 // -                                        Any User                                              -
@@ -48,7 +39,7 @@ impl AccountCreatorInitializer for AccountCreator {
         &self,
         tx_id: u32,
         scrt: &SecAccount,
-        valid_asset_ids: &Vec<Scalar>,
+        valid_asset_ids: &[Scalar],
         account_id: u32,
         rng: &mut T,
     ) -> Fallible<PubAccountTx> {
@@ -89,32 +80,25 @@ impl AccountCreatorInitializer for AccountCreator {
                 asset_id,
                 scrt.asset_id_witness.blinding(),
                 generators,
-                valid_asset_ids.as_slice(),
+                valid_asset_ids,
                 BASE,
                 EXPONENT,
             )?,
             rng,
         )?;
 
-        // Gather content and sign it
-        // Account creation is the first transaction. Therefore, nothing has been processed before it.
-        let content = PubAccountContent {
+        Ok(PubAccountTx {
             pub_account: PubAccount {
                 id: account_id,
                 enc_asset_id,
-                memo: AccountMemo::new(scrt.enc_keys.pblc, scrt.sign_keys.public),
+                owner_enc_pub_key: scrt.enc_keys.pblc,
             },
             initial_balance,
             asset_wellformedness_proof,
             asset_membership_proof,
             initial_balance_correctness_proof,
             tx_id,
-        };
-
-        let message = content.encode();
-        let sig = scrt.sign_keys.sign(SIG_CTXT.bytes(&message));
-
-        Ok(PubAccountTx { content, sig })
+        })
     }
 }
 
@@ -136,25 +120,17 @@ pub fn withdraw(
 pub struct AccountValidator {}
 
 impl AccountCreatorVerifier for AccountValidator {
-    fn verify(&self, account: &PubAccountTx, valid_asset_ids: &Vec<Scalar>) -> Fallible<()> {
+    fn verify(&self, account: &PubAccountTx, valid_asset_ids: &[Scalar]) -> Fallible<()> {
         let gens = &PedersenGens::default();
-
-        let message = account.content.encode();
-        let _ = account
-            .content
-            .pub_account
-            .memo
-            .owner_sign_pub_key
-            .verify(SIG_CTXT.bytes(&message), &account.sig)?;
 
         // Verify that the encrypted asset id is wellformed
         single_property_verifier(
             &WellformednessVerifier {
-                pub_key: account.content.pub_account.memo.owner_enc_pub_key,
-                cipher: account.content.pub_account.enc_asset_id,
+                pub_key: account.pub_account.owner_enc_pub_key,
+                cipher: account.pub_account.enc_asset_id,
                 pc_gens: &gens,
             },
-            account.content.asset_wellformedness_proof,
+            account.asset_wellformedness_proof,
         )?;
 
         // Verify that the encrypted balance is correct
@@ -162,19 +138,19 @@ impl AccountCreatorVerifier for AccountValidator {
         single_property_verifier(
             &CorrectnessVerifier {
                 value: balance.into(),
-                pub_key: account.content.pub_account.memo.owner_enc_pub_key,
-                cipher: account.content.initial_balance,
+                pub_key: account.pub_account.owner_enc_pub_key,
+                cipher: account.initial_balance,
                 pc_gens: &gens,
             },
-            account.content.initial_balance_correctness_proof,
+            account.initial_balance_correctness_proof,
         )?;
 
         // Verify that the asset is from the proper asset list
-        let membership_proof = account.content.asset_membership_proof.clone();
+        let membership_proof = account.asset_membership_proof.clone();
         let generators = &OooNProofGenerators::new(BASE, EXPONENT);
         single_property_verifier(
             &MembershipProofVerifier {
-                secret_element_com: account.content.pub_account.enc_asset_id.y,
+                secret_element_com: account.pub_account.enc_asset_id.y,
                 generators,
                 elements_set: valid_asset_ids,
             },
@@ -196,8 +172,6 @@ mod tests {
     use crate::{asset_proofs::ElgamalSecretKey, mercat::EncryptionKeys};
     use curve25519_dalek::scalar::Scalar;
     use rand::{rngs::StdRng, SeedableRng};
-    use schnorrkel::{ExpansionMode, MiniSecretKey};
-    use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
     #[test]
@@ -208,25 +182,17 @@ mod tests {
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let enc_keys = EncryptionKeys {
-            pblc: elg_pub.into(),
-            scrt: elg_secret.into(),
+            pblc: elg_pub,
+            scrt: elg_secret,
         };
-        let seed = [11u8; 32];
-        let sign_keys = MiniSecretKey::from_bytes(&seed)
-            .expect("Invalid seed")
-            .expand_to_keypair(ExpansionMode::Ed25519);
-
         let asset_id = AssetId::from(1);
-        let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
-            .iter()
-            .map(|id| AssetId::from(id.clone()))
-            .collect();
+        let valid_asset_ids: Vec<AssetId> =
+            vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
         let account_id = 2;
-        let asset_id_witness = CommitmentWitness::from((asset_id.clone().into(), &mut rng));
+        let asset_id_witness = CommitmentWitness::from((asset_id.into(), &mut rng));
         let scrt_account = SecAccount {
             enc_keys,
-            sign_keys,
             asset_id_witness,
         };
 
@@ -241,7 +207,7 @@ mod tests {
         let decrypted_balance = scrt_account
             .enc_keys
             .scrt
-            .decrypt(&sndr_account_tx.content.initial_balance)
+            .decrypt(&sndr_account_tx.initial_balance)
             .unwrap();
         assert_eq!(decrypted_balance, 0);
 
@@ -258,24 +224,17 @@ mod tests {
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let enc_keys = EncryptionKeys {
-            pblc: elg_pub.into(),
-            scrt: elg_secret.into(),
+            pblc: elg_pub,
+            scrt: elg_secret,
         };
-        let sign_keys = MiniSecretKey::from_bytes(&[11u8; 32])
-            .expect("Invalid seed")
-            .expand_to_keypair(ExpansionMode::Ed25519);
-
         let asset_id = AssetId::from(1);
-        let valid_asset_ids: Vec<AssetId> = vec![1, 2, 3]
-            .iter()
-            .map(|id| AssetId::from(id.clone()))
-            .collect();
+        let valid_asset_ids: Vec<AssetId> =
+            vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
         let account_id = 2;
-        let asset_id_witness = CommitmentWitness::from((asset_id.clone().into(), &mut rng));
+        let asset_id_witness = CommitmentWitness::from((asset_id.into(), &mut rng));
         let scrt_account = SecAccount {
             enc_keys,
-            sign_keys,
             asset_id_witness,
         };
 
@@ -290,28 +249,24 @@ mod tests {
         let balance = scrt_account
             .enc_keys
             .scrt
-            .decrypt(&pub_account_tx.content.initial_balance)
+            .decrypt(&pub_account_tx.initial_balance)
             .unwrap();
         assert_eq!(balance, 0);
 
         let ten: Balance = 10;
-        let ten = EncryptedAmount::from(
-            scrt_account
-                .enc_keys
-                .pblc
-                .encrypt_value(ten.into(), &mut rng)
-                .1,
-        );
+        let ten = scrt_account
+            .enc_keys
+            .pblc
+            .encrypt_value(ten.into(), &mut rng)
+            .1;
         let five: Balance = 5;
-        let five = EncryptedAmount::from(
-            scrt_account
-                .enc_keys
-                .pblc
-                .encrypt_value(five.into(), &mut rng)
-                .1,
-        );
+        let five = scrt_account
+            .enc_keys
+            .pblc
+            .encrypt_value(five.into(), &mut rng)
+            .1;
 
-        let new_enc_balance = deposit(&pub_account_tx.content.initial_balance, &ten);
+        let new_enc_balance = deposit(&pub_account_tx.initial_balance, &ten);
         let balance = scrt_account
             .enc_keys
             .scrt

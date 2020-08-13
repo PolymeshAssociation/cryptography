@@ -6,7 +6,7 @@ use cryptography::{
         asset::{AssetIssuer, AssetMediator, AssetValidator},
         Account, AssetTransactionIssuer, AssetTransactionMediator, AssetTransactionVerifier,
         EncryptedAmount, EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx, MediatorAccount,
-        PubAccount, SigningPubKey,
+        PubAccount,
     },
     AssetId, Balance,
 };
@@ -98,7 +98,6 @@ fn bench_transaction_mediator(
                         tx.clone(),
                         &issuer_account_cloned.clone(),
                         &mediator_account_cloned.encryption_key.clone(),
-                        &mediator_account_cloned.signing_key.clone(),
                         &[],
                     )
                     .unwrap()
@@ -116,7 +115,6 @@ fn bench_transaction_mediator(
                     tx.clone(),
                     &issuer_account.clone(),
                     &mediator_account.encryption_key.clone(),
-                    &mediator_account.signing_key.clone(),
                     &[],
                 )
                 .unwrap()
@@ -130,7 +128,6 @@ fn bench_transaction_validator(
     issuer_account: PubAccount,
     issuer_init_balance: EncryptedAmount,
     mediator_enc_pub_key: EncryptionPubKey,
-    mediator_sign_pub_key: SigningPubKey,
 ) {
     let label = "MERCAT Transaction: Validator".to_string();
 
@@ -151,7 +148,6 @@ fn bench_transaction_validator(
                         &issuer_account,
                         &issuer_init_balance,
                         &mediator_enc_pub_key,
-                        &mediator_sign_pub_key,
                         &[],
                     )
                     .unwrap()
@@ -163,13 +159,11 @@ fn bench_transaction_validator(
 
 fn bench_asset_transaction(c: &mut Criterion) {
     let asset_id = AssetId::from(ASSET_ID);
-    let valid_asset_ids: Vec<AssetId> = (0..MAX_ASSET_ID_INDEX)
-        .map(|id| AssetId::from(id))
-        .collect();
+    let valid_asset_ids: Vec<AssetId> = (0..MAX_ASSET_ID_INDEX).map(AssetId::from).collect();
     let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
     let mut rng = thread_rng();
-    let (public_account, private_account) = utility::generate_mediator_keys(&mut rng);
+    let (enc_pub_key, private_account) = utility::generate_mediator_keys(&mut rng);
     let (issuer_account, issuer_init_balance) =
         utility::create_account_with_amount(&mut rng, &asset_id, &valid_asset_ids, 0);
 
@@ -178,12 +172,8 @@ fn bench_asset_transaction(c: &mut Criterion) {
         .collect();
 
     // Initialization
-    let transactions = bench_transaction_issuer(
-        c,
-        issuer_account.clone(),
-        public_account.owner_enc_pub_key,
-        issued_amounts,
-    );
+    let transactions =
+        bench_transaction_issuer(c, issuer_account.clone(), enc_pub_key, issued_amounts);
 
     // Justification
     let transactions = bench_transaction_mediator(
@@ -199,8 +189,7 @@ fn bench_asset_transaction(c: &mut Criterion) {
         transactions,
         issuer_account.pblc,
         issuer_init_balance,
-        public_account.owner_enc_pub_key,
-        public_account.owner_sign_pub_key,
+        enc_pub_key,
     );
 }
 
