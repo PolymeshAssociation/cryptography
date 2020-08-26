@@ -252,14 +252,14 @@ mod tests {
         WellformednessVerifier,
     ) {
         let prover = WellformednessProverAwaitingChallenge {
-            pub_key: pub_key,
+            pub_key,
             w: Zeroizing::new(witness),
-            pc_gens: pc_gens,
+            pc_gens,
         };
         let verifier = WellformednessVerifier {
-            pub_key: pub_key,
-            cipher: cipher,
-            pc_gens: pc_gens,
+            pub_key,
+            cipher,
+            pc_gens,
         };
 
         (prover, verifier)
@@ -276,12 +276,8 @@ mod tests {
         let pub_key = secret_key.get_public_key();
         let (w, cipher) = pub_key.encrypt_value(secret_value.into(), &mut rng);
 
-        let (prover0, verifier0) = create_correctness_proof_objects_helper(
-            w.clone(),
-            pub_key.clone(),
-            cipher.clone(),
-            &gens,
-        );
+        let (prover0, verifier0) =
+            create_correctness_proof_objects_helper(w.clone(), pub_key, cipher, &gens);
         let (initial_message0, final_response0) =
             single_property_prover::<StdRng, CorrectnessProverAwaitingChallenge>(prover0, &mut rng)
                 .unwrap();
@@ -321,12 +317,8 @@ mod tests {
         let (w, cipher) = pub_key.encrypt_value(6u32.into(), &mut rng);
         let mut transcript = Transcript::new(b"batch_proof_label");
 
-        let (prover0, verifier0) = create_correctness_proof_objects_helper(
-            w.clone(),
-            pub_key.clone(),
-            cipher.clone(),
-            &gens,
-        );
+        let (prover0, verifier0) =
+            create_correctness_proof_objects_helper(w.clone(), pub_key, cipher, &gens);
         let (prover1, verifier1) =
             create_wellformedness_proof_objects_helper(w, pub_key, cipher, &gens);
 

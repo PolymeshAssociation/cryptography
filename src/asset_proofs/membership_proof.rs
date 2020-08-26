@@ -416,7 +416,7 @@ mod tests {
 
         let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(8u32),
-            blinding.clone(),
+            blinding,
             &generators,
             even_elements.as_slice(),
             BASE,
@@ -441,11 +441,7 @@ mod tests {
             generators: &generators,
         };
 
-        let result = verifier.verify(
-            &challenge,
-            &initial_message.clone(),
-            &final_response.clone(),
-        );
+        let result = verifier.verify(&challenge, &initial_message, &final_response);
         assert!(result.is_ok());
 
         // Negative test
@@ -463,7 +459,7 @@ mod tests {
         // Testing the attempt of initializting the prover with an invalid asset or an asset list.
         let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(78953u32),
-            blinding.clone(),
+            blinding,
             &generators,
             even_elements.as_slice(),
             BASE,
@@ -474,7 +470,7 @@ mod tests {
         // Testing the non-interactive API
         let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(7u32),
-            blinding.clone(),
+            blinding,
             &generators,
             odd_elements.as_slice(),
             BASE,
@@ -528,7 +524,7 @@ mod tests {
 
         let generators = OooNProofGenerators::new(EXPONENT, BASE);
 
-        let elements_set: Vec<Scalar> = (0..20000u32).map(|m| Scalar::from(m)).collect();
+        let elements_set: Vec<Scalar> = (0..20000u32).map(Scalar::from).collect();
 
         let secret = Scalar::from(8760u32);
         let blinding = Scalar::random(&mut rng);
@@ -537,7 +533,7 @@ mod tests {
 
         let prover = MembershipProverAwaitingChallenge::new(
             secret,
-            blinding.clone(),
+            blinding,
             &generators,
             elements_set.as_slice(),
             BASE,
@@ -581,7 +577,7 @@ mod tests {
 
         let prover = MembershipProverAwaitingChallenge::new(
             Scalar::from(8u32),
-            blinding.clone(),
+            blinding,
             &generators,
             even_elements.as_slice(),
             BASE,

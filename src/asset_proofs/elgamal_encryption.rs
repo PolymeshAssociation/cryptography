@@ -398,7 +398,7 @@ mod tests {
         let blinding = Scalar::random(&mut rng);
         let balance_witness = CommitmentWitness {
             value: balance.into(),
-            blinding: blinding,
+            blinding,
         };
         // Test encrypt().
         let cipher = elg_pub.encrypt(&balance_witness);
@@ -415,7 +415,7 @@ mod tests {
         let blinding = Scalar::random(&mut rng);
         let asset_id_witness = CommitmentWitness {
             value: asset_id.clone().into(),
-            blinding: blinding,
+            blinding,
         };
         // Test encrypt().
         let cipher = elg_pub.encrypt(&asset_id_witness);
@@ -471,7 +471,7 @@ mod tests {
         let blinding = Scalar::random(&mut rng);
         let w = CommitmentWitness {
             value: value.into(),
-            blinding: blinding,
+            blinding,
         };
 
         let scrt1 = ElgamalSecretKey::new(Scalar::random(&mut rng));

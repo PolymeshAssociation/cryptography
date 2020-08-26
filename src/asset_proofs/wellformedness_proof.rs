@@ -321,7 +321,7 @@ mod tests {
         // Positive test
         assert!(
             // 4th round
-            single_property_verifier(&verifier, (initial_message, final_response.clone())).is_ok()
+            single_property_verifier(&verifier, (initial_message, final_response)).is_ok()
         );
 
         // Negative tests
@@ -352,7 +352,7 @@ mod tests {
 
         let prover = WellformednessProverAwaitingChallenge {
             pub_key,
-            w: Zeroizing::new(w.clone()),
+            w: Zeroizing::new(w),
             pc_gens: &gens,
         };
         let (initial_message, final_response) = encryption_proofs::single_property_prover::<
