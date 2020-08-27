@@ -161,13 +161,8 @@ mod tests {
         let (witness, cipher) = elg_pub.encrypt_value(secret_value.into(), &mut rng);
 
         // Positive test: secret value within range [0, 2^32)
-        let proof = prove_within_range(
-            secret_value as u64,
-            witness.blinding().clone(),
-            32,
-            &mut rng,
-        )
-        .expect("This shouldn't happen.");
+        let proof = prove_within_range(secret_value as u64, witness.blinding(), 32, &mut rng)
+            .expect("This shouldn't happen.");
         assert_eq!(proof.range, 32);
         assert!(verify_within_range(&proof, &mut rng).is_ok());
 

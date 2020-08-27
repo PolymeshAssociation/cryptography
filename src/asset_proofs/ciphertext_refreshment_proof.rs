@@ -285,8 +285,8 @@ mod tests {
 
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let (_, ciphertext1) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
-        let (_, ciphertext2) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+        let (_, ciphertext1) = elg_pub.encrypt_value(secret_value, &mut rng);
+        let (_, ciphertext2) = elg_pub.encrypt_value(secret_value, &mut rng);
 
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             elg_secret,
@@ -354,8 +354,8 @@ mod tests {
         let gens = PedersenGens::default();
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
-        let (_, ciphertext1) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
-        let (_, ciphertext2) = elg_pub.encrypt_value(secret_value.clone(), &mut rng);
+        let (_, ciphertext1) = elg_pub.encrypt_value(secret_value, &mut rng);
+        let (_, ciphertext2) = elg_pub.encrypt_value(secret_value, &mut rng);
 
         let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
             elg_secret,

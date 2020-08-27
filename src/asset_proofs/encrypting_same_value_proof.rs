@@ -297,8 +297,8 @@ mod tests {
         let verifier = EncryptingSameValueVerifier {
             pub_key1: elg_pub1,
             pub_key2: elg_pub2,
-            cipher1: cipher1,
-            cipher2: cipher2,
+            cipher1,
+            cipher2,
             pc_gens: &gens,
         };
         let mut transcript = Transcript::new(ENCRYPTING_SAME_VALUE_PROOF_FINAL_RESPONSE_LABEL);

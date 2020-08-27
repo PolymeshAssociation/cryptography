@@ -197,7 +197,7 @@ mod tests {
         // If the message is altered, it won't decrypt.
         let value = 111u32;
         let (_, cipher) = elg_pub.const_time_encrypt_value(value.into(), &mut rng);
-        let mut corrupt_cipher = cipher.clone();
+        let mut corrupt_cipher = cipher;
         corrupt_cipher.z[0] += 1;
         assert_err!(
             elg_secret.const_time_decrypt(&corrupt_cipher),
