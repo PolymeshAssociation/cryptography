@@ -36,8 +36,7 @@ use zeroize::Zeroizing;
 
 /// The sender of a confidential transaction. Sender creates a transaction
 /// and performs initial proofs.
-#[derive(Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Debug)]
 pub struct CtxSender {}
 
 impl TransferTransactionSender for CtxSender {
@@ -250,8 +249,7 @@ fn add_transaction_auditor<T: RngCore + CryptoRng>(
 
 /// The receiver of a confidential transaction. Receiver finalizes and processes
 /// transaction.
-#[derive(Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Debug)]
 pub struct CtxReceiver {}
 
 impl TransferTransactionReceiver for CtxReceiver {
@@ -305,8 +303,7 @@ impl TransferTransactionReceiver for CtxReceiver {
 // -                                           Mediator                                           -
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Debug)]
 pub struct CtxMediator {}
 
 impl TransferTransactionMediator for CtxMediator {
@@ -381,8 +378,7 @@ impl TransferTransactionMediator for CtxMediator {
 // ------------------------------------------------------------------------------------------------
 
 /// Transaction Validator.
-#[derive(Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Debug)]
 pub struct TransactionValidator {}
 
 impl TransferTransactionVerifier for TransactionValidator {
@@ -610,8 +606,7 @@ fn verify_auditor_payload(
 // ------------------------------------------------------------------------------------------------
 
 /// Transaction Validator.
-#[derive(Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Debug)]
 pub struct CtxAuditor {}
 
 impl TransferTransactionAuditor for CtxAuditor {

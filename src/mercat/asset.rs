@@ -354,8 +354,7 @@ impl AssetTransactionMediator for AssetMediator {
 // ------------------------------------------------------------------------------------------------
 
 /// Asset transaction auditor.
-#[derive(Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Debug)]
 pub struct AssetAuditor {}
 
 impl AssetTransactionAuditor for AssetAuditor {
