@@ -5,7 +5,7 @@
 pub mod claim_proofs;
 pub use claim_proofs::{
     build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CDDClaimData, ProofKeyPair,
-    ProofPublicKey, ScopeClaimData,
+    ProofPublicKey, ScopeClaimData, ScopeClaimProofData,
 };
 
 pub mod pedersen_commitments;

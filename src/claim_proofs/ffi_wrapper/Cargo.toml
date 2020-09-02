@@ -1,0 +1,28 @@
+[package]
+name = "claim-proofs-ffi"
+version = "0.1.0"
+authors = [ "Polymath Inc" ]
+readme = "README.md"
+edition = "2018"
+description = "FFI bindings for the claim_proofs crate"
+
+[lib]
+name = "claim_proofs_ffi"
+crate-type = ["cdylib"]
+
+[features]
+default = ["cbindgen"]
+
+[dependencies.cryptography]
+path = "../../.."
+
+[dependencies]
+libc = "^0.2"
+curve25519-dalek = { version = "2", default-features = false, features = ["nightly"] }
+schnorrkel = { version = "0.9.1", default-features = false }
+
+[build-dependencies]
+cbindgen = { version = "^0.13", optional = true }
+
+[package.metadata.docs.rs]
+no-default-features = true

@@ -37,7 +37,6 @@ schnorrkel = { version = "0.9.1", default-features = false }
 merlin = { version = "2.0.0", default-features = false }
 bulletproofs = { git = "https://github.com/PolymathNetwork/bulletproofs.git", branch = "main", default-features = false, features = ["zeroize"] }
 
-
 [dev-dependencies]
 wasm-bindgen-test = { version = "0.3.10"}
 
