@@ -11,7 +11,7 @@
 //!
 //! ```
 //! use cryptography::claim_proofs::{compute_cdd_id, compute_scope_id, build_scope_claim_proof_data,
-//!     CDDClaimData, ScopeClaimData, ProofKeyPair, RawData};
+//!     CDDClaimData, ScopeClaimData, ProofKeyPair};
 //! use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 //!
 //! // Investor side:
@@ -55,16 +55,6 @@ const SIGNING_CTX: &[u8] = b"PolymathClaimProofs";
 
 lazy_static! {
     static ref SIG_CTXT: SigningContext = signing_context(SIGNING_CTX);
-}
-
-#[derive(Debug, Copy, Clone, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RawData(pub [u8; 32]);
-
-impl AsRef<[u8; 32]> for RawData {
-    fn as_ref(&self) -> &[u8; 32] {
-        &self.0
-    }
 }
 
 /// The data needed to generate a CDD ID
@@ -265,8 +255,8 @@ mod tests {
     #[test]
     fn match_pub_key_both_sides() {
         let expected_public_key = [
-            84, 187, 123, 240, 45, 40, 230, 87, 26, 0, 180, 230, 181, 65, 112, 176, 228, 180, 167,
-            76, 81, 254, 147, 102, 152, 251, 26, 99, 100, 215, 129, 62,
+            220, 100, 91, 47, 92, 14, 0, 234, 127, 191, 5, 26, 248, 147, 212, 237, 161, 119, 64,
+            169, 83, 51, 41, 240, 233, 227, 181, 239, 109, 96, 202, 93,
         ];
 
         let mut rng = StdRng::from_seed(SEED_1);
