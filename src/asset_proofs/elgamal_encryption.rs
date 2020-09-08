@@ -22,9 +22,8 @@ use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use sp_std::prelude::*;
 
 /// Prover's representation of the commitment secret.
-#[derive(Clone, PartialEq, Zeroize)]
+#[derive(Clone, PartialEq, Zeroize, Debug)]
 #[zeroize(drop)]
-#[cfg_attr(feature = "std", derive(Debug))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CommitmentWitness {
     /// Depending on how the witness was created this variable stores the
@@ -88,8 +87,7 @@ impl Decode for CommitmentWitness {
 }
 
 /// Prover's representation of the encrypted secret.
-#[derive(PartialEq, Copy, Clone, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Copy, Clone, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CipherText {
     pub x: RistrettoPoint,
@@ -188,9 +186,8 @@ define_sub_assign_variants!(LHS = CipherText, RHS = CipherText);
 /// where g and h are 2 orthogonal generators.
 
 /// An Elgamal Secret Key is a random scalar.
-#[derive(Clone, Zeroize)]
+#[derive(Clone, Zeroize, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 #[zeroize(drop)]
 pub struct ElgamalSecretKey {
     pub secret: Scalar,
@@ -218,9 +215,8 @@ impl Decode for ElgamalSecretKey {
 }
 
 /// The Elgamal Public Key is the secret key multiplied by the blinding generator (g).
-#[derive(Copy, Clone, Default, PartialEq)]
+#[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct ElgamalPublicKey {
     pub pub_key: RistrettoPoint,
 }

@@ -25,9 +25,8 @@ pub type RangeProofInitialMessage = CompressedRistretto;
 pub type RangeProofFinalResponse = RangeProof;
 
 /// Holds the non-interactive range proofs, equivalent of L_range of MERCAT paper.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct InRangeProof {
     pub init: RangeProofInitialMessage,
     pub response: RangeProofFinalResponse,

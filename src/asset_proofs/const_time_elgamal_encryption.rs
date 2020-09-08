@@ -53,8 +53,7 @@ use crate::errors::Fallible;
 /// Note that we can not only rely on regular Elgamal encryption since
 /// 1. it is not homomorphic. 2. all asset proofs prove properties of
 /// a twisted Elgamal cipher text.
-#[derive(PartialEq, Copy, Clone, Default)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Copy, Clone, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CipherTextWithHint {
     // The twisted Elgamal cipher text.

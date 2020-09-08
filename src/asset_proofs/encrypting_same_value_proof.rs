@@ -40,9 +40,8 @@ pub const ENCRYPTING_SAME_VALUE_PROOF_CHALLENGE_LABEL: &[u8] =
 // Public Keys
 // ------------------------------------------------------------------------
 
-#[derive(PartialEq, Copy, Clone, Default)]
+#[derive(PartialEq, Copy, Clone, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptingSameValueFinalResponse {
     z1: Scalar,
     z2: Scalar,
@@ -71,9 +70,8 @@ impl Decode for EncryptingSameValueFinalResponse {
     }
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptingSameValueInitialMessage {
     a1: RistrettoPoint,
     a2: RistrettoPoint,

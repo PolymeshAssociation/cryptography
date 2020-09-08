@@ -34,9 +34,8 @@ pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathWellforme
 /// The domain label for the challenge.
 pub const WELLFORMEDNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathWellformednessProofChallenge";
 
-#[derive(PartialEq, Copy, Clone, Default)]
+#[derive(PartialEq, Copy, Clone, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessFinalResponse {
     z1: Scalar,
     z2: Scalar,
@@ -68,9 +67,8 @@ impl Decode for WellformednessFinalResponse {
     }
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct WellformednessInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,
@@ -127,8 +125,7 @@ impl UpdateTranscript for WellformednessInitialMessage {
 pub type WellformednessProof =
     ZKProofResponse<WellformednessInitialMessage, WellformednessFinalResponse>;
 
-#[derive(Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Debug)]
 pub struct WellformednessProver {
     /// The secret commitment witness.
     w: Zeroizing<CommitmentWitness>,

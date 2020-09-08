@@ -43,9 +43,8 @@ pub const CIPHERTEXT_REFRESHMENT_PROOF_CHALLENGE_LABEL: &[u8] =
 // public key
 // ------------------------------------------------------------------------
 
-#[derive(PartialEq, Copy, Clone, Default)]
+#[derive(PartialEq, Copy, Clone, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherTextRefreshmentFinalResponse(Scalar);
 
 impl Encode for CipherTextRefreshmentFinalResponse {
@@ -71,9 +70,8 @@ impl Decode for CipherTextRefreshmentFinalResponse {
     }
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct CipherTextRefreshmentInitialMessage {
     a: RistrettoPoint,
     b: RistrettoPoint,

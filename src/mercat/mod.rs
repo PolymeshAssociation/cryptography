@@ -44,9 +44,8 @@ pub type EncryptionPubKey = ElgamalPublicKey;
 pub type EncryptionSecKey = ElgamalSecretKey;
 
 /// Holds ElGamal encryption keys.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct EncryptionKeys {
     pub pblc: EncryptionPubKey,
     pub scrt: EncryptionSecKey,
@@ -65,16 +64,14 @@ pub type EncryptedAmountWithHint = CipherTextWithHint;
 // -                                    Account                                        -
 // -------------------------------------------------------------------------------------
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct MediatorAccount {
     pub encryption_key: EncryptionKeys,
 }
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccount {
     pub id: u32,
     pub enc_asset_id: EncryptedAssetId,
@@ -82,9 +79,8 @@ pub struct PubAccount {
 }
 
 /// Holds contents of the public portion of an account which can be safely put on the chain.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct PubAccountTx {
     pub pub_account: PubAccount,
     pub initial_balance: EncryptedAmount,
@@ -95,17 +91,15 @@ pub struct PubAccountTx {
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
     pub asset_id_witness: CommitmentWitness,
 }
 
 /// Wrapper for both the secret and public account info
-#[derive(Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Debug)]
 pub struct Account {
     pub pblc: PubAccount,
     pub scrt: SecAccount,
@@ -234,9 +228,8 @@ impl core::fmt::Debug for TransferTxState {
 // -------------------------------------------------------------------------------------
 
 /// Asset memo holds the contents of an asset issuance transaction.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct AssetMemo {
     pub enc_issued_amount: EncryptedAmount,
     pub tx_id: u32,
@@ -244,9 +237,8 @@ pub struct AssetMemo {
 
 /// Holds the public portion of an asset issuance transaction after initialization.
 /// This can be placed on the chain.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct InitializedAssetTx {
     pub account_id: u32,
     pub enc_asset_id: EncryptedAssetId,
@@ -258,9 +250,8 @@ pub struct InitializedAssetTx {
     pub auditors_payload: Vec<AuditorPayload>,
 }
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct JustifiedAssetTx {
     pub init_data: InitializedAssetTx,
 }
@@ -322,9 +313,8 @@ pub trait AssetTransactionAuditor {
 // -                       Confidential Transfer Transaction                           -
 // -------------------------------------------------------------------------------------
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuditorPayload {
     pub auditor_id: u32,
     pub encrypted_amount: EncryptedAmountWithHint,
@@ -332,9 +322,8 @@ pub struct AuditorPayload {
 }
 
 /// Holds the memo for confidential transaction sent by the sender.
-#[derive(Default, Clone, Copy, Encode, Decode)]
+#[derive(Default, Clone, Copy, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct TransferTxMemo {
     pub sndr_account_id: u32,
     pub rcvr_account_id: u32,
@@ -349,9 +338,8 @@ pub struct TransferTxMemo {
 }
 
 /// Holds the proofs and memo of the confidential transaction sent by the sender.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct InitializedTransferTx {
     pub amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub non_neg_amount_proof: InRangeProof,
@@ -367,17 +355,15 @@ pub struct InitializedTransferTx {
 
 /// Holds the initial transaction data and the proof of equality of asset ids
 /// prepared by the receiver.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct FinalizedTransferTx {
     pub init_data: InitializedTransferTx,
     pub asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof,
 }
 
 /// Wrapper for the contents and auditors' payload.
-#[derive(Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Clone, Encode, Decode, Debug)]
 pub struct JustifiedTransferTx {
     pub finalized_data: FinalizedTransferTx,
 }
