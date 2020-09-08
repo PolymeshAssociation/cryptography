@@ -1,5 +1,5 @@
 [package]
-name = "scv"
+name = "polymath-scv"
 version = "0.1.0"
 authors = [ "Polymath Inc" ]
 repository = "https://github.com/PolymathNetwork/cryptography"
