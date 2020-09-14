@@ -37,9 +37,10 @@ use std::{
 
 pub const ON_CHAIN_DIR: &str = "on-chain";
 pub const OFF_CHAIN_DIR: &str = "off-chain";
-pub const MEDIATOR_PUBLIC_ACCOUNT_FILE: &str = "mediator_public_account.json";
-pub const VALIDATED_PUBLIC_ACCOUNT_FILE: &str = "validated_public_account.json";
-pub const SECRET_ACCOUNT_FILE: &str = "secret_account.json";
+pub const MEDIATOR_PUBLIC_ACCOUNT_FILE: &str = "mediator_public_account";
+pub const VALIDATED_PUBLIC_ACCOUNT_FILE: &str = "validated_public_account";
+pub const VALIDATED_PUBLIC_ACCOUNT_BALANCE_FILE: &str = "validated_public_account_balance";
+pub const SECRET_ACCOUNT_FILE: &str = "secret_account";
 pub const ASSET_ID_LIST_FILE: &str = "valid_asset_ids.json";
 pub const COMMON_OBJECTS_DIR: &str = "common";
 pub const USER_ACCOUNT_MAP: &str = "user_ticker_to_account_id.json";
@@ -266,6 +267,11 @@ pub fn account_create_transaction_file(tx_id: u32, user: &String, ticker: &Strin
 #[inline]
 pub fn user_public_account_file(ticker: &String) -> String {
     format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE)
+}
+
+#[inline]
+pub fn user_public_account_balance_file(ticker: &String) -> String {
+    format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_BALANCE_FILE)
 }
 
 #[inline]
@@ -794,15 +800,11 @@ pub fn compute_enc_pending_balance(
             tx_id: _,
         } = core_tx
         {
-            pending_balance -= tx.content.memo.enc_amount_using_sndr;
-            let account_id = tx.content.memo.sndr_account_id;
+            pending_balance -= tx.memo.enc_amount_using_sndr;
+            let account_id = tx.memo.sndr_account_id;
             debug!(
                 "------> decremented by {}.",
-                debug_decrypt(
-                    account_id,
-                    tx.content.memo.enc_amount_using_sndr,
-                    db_dir.clone()
-                )?
+                debug_decrypt(account_id, tx.memo.enc_amount_using_sndr, db_dir.clone())?
             );
         }
     }
@@ -977,11 +979,11 @@ pub fn debug_decrypt_account_balance(
     ticker: String,
     db_dir: PathBuf,
 ) -> Result<u32, Error> {
-    let ordered_pub_account: OrderedPubAccount = load_object(
+    let enc_balance: EncryptedAmount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &user,
-        &user_public_account_file(&ticker),
+        &user_public_account_balance_file(&ticker),
     )?;
     let scrt: SecAccount = load_object(
         db_dir.clone(),
@@ -989,7 +991,6 @@ pub fn debug_decrypt_account_balance(
         &user,
         &user_secret_account_file(&ticker),
     )?;
-    let enc_balance = ordered_pub_account.pub_account.enc_balance;
     scrt.enc_keys
         .scrt
         .decrypt(&enc_balance)

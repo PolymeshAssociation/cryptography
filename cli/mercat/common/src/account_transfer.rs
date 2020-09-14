@@ -1,27 +1,21 @@
 use crate::{
     compute_enc_pending_balance, confidential_transaction_file, construct_path,
     create_rng_from_seed, debug_decrypt, errors::Error, last_ordering_state, load_object,
-    save_object, user_public_account_file, user_secret_account_file, OrderedPubAccount,
-    OrderedTransferInstruction, OrderingState, COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE,
-    OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    save_object, user_public_account_balance_file, user_public_account_file,
+    user_secret_account_file, OrderedPubAccount, OrderedTransferInstruction, OrderingState,
+    COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use base64;
 use codec::{Decode, Encode};
 use cryptography::mercat::{
     transaction::{CtxReceiver, CtxSender},
-    Account, AccountMemo, InitializedTransferTx, PubAccount, TransferTransactionReceiver,
-    TransferTransactionSender, TransferTxState, TxSubstate,
+    Account, EncryptedAmount, EncryptionPubKey, InitializedTransferTx, PubAccount,
+    TransferTransactionReceiver, TransferTransactionSender, TransferTxState, TxSubstate,
 };
-use lazy_static::lazy_static;
 use log::{debug, info};
 use metrics::timing;
 use rand::Rng;
-use schnorrkel::{context::SigningContext, signing_context};
 use std::{path::PathBuf, time::Instant};
-
-lazy_static! {
-    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/transaction");
-}
 
 pub fn process_create_tx(
     seed: String,
@@ -44,6 +38,12 @@ pub fn process_create_tx(
         &sender,
         &user_public_account_file(&ticker),
     )?;
+    let sender_account_balance: EncryptedAmount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &sender,
+        &user_public_account_balance_file(&ticker),
+    )?;
     let sender_account = Account {
         scrt: load_object(
             db_dir.clone(),
@@ -61,7 +61,7 @@ pub fn process_create_tx(
         &user_public_account_file(&ticker),
     )?;
 
-    let mediator_account: AccountMemo = load_object(
+    let mediator_account: EncryptionPubKey = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &mediator,
@@ -78,7 +78,7 @@ pub fn process_create_tx(
     // Calculate the pending
     let calc_pending_state_timer = Instant::now();
     let last_processed_tx_counter = sender_ordered_pub_account.last_processed_tx_counter;
-    let last_processed_account_balance = sender_account.pblc.enc_balance;
+    let last_processed_account_balance = sender_account_balance;
     let ordering_state = last_ordering_state(
         sender.clone(),
         last_processed_tx_counter,
@@ -134,16 +134,16 @@ pub fn process_create_tx(
         pblc: PubAccount {
             id: sender_account.pblc.id,
             enc_asset_id: sender_account.pblc.enc_asset_id,
-            enc_balance: pending_balance,
-            memo: sender_account.pblc.memo,
+            owner_enc_pub_key: sender_account.pblc.owner_enc_pub_key,
         },
     };
     let mut asset_tx = ctx_sender
         .create_transaction(
             tx_id,
             &pending_account,
+            &pending_balance,
             &receiver_account.pub_account,
-            &mediator_account.owner_enc_pub_key,
+            &mediator_account,
             &[],
             amount,
             &mut rng,
@@ -162,12 +162,7 @@ pub fn process_create_tx(
             "CLI log: tx-{}: Cheating by changing the sender's account id. Correct account id: {}",
             tx_id, pending_account.pblc.id
         );
-        asset_tx.content.memo.sndr_account_id += 1;
-        let message = asset_tx.content.encode();
-        asset_tx.sig = pending_account
-            .scrt
-            .sign_keys
-            .sign(SIG_CTXT.bytes(&message));
+        asset_tx.memo.sndr_account_id += 1;
     }
 
     // Save the artifacts to file.
@@ -218,13 +213,6 @@ pub fn process_finalize_tx(
     let mut rng = create_rng_from_seed(Some(seed))?;
     let load_from_file_timer = Instant::now();
     let state = TransferTxState::Initialization(TxSubstate::Started);
-
-    let sender_ordered_pub_account: OrderedPubAccount = load_object(
-        db_dir.clone(),
-        ON_CHAIN_DIR,
-        &sender,
-        &user_public_account_file(&ticker),
-    )?;
 
     let receiver_ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
@@ -304,17 +292,7 @@ pub fn process_finalize_tx(
     let finalize_by_receiver_timer = Instant::now();
     let receiver = CtxReceiver {};
     let mut asset_tx = receiver
-        .finalize_transaction(
-            tx_id,
-            tx,
-            &sender_ordered_pub_account
-                .pub_account
-                .memo
-                .owner_sign_pub_key,
-            receiver_account.clone(),
-            amount,
-            &mut rng,
-        )
+        .finalize_transaction(tx_id, tx, receiver_account.clone(), amount, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     let ordering_state = OrderingState {
@@ -328,12 +306,7 @@ pub fn process_finalize_tx(
             "CLI log: tx-{}: Cheating by changing the receiver's account id. Correct account id: {}",
             tx_id, receiver_account.pblc.id
         );
-        asset_tx.content.init_data.content.memo.rcvr_account_id += 1;
-        let message = asset_tx.content.encode();
-        asset_tx.sig = receiver_account
-            .scrt
-            .sign_keys
-            .sign(SIG_CTXT.bytes(&message));
+        asset_tx.init_data.memo.rcvr_account_id += 1;
     }
 
     timing!(

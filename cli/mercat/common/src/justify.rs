@@ -1,48 +1,40 @@
 use crate::{
     asset_transaction_file, compute_enc_pending_balance, confidential_transaction_file,
     construct_path, create_rng_from_seed, errors::Error, last_ordering_state, load_object,
-    save_object, user_public_account_file, AssetInstruction, OrderedAssetInstruction,
-    OrderedPubAccount, OrderedTransferInstruction, TransferInstruction, COMMON_OBJECTS_DIR,
-    MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
+    save_object, user_public_account_balance_file, user_public_account_file, AssetInstruction,
+    OrderedAssetInstruction, OrderedPubAccount, OrderedTransferInstruction, TransferInstruction,
+    COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    SECRET_ACCOUNT_FILE,
 };
 use codec::{Decode, Encode};
 use cryptography::{
     asset_id_from_ticker,
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     mercat::{
-        asset::AssetMediator, transaction::CtxMediator, AccountMemo, AssetTransactionMediator,
-        AssetTxState, EncryptionKeys, FinalizedTransferTx, InitializedAssetTx, MediatorAccount,
-        TransferTransactionMediator, TransferTxState, TxSubstate,
+        asset::AssetMediator, transaction::CtxMediator, AssetTransactionMediator, AssetTxState,
+        EncryptedAmount, EncryptionKeys, EncryptionPubKey, FinalizedTransferTx, InitializedAssetTx,
+        MediatorAccount, TransferTransactionMediator, TransferTxState, TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
-use lazy_static::lazy_static;
 use log::info;
 use metrics::timing;
 use rand::{CryptoRng, RngCore};
-use schnorrkel::{context::SigningContext, signing_context, ExpansionMode, MiniSecretKey};
 use std::{path::PathBuf, time::Instant};
 
-lazy_static! {
-    static ref SIG_CTXT_ISSUE: SigningContext = signing_context(b"mercat/asset");
-    static ref SIG_CTXT_TRANSACTION: SigningContext = signing_context(b"mercat/transaction");
-}
-
-fn generate_mediator_keys<R: RngCore + CryptoRng>(rng: &mut R) -> (AccountMemo, MediatorAccount) {
+fn generate_mediator_keys<R: RngCore + CryptoRng>(
+    rng: &mut R,
+) -> (EncryptionPubKey, MediatorAccount) {
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
     let mediator_enc_key = EncryptionKeys {
         pblc: mediator_elg_secret_key.get_public_key().into(),
         scrt: mediator_elg_secret_key.into(),
     };
 
-    let mediator_signing_pair =
-        MiniSecretKey::generate_with(rng).expand_to_keypair(ExpansionMode::Ed25519);
-
     (
-        AccountMemo::new(mediator_enc_key.pblc, mediator_signing_pair.public),
+        mediator_enc_key.pblc,
         MediatorAccount {
             encryption_key: mediator_enc_key,
-            signing_key: mediator_signing_pair,
         },
     )
 }
@@ -152,7 +144,6 @@ pub fn justify_asset_issuance_transaction(
             asset_tx.clone(),
             &issuer_ordered_pub_account.pub_account,
             &mediator_account.encryption_key,
-            &mediator_account.signing_key,
             &[],
         )
         .map_err(|error| Error::LibraryError { error })?;
@@ -172,12 +163,7 @@ pub fn justify_asset_issuance_transaction(
             .pblc
             .encrypt(&cheat_asset_id_witness);
 
-        justified_tx.content.content.enc_asset_id = cheat_enc_asset_id;
-        let message = justified_tx.content.encode();
-        justified_tx.sig = mediator_account
-            .clone()
-            .signing_key
-            .sign(SIG_CTXT_ISSUE.bytes(&message));
+        justified_tx.init_data.enc_asset_id = cheat_enc_asset_id;
     }
 
     timing!(
@@ -290,6 +276,12 @@ pub fn justify_asset_transfer_transaction(
         &sender.clone(),
         &user_public_account_file(&ticker),
     )?;
+    let sender_account_balance: EncryptedAmount = load_object(
+        db_dir.clone(),
+        ON_CHAIN_DIR,
+        &sender,
+        &user_public_account_balance_file(&ticker),
+    )?;
 
     let receiver_ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
@@ -310,7 +302,7 @@ pub fn justify_asset_transfer_transaction(
 
     // Calculate the pending
     let last_processed_tx_counter = sender_ordered_pub_account.last_processed_tx_counter;
-    let last_processed_account_balance = sender_ordered_pub_account.pub_account.enc_balance;
+    let last_processed_account_balance = sender_account_balance;
     let ordering_state = last_ordering_state(
         sender.clone(),
         last_processed_tx_counter,
@@ -331,10 +323,9 @@ pub fn justify_asset_transfer_transaction(
         .justify_transaction(
             asset_tx.clone(),
             &mediator_account.encryption_key,
-            &mediator_account.signing_key,
             &sender_ordered_pub_account.pub_account,
+            &pending_balance,
             &receiver_ordered_pub_account.pub_account,
-            pending_balance,
             &[],
             asset_id,
             &mut rng,
@@ -347,18 +338,7 @@ pub fn justify_asset_transfer_transaction(
             tx_id
         );
 
-        justified_tx
-            .content
-            .content
-            .init_data
-            .content
-            .memo
-            .sndr_account_id += 1;
-        let message = justified_tx.content.encode();
-        justified_tx.sig = mediator_account
-            .clone()
-            .signing_key
-            .sign(SIG_CTXT_TRANSACTION.bytes(&message));
+        justified_tx.finalized_data.init_data.memo.sndr_account_id += 1;
     }
 
     timing!(

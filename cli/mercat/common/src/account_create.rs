@@ -14,17 +14,10 @@ use cryptography::{
     },
 };
 use curve25519_dalek::scalar::Scalar;
-use lazy_static::lazy_static;
 use log::{error, info};
 use metrics::timing;
 use rand::{CryptoRng, Rng, RngCore};
-use schnorrkel::{context::SigningContext, signing_context};
-use schnorrkel::{ExpansionMode, MiniSecretKey};
 use std::{path::PathBuf, time::Instant};
-
-lazy_static! {
-    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/account");
-}
 
 pub fn process_create_account(
     seed: Option<String>,
@@ -72,19 +65,12 @@ pub fn process_create_account(
                     .enc_keys
                     .pblc
                     .encrypt(&cheat_asset_id_witness);
-                // the encrypted asset id and update the signature
-                account_tx.content.pub_account.enc_asset_id =
-                    EncryptedAssetId::from(cheat_enc_asset_id);
-                let message = account_tx.content.pub_account.encode();
-                account_tx.sig = secret_account
-                    .clone()
-                    .sign_keys
-                    .sign(SIG_CTXT.bytes(&message));
+                account_tx.pub_account.enc_asset_id = EncryptedAssetId::from(cheat_enc_asset_id);
             }
             1 => {
                 info!("CLI log: tx-{}: Cheating by overwriting the account id but not the signature. Correct account id: {}",
-                      tx_id, account_tx.content.pub_account.id);
-                account_tx.content.pub_account.id += 1;
+                      tx_id, account_tx.pub_account.id);
+                account_tx.pub_account.id += 1;
             }
             _ => error!("CLI log: tx-{}: This should never happen!", tx_id),
         }
@@ -142,11 +128,8 @@ fn create_secret_account<R: RngCore + CryptoRng>(
         asset_id_from_ticker(&ticker_id).map_err(|error| Error::LibraryError { error })?;
     let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));
 
-    let sign_keys = MiniSecretKey::generate_with(rng).expand_to_keypair(ExpansionMode::Ed25519);
-
     Ok(SecAccount {
         enc_keys,
-        sign_keys,
         asset_id_witness,
     })
 }

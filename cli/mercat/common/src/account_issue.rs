@@ -10,20 +10,15 @@ use cryptography::{
     asset_id_from_ticker,
     asset_proofs::CommitmentWitness,
     mercat::{
-        asset::AssetIssuer, Account, AccountMemo, AssetTransactionIssuer, AssetTxState, TxSubstate,
+        asset::AssetIssuer, Account, AssetTransactionIssuer, AssetTxState, EncryptionPubKey,
+        TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
-use lazy_static::lazy_static;
 use log::info;
 use metrics::timing;
 use rand::Rng;
-use schnorrkel::{context::SigningContext, signing_context};
 use std::{path::PathBuf, time::Instant};
-
-lazy_static! {
-    static ref SIG_CTXT: SigningContext = signing_context(b"mercat/asset");
-}
 
 pub fn process_issue_asset(
     seed: String,
@@ -55,7 +50,7 @@ pub fn process_issue_asset(
         )?,
     };
 
-    let mediator_account: AccountMemo = load_object(
+    let mediator_account: EncryptionPubKey = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
         &mediator,
@@ -112,7 +107,7 @@ pub fn process_issue_asset(
         .initialize_asset_transaction(
             tx_id,
             &issuer_account,
-            &mediator_account.owner_enc_pub_key,
+            &mediator_account,
             &[],
             amount,
             &mut rng,
@@ -139,13 +134,7 @@ pub fn process_issue_asset(
             .pblc
             .encrypt(&cheat_asset_id_witness);
 
-        asset_tx.content.enc_asset_id = cheat_enc_asset_id;
-        let message = asset_tx.content.encode();
-        asset_tx.sig = issuer_account
-            .scrt
-            .clone()
-            .sign_keys
-            .sign(SIG_CTXT.bytes(&message));
+        asset_tx.enc_asset_id = cheat_enc_asset_id;
     }
     timing!(
         "account.issue_asset.init",

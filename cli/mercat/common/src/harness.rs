@@ -3,18 +3,17 @@ use crate::{
     account_issue::process_issue_asset,
     account_transfer::{process_create_tx, process_finalize_tx},
     chain_setup::process_asset_id_creation,
-    create_rng_from_seed,
+    create_rng_from_seed, debug_decrypt_account_balance,
     errors::Error,
     gen_seed, gen_seed_from,
     justify::{
         justify_asset_issuance_transaction, justify_asset_transfer_transaction,
         process_create_mediator,
     },
-    load_object, user_public_account_file, user_secret_account_file,
+    user_public_account_file,
     validate::validate_all_pending,
-    OrderedPubAccount, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    COMMON_OBJECTS_DIR, ON_CHAIN_DIR,
 };
-use cryptography::mercat::{Account, SecAccount};
 use linked_hash_map::LinkedHashMap;
 use log::{error, info, warn};
 use rand::Rng;
@@ -644,33 +643,17 @@ impl TestCase {
                 if user != COMMON_OBJECTS_DIR {
                     for ticker in self.ticker_names.clone() {
                         let pub_file_name = user_public_account_file(&ticker);
-                        let sec_file_name = user_secret_account_file(&ticker);
 
                         let mut path = dir.clone();
                         path.push(pub_file_name.clone());
                         if !path.exists() {
                             continue;
                         }
-                        let ordered_pub_account: OrderedPubAccount = load_object(
+                        let balance = debug_decrypt_account_balance(
+                            String::from(user),
+                            ticker.clone(),
                             self.chain_db_dir.clone(),
-                            ON_CHAIN_DIR,
-                            user,
-                            &pub_file_name,
                         )?;
-                        let pub_account = ordered_pub_account.pub_account;
-                        let sec_account: SecAccount = load_object(
-                            self.chain_db_dir.clone(),
-                            OFF_CHAIN_DIR,
-                            user,
-                            &sec_file_name,
-                        )?;
-                        let account = Account {
-                            pblc: pub_account,
-                            scrt: sec_account,
-                        };
-                        let balance = account
-                            .decrypt_balance()
-                            .map_err(|error| Error::LibraryError { error })?;
                         accounts.insert(InputAccount {
                             owner: Party::try_from(user)?,
                             ticker: Some(ticker),

@@ -9,7 +9,7 @@ jobs:
       - checkout
       - run:
           name: Checkout Cryptography submodule
-          command: git submodule update --init
+          command: git submodule update --init --remote
       - run:
           name: Check formatting
           command: ./scripts/lint
@@ -22,7 +22,7 @@ jobs:
       - checkout
       - run:
           name: Checkout Cryptography submodule
-          command: git submodule update --init
+          command: git submodule update --init --remote
       - run:
           name: Store rust version in an environment var for cache key
           command: rustc --version > rust.version
@@ -49,7 +49,7 @@ jobs:
       - checkout
       - run:
           name: Checkout Cryptography submodule
-          command: git submodule update --init
+          command: git submodule update --init --remote
       - run:
           name: Store rust version in a file for cache key
           command: rustc --version > rust.version
