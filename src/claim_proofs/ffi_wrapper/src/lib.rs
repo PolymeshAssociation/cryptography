@@ -18,96 +18,117 @@ pub type Signature = schnorrkel::Signature;
 pub type Scalar = curve25519_dalek::scalar::Scalar;
 pub type RistrettoPoint = curve25519_dalek::ristretto::RistrettoPoint;
 
+fn box_alloc<T>(x: T) -> *mut T {
+    Box::into_raw(Box::new(x))
+}
+
 // ------------------------------------------------------------------------
 // Data Structures
 // ------------------------------------------------------------------------
 
+/// Create a `Scalar` object from a 32 bytes array.
+///
+/// Caller is responsible for calling `scalar_free()` to deallocate this object.
+/// SAFETY: Caller is also responsible for making sure the `scalar_bits` pointer
+///         is not Null and points to a 32 bytes block of memory.
 #[no_mangle]
-pub extern "C" fn scalar_new(scalar_bits: *const u8, len: size_t) -> *mut Scalar {
-    assert!(!scalar_bits.is_null() && len == 32);
+pub unsafe extern "C" fn scalar_new(scalar_bits: *const u8) -> *mut Scalar {
+    assert!(!scalar_bits.is_null());
 
+    let len = 32usize;
     let mut scalar_slice = [0u8; 32];
-    scalar_slice
-        .copy_from_slice(unsafe { &slice::from_raw_parts(scalar_bits, len as usize)[..32] });
+    scalar_slice.copy_from_slice(&slice::from_raw_parts(scalar_bits, len)[..32]);
 
     let scalar = Scalar::from_bits(scalar_slice);
-    Box::into_raw(Box::new(scalar))
+    box_alloc(scalar)
 }
 
+/// Deallocates a `Scalar` object's memory.
 #[no_mangle]
-pub extern "C" fn scalar_free(ptr: *mut Scalar) {
+pub unsafe extern "C" fn scalar_free(ptr: *mut Scalar) {
     if ptr.is_null() {
         return;
     }
-    unsafe {
-        Box::from_raw(ptr);
-    }
+
+    Box::from_raw(ptr);
 }
 
+/// Create a new `CDDClaimData` object.
+///
+/// Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
+/// SAFETY: Caller is also responsible for making sure the `investor_did` and
+///         `investor_unique_id` pointers are not Null.
 #[no_mangle]
-pub extern "C" fn cdd_claim_data_new(
+pub unsafe extern "C" fn cdd_claim_data_new(
     investor_did: *mut Scalar,
     investor_unique_id: *mut Scalar,
 ) -> *mut CDDClaimData {
     assert!(!investor_did.is_null());
     assert!(!investor_unique_id.is_null());
 
-    let investor_did: Scalar = unsafe { *investor_did };
-    let investor_unique_id: Scalar = unsafe { *investor_unique_id };
-    Box::into_raw(Box::new(CDDClaimData {
+    let investor_did: Scalar = *investor_did;
+    let investor_unique_id: Scalar = *investor_unique_id;
+    box_alloc(CDDClaimData {
         investor_did,
         investor_unique_id,
-    }))
+    })
 }
 
+/// Deallocates a `CDDClaimData` object's memory.
 #[no_mangle]
-pub extern "C" fn cdd_claim_data_free(ptr: *mut CDDClaimData) {
+pub unsafe extern "C" fn cdd_claim_data_free(ptr: *mut CDDClaimData) {
     if ptr.is_null() {
         return;
     }
-    unsafe {
-        Box::from_raw(ptr);
-    }
+    Box::from_raw(ptr);
 }
 
+/// Create a new `ScopeClaimData` object.
+///
+/// Caller is responsible for calling `scope_claim_data_free()` to deallocate this object.
+/// SAFETY: Caller is also responsible for making sure the `scope_did` and
+///         `investor_unique_id` pointers are not Null.
 #[no_mangle]
-pub extern "C" fn scope_claim_data_new(
+pub unsafe extern "C" fn scope_claim_data_new(
     scope_did: *mut Scalar,
     investor_unique_id: *mut Scalar,
 ) -> *mut ScopeClaimData {
     assert!(!scope_did.is_null());
     assert!(!investor_unique_id.is_null());
 
-    let scope_did: Scalar = unsafe { *scope_did };
-    let investor_unique_id: Scalar = unsafe { *investor_unique_id };
-    Box::into_raw(Box::new(ScopeClaimData {
+    let scope_did: Scalar = *scope_did;
+    let investor_unique_id: Scalar = *investor_unique_id;
+    box_alloc(ScopeClaimData {
         scope_did,
         investor_unique_id,
-    }))
+    })
 }
 
+/// Deallocates a `ScopeClaimData` object's memory.
 #[no_mangle]
-pub extern "C" fn scope_claim_data_free(ptr: *mut ScopeClaimData) {
+pub unsafe extern "C" fn scope_claim_data_free(ptr: *mut ScopeClaimData) {
     if ptr.is_null() {
         return;
     }
-    unsafe {
-        Box::from_raw(ptr);
-    }
+    Box::from_raw(ptr);
 }
 
+/// Deallocates a `ScopeClaimProofData` object's memory.
 #[no_mangle]
-pub extern "C" fn scope_claim_proof_data_free(ptr: *mut ScopeClaimProofData) {
+pub unsafe extern "C" fn scope_claim_proof_data_free(ptr: *mut ScopeClaimProofData) {
     if ptr.is_null() {
         return;
     }
-    unsafe {
-        Box::from_raw(ptr);
-    }
+    Box::from_raw(ptr);
 }
 
+/// Create a new `ProofPublicKey` object.
+///
+/// Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
+/// SAFETY: Caller is also responsible for making sure the `cdd_id`, `investor_did`,
+///         `scope_id`, and `scope_did` pointers are not Null.
 #[no_mangle]
-pub extern "C" fn proof_public_key_new(
+pub unsafe extern "C" fn proof_public_key_new(
     cdd_id: *mut RistrettoPoint,
     investor_did: *mut Scalar,
     scope_id: *mut RistrettoPoint,
@@ -118,76 +139,93 @@ pub extern "C" fn proof_public_key_new(
     assert!(!scope_id.is_null());
     assert!(!scope_did.is_null());
 
-    let cdd_id: RistrettoPoint = unsafe { *cdd_id };
-    let investor_did: Scalar = unsafe { *investor_did };
-    let scope_id: RistrettoPoint = unsafe { *scope_id };
-    let scope_did: Scalar = unsafe { *scope_did };
+    let cdd_id: RistrettoPoint = *cdd_id;
+    let investor_did: Scalar = *investor_did;
+    let scope_id: RistrettoPoint = *scope_id;
+    let scope_did: Scalar = *scope_did;
 
     let proof_public_key = ProofPublicKey::new(cdd_id, investor_did, scope_id, scope_did);
 
-    Box::into_raw(Box::new(proof_public_key))
+    box_alloc(proof_public_key)
 }
 
+/// Deallocates a `ProofPublicKey` object's memory.
 #[no_mangle]
-pub extern "C" fn proof_public_key_free(ptr: *mut ProofPublicKey) {
+pub unsafe extern "C" fn proof_public_key_free(ptr: *mut ProofPublicKey) {
     if ptr.is_null() {
         return;
     }
-    unsafe {
-        Box::from_raw(ptr);
-    }
+
+    Box::from_raw(ptr);
 }
 
+/// Deallocates a `Signature` object's memory.
 #[no_mangle]
-pub extern "C" fn signature_free(ptr: *mut Signature) {
+pub unsafe extern "C" fn signature_free(ptr: *mut Signature) {
     if ptr.is_null() {
         return;
     }
-    unsafe {
-        Box::from_raw(ptr);
-    }
+    Box::from_raw(ptr);
 }
 
 // ------------------------------------------------------------------------
 // Prover API
 // ------------------------------------------------------------------------
 
+/// Creates a `ScopeClaimProofData` object from a CDD claim and an scope claim.
+///
+/// SAFETY: Caller is responsible to make sure `cdd_claim` and `scope_claim`
+///         pointers are not Null.
+/// Caller is responsible for deallocating memory after use.
 #[no_mangle]
-pub extern "C" fn build_scope_claim_proof_data_wrapper(
+pub unsafe extern "C" fn build_scope_claim_proof_data_wrapper(
     cdd_claim: *const CDDClaimData,
     scope_claim: *const ScopeClaimData,
 ) -> *mut ScopeClaimProofData {
     assert!(!cdd_claim.is_null());
     assert!(!scope_claim.is_null());
 
-    let cdd_claim: CDDClaimData = unsafe { *cdd_claim };
-    let scope_claim: ScopeClaimData = unsafe { *scope_claim };
-    Box::into_raw(Box::new(build_scope_claim_proof_data(
-        &cdd_claim,
-        &scope_claim,
-    )))
+    let cdd_claim: CDDClaimData = *cdd_claim;
+    let scope_claim: ScopeClaimData = *scope_claim;
+    box_alloc(build_scope_claim_proof_data(&cdd_claim, &scope_claim))
 }
 
+/// Creates a CDD ID from a CDD claim.
+///
+/// SAFETY: Caller is responsible to make sure `cdd_claim` pointer is not Null.
+/// Caller is responsible for deallocating memory after use.
 #[no_mangle]
-pub extern "C" fn compute_cdd_id_wrapper(cdd_claim: *const CDDClaimData) -> *mut RistrettoPoint {
+pub unsafe extern "C" fn compute_cdd_id_wrapper(
+    cdd_claim: *const CDDClaimData,
+) -> *mut RistrettoPoint {
     assert!(!cdd_claim.is_null());
 
-    let cdd_claim: CDDClaimData = unsafe { *cdd_claim };
-    Box::into_raw(Box::new(compute_cdd_id(&cdd_claim)))
+    let cdd_claim: CDDClaimData = *cdd_claim;
+    box_alloc(compute_cdd_id(&cdd_claim))
 }
 
+/// Creates a scope ID from a scope claim.
+///
+/// SAFETY: Caller is responsible to make sure the `scope_claim` pointer is not Null.
+/// Caller is responsible for deallocating memory after use.
 #[no_mangle]
-pub extern "C" fn compute_scope_id_wrapper(
+pub unsafe extern "C" fn compute_scope_id_wrapper(
     scope_claim: *const ScopeClaimData,
 ) -> *mut RistrettoPoint {
     assert!(!scope_claim.is_null());
 
-    let scope_claim: ScopeClaimData = unsafe { *scope_claim };
-    Box::into_raw(Box::new(compute_scope_id(&scope_claim)))
+    let scope_claim: ScopeClaimData = *scope_claim;
+    box_alloc(compute_scope_id(&scope_claim))
 }
 
+/// Creates a `Signature` from a scope claim proof data and a message.
+///
+/// SAFETY: Caller is responsible to make sure `scope_claim_proof_data` and `message`
+///         pointers are not Null, and `message` points to a block of memory that has
+///         at least `message_size` bytes.
+/// Caller is responsible for deallocating memory after use.
 #[no_mangle]
-pub extern "C" fn generate_id_match_proof_wrapper(
+pub unsafe extern "C" fn generate_id_match_proof_wrapper(
     scope_claim_proof_data: *mut ScopeClaimProofData,
     message: *const u8,
     message_size: size_t,
@@ -196,20 +234,26 @@ pub extern "C" fn generate_id_match_proof_wrapper(
     assert!(!message.is_null());
     // We allow zero size messages.
 
-    let message_slice = unsafe { slice::from_raw_parts(message, message_size as usize) };
-    let scope_claim_proof_data: ScopeClaimProofData = unsafe { *scope_claim_proof_data };
+    let message_slice = slice::from_raw_parts(message, message_size as usize);
+    let scope_claim_proof_data: ScopeClaimProofData = *scope_claim_proof_data;
     let pair = ProofKeyPair::from(scope_claim_proof_data);
     let proof = pair.generate_id_match_proof(message_slice);
 
-    Box::into_raw(Box::new(proof))
+    box_alloc(proof)
 }
 
 // ------------------------------------------------------------------------
 // Verifier API
 // ------------------------------------------------------------------------
 
+/// Verifies the signature on a message.
+///
+/// SAFETY: Caller is responsible to make sure `proof_public_key`, `message`, and `signature`
+///         pointers are not Null, and `message` points to a block of memory that has
+///         at least `message_size` bytes.
+/// Caller is responsible for deallocating memory after use.
 #[no_mangle]
-pub extern "C" fn verify_id_match_proof_wrapper(
+pub unsafe extern "C" fn verify_id_match_proof_wrapper(
     proof_public_key: *const ProofPublicKey,
     message: *const u8,
     message_size: size_t,
@@ -219,9 +263,9 @@ pub extern "C" fn verify_id_match_proof_wrapper(
     assert!(!message.is_null());
     // We allow zero size messages.
 
-    let message_slice = unsafe { slice::from_raw_parts(message, message_size as usize) };
-    let proof_public_key: ProofPublicKey = unsafe { *proof_public_key };
-    let signature: Signature = unsafe { *signature };
+    let message_slice = slice::from_raw_parts(message, message_size as usize);
+    let proof_public_key: ProofPublicKey = *proof_public_key;
+    let signature: Signature = *signature;
 
     proof_public_key.verify_id_match_proof(message_slice, &signature)
 }
