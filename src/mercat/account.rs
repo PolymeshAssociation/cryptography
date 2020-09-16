@@ -40,7 +40,6 @@ impl AccountCreatorInitializer for AccountCreator {
         tx_id: u32,
         scrt: &SecAccount,
         valid_asset_ids: &[Scalar],
-        account_id: u32,
         rng: &mut T,
     ) -> Fallible<PubAccountTx> {
         let balance_blinding = Scalar::random(rng);
@@ -89,7 +88,6 @@ impl AccountCreatorInitializer for AccountCreator {
 
         Ok(PubAccountTx {
             pub_account: PubAccount {
-                id: account_id,
                 enc_asset_id,
                 owner_enc_pub_key: scrt.enc_keys.pblc,
             },

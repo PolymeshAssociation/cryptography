@@ -186,8 +186,8 @@ impl TransferTransactionSender for CtxSender {
             asset_id_correctness_proof,
             amount_correctness_proof,
             memo: TransferTxMemo {
-                sndr_account_id: sndr_pub_account.id,
-                rcvr_account_id: rcvr_pub_account.id,
+                sndr_account_id: sndr_pub_account.enc_asset_id,
+                rcvr_account_id: rcvr_pub_account.enc_asset_id,
                 enc_amount_using_sndr: sndr_new_enc_amount,
                 enc_amount_using_rcvr: rcvr_new_enc_amount,
                 refreshed_enc_balance,
@@ -393,7 +393,7 @@ impl TransferTransactionVerifier for TransactionValidator {
         rng: &mut R,
     ) -> Fallible<(EncryptedAmount, EncryptedAmount)> {
         ensure!(
-            sndr_account.id
+            sndr_account.enc_asset_id
                 == justified_transaction
                     .finalized_data
                     .init_data
@@ -402,7 +402,7 @@ impl TransferTransactionVerifier for TransactionValidator {
             ErrorKind::AccountIdMismatch
         );
         ensure!(
-            rcvr_account.id
+            rcvr_account.enc_asset_id
                 == justified_transaction
                     .finalized_data
                     .init_data
@@ -620,7 +620,7 @@ impl TransferTransactionAuditor for CtxAuditor {
         auditor_enc_key: &(u32, EncryptionKeys),
     ) -> Fallible<()> {
         ensure!(
-            sndr_account.id
+            sndr_account.enc_asset_id
                 == justified_transaction
                     .finalized_data
                     .init_data
@@ -629,7 +629,7 @@ impl TransferTransactionAuditor for CtxAuditor {
             ErrorKind::AccountIdMismatch
         );
         ensure!(
-            rcvr_account.id
+            rcvr_account.enc_asset_id
                 == justified_transaction
                     .finalized_data
                     .init_data
@@ -722,8 +722,8 @@ mod tests {
         let (_, enc_amount_using_rcvr) = rcvr_pub_key.encrypt_value(amount.into(), rng);
         let (_, enc_asset_id_using_rcvr) = rcvr_pub_key.encrypt_value(asset_id.into(), rng);
         TransferTxMemo {
-            sndr_account_id: 0,
-            rcvr_account_id: 0,
+            sndr_account_id: EncryptedAssetId::default(),
+            rcvr_account_id: EncryptedAssetId::default(),
             enc_amount_using_sndr: EncryptedAmount::default(),
             enc_amount_using_rcvr,
             refreshed_enc_balance: EncryptedAmount::default(),
@@ -746,7 +746,6 @@ mod tests {
 
         Ok((
             PubAccount {
-                id: 1,
                 enc_asset_id,
                 owner_enc_pub_key: rcvr_enc_pub_key,
             },

@@ -14,8 +14,8 @@ use crate::{
     errors::{ErrorKind, Fallible},
     mercat::{
         Account, AssetMemo, AssetTransactionAuditor, AssetTransactionIssuer,
-        AssetTransactionMediator, AssetTransactionVerifier, AuditorPayload, EncryptedAmount,
-        EncryptionKeys, EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx, PubAccount,
+        AssetTransactionVerifier, AuditorPayload, EncryptedAmount, EncryptionKeys,
+        EncryptionPubKey, InitializedAssetTx, PubAccount,
     },
     Balance,
 };
@@ -29,21 +29,8 @@ use zeroize::Zeroizing;
 fn asset_issuance_init_verify_proofs(
     asset_tx: &InitializedAssetTx,
     issr_pub_account: &PubAccount,
-    mdtr_enc_pub_key: &EncryptionPubKey,
 ) -> Fallible<()> {
     let gens = PedersenGens::default();
-
-    // Verify the proof of encrypting the same asset type as the account type.
-    single_property_verifier(
-        &EncryptingSameValueVerifier {
-            pub_key1: issr_pub_account.owner_enc_pub_key,
-            pub_key2: *mdtr_enc_pub_key,
-            cipher1: issr_pub_account.enc_asset_id,
-            cipher2: asset_tx.enc_asset_id,
-            pc_gens: &gens,
-        },
-        asset_tx.asset_id_equal_cipher_proof,
-    )?;
 
     // Verify the proof of memo's wellformedness.
     single_property_verifier(
@@ -61,10 +48,9 @@ fn asset_issuance_init_verify_proofs(
 fn asset_issuance_init_verify(
     asset_tx: &InitializedAssetTx,
     issr_pub_account: &PubAccount,
-    mdtr_enc_pub_key: &EncryptionPubKey,
     auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
 ) -> Fallible<()> {
-    asset_issuance_init_verify_proofs(asset_tx, issr_pub_account, mdtr_enc_pub_key)?;
+    asset_issuance_init_verify_proofs(asset_tx, issr_pub_account)?;
 
     // Verify auditors payload.
     verify_auditor_payload(
@@ -132,18 +118,11 @@ impl AssetTransactionIssuer for AssetIssuer {
         &self,
         tx_id: u32,
         issr_account: &Account,
-        mdtr_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedAssetTx> {
         let gens = PedersenGens::default();
-
-        // Encrypt the asset_id with mediator's public key.
-        let mdtr_enc_asset_id = mdtr_pub_key.encrypt(&issr_account.scrt.asset_id_witness);
-
-        // Encrypt the balance issued to mediator's public key.
-        let (_, mdtr_enc_amount) = mdtr_pub_key.const_time_encrypt_value(amount.into(), rng);
 
         // Encrypt the balance to issuer's public key (memo).
         let (issr_amount_witness, issr_enc_amount) = issr_account
@@ -155,17 +134,6 @@ impl AssetTransactionIssuer for AssetIssuer {
             enc_issued_amount: issr_enc_amount,
             tx_id,
         };
-
-        // Proof of encrypting the same asset type as the account type.
-        let same_asset_id_cipher_proof = single_property_prover(
-            EncryptingSameValueProverAwaitingChallenge {
-                pub_key1: issr_account.scrt.enc_keys.pblc,
-                pub_key2: *mdtr_pub_key,
-                w: Zeroizing::new(issr_account.scrt.asset_id_witness.clone()),
-                pc_gens: &gens,
-            },
-            rng,
-        )?;
 
         // Proof of memo's wellformedness.
         let memo_wellformedness_proof = single_property_prover(
@@ -197,11 +165,8 @@ impl AssetTransactionIssuer for AssetIssuer {
 
         // Bundle the issuance data.
         Ok(InitializedAssetTx {
-            account_id: issr_account.pblc.id,
-            enc_asset_id: mdtr_enc_asset_id,
-            enc_amount_for_mdtr: mdtr_enc_amount,
+            account_id: issr_account.pblc.enc_asset_id,
             memo,
-            asset_id_equal_cipher_proof: same_asset_id_cipher_proof,
             balance_wellformedness_proof: memo_wellformedness_proof,
             balance_correctness_proof: memo_correctness_proof,
             auditors_payload,
@@ -260,13 +225,11 @@ pub struct AssetValidator {}
 fn verify_initialization(
     asset_tx: &InitializedAssetTx,
     issr_pub_account: &PubAccount,
-    mdtr_enc_pub_key: &EncryptionPubKey,
     auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
 ) -> Fallible<()> {
     Ok(asset_issuance_init_verify(
         asset_tx,
         issr_pub_account,
-        mdtr_enc_pub_key,
         auditors_enc_pub_keys,
     )?)
 }
@@ -275,20 +238,13 @@ impl AssetTransactionVerifier for AssetValidator {
     /// Called by validators to verify the justification and processing of the transaction.
     fn verify_asset_transaction(
         &self,
-        justified_asset_tx: &JustifiedAssetTx,
+        initialized_asset_tx: &InitializedAssetTx,
         issr_account: &PubAccount,
         issr_init_balance: &EncryptedAmount,
-        mdtr_enc_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     ) -> Fallible<EncryptedAmount> {
         // Verify issuer's initialization proofs.
-        let initialized_asset_tx = justified_asset_tx.init_data.clone();
-        verify_initialization(
-            &initialized_asset_tx,
-            &issr_account,
-            mdtr_enc_pub_key,
-            auditors_enc_pub_keys,
-        )?;
+        verify_initialization(&initialized_asset_tx, &issr_account, auditors_enc_pub_keys)?;
 
         // After successfully verifying the transaction, validator deposits the amount
         // to issuer's account (aka processing phase).
@@ -298,54 +254,6 @@ impl AssetTransactionVerifier for AssetValidator {
         );
 
         Ok(updated_issr_balance)
-    }
-}
-
-// -------------------------------------------------------------------------------------
-// -                                    Mediator                                       -
-// -------------------------------------------------------------------------------------
-
-pub struct AssetMediator {}
-
-impl AssetTransactionMediator for AssetMediator {
-    /// Justifies and processes a confidential asset issue transaction. This method is called
-    /// by mediator. Corresponds to `JustifyAssetTx` and `ProcessCTx` of MERCAT paper.
-    /// If the transaction is justified, it will be processed immediately.
-    fn justify_asset_transaction(
-        &self,
-        initialized_asset_tx: InitializedAssetTx,
-        issr_pub_account: &PubAccount,
-        mdtr_enc_keys: &EncryptionKeys,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
-    ) -> Fallible<JustifiedAssetTx> {
-        let gens = PedersenGens::default();
-
-        // Mediator revalidates all proofs.
-        asset_issuance_init_verify(
-            &initialized_asset_tx,
-            issr_pub_account,
-            &mdtr_enc_keys.pblc,
-            auditors_enc_pub_keys,
-        )?;
-
-        // Mediator decrypts the encrypted amount and uses it to verify the correctness proof.
-        let amount = mdtr_enc_keys
-            .scrt
-            .const_time_decrypt(&initialized_asset_tx.enc_amount_for_mdtr)?;
-
-        single_property_verifier(
-            &CorrectnessVerifier {
-                value: amount.into(),
-                pub_key: issr_pub_account.owner_enc_pub_key,
-                cipher: initialized_asset_tx.memo.enc_issued_amount,
-                pc_gens: &gens,
-            },
-            initialized_asset_tx.balance_correctness_proof,
-        )?;
-
-        Ok(JustifiedAssetTx {
-            init_data: initialized_asset_tx,
-        })
     }
 }
 
@@ -362,16 +270,14 @@ impl AssetTransactionAuditor for AssetAuditor {
     /// Audit the sender's encrypted amount.
     fn audit_asset_transaction(
         &self,
-        justified_asset_tx: &JustifiedAssetTx,
+        initialized_asset_tx: &InitializedAssetTx,
         issuer_account: &PubAccount,
-        mdtr_enc_pub_key: &EncryptionPubKey,
         auditor_enc_key: &(u32, EncryptionKeys),
     ) -> Fallible<()> {
         let gens = PedersenGens::default();
 
         // Verify issuer's initialization proofs.
-        let initialized_asset_tx = justified_asset_tx.init_data.clone();
-        asset_issuance_init_verify_proofs(&initialized_asset_tx, issuer_account, mdtr_enc_pub_key)?;
+        asset_issuance_init_verify_proofs(&initialized_asset_tx, issuer_account)?;
 
         // If all checks pass, decrypt the encrypted amount and verify issuer's correctness proof.
         let _: Fallible<()> = initialized_asset_tx
@@ -483,32 +389,13 @@ mod tests {
         let tx_id = tx_id + 1;
         let issuer = AssetIssuer {};
         let asset_tx = issuer
-            .initialize_asset_transaction(
-                tx_id,
-                &issuer_account,
-                &mediator_enc_key.pblc,
-                &[],
-                issued_amount,
-                &mut rng,
-            )
-            .unwrap();
-
-        // ----------------------- Justification
-        let mediator = AssetMediator {};
-        let justified_tx = mediator
-            .justify_asset_transaction(asset_tx, &issuer_public_account, &mediator_enc_key, &[])
+            .initialize_asset_transaction(tx_id, &issuer_account, &[], issued_amount, &mut rng)
             .unwrap();
 
         // Positive test.
         let validator = AssetValidator {};
         let updated_issuer_balance = validator
-            .verify_asset_transaction(
-                &justified_tx,
-                &issuer_public_account,
-                &issuer_init_balance,
-                &mediator_enc_key.pblc,
-                &[],
-            )
+            .verify_asset_transaction(&asset_tx, &issuer_public_account, &issuer_init_balance, &[])
             .unwrap();
 
         // ----------------------- Processing
@@ -550,7 +437,6 @@ mod tests {
 
         // Note that we use default proof values since we don't reverify these proofs during asset issuance.
         let issuer_public_account = PubAccount {
-            id: 1,
             enc_asset_id: pub_account_enc_asset_id,
             owner_enc_pub_key: issuer_enc_key.pblc,
         };
@@ -577,34 +463,17 @@ mod tests {
             .initialize_asset_transaction(
                 1234u32,
                 &issuer_account,
-                &mediator_enc_key.pblc,
                 issuer_auditor_list,
                 issued_amount,
                 &mut rng,
             )
             .unwrap();
 
-        // ----------------------- Justification
-        let mediator = AssetMediator {};
-        let result = mediator.justify_asset_transaction(
-            asset_tx,
-            &issuer_public_account,
-            &mediator_enc_key,
-            mediator_auditor_list,
-        );
-        if mediator_check_fails {
-            assert_err!(result, ErrorKind::AuditorPayloadError);
-            return;
-        }
-
-        let justified_tx = result.unwrap();
-
         let validator = AssetValidator {};
         let result = validator.verify_asset_transaction(
-            &justified_tx,
+            &asset_tx,
             &issuer_public_account,
             &issuer_init_balance,
-            &mediator_enc_key.pblc,
             validator_auditor_list,
         );
         if validator_check_fails {
@@ -624,12 +493,7 @@ mod tests {
         let _ = auditors_list.iter().map(|auditor| {
             let transaction_auditor = AssetAuditor {};
             assert!(transaction_auditor
-                .audit_asset_transaction(
-                    &justified_tx,
-                    &issuer_public_account,
-                    &mediator_enc_key.pblc,
-                    auditor,
-                )
+                .audit_asset_transaction(&asset_tx, &issuer_public_account, auditor,)
                 .is_ok());
         });
     }
