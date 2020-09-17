@@ -227,7 +227,7 @@ impl core::fmt::Debug for TransferTxState {
 // -------------------------------------------------------------------------------------
 
 /// Asset memo holds the contents of an asset issuance transaction.
-#[derive(Clone, Encode, Decode, Debug)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AssetMemo {
     pub enc_issued_amount: EncryptedAmount,
@@ -236,7 +236,7 @@ pub struct AssetMemo {
 
 /// Holds the public portion of an asset issuance transaction after initialization.
 /// This can be placed on the chain.
-#[derive(Clone, Encode, Decode, Debug)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct InitializedAssetTx {
     pub account_id: EncryptedAssetId,
@@ -287,7 +287,7 @@ pub trait AssetTransactionAuditor {
 // -                       Confidential Transfer Transaction                           -
 // -------------------------------------------------------------------------------------
 
-#[derive(Clone, Encode, Decode, Debug)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AuditorPayload {
     pub auditor_id: u32,
