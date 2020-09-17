@@ -43,6 +43,9 @@ pub unsafe extern "C" fn scalar_new(scalar_bits: *const u8) -> *mut Scalar {
 }
 
 /// Deallocates a `Scalar` object's memory.
+///
+/// Should only be called on a still-valid pointer to an object returned by
+/// `scalar_new()`.
 #[no_mangle]
 pub unsafe extern "C" fn scalar_free(ptr: *mut Scalar) {
     if ptr.is_null() {
@@ -56,7 +59,8 @@ pub unsafe extern "C" fn scalar_free(ptr: *mut Scalar) {
 ///
 /// Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
 /// SAFETY: Caller is also responsible for making sure the `investor_did` and
-///         `investor_unique_id` pointers are not Null.
+///         `investor_unique_id` are valid pointers to Scalar objects, created using
+///         `scalar_new()` API.
 #[no_mangle]
 pub unsafe extern "C" fn cdd_claim_data_new(
     investor_did: *mut Scalar,
@@ -74,6 +78,9 @@ pub unsafe extern "C" fn cdd_claim_data_new(
 }
 
 /// Deallocates a `CDDClaimData` object's memory.
+///
+/// Should only be called on a still-valid pointer to an object returned by
+/// `cdd_claim_data_new()`.
 #[no_mangle]
 pub unsafe extern "C" fn cdd_claim_data_free(ptr: *mut CDDClaimData) {
     if ptr.is_null() {
@@ -86,7 +93,8 @@ pub unsafe extern "C" fn cdd_claim_data_free(ptr: *mut CDDClaimData) {
 ///
 /// Caller is responsible for calling `scope_claim_data_free()` to deallocate this object.
 /// SAFETY: Caller is also responsible for making sure the `scope_did` and
-///         `investor_unique_id` pointers are not Null.
+///         `investor_unique_id` are valid pointers to Scalar objects, created using
+///         `scalar_new()` API.
 #[no_mangle]
 pub unsafe extern "C" fn scope_claim_data_new(
     scope_did: *mut Scalar,
@@ -104,6 +112,9 @@ pub unsafe extern "C" fn scope_claim_data_new(
 }
 
 /// Deallocates a `ScopeClaimData` object's memory.
+///
+/// Should only be called on a still-valid pointer to an object returned by
+/// `scope_claim_data_new()`.
 #[no_mangle]
 pub unsafe extern "C" fn scope_claim_data_free(ptr: *mut ScopeClaimData) {
     if ptr.is_null() {
@@ -113,6 +124,9 @@ pub unsafe extern "C" fn scope_claim_data_free(ptr: *mut ScopeClaimData) {
 }
 
 /// Deallocates a `ScopeClaimProofData` object's memory.
+///
+/// Should only be called on a still-valid pointer to an object returned by
+/// `build_scope_claim_proof_data_wrapper()`.
 #[no_mangle]
 pub unsafe extern "C" fn scope_claim_proof_data_free(ptr: *mut ScopeClaimProofData) {
     if ptr.is_null() {
@@ -125,7 +139,9 @@ pub unsafe extern "C" fn scope_claim_proof_data_free(ptr: *mut ScopeClaimProofDa
 ///
 /// Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
 /// SAFETY: Caller is also responsible for making sure the `cdd_id`, `investor_did`,
-///         `scope_id`, and `scope_did` pointers are not Null.
+///         `scope_id`, and `scope_did` are valid pointers, created using
+///         `scalar_new()`, `compute_cdd_id_wrapper()`, and `compute_scope_id_wrapper()`
+///          API.
 #[no_mangle]
 pub unsafe extern "C" fn proof_public_key_new(
     cdd_id: *mut RistrettoPoint,
@@ -149,6 +165,9 @@ pub unsafe extern "C" fn proof_public_key_new(
 }
 
 /// Deallocates a `ProofPublicKey` object's memory.
+///
+/// Should only be called on a still-valid pointer to an object returned by
+/// `proof_public_key_new()`.
 #[no_mangle]
 pub unsafe extern "C" fn proof_public_key_free(ptr: *mut ProofPublicKey) {
     if ptr.is_null() {
@@ -159,6 +178,9 @@ pub unsafe extern "C" fn proof_public_key_free(ptr: *mut ProofPublicKey) {
 }
 
 /// Deallocates a `Signature` object's memory.
+///
+/// Should only be called on a still-valid pointer to an object returned by
+/// `generate_id_match_proof_wrapper()`.
 #[no_mangle]
 pub unsafe extern "C" fn signature_free(ptr: *mut Signature) {
     if ptr.is_null() {
@@ -174,7 +196,8 @@ pub unsafe extern "C" fn signature_free(ptr: *mut Signature) {
 /// Creates a `ScopeClaimProofData` object from a CDD claim and an scope claim.
 ///
 /// SAFETY: Caller is responsible to make sure `cdd_claim` and `scope_claim`
-///         pointers are not Null.
+///         pointers are valid pointers to `CDDClaimData` and `ScopeClaimData`
+///         objects, created by this API.
 /// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn build_scope_claim_proof_data_wrapper(
@@ -191,7 +214,8 @@ pub unsafe extern "C" fn build_scope_claim_proof_data_wrapper(
 
 /// Creates a CDD ID from a CDD claim.
 ///
-/// SAFETY: Caller is responsible to make sure `cdd_claim` pointer is not Null.
+/// SAFETY: Caller is responsible to make sure `cdd_claim` pointer is a valid
+///         `CDDClaimData` object, created by this API.
 /// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn compute_cdd_id_wrapper(
@@ -205,7 +229,8 @@ pub unsafe extern "C" fn compute_cdd_id_wrapper(
 
 /// Creates a scope ID from a scope claim.
 ///
-/// SAFETY: Caller is responsible to make sure the `scope_claim` pointer is not Null.
+/// SAFETY: Caller is responsible to make sure the `scope_claim` pointer is a valid
+///         `ScopeClaimData` object, created by this API.
 /// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn compute_scope_id_wrapper(
@@ -220,8 +245,8 @@ pub unsafe extern "C" fn compute_scope_id_wrapper(
 /// Creates a `Signature` from a scope claim proof data and a message.
 ///
 /// SAFETY: Caller is responsible to make sure `scope_claim_proof_data` and `message`
-///         pointers are not Null, and `message` points to a block of memory that has
-///         at least `message_size` bytes.
+///         pointers are valid objects, created by this API, and `message` points to
+///         a block of memory that has at least `message_size` bytes.
 /// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn generate_id_match_proof_wrapper(
@@ -248,8 +273,8 @@ pub unsafe extern "C" fn generate_id_match_proof_wrapper(
 /// Verifies the signature on a message.
 ///
 /// SAFETY: Caller is responsible to make sure `proof_public_key`, `message`, and `signature`
-///         pointers are not Null, and `message` points to a block of memory that has
-///         at least `message_size` bytes.
+///         pointers are valid objects, created by this API, and `message` points to a block
+///         of memory that has at least `message_size` bytes.
 /// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn verify_id_match_proof_wrapper(
