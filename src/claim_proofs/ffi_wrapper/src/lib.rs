@@ -39,8 +39,7 @@ pub unsafe extern "C" fn scalar_new(scalar_bits: *const u8) -> *mut Scalar {
     let mut scalar_slice = [0u8; 32];
     scalar_slice.copy_from_slice(&slice::from_raw_parts(scalar_bits, len)[..32]);
 
-    let scalar = Scalar::from_bits(scalar_slice);
-    box_alloc(scalar)
+    box_alloc(Scalar::from_bits(scalar_slice))
 }
 
 /// Deallocates a `Scalar` object's memory.
