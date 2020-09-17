@@ -238,13 +238,26 @@ impl AssetTransactionVerifier for AssetValidator {
     /// Called by validators to verify the justification and processing of the transaction.
     fn verify_asset_transaction(
         &self,
+        amount: u32,
         initialized_asset_tx: &InitializedAssetTx,
         issr_account: &PubAccount,
         issr_init_balance: &EncryptedAmount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     ) -> Fallible<EncryptedAmount> {
+        let gens = PedersenGens::default();
+
         // Verify issuer's initialization proofs.
         verify_initialization(&initialized_asset_tx, &issr_account, auditors_enc_pub_keys)?;
+
+        single_property_verifier(
+            &CorrectnessVerifier {
+                value: amount.into(),
+                pub_key: issr_account.owner_enc_pub_key,
+                cipher: initialized_asset_tx.memo.enc_issued_amount,
+                pc_gens: &gens,
+            },
+            initialized_asset_tx.balance_correctness_proof,
+        )?;
 
         // After successfully verifying the transaction, validator deposits the amount
         // to issuer's account (aka processing phase).

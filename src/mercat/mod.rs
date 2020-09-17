@@ -265,6 +265,7 @@ pub trait AssetTransactionVerifier {
     /// Called by validators to verify the justification and processing of the transaction.
     fn verify_asset_transaction(
         &self,
+        amount: u32,
         justified_asset_tx: &InitializedAssetTx,
         issr_account: &PubAccount,
         issr_init_balance: &EncryptedAmount,
