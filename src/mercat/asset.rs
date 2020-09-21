@@ -365,7 +365,6 @@ mod tests {
             asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
         };
 
-        let account_id = 1234u32;
         let valid_asset_ids: Vec<AssetId> =
             vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
@@ -373,13 +372,7 @@ mod tests {
         let account_creator = AccountCreator {};
         let tx_id = 0;
         let issuer_account_tx = account_creator
-            .create(
-                tx_id,
-                &issuer_secret_account,
-                &valid_asset_ids,
-                account_id,
-                &mut rng,
-            )
+            .create(tx_id, &issuer_secret_account, &valid_asset_ids, &mut rng)
             .unwrap();
         let issuer_public_account = issuer_account_tx.pub_account;
         let issuer_init_balance = issuer_account_tx.initial_balance;
@@ -408,7 +401,13 @@ mod tests {
         // Positive test.
         let validator = AssetValidator {};
         let updated_issuer_balance = validator
-            .verify_asset_transaction(&asset_tx, &issuer_public_account, &issuer_init_balance, &[])
+            .verify_asset_transaction(
+                issued_amount,
+                &asset_tx,
+                &issuer_public_account,
+                &issuer_init_balance,
+                &[],
+            )
             .unwrap();
 
         // ----------------------- Processing
@@ -484,6 +483,7 @@ mod tests {
 
         let validator = AssetValidator {};
         let result = validator.verify_asset_transaction(
+            issued_amount,
             &asset_tx,
             &issuer_public_account,
             &issuer_init_balance,

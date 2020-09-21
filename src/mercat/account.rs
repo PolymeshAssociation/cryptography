@@ -187,7 +187,6 @@ mod tests {
         let valid_asset_ids: Vec<AssetId> =
             vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
-        let account_id = 2;
         let asset_id_witness = CommitmentWitness::from((asset_id.into(), &mut rng));
         let scrt_account = SecAccount {
             enc_keys,
@@ -199,7 +198,7 @@ mod tests {
         let tx_id = 0;
         let account_creator = AccountCreator {};
         let sndr_account_tx = account_creator
-            .create(tx_id, &scrt_account, &valid_asset_ids, account_id, &mut rng)
+            .create(tx_id, &scrt_account, &valid_asset_ids, &mut rng)
             .unwrap();
 
         let decrypted_balance = scrt_account
@@ -229,7 +228,6 @@ mod tests {
         let valid_asset_ids: Vec<AssetId> =
             vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
-        let account_id = 2;
         let asset_id_witness = CommitmentWitness::from((asset_id.into(), &mut rng));
         let scrt_account = SecAccount {
             enc_keys,
@@ -241,7 +239,7 @@ mod tests {
         let tx_id = 0;
         let account_creator = AccountCreator {};
         let pub_account_tx = account_creator
-            .create(tx_id, &scrt_account, &valid_asset_ids, account_id, &mut rng)
+            .create(tx_id, &scrt_account, &valid_asset_ids, &mut rng)
             .unwrap();
 
         let balance = scrt_account
