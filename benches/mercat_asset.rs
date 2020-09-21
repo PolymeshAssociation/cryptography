@@ -3,10 +3,9 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use cryptography::{
     mercat::{
         account::convert_asset_ids,
-        asset::{AssetIssuer, AssetMediator, AssetValidator},
-        Account, AssetTransactionIssuer, AssetTransactionMediator, AssetTransactionVerifier,
-        EncryptedAmount, EncryptionPubKey, InitializedAssetTx, JustifiedAssetTx, MediatorAccount,
-        PubAccount,
+        asset::{AssetIssuer, AssetValidator},
+        Account, AssetTransactionIssuer, AssetTransactionVerifier, EncryptedAmount,
+        InitializedAssetTx, PubAccount,
     },
     AssetId, Balance,
 };
@@ -26,7 +25,6 @@ const ASSET_ID: u32 = 1;
 fn bench_transaction_issuer(
     c: &mut Criterion,
     issuer_account: Account,
-    mdtr_pub_key: EncryptionPubKey,
     amounts: Vec<Balance>,
 ) -> Vec<InitializedAssetTx> {
     let label = "MERCAT Transaction: Issuer".to_string();
@@ -43,7 +41,6 @@ fn bench_transaction_issuer(
                     .initialize_asset_transaction(
                         tx_id,
                         &issuer_account_cloned.clone(),
-                        &mdtr_pub_key.clone(),
                         &[],
                         amount,
                         &mut rng,
@@ -59,64 +56,7 @@ fn bench_transaction_issuer(
         .map(|&amount| {
             let issuer = AssetIssuer {};
             issuer
-                .initialize_asset_transaction(
-                    tx_id,
-                    &issuer_account.clone(),
-                    &mdtr_pub_key.clone(),
-                    &[],
-                    amount,
-                    &mut rng,
-                )
-                .unwrap()
-        })
-        .collect()
-}
-
-fn bench_transaction_mediator(
-    c: &mut Criterion,
-    transactions: Vec<InitializedAssetTx>,
-    issuer_account: PubAccount,
-    mediator_account: MediatorAccount,
-) -> Vec<JustifiedAssetTx> {
-    let label = "MERCAT Transaction: Mediator".to_string();
-    let issuer_account_cloned = issuer_account.clone();
-    let mediator_account_cloned = mediator_account.clone();
-
-    let indexed_transaction: Vec<(String, InitializedAssetTx)> = (MIN_ISSUED_AMOUNT_ORDER
-        ..MAX_ISSUED_AMOUNT_ORDER)
-        .map(|i| format!("issued_amount ({:?})", 10u32.pow(i)))
-        .zip(transactions.clone())
-        .collect();
-
-    c.bench_function_over_inputs(
-        &label,
-        move |b, (_label, tx)| {
-            b.iter(|| {
-                let mediator = AssetMediator {};
-                mediator
-                    .justify_asset_transaction(
-                        tx.clone(),
-                        &issuer_account_cloned.clone(),
-                        &mediator_account_cloned.encryption_key.clone(),
-                        &[],
-                    )
-                    .unwrap()
-            })
-        },
-        indexed_transaction,
-    );
-
-    transactions
-        .iter()
-        .map(|tx| {
-            let mediator = AssetMediator {};
-            mediator
-                .justify_asset_transaction(
-                    tx.clone(),
-                    &issuer_account.clone(),
-                    &mediator_account.encryption_key.clone(),
-                    &[],
-                )
+                .initialize_asset_transaction(tx_id, &issuer_account.clone(), &[], amount, &mut rng)
                 .unwrap()
         })
         .collect()
@@ -124,30 +64,32 @@ fn bench_transaction_mediator(
 
 fn bench_transaction_validator(
     c: &mut Criterion,
-    transactions: Vec<JustifiedAssetTx>,
+    transactions: Vec<InitializedAssetTx>,
     issuer_account: PubAccount,
     issuer_init_balance: EncryptedAmount,
-    mediator_enc_pub_key: EncryptionPubKey,
 ) {
     let label = "MERCAT Transaction: Validator".to_string();
 
-    let indexed_transaction: Vec<(String, JustifiedAssetTx)> = (MIN_ISSUED_AMOUNT_ORDER
+    let indexed_transaction: Vec<((String, u32), InitializedAssetTx)> = (MIN_ISSUED_AMOUNT_ORDER
         ..MAX_ISSUED_AMOUNT_ORDER)
-        .map(|i| format!("issued_amount ({:?})", 10u32.pow(i)))
+        .map(|i| {
+            let amount = 10u32.pow(i);
+            (format!("issued_amount ({:?})", amount), amount)
+        })
         .zip(transactions)
         .collect();
 
     c.bench_function_over_inputs(
         &label,
-        move |b, (_label, tx)| {
+        move |b, ((_label, amount), tx)| {
             b.iter(|| {
                 let validator = AssetValidator {};
                 validator
                     .verify_asset_transaction(
+                        *amount,
                         &tx,
                         &issuer_account,
                         &issuer_init_balance,
-                        &mediator_enc_pub_key,
                         &[],
                     )
                     .unwrap()
@@ -163,7 +105,6 @@ fn bench_asset_transaction(c: &mut Criterion) {
     let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
     let mut rng = thread_rng();
-    let (enc_pub_key, private_account) = utility::generate_mediator_keys(&mut rng);
     let (issuer_account, issuer_init_balance) =
         utility::create_account_with_amount(&mut rng, &asset_id, &valid_asset_ids, 0);
 
@@ -172,25 +113,10 @@ fn bench_asset_transaction(c: &mut Criterion) {
         .collect();
 
     // Initialization
-    let transactions =
-        bench_transaction_issuer(c, issuer_account.clone(), enc_pub_key, issued_amounts);
-
-    // Justification
-    let transactions = bench_transaction_mediator(
-        c,
-        transactions,
-        issuer_account.pblc.clone(),
-        private_account,
-    );
+    let transactions = bench_transaction_issuer(c, issuer_account.clone(), issued_amounts);
 
     // Validation
-    bench_transaction_validator(
-        c,
-        transactions,
-        issuer_account.pblc,
-        issuer_init_balance,
-        enc_pub_key,
-    );
+    bench_transaction_validator(c, transactions, issuer_account.pblc, issuer_init_balance);
 }
 
 criterion_group! {

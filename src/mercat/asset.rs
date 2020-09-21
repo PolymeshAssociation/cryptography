@@ -381,13 +381,6 @@ mod tests {
             scrt: issuer_secret_account,
         };
 
-        // Generate keys for the mediator.
-        let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
-        let mediator_enc_key = EncryptionKeys {
-            pblc: mediator_elg_secret_key.get_public_key(),
-            scrt: mediator_elg_secret_key,
-        };
-
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
 
@@ -420,8 +413,6 @@ mod tests {
 
     fn asset_issuance_auditing_helper(
         issuer_auditor_list: &[(u32, EncryptionPubKey)],
-        mediator_auditor_list: &[(u32, EncryptionPubKey)],
-        mediator_check_fails: bool,
         validator_auditor_list: &[(u32, EncryptionPubKey)],
         validator_check_fails: bool,
         auditors_list: &[(u32, EncryptionKeys)],
@@ -457,13 +448,6 @@ mod tests {
         let issuer_account = Account {
             pblc: issuer_public_account.clone(),
             scrt: issuer_secret_account,
-        };
-
-        // Generate keys for the mediator.
-        let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
-        let mediator_enc_key = EncryptionKeys {
-            pblc: mediator_elg_secret_key.get_public_key(),
-            scrt: mediator_elg_secret_key,
         };
 
         let mut seed = [0u8; 32];
@@ -548,22 +532,11 @@ mod tests {
             auditors_list,
             auditors_list,
             false,
-            auditors_list,
-            false,
             auditors_secret_account_list,
         );
 
-        // Change the order of auditors lists on the mediator and validator sides.
+        // Change the order of auditors lists on validator side.
         // The tests still must pass.
-        let mediator_auditor_list = vec![
-            auditors_vec[1],
-            auditors_vec[0],
-            auditors_vec[3],
-            auditors_vec[2],
-            auditors_vec[4],
-        ];
-        let mediator_auditor_list = mediator_auditor_list.as_slice();
-
         let validator_auditor_list = vec![
             auditors_vec[4],
             auditors_vec[3],
@@ -575,15 +548,13 @@ mod tests {
 
         asset_issuance_auditing_helper(
             auditors_list,
-            mediator_auditor_list,
-            false,
             validator_auditor_list,
             false,
             auditors_secret_account_list,
         );
 
         // Asset doesn't have any auditors.
-        asset_issuance_auditing_helper(&[], &[], false, &[], false, &[]);
+        asset_issuance_auditing_helper(&[], &[], false, &[]);
 
         // Negative tests.
 
@@ -598,8 +569,6 @@ mod tests {
 
         asset_issuance_auditing_helper(
             &four_auditor_list,
-            mediator_auditor_list,
-            true,
             validator_auditor_list,
             true,
             auditors_secret_account_list,
@@ -608,8 +577,6 @@ mod tests {
         // Sender and mediator miss an auditor, but validator catches them.
         asset_issuance_auditing_helper(
             &four_auditor_list,
-            &four_auditor_list,
-            false,
             validator_auditor_list,
             true,
             auditors_secret_account_list,
@@ -618,8 +585,6 @@ mod tests {
         // Sender doesn't include any auditors. Mediator catches it.
         asset_issuance_auditing_helper(
             &[],
-            mediator_auditor_list,
-            true,
             validator_auditor_list,
             true,
             auditors_secret_account_list,
@@ -628,8 +593,6 @@ mod tests {
         // Sender and mediator don't believe in auditors but validator does.
         asset_issuance_auditing_helper(
             &[],
-            &[],
-            false,
             validator_auditor_list,
             true,
             auditors_secret_account_list,
