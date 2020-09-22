@@ -47,7 +47,6 @@ use lazy_static::lazy_static;
 use schnorrkel::{context::SigningContext, signing_context, Keypair, PublicKey, Signature};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use sha3::{digest::FixedOutput, Digest, Sha3_256, Sha3_512};
 use sp_std::prelude::*;
 
 /// Signing context.
@@ -57,7 +56,20 @@ lazy_static! {
     static ref SIG_CTXT: SigningContext = signing_context(SIGNING_CTX);
 }
 
-/// The data needed to generate a CDD ID
+/// Create a scalar from a slice of data.
+fn slice_to_scalar(data: &[u8]) -> Scalar {
+    use blake2::{Blake2b, Digest};
+    let mut hash = [0u8; 64];
+    hash.copy_from_slice(
+        Blake2b::default()
+            .chain(data.as_ref())
+            .finalize()
+            .as_slice(),
+    );
+    Scalar::from_bytes_mod_order_wide(&hash)
+}
+
+/// The data needed to generate a CDD ID.
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CDDClaimData {
@@ -65,12 +77,32 @@ pub struct CDDClaimData {
     pub investor_unique_id: Scalar,
 }
 
-/// The data needed to generate a SCOPE ID
+impl CDDClaimData {
+    /// Create a CDD Claim Data object from slices of data.
+    fn new(investor_did: &[u8], investor_unique_id: &[u8]) -> Self {
+        CDDClaimData {
+            investor_did: slice_to_scalar(investor_did),
+            investor_unique_id: slice_to_scalar(investor_unique_id),
+        }
+    }
+}
+
+/// The data needed to generate a SCOPE ID.
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ScopeClaimData {
     pub scope_did: Scalar,
     pub investor_unique_id: Scalar,
+}
+
+impl ScopeClaimData {
+    /// Create a Scope Claim Data object from slices of data.
+    fn new(scope_did: &[u8], investor_unique_id: &[u8]) -> Self {
+        ScopeClaimData {
+            scope_did: slice_to_scalar(scope_did),
+            investor_unique_id: slice_to_scalar(investor_unique_id),
+        }
+    }
 }
 
 /// The data needed to generate a proof that a SCOPE ID matches a CDD ID
@@ -99,6 +131,7 @@ pub struct ProofPublicKey {
 }
 
 fn generate_pedersen_commit(a: Scalar, b: Scalar) -> RistrettoPoint {
+    use sha3::{Digest, Sha3_512};
     // 0. Generate the blind factor as concatenation of `a` and `b`.
     let hash = Sha3_512::default().chain(a.as_bytes()).chain(b.as_bytes());
     let blind = Scalar::from_hash(hash);
@@ -152,6 +185,7 @@ impl From<ScopeClaimProofData> for ProofKeyPair {
     /// # Input:
     /// `d`: the data required to prove that a SCOPE_ID matches a CDD_ID.
     fn from(d: ScopeClaimProofData) -> Self {
+        use sha3::{digest::FixedOutput, Digest, Sha3_256, Sha3_512};
         // Investor's secret key is:
         // Hash([INVESTOR_DID | INVESTOR_UNIQUE_ID]) - Hash([SCOPE_DID | INVESTOR_UNIQUE_ID])
         let first_term = Scalar::from_hash(
@@ -248,6 +282,7 @@ mod tests {
     use super::*;
     use crate::claim_proofs::random_claim;
     use rand::{rngs::StdRng, SeedableRng};
+    use rand_core::RngCore;
 
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [43u8; 32];
@@ -282,14 +317,11 @@ mod tests {
         assert_eq!(verifier_pub.pub_key.to_bytes(), expected_public_key);
     }
 
-    #[test]
-    fn verify_proofs() {
+    fn verify_proofs_helper(cdd_claim: CDDClaimData, scope_claim: ScopeClaimData) {
         let message = &b"I didn't claim anything!".to_vec();
         let bad_message = &b"I claim everything!".to_vec();
 
         // Investor side.
-        let mut rng = StdRng::from_seed(SEED_2);
-        let (cdd_claim, scope_claim) = random_claim(&mut rng);
         let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
 
         let pair = ProofKeyPair::from(scope_claim_proof_data);
@@ -318,5 +350,25 @@ mod tests {
         // Negative tests.
         let bad_result = verifier_pub.verify_id_match_proof(bad_message, &proof);
         assert!(!bad_result);
+    }
+
+    #[test]
+    fn verify_proofs() {
+        let mut rng = StdRng::from_seed(SEED_2);
+        // Use random scalars to make claims.
+        let (cdd_claim, scope_claim) = random_claim(&mut rng);
+        verify_proofs_helper(cdd_claim, scope_claim);
+
+        // Use random slices to make claims.
+        // Don't make any assumptions about these slices' sizes.
+        let mut unique_id_bytes = [0u8; 72];
+        rng.fill_bytes(&mut unique_id_bytes);
+        let mut did_bytes = [0u8; 32];
+        rng.fill_bytes(&mut did_bytes);
+        let mut scope_id_bytes = [0u8; 128];
+        rng.fill_bytes(&mut scope_id_bytes);
+        let cdd_claim = CDDClaimData::new(&did_bytes, &unique_id_bytes);
+        let scope_claim = ScopeClaimData::new(&scope_id_bytes, &unique_id_bytes);
+        verify_proofs_helper(cdd_claim, scope_claim);
     }
 }
