@@ -111,3 +111,7 @@ harness = false
 [[bench]]
 name = "mercat_transaction"
 harness = false
+
+[[bench]]
+name = "scalar_from_hash"
+harness = false
