@@ -17,12 +17,12 @@
 //! // Investor side:
 //! let message = b"some asset ownership claims!";
 //!
-//! let investor_did = Scalar::from_bits([1u8; 32]);
-//! let investor_unique_id = Scalar::from_bits([2u8; 32]);
-//! let cdd_claim = CDDClaimData {investor_did, investor_unique_id};
+//! let investor_did = [1u8; 32];
+//! let investor_unique_id = [2u8; 32];
+//! let cdd_claim = CDDClaimData::new(&investor_did, &investor_unique_id);
 //!
-//! let scope_did = Scalar::from_bits([4u8; 32]);
-//! let scope_claim = ScopeClaimData {scope_did, investor_unique_id};
+//! let scope_did = [4u8; 32];
+//! let scope_claim = ScopeClaimData::new(&scope_did, &investor_unique_id);
 //!
 //! let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
 //! let pair = ProofKeyPair::from(scope_claim_proof_data);
@@ -34,7 +34,7 @@
 //! // Verifier side:
 //! use cryptography::claim_proofs::ProofPublicKey;
 //!
-//! let verifier_pub = ProofPublicKey::new(cdd_id, investor_did, scope_id, scope_did);
+//! let verifier_pub = ProofPublicKey::new(cdd_id, &investor_did, scope_id, &scope_did);
 //! let result = verifier_pub.verify_id_match_proof(message, &proof);
 //!
 //! assert!(result);
@@ -79,7 +79,7 @@ pub struct CDDClaimData {
 
 impl CDDClaimData {
     /// Create a CDD Claim Data object from slices of data.
-    fn new(investor_did: &[u8], investor_unique_id: &[u8]) -> Self {
+    pub fn new(investor_did: &[u8], investor_unique_id: &[u8]) -> Self {
         CDDClaimData {
             investor_did: slice_to_scalar(investor_did),
             investor_unique_id: slice_to_scalar(investor_unique_id),
@@ -97,7 +97,7 @@ pub struct ScopeClaimData {
 
 impl ScopeClaimData {
     /// Create a Scope Claim Data object from slices of data.
-    fn new(scope_did: &[u8], investor_unique_id: &[u8]) -> Self {
+    pub fn new(scope_did: &[u8], investor_unique_id: &[u8]) -> Self {
         ScopeClaimData {
             scope_did: slice_to_scalar(scope_did),
             investor_unique_id: slice_to_scalar(investor_unique_id),
@@ -245,11 +245,14 @@ impl ProofPublicKey {
     /// * `scope_did`: the scope DID
     pub fn new(
         cdd_id: RistrettoPoint,
-        investor_did: Scalar,
+        investor_did: &[u8],
         scope_id: RistrettoPoint,
-        scope_did: Scalar,
+        scope_did: &[u8],
     ) -> Self {
+        let investor_did = slice_to_scalar(investor_did);
+        let scope_did = slice_to_scalar(scope_did);
         let pg = PedersenGenerators::default();
+
         let cdd_label_prime = pg.label_prime(cdd_id, investor_did);
         let scope_label_prime = pg.label_prime(scope_id, scope_did);
         let diff = cdd_label_prime - scope_label_prime;
@@ -280,7 +283,6 @@ impl ProofPublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::claim_proofs::random_claim;
     use rand::{rngs::StdRng, SeedableRng};
     use rand_core::RngCore;
 
@@ -290,12 +292,24 @@ mod tests {
     #[test]
     fn match_pub_key_both_sides() {
         let expected_public_key = [
-            220, 100, 91, 47, 92, 14, 0, 234, 127, 191, 5, 26, 248, 147, 212, 237, 161, 119, 64,
-            169, 83, 51, 41, 240, 233, 227, 181, 239, 109, 96, 202, 93,
+            102, 132, 8, 112, 82, 12, 133, 155, 7, 47, 56, 166, 4, 178, 144, 27, 78, 252, 169, 28,
+            30, 215, 62, 126, 248, 158, 208, 35, 9, 210, 148, 49,
         ];
 
         let mut rng = StdRng::from_seed(SEED_1);
-        let (cdd_claim, scope_claim) = random_claim(&mut rng);
+
+        // Generate random IDs.
+        // Use random slices to make claims.
+        // Don't make any assumptions about these slices' sizes.
+        let mut unique_id_bytes = [0u8; 256];
+        rng.fill_bytes(&mut unique_id_bytes);
+        let mut did_bytes = [0u8; 32];
+        rng.fill_bytes(&mut did_bytes);
+        let mut scope_id_bytes = [0u8; 128];
+        rng.fill_bytes(&mut scope_id_bytes);
+        let cdd_claim = CDDClaimData::new(&did_bytes, &unique_id_bytes);
+        let scope_claim = ScopeClaimData::new(&scope_id_bytes, &unique_id_bytes);
+
         let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
 
         // Investor side.
@@ -304,12 +318,7 @@ mod tests {
         let scope_id = compute_scope_id(&scope_claim);
 
         // Verifier side.
-        let verifier_pub = ProofPublicKey::new(
-            cdd_id,
-            cdd_claim.investor_did,
-            scope_id,
-            scope_claim.scope_did,
-        );
+        let verifier_pub = ProofPublicKey::new(cdd_id, &did_bytes, scope_id, &scope_id_bytes);
 
         // Make sure both sides get the same public key.
         assert_eq!(pair.keypair.public, verifier_pub.pub_key);
@@ -317,7 +326,21 @@ mod tests {
         assert_eq!(verifier_pub.pub_key.to_bytes(), expected_public_key);
     }
 
-    fn verify_proofs_helper(cdd_claim: CDDClaimData, scope_claim: ScopeClaimData) {
+    #[test]
+    fn verify_proofs() {
+        let mut rng = StdRng::from_seed(SEED_2);
+
+        // Use random slices to make claims.
+        // Don't make any assumptions about these slices' sizes.
+        let mut unique_id_bytes = [0u8; 72];
+        rng.fill_bytes(&mut unique_id_bytes);
+        let mut did_bytes = [0u8; 32];
+        rng.fill_bytes(&mut did_bytes);
+        let mut scope_id_bytes = [0u8; 128];
+        rng.fill_bytes(&mut scope_id_bytes);
+        let cdd_claim = CDDClaimData::new(&did_bytes, &unique_id_bytes);
+        let scope_claim = ScopeClaimData::new(&scope_id_bytes, &unique_id_bytes);
+
         let message = &b"I didn't claim anything!".to_vec();
         let bad_message = &b"I claim everything!".to_vec();
 
@@ -336,12 +359,7 @@ mod tests {
         // => Investor makes {cdd_id, scope_id, investor_did, scope_did, message, proof} public knowledge.
 
         // Verifier side.
-        let verifier_pub = ProofPublicKey::new(
-            cdd_id,
-            cdd_claim.investor_did,
-            scope_id,
-            scope_claim.scope_did,
-        );
+        let verifier_pub = ProofPublicKey::new(cdd_id, &did_bytes, scope_id, &scope_id_bytes);
 
         // Positive tests.
         let result = verifier_pub.verify_id_match_proof(message, &proof);
@@ -350,25 +368,5 @@ mod tests {
         // Negative tests.
         let bad_result = verifier_pub.verify_id_match_proof(bad_message, &proof);
         assert!(!bad_result);
-    }
-
-    #[test]
-    fn verify_proofs() {
-        let mut rng = StdRng::from_seed(SEED_2);
-        // Use random scalars to make claims.
-        let (cdd_claim, scope_claim) = random_claim(&mut rng);
-        verify_proofs_helper(cdd_claim, scope_claim);
-
-        // Use random slices to make claims.
-        // Don't make any assumptions about these slices' sizes.
-        let mut unique_id_bytes = [0u8; 72];
-        rng.fill_bytes(&mut unique_id_bytes);
-        let mut did_bytes = [0u8; 32];
-        rng.fill_bytes(&mut did_bytes);
-        let mut scope_id_bytes = [0u8; 128];
-        rng.fill_bytes(&mut scope_id_bytes);
-        let cdd_claim = CDDClaimData::new(&did_bytes, &unique_id_bytes);
-        let scope_claim = ScopeClaimData::new(&scope_id_bytes, &unique_id_bytes);
-        verify_proofs_helper(cdd_claim, scope_claim);
     }
 }
