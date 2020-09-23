@@ -52,7 +52,7 @@ pub fn create_account_with_amount<R: RngCore + CryptoRng>(
     let tx_id = 0;
     let account_creator = AccountCreator {};
     let pub_account_tx = account_creator
-        .create(tx_id, &secret_account, valid_asset_ids, 0, rng)
+        .create(tx_id, &secret_account, valid_asset_ids, rng)
         .unwrap();
     let account = Account {
         scrt: secret_account,
@@ -77,14 +77,13 @@ pub fn create_account<R: RngCore + CryptoRng>(
     rng: &mut R,
     asset_id: &AssetId,
     valid_asset_ids: &Vec<Scalar>,
-    account_id: u32,
     tx_id: u32,
 ) -> PubAccountTx {
     let secret_account = gen_keys(rng, asset_id);
 
     let account_creator = AccountCreator {};
     account_creator
-        .create(tx_id, &secret_account, valid_asset_ids, account_id, rng)
+        .create(tx_id, &secret_account, valid_asset_ids, rng)
         .unwrap()
 }
 

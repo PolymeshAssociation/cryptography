@@ -73,7 +73,7 @@ pub struct MediatorAccount {
 #[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAccount {
-    pub id: u32,
+    // enc_asset_id acts as the account id.
     pub enc_asset_id: EncryptedAssetId,
     pub owner_enc_pub_key: EncryptionPubKey,
 }
@@ -115,7 +115,6 @@ pub trait AccountCreatorInitializer {
         tx_id: u32,
         scrt: &SecAccount,
         valid_asset_ids: &[Scalar],
-        account_id: u32,
         rng: &mut T,
     ) -> Fallible<PubAccountTx>;
 }
@@ -228,7 +227,7 @@ impl core::fmt::Debug for TransferTxState {
 // -------------------------------------------------------------------------------------
 
 /// Asset memo holds the contents of an asset issuance transaction.
-#[derive(Clone, Encode, Decode, Debug)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AssetMemo {
     pub enc_issued_amount: EncryptedAmount,
@@ -237,23 +236,14 @@ pub struct AssetMemo {
 
 /// Holds the public portion of an asset issuance transaction after initialization.
 /// This can be placed on the chain.
-#[derive(Clone, Encode, Decode, Debug)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct InitializedAssetTx {
-    pub account_id: u32,
-    pub enc_asset_id: EncryptedAssetId,
-    pub enc_amount_for_mdtr: EncryptedAmountWithHint,
+    pub account_id: EncryptedAssetId,
     pub memo: AssetMemo,
-    pub asset_id_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
     pub balance_wellformedness_proof: WellformednessProof,
     pub balance_correctness_proof: CorrectnessProof,
     pub auditors_payload: Vec<AuditorPayload>,
-}
-
-#[derive(Clone, Encode, Decode, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct JustifiedAssetTx {
-    pub init_data: InitializedAssetTx,
 }
 
 /// The interface for the confidential asset issuance transaction.
@@ -265,34 +255,20 @@ pub trait AssetTransactionIssuer {
         &self,
         tx_id: u32,
         issr_account: &Account,
-        mdtr_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedAssetTx>;
 }
 
-pub trait AssetTransactionMediator {
-    /// Justifies and processes a confidential asset issue transaction. This includes checking
-    /// the transaction for proper auditors payload. This method is called
-    /// by mediator. Corresponds to `JustifyAssetTx` of MERCAT paper.
-    fn justify_asset_transaction(
-        &self,
-        initialized_asset_tx: InitializedAssetTx,
-        issr_pub_account: &PubAccount,
-        mdtr_enc_keys: &EncryptionKeys,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
-    ) -> Fallible<JustifiedAssetTx>;
-}
-
 pub trait AssetTransactionVerifier {
     /// Called by validators to verify the justification and processing of the transaction.
     fn verify_asset_transaction(
         &self,
-        justified_asset_tx: &JustifiedAssetTx,
+        amount: u32,
+        justified_asset_tx: &InitializedAssetTx,
         issr_account: &PubAccount,
         issr_init_balance: &EncryptedAmount,
-        mdtr_enc_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
     ) -> Fallible<EncryptedAmount>;
 }
@@ -302,9 +278,8 @@ pub trait AssetTransactionAuditor {
     /// Audit the sender's encrypted amount.
     fn audit_asset_transaction(
         &self,
-        justified_asset_tx: &JustifiedAssetTx,
+        justified_asset_tx: &InitializedAssetTx,
         issuer_account: &PubAccount,
-        mdtr_enc_pub_key: &EncryptionPubKey,
         auditor_enc_keys: &(u32, EncryptionKeys),
     ) -> Fallible<()>;
 }
@@ -313,7 +288,7 @@ pub trait AssetTransactionAuditor {
 // -                       Confidential Transfer Transaction                           -
 // -------------------------------------------------------------------------------------
 
-#[derive(Clone, Encode, Decode, Debug)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AuditorPayload {
     pub auditor_id: u32,
@@ -325,8 +300,8 @@ pub struct AuditorPayload {
 #[derive(Default, Clone, Copy, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TransferTxMemo {
-    pub sndr_account_id: u32,
-    pub rcvr_account_id: u32,
+    pub sndr_account_id: EncryptedAssetId,
+    pub rcvr_account_id: EncryptedAssetId,
     pub enc_amount_using_sndr: EncryptedAmount,
     pub enc_amount_using_rcvr: EncryptedAmount,
     pub refreshed_enc_balance: EncryptedAmount,
