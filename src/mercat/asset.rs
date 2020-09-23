@@ -13,7 +13,7 @@ use crate::{
     },
     errors::{ErrorKind, Fallible},
     mercat::{
-        Account, AssetMemo, AssetTransactionAuditor, AssetTransactionIssuer,
+        account::deposit, Account, AssetMemo, AssetTransactionAuditor, AssetTransactionIssuer,
         AssetTransactionVerifier, AuditorPayload, EncryptedAmount, EncryptionKeys,
         EncryptionPubKey, InitializedAssetTx, PubAccount,
     },
@@ -261,7 +261,7 @@ impl AssetTransactionVerifier for AssetValidator {
 
         // After successfully verifying the transaction, validator deposits the amount
         // to issuer's account (aka processing phase).
-        let updated_issr_balance = crate::mercat::account::deposit(
+        let updated_issr_balance = deposit(
             issr_init_balance,
             &initialized_asset_tx.memo.enc_issued_amount,
         );
