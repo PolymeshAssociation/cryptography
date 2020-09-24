@@ -1,4 +1,4 @@
 [submodule "cryptography"]
 	path = cryptography
 	url = git@github.com:PolymathNetwork/cryptography.git
-	branch = develop 
+	branch = develop

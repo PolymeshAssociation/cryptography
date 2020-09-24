@@ -8,18 +8,23 @@ use cryptography::claim_proofs::{
     build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CDDClaimData, ProofKeyPair,
     ScopeClaimData,
 };
-use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CddId {
+    pub cdd_id: RistrettoPoint,
+}
+
 /// polymath-scp -- a simple claim prover.
 ///
-/// The polymath-scp utility which creates a proof for a scope-claim. The CLI will generate random content
-/// for `cdd-claim` and `scope-claim` parameters if you pass `-r` to it. Alternatively, you can
-/// provide the `cdd-claim` file that you have received from CDD provider and generate your own
-/// `scope-claim` file.
+/// The polymath-scp/create-claim-proof utility which creates a proof for a scope-claim.
+/// This CLI will generate random content for `cdd-claim` and `scope-claim` parameters if you
+/// pass `-r` to it. Alternatively, you can provide the `cdd-claim` file that you have received
+/// from CDD provider and generate your own `scope-claim` file.
 ///
 /// Terminology:{n}
 /// - cdd-claim privately links an investor unique identity to their on-chain identity (DID).
@@ -30,8 +35,8 @@ use structopt::StructOpt;
 ///            a scope.{n}
 /// - proof, is the output of this CLI.
 ///          It contains a secure and private proof about the claim of the investor.
-#[derive(StructOpt, Debug, Serialize, Deserialize)]
-struct Cli {
+#[derive(Clone, Debug, StructOpt)]
+pub struct CreateClaimProofInfo {
     /// Generate and use a random claim.
     #[structopt(short, long)]
     rand: bool,
@@ -60,6 +65,47 @@ struct Cli {
     verbose: bool,
 }
 
+/// polymath-scp -- a simple claim prover.
+///
+/// The polymath-scp/create-cdd-id utility which creates a CDD Id for a CDD Claim.
+/// This CLI will generate random content for `cdd-claim` parameter if you pass `-r` to it.
+/// Alternatively, you can provide the `cdd-claim` file that you have created as a CDD provider.
+///
+/// Terminology:{n}
+/// - cdd-claim privately links an investor unique identity to their on-chain identity (DID).
+///             This is created for the users by a trusted CDD provider.{n}
+/// - cdd-id is an on-chain ID that is created by the CDD provider and links the investor's
+///          DID to their unique identity.
+#[derive(Clone, Debug, StructOpt)]
+pub struct CreateCDDIdInfo {
+    /// Generate and use a random CDD claim.
+    #[structopt(short, long)]
+    rand: bool,
+
+    /// Get the Json formatted claim from file.
+    /// If this option is provided along with `rand`,
+    /// it will save the randomly generated claim to file.
+    #[structopt(short, long, parse(from_os_str))]
+    cdd_claim: Option<std::path::PathBuf>,
+
+    /// Write the CDD Id to file in Json format.
+    #[structopt(long, parse(from_os_str))]
+    cdd_id: Option<std::path::PathBuf>,
+
+    /// Be verbose.
+    #[structopt(short, long)]
+    verbose: bool,
+}
+
+#[derive(Clone, Debug, StructOpt)]
+pub enum CLI {
+    /// Create the CDD Id.
+    CreateCDDId(CreateCDDIdInfo),
+
+    /// Create a Claim proof.
+    CreateClaimProof(CreateClaimProofInfo),
+}
+
 pub fn random_claim<R: RngCore + CryptoRng>(rng: &mut R) -> (CDDClaimData, ScopeClaimData) {
     let investor_unique_id = Scalar::random(rng);
     (
@@ -74,42 +120,34 @@ pub fn random_claim<R: RngCore + CryptoRng>(rng: &mut R) -> (CDDClaimData, Scope
     )
 }
 
-fn main() {
-    let args = Cli::from_args();
+pub fn random_cdd_claim<R: RngCore + CryptoRng>(rng: &mut R) -> CDDClaimData {
+    CDDClaimData {
+        investor_did: Scalar::random(rng),
+        investor_unique_id: Scalar::random(rng),
+    }
+}
 
-    let (cdd_claim, scope_claim) = if args.rand {
+fn process_create_cdd_id(cfg: CreateCDDIdInfo) {
+    let cdd_claim = if cfg.rand {
         let mut rng = StdRng::from_seed([42u8; 32]);
-        let (rand_cdd_claim, rand_scope_claim) = random_claim(&mut rng);
+        let rand_cdd_claim = random_cdd_claim(&mut rng);
 
         // If user provided the `claim` option, save this to file.
-        if let Some(c) = args.cdd_claim {
+        if let Some(c) = cfg.cdd_claim {
             std::fs::write(
                 c,
                 serde_json::to_string(&rand_cdd_claim)
                     .unwrap_or_else(|error| panic!("Failed to serialize the cdd claim: {}", error)),
             )
             .expect("Failed to write the cdd claim to file.");
-            if args.verbose {
+            if cfg.verbose {
                 println!("Successfully wrote the cdd claim to file.");
             }
         }
 
-        if let Some(c) = args.scope_claim {
-            std::fs::write(
-                c,
-                serde_json::to_string(&rand_scope_claim).unwrap_or_else(|error| {
-                    panic!("Failed to serialize the scope claim: {}", error)
-                }),
-            )
-            .expect("Failed to write the scope claim to file.");
-            if args.verbose {
-                println!("Successfully wrote the scope claim to file.");
-            }
-        }
-
-        (rand_cdd_claim, rand_scope_claim)
+        rand_cdd_claim
     } else {
-        let file_cdd_claim = match args.cdd_claim {
+        let file_cdd_claim = match cfg.cdd_claim {
             Some(c) => {
                 let json_file_content =
                     std::fs::read_to_string(&c).expect("Failed to read the cdd claim from file.");
@@ -119,7 +157,78 @@ fn main() {
             }
             None => panic!("You must either pass in a claim file or generate it randomly."),
         };
-        let file_scope_claim = match args.scope_claim {
+
+        file_cdd_claim
+    };
+
+    if cfg.verbose {
+        println!(
+            "CDD Claim: {:?}",
+            serde_json::to_string(&cdd_claim).unwrap()
+        );
+    }
+
+    let cdd_id = compute_cdd_id(&cdd_claim);
+
+    // => CDD provider includes the CDD Id in their claim and submits it to the PolyMesh.
+    let packaged_cdd_id = CddId { cdd_id: cdd_id };
+    let cdd_id_str = serde_json::to_string(&packaged_cdd_id)
+        .unwrap_or_else(|error| panic!("Failed to serialize the CDD Id: {}", error));
+
+    if cfg.verbose {
+        println!("CDD Id Package: {:?}", cdd_id_str);
+    }
+
+    if let Some(p) = cfg.cdd_id {
+        std::fs::write(p, cdd_id_str.as_bytes()).expect("Failed to write the CDD Id to file.");
+        println!("Successfully wrote the CDD Id.");
+    }
+}
+
+fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
+    let (cdd_claim, scope_claim) = if cfg.rand {
+        let mut rng = StdRng::from_seed([42u8; 32]);
+        let (rand_cdd_claim, rand_scope_claim) = random_claim(&mut rng);
+
+        // If user provided the `claim` option, save this to file.
+        if let Some(c) = cfg.cdd_claim {
+            std::fs::write(
+                c,
+                serde_json::to_string(&rand_cdd_claim)
+                    .unwrap_or_else(|error| panic!("Failed to serialize the cdd claim: {}", error)),
+            )
+            .expect("Failed to write the cdd claim to file.");
+            if cfg.verbose {
+                println!("Successfully wrote the cdd claim to file.");
+            }
+        }
+
+        if let Some(c) = cfg.scope_claim {
+            std::fs::write(
+                c,
+                serde_json::to_string(&rand_scope_claim).unwrap_or_else(|error| {
+                    panic!("Failed to serialize the scope claim: {}", error)
+                }),
+            )
+            .expect("Failed to write the scope claim to file.");
+            if cfg.verbose {
+                println!("Successfully wrote the scope claim to file.");
+            }
+        }
+
+        (rand_cdd_claim, rand_scope_claim)
+    } else {
+        let file_cdd_claim = match cfg.cdd_claim {
+            Some(c) => {
+                let json_file_content =
+                    std::fs::read_to_string(&c).expect("Failed to read the cdd claim from file.");
+                serde_json::from_str(&json_file_content).unwrap_or_else(|error| {
+                    panic!("Failed to deserialize the cdd claim: {}", error)
+                })
+            }
+            None => panic!("You must either pass in a claim file or generate it randomly."),
+        };
+        let file_scope_claim = match cfg.scope_claim {
             Some(c) => {
                 let json_file_content =
                     std::fs::read_to_string(&c).expect("Failed to read the scope claim from file.");
@@ -132,7 +241,7 @@ fn main() {
         (file_cdd_claim, file_scope_claim)
     };
 
-    if args.verbose {
+    if cfg.verbose {
         println!(
             "CDD Claim: {:?}",
             serde_json::to_string(&cdd_claim).unwrap()
@@ -141,10 +250,10 @@ fn main() {
             "Scope Claim: {:?}",
             serde_json::to_string(&scope_claim).unwrap()
         );
-        println!("Message: {:?}", args.message);
+        println!("Message: {:?}", cfg.message);
     }
 
-    let message: &[u8] = args.message.as_bytes();
+    let message: &[u8] = cfg.message.as_bytes();
     let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
 
     let pair = ProofKeyPair::from(scope_claim_proof_data);
@@ -164,12 +273,21 @@ fn main() {
     let proof_str = serde_json::to_string(&packaged_proof)
         .unwrap_or_else(|error| panic!("Failed to serialize the proof: {}", error));
 
-    if args.verbose {
+    if cfg.verbose {
         println!("Proof Package: {:?}", proof_str);
     }
 
-    if let Some(p) = args.proof {
+    if let Some(p) = cfg.proof {
         std::fs::write(p, proof_str.as_bytes()).expect("Failed to write the proof to file.");
         println!("Successfully wrote the proof.");
+    }
+}
+
+fn main() {
+    let args: CLI = CLI::from_args();
+
+    match args {
+        CLI::CreateCDDId(cfg) => process_create_cdd_id(cfg),
+        CLI::CreateClaimProof(cfg) => process_create_claim_proof(cfg),
     }
 }
