@@ -16,7 +16,7 @@ mediators:
 transactions:
   - sequence:
     - validate # This validates the account creations. Can be done automatically without needing to write it here explicitly.
-    - issue Alice 50 ACME Mike approve
+    - issue Alice 50 ACME
     - validate # without this, the account is not deposited at the time of the next transaction
     - transfer Alice 30 ACME Bob approve Mike approve
     - validate

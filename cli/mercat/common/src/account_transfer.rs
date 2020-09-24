@@ -1,9 +1,10 @@
 use crate::{
     compute_enc_pending_balance, confidential_transaction_file, construct_path,
     create_rng_from_seed, debug_decrypt, errors::Error, last_ordering_state, load_object,
-    save_object, user_public_account_balance_file, user_public_account_file,
+    non_empty_account_id, save_object, user_public_account_balance_file, user_public_account_file,
     user_secret_account_file, OrderedPubAccount, OrderedTransferInstruction, OrderingState,
-    COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    PrintableAccountId, COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR,
+    ON_CHAIN_DIR,
 };
 use base64;
 use codec::{Decode, Encode};
@@ -97,7 +98,7 @@ pub fn process_create_tx(
         "------------> initiating transfer tx: {}, pending_balance: {}",
         tx_id,
         debug_decrypt(
-            sender_account.pblc.id,
+            sender_account.pblc.enc_asset_id,
             pending_balance.clone(),
             db_dir.clone()
         )?
@@ -132,7 +133,6 @@ pub fn process_create_tx(
     let pending_account = Account {
         scrt: sender_account.scrt,
         pblc: PubAccount {
-            id: sender_account.pblc.id,
             enc_asset_id: sender_account.pblc.enc_asset_id,
             owner_enc_pub_key: sender_account.pblc.owner_enc_pub_key,
         },
@@ -160,9 +160,10 @@ pub fn process_create_tx(
     if cheat && cheating_strategy == 1 {
         info!(
             "CLI log: tx-{}: Cheating by changing the sender's account id. Correct account id: {}",
-            tx_id, pending_account.pblc.id
+            tx_id,
+            PrintableAccountId(pending_account.pblc.enc_asset_id.encode())
         );
-        asset_tx.memo.sndr_account_id += 1;
+        asset_tx.memo.sndr_account_id += non_empty_account_id();
     }
 
     // Save the artifacts to file.
@@ -304,9 +305,9 @@ pub fn process_finalize_tx(
     if cheat && cheating_strategy == 1 {
         info!(
             "CLI log: tx-{}: Cheating by changing the receiver's account id. Correct account id: {}",
-            tx_id, receiver_account.pblc.id
+            tx_id, PrintableAccountId(receiver_account.pblc.enc_asset_id.encode())
         );
-        asset_tx.init_data.memo.rcvr_account_id += 1;
+        asset_tx.init_data.memo.rcvr_account_id += non_empty_account_id();
     }
 
     timing!(

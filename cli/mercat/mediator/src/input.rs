@@ -192,9 +192,6 @@ pub enum CLI {
     /// Create a MERCAT mediator account.
     Create(CreateMediatorAccountInfo),
 
-    /// Justify a MERCAT asset issuance transaction.
-    JustifyIssuanceTransaction(JustifyIssuanceInfo),
-
     /// Justify a MERCAT transfer transaction.
     JustifyTransferTransaction(JustifyTransferInfo),
 }
@@ -227,35 +224,6 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             save_config(cfg.save_config.clone(), &cfg);
 
             return Ok(CLI::Create(cfg));
-        }
-
-        CLI::JustifyIssuanceTransaction(cfg) => {
-            // Set the default seed and db_dir if needed.
-            let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
-
-            let seed: Option<String> = cfg.seed.clone().or_else(|| Some(gen_seed()));
-            info!("Seed: {:?}", seed.clone().unwrap());
-            let cfg = JustifyIssuanceInfo {
-                db_dir,
-                account_id_from_ticker: cfg.account_id_from_ticker,
-                tx_id: cfg.tx_id,
-                issuer: cfg.issuer,
-                mediator: cfg.mediator,
-                seed,
-                reject: cfg.reject,
-                save_config: cfg.save_config.clone(),
-                cheat: cfg.cheat,
-            };
-
-            info!(
-                "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
-            );
-
-            // Save the config if the argument is passed.
-            save_config(cfg.save_config.clone(), &cfg);
-
-            return Ok(CLI::JustifyIssuanceTransaction(cfg));
         }
 
         CLI::JustifyTransferTransaction(cfg) => {

@@ -1,18 +1,14 @@
 use crate::{
     asset_transaction_file, create_rng_from_seed, errors::Error, last_ordering_state, load_object,
     save_object, user_public_account_file, user_secret_account_file, OrderedAssetInstruction,
-    OrderedPubAccount, OrderingState, COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE,
-    OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    OrderedPubAccount, OrderingState, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use base64;
 use codec::Encode;
 use cryptography::{
     asset_id_from_ticker,
     asset_proofs::CommitmentWitness,
-    mercat::{
-        asset::AssetIssuer, Account, AssetTransactionIssuer, AssetTxState, EncryptionPubKey,
-        TxSubstate,
-    },
+    mercat::{asset::AssetIssuer, Account, AssetTransactionIssuer, AssetTxState, TxSubstate},
 };
 use curve25519_dalek::scalar::Scalar;
 use log::info;
@@ -24,7 +20,6 @@ pub fn process_issue_asset(
     seed: String,
     db_dir: PathBuf,
     issuer: String,
-    mediator: String,
     ticker: String,
     amount: u32,
     stdout: bool,
@@ -49,13 +44,6 @@ pub fn process_issue_asset(
             &user_secret_account_file(&ticker),
         )?,
     };
-
-    let mediator_account: EncryptionPubKey = load_object(
-        db_dir.clone(),
-        ON_CHAIN_DIR,
-        &mediator,
-        &MEDIATOR_PUBLIC_ACCOUNT_FILE,
-    )?;
 
     timing!(
         "account.issue_asset.load_from_file",
@@ -104,14 +92,7 @@ pub fn process_issue_asset(
     let issuance_init_timer = Instant::now();
     let ctx_issuer = AssetIssuer {};
     let mut asset_tx = ctx_issuer
-        .initialize_asset_transaction(
-            tx_id,
-            &issuer_account,
-            &mediator_account,
-            &[],
-            amount,
-            &mut rng,
-        )
+        .initialize_asset_transaction(tx_id, &issuer_account, &[], amount, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     let ordering_state = OrderingState {
@@ -121,8 +102,8 @@ pub fn process_issue_asset(
     };
 
     if cheat && cheating_strategy == 1 {
-        info!("CLI log: tx-{}: Cheating by overwriting the asset id of the account. Correct ticker: {} and asset id: {:?}",
-                      tx_id, ticker, issuer_account.scrt.asset_id_witness.value());
+        info!("CLI log: tx-{}: Cheating by overwriting the encrypted issued amount. Correct ticker: {} and encrypted amount: {:?}",
+                      tx_id, ticker, &asset_tx.memo.enc_issued_amount);
         let cheat_asset_id =
             asset_id_from_ticker("CHEAT").map_err(|error| Error::LibraryError { error })?;
         let cheat_asset_id_witness =
@@ -134,7 +115,7 @@ pub fn process_issue_asset(
             .pblc
             .encrypt(&cheat_asset_id_witness);
 
-        asset_tx.enc_asset_id = cheat_enc_asset_id;
+        asset_tx.memo.enc_issued_amount = cheat_enc_asset_id;
     }
     timing!(
         "account.issue_asset.init",
@@ -149,6 +130,7 @@ pub fn process_issue_asset(
         state,
         ordering_state,
         data: asset_tx.encode().to_vec(),
+        amount,
     };
 
     save_object(

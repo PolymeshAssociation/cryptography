@@ -24,9 +24,9 @@ transactions:
   - sequence:
     - validate # validate the account creation phase
     - concurrent:
-      - issue Alice 50 ACME Mike approve
-      - issue Carol 10 ACME Mike approve
-      - issue Bob 10 AAPL Moe approve
+      - issue Alice 50 ACME
+      - issue Carol 10 ACME
+      - issue Bob 10 AAPL
     - validate # validate the asset issuance phase
     - concurrent:
       - transfer Alice 50 ACME Carol approve Marry approve

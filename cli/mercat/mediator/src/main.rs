@@ -7,10 +7,7 @@ mod input;
 use mercat_common::{
     errors::Error,
     init_print_logger,
-    justify::{
-        justify_asset_issuance_transaction, justify_asset_transfer_transaction,
-        process_create_mediator,
-    },
+    justify::{justify_asset_transfer_transaction, process_create_mediator},
 };
 
 use env_logger;
@@ -33,16 +30,6 @@ fn main() {
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.user,
-        )
-        .unwrap(),
-        CLI::JustifyIssuanceTransaction(cfg) => justify_asset_issuance_transaction(
-            cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
-            cfg.issuer,
-            cfg.mediator,
-            cfg.account_id_from_ticker,
-            cfg.tx_id,
-            cfg.reject,
-            cfg.cheat,
         )
         .unwrap(),
         CLI::JustifyTransferTransaction(cfg) => justify_asset_transfer_transaction(

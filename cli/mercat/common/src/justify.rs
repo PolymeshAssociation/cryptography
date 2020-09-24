@@ -1,19 +1,18 @@
 use crate::{
-    asset_transaction_file, compute_enc_pending_balance, confidential_transaction_file,
-    construct_path, create_rng_from_seed, errors::Error, last_ordering_state, load_object,
-    save_object, user_public_account_balance_file, user_public_account_file, AssetInstruction,
-    OrderedAssetInstruction, OrderedPubAccount, OrderedTransferInstruction, TransferInstruction,
-    COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
-    SECRET_ACCOUNT_FILE,
+    compute_enc_pending_balance, confidential_transaction_file, construct_path,
+    create_rng_from_seed, errors::Error, last_ordering_state, load_object, non_empty_account_id,
+    save_object, user_public_account_balance_file, user_public_account_file, OrderedPubAccount,
+    OrderedTransferInstruction, TransferInstruction, COMMON_OBJECTS_DIR,
+    MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
 };
 use codec::{Decode, Encode};
 use cryptography::{
     asset_id_from_ticker,
-    asset_proofs::{CommitmentWitness, ElgamalSecretKey},
+    asset_proofs::ElgamalSecretKey,
     mercat::{
-        asset::AssetMediator, transaction::CtxMediator, AssetTransactionMediator, AssetTxState,
-        EncryptedAmount, EncryptionKeys, EncryptionPubKey, FinalizedTransferTx, InitializedAssetTx,
-        MediatorAccount, TransferTransactionMediator, TransferTxState, TxSubstate,
+        transaction::CtxMediator, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
+        FinalizedTransferTx, MediatorAccount, TransferTransactionMediator, TransferTxState,
+        TxSubstate,
     },
 };
 use curve25519_dalek::scalar::Scalar;
@@ -74,151 +73,6 @@ pub fn process_create_mediator(seed: String, db_dir: PathBuf, user: String) -> R
         mediator_save_keys_timer,
         Instant::now(),
         "tx_id" => "N/A"
-    );
-
-    Ok(())
-}
-
-pub fn justify_asset_issuance_transaction(
-    db_dir: PathBuf,
-    issuer: String,
-    mediator: String,
-    ticker: String,
-    tx_id: u32,
-    reject: bool,
-    cheat: bool,
-) -> Result<(), Error> {
-    // Load the transaction, mediator's credentials, and issuer's public account.
-    let justify_load_objects_timer = Instant::now();
-
-    let instruction_file_name = asset_transaction_file(
-        tx_id,
-        &issuer,
-        AssetTxState::Initialization(TxSubstate::Started),
-    );
-
-    let instruction: OrderedAssetInstruction = load_object(
-        db_dir.clone(),
-        ON_CHAIN_DIR,
-        COMMON_OBJECTS_DIR,
-        &instruction_file_name,
-    )?;
-
-    let asset_tx = InitializedAssetTx::decode(&mut &instruction.data[..]).map_err(|error| {
-        Error::ObjectLoadError {
-            error,
-            path: construct_path(
-                db_dir.clone(),
-                ON_CHAIN_DIR,
-                COMMON_OBJECTS_DIR,
-                &instruction_file_name,
-            ),
-        }
-    })?;
-
-    let mediator_account: MediatorAccount = load_object(
-        db_dir.clone(),
-        OFF_CHAIN_DIR,
-        &mediator,
-        SECRET_ACCOUNT_FILE,
-    )?;
-
-    let issuer_ordered_pub_account: OrderedPubAccount = load_object(
-        db_dir.clone(),
-        ON_CHAIN_DIR,
-        &issuer,
-        &user_public_account_file(&ticker),
-    )?;
-
-    timing!(
-        "mediator.justify_load_objects",
-        justify_load_objects_timer,
-        Instant::now(),
-        "tx_id" => tx_id.to_string()
-    );
-
-    // Justification.
-    let justify_library_timer = Instant::now();
-    let mut justified_tx = AssetMediator {}
-        .justify_asset_transaction(
-            asset_tx.clone(),
-            &issuer_ordered_pub_account.pub_account,
-            &mediator_account.encryption_key,
-            &[],
-        )
-        .map_err(|error| Error::LibraryError { error })?;
-
-    if cheat {
-        info!(
-            "CLI log: tx-{}: Cheating by overwriting the asset id of the account.",
-            tx_id
-        );
-        let cheat_asset_id =
-            asset_id_from_ticker("CHEAT").map_err(|error| Error::LibraryError { error })?;
-        let cheat_asset_id_witness =
-            CommitmentWitness::new(cheat_asset_id.clone().into(), Scalar::one());
-        let cheat_enc_asset_id = mediator_account
-            .clone()
-            .encryption_key
-            .pblc
-            .encrypt(&cheat_asset_id_witness);
-
-        justified_tx.init_data.enc_asset_id = cheat_enc_asset_id;
-    }
-
-    timing!(
-        "mediator.justify_library",
-        justify_library_timer,
-        Instant::now(),
-        "tx_id" => tx_id.to_string()
-    );
-
-    let next_instruction;
-    let justify_save_objects_timer = Instant::now();
-    // If the `reject` flag is set, save the transaction as rejected.
-    if reject {
-        info!(
-            "CLI log: tx-{}: Rejecting the transaction as instructed.",
-            tx_id
-        );
-        let rejected_state = AssetTxState::Justification(TxSubstate::Rejected);
-        next_instruction = AssetInstruction {
-            data: asset_tx.encode().to_vec(),
-            state: rejected_state,
-        };
-
-        save_object(
-            db_dir,
-            ON_CHAIN_DIR,
-            COMMON_OBJECTS_DIR,
-            &asset_transaction_file(tx_id, &issuer, rejected_state),
-            &next_instruction,
-        )?;
-    } else {
-        // Save the justified transaction.
-        next_instruction = AssetInstruction {
-            data: justified_tx.encode().to_vec(),
-            state: AssetTxState::Justification(TxSubstate::Started),
-        };
-
-        save_object(
-            db_dir,
-            ON_CHAIN_DIR,
-            COMMON_OBJECTS_DIR,
-            &asset_transaction_file(
-                tx_id,
-                &mediator,
-                AssetTxState::Justification(TxSubstate::Started),
-            ),
-            &next_instruction,
-        )?;
-    }
-
-    timing!(
-        "mediator.justify_save_objects",
-        justify_save_objects_timer,
-        Instant::now(),
-        "tx_id" => tx_id.to_string()
     );
 
     Ok(())
@@ -338,7 +192,7 @@ pub fn justify_asset_transfer_transaction(
             tx_id
         );
 
-        justified_tx.finalized_data.init_data.memo.sndr_account_id += 1;
+        justified_tx.finalized_data.init_data.memo.sndr_account_id += non_empty_account_id();
     }
 
     timing!(

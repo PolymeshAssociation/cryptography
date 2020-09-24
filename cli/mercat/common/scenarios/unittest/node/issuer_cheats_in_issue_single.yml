@@ -8,13 +8,10 @@ accounts:
   - alice:
     - ACME
 
-mediators:
-  - Mike
-    
 transactions:
   - sequence:
     - validate
-    - issue Alice(cheat) 10 ACME Mike approve
+    - issue Alice(cheat) 10 ACME
     - validate
 
 outcome: 

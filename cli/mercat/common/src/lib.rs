@@ -9,13 +9,17 @@ mod harness;
 pub mod justify;
 pub mod validate;
 
+use base64;
 use codec::{Decode, Encode};
-use cryptography::mercat::{
-    Account, AssetTxState, EncryptedAmount, FinalizedTransferTx, InitializedAssetTx,
-    InitializedTransferTx, JustifiedAssetTx, JustifiedTransferTx, PubAccount, PubAccountTx,
-    SecAccount, TransferTxState, TxSubstate,
+use cryptography::{
+    asset_proofs::CipherText,
+    mercat::{
+        Account, AssetTxState, EncryptedAmount, EncryptedAssetId, FinalizedTransferTx,
+        InitializedAssetTx, InitializedTransferTx, JustifiedTransferTx, PubAccount, PubAccountTx,
+        SecAccount, TransferTxState, TxSubstate,
+    },
 };
-use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
 use errors::Error;
 use log::{debug, error, info};
 use metrics::Recorder;
@@ -24,13 +28,12 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand::{CryptoRng, RngCore};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
-use std::convert::TryFrom;
-use std::hash::{Hash, Hasher};
 use std::{
     collections::HashMap,
     convert::TryInto,
+    fmt,
     fs::{create_dir_all, File},
+    hash::Hash,
     io::BufReader,
     path::{Path, PathBuf},
 };
@@ -61,11 +64,7 @@ pub enum CoreTransaction {
         issuer: String,
         ordering_state: OrderingState,
         tx_id: u32,
-    },
-    IssueJustify {
-        issue_tx: JustifiedAssetTx,
-        mediator: String,
-        tx_id: u32,
+        amount: u32,
     },
     TransferInit {
         tx: InitializedTransferTx,
@@ -96,10 +95,12 @@ impl CoreTransaction {
                 ordering_state: _,
                 tx_id: _,
             } => true,
-            CoreTransaction::IssueJustify {
+            CoreTransaction::IssueInit {
                 issue_tx: _,
-                mediator: _,
+                issuer: _,
                 tx_id: _,
+                ordering_state: _,
+                amount: _,
             } => true,
             CoreTransaction::TransferJustify {
                 tx: _,
@@ -135,6 +136,7 @@ impl CoreTransaction {
                 issuer: _,
                 ordering_state,
                 tx_id: _,
+                amount: _,
             } => ordering_state.clone(),
             CoreTransaction::TransferInit {
                 tx: _,
@@ -219,6 +221,7 @@ pub struct OrderedPubAccountTx {
 #[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
 pub struct OrderedAssetInstruction {
     pub state: AssetTxState,
+    pub amount: u32,
     pub ordering_state: OrderingState,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
@@ -249,6 +252,21 @@ pub struct TransferInstruction {
     pub data: Vec<u8>,
 }
 
+#[derive(PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PrintableAccountId(pub Vec<u8>);
+
+impl fmt::Display for PrintableAccountId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+impl PrintableAccountId {
+    fn to_string(&self) -> String {
+        format!("{}", base64::encode(self.0.clone()))
+    }
+}
+
 #[inline]
 pub fn asset_transaction_file(tx_id: u32, user: &String, state: AssetTxState) -> String {
     format!("tx_{}_{}_{}.json", tx_id, user, state)
@@ -277,6 +295,15 @@ pub fn user_public_account_balance_file(ticker: &String) -> String {
 #[inline]
 pub fn user_secret_account_file(ticker: &String) -> String {
     format!("{}_{}", ticker, SECRET_ACCOUNT_FILE)
+}
+
+/// This is used for simulating cheating by increasing the account id.
+#[inline]
+pub fn non_empty_account_id() -> EncryptedAssetId {
+    CipherText {
+        x: RISTRETTO_BASEPOINT_POINT,
+        y: RISTRETTO_BASEPOINT_POINT,
+    }
 }
 
 /// Parses the transaction file name and returns: (tx_id, user_name, state, the_input_file_path).
@@ -559,28 +586,10 @@ pub fn create_rng_from_seed(seed: Option<String>) -> Result<StdRng, Error> {
     Ok(StdRng::from_seed(seed))
 }
 
-/// Uses the default hasher to hash the input object to an integer.
-#[inline]
-fn simple_hasher<T>(obj: T) -> u64
-where
-    T: Hash,
-{
-    let mut hasher = DefaultHasher::new();
-    obj.hash(&mut hasher);
-    hasher.finish()
-}
-
-/// Helper function to create account id from user and ticker.
-#[inline]
-pub fn calc_account_id(user: String, ticker: String) -> u32 {
-    let u32_val = simple_hasher(&format!("{}_{}", user, ticker)) % (u32::MAX as u64);
-    u32::try_from(u32_val).unwrap_or_default()
-}
-
 /// Reads the account mapping from disk. Returns a map of account id to (user_name, ticker, tx_id).
 #[inline]
-pub fn load_account_map(db_dir: PathBuf) -> HashMap<u32, (String, String, u32)> {
-    let mapping: Result<HashMap<u32, (String, String, u32)>, Error> =
+pub fn load_account_map(db_dir: PathBuf) -> HashMap<String, (String, String, u32)> {
+    let mapping: Result<HashMap<String, (String, String, u32)>, Error> =
         load_from_file(db_dir, OFF_CHAIN_DIR, COMMON_OBJECTS_DIR, USER_ACCOUNT_MAP);
     match mapping {
         Err(_error) => HashMap::new(),
@@ -594,11 +603,14 @@ pub fn update_account_map(
     db_dir: PathBuf,
     user: String,
     ticker: String,
-    account_id: u32,
+    account_id: EncryptedAssetId,
     tx_id: u32,
 ) -> Result<(), Error> {
     let mut mapping = load_account_map(db_dir.clone());
-    mapping.insert(account_id, (user, ticker, tx_id));
+    mapping.insert(
+        PrintableAccountId(account_id.encode()).to_string(),
+        (user, ticker, tx_id),
+    );
     save_to_file(
         db_dir,
         OFF_CHAIN_DIR,
@@ -611,13 +623,15 @@ pub fn update_account_map(
 /// Reads the account mapping file and returns (user_name, ticker, tx_id) of the given account id.
 #[inline]
 pub fn get_user_ticker_from(
-    account_id: u32,
+    account_id: EncryptedAssetId,
     db_dir: PathBuf,
 ) -> Result<(String, String, u32), Error> {
     let mapping = load_account_map(db_dir.clone());
     let (user, ticker, tx_id) = mapping
-        .get(&account_id)
-        .ok_or(Error::AccountIdNotFound { account_id })?;
+        .get(&PrintableAccountId(account_id.encode()).to_string())
+        .ok_or(Error::AccountIdNotFound {
+            account_id: PrintableAccountId(account_id.encode()).to_string(),
+        })?;
     Ok((user.clone(), ticker.clone(), tx_id.clone()))
 }
 
@@ -890,14 +904,7 @@ pub fn load_tx_file(
             issuer: user,
             ordering_state: instruction.ordering_state,
             tx_id,
-        }
-    } else if state == AssetTxState::Justification(TxSubstate::Started).to_string() {
-        let instruction: AssetInstruction = load_object_from(PathBuf::from(tx_file_path))?;
-        CoreTransaction::IssueJustify {
-            issue_tx: JustifiedAssetTx::decode(&mut &instruction.data[..])
-                .map_err(|_| Error::DecodeError)?,
-            mediator: user,
-            tx_id,
+            amount: instruction.amount,
         }
     } else if state == TransferTxState::Initialization(TxSubstate::Started).to_string() {
         let instruction: OrderedTransferInstruction =
@@ -944,7 +951,7 @@ pub fn load_tx_file(
 /// Use only for debugging purposes.
 #[inline]
 fn debug_decrypt(
-    account_id: u32,
+    account_id: EncryptedAssetId,
     enc_balance: EncryptedAmount,
     db_dir: PathBuf,
 ) -> Result<u32, Error> {

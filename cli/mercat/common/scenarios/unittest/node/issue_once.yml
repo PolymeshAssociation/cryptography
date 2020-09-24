@@ -8,13 +8,10 @@ accounts:
   - alice:
     - ACME
 
-mediators:
-  - Mike
-    
 transactions:
   - sequence:
     - validate # This validates the account creations. Can be done automatically without needing to write it here explicitly
-    - issue Alice 10 ACME Mike approve
+    - issue Alice 10 ACME
     - validate
 
 outcome: 

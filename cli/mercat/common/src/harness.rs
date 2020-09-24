@@ -6,10 +6,7 @@ use crate::{
     create_rng_from_seed, debug_decrypt_account_balance,
     errors::Error,
     gen_seed, gen_seed_from,
-    justify::{
-        justify_asset_issuance_transaction, justify_asset_transfer_transaction,
-        process_create_mediator,
-    },
+    justify::{justify_asset_transfer_transaction, process_create_mediator},
     user_public_account_file,
     validate::validate_all_pending,
     COMMON_OBJECTS_DIR, ON_CHAIN_DIR,
@@ -132,8 +129,6 @@ pub struct Create {
 pub struct Issue {
     pub tx_id: u32,
     pub issuer: Party,
-    pub mediator: Party,
-    pub mediator_approves: bool,
     pub ticker: String,
     pub amount: u32,
 }
@@ -142,12 +137,11 @@ impl TryFrom<(u32, String)> for Issue {
     type Error = Error;
     fn try_from(pair: (u32, String)) -> Result<Self, Error> {
         let (tx_id, segment) = pair;
-        // Example: issue Bob(cheat) 40 ACME Carol approve Marry reject
-        let re = Regex::new(
-            r"^issue ([a-zA-Z0-9()]+) ([0-9]+) ([a-zA-Z0-9]+) ([a-zA-Z0-9()]+) (approve|reject)$",
-        )
-        .map_err(|_| Error::RegexError {
-            reason: String::from("Failed to compile the Issue regex"),
+        // Example: issue Bob(cheat) 40 ACME
+        let re = Regex::new(r"^issue ([a-zA-Z0-9()]+) ([0-9]+) ([a-zA-Z0-9]+)$").map_err(|_| {
+            Error::RegexError {
+                reason: String::from("Failed to compile the Issue regex"),
+            }
         })?;
         let caps = re.captures(&segment).ok_or(Error::RegexError {
             reason: format!("Pattern did not match {}", segment),
@@ -156,8 +150,6 @@ impl TryFrom<(u32, String)> for Issue {
         Ok(Self {
             tx_id,
             issuer: Party::try_from(&caps[1])?,
-            mediator: Party::try_from(&caps[4])?,
-            mediator_approves: caps[5].to_string() == "approve",
             ticker,
             amount: caps[2]
                 .to_string()
@@ -449,12 +441,11 @@ impl Issue {
     pub fn issue<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
         let value = format!(
-            "tx-{}: $ mercat-account issue --account-id-from-ticker {} --amount {} --issuer {} --mediator {} --tx-id {} --seed {} --db-dir {} {}",
+            "tx-{}: $ mercat-account issue --account-id-from-ticker {} --amount {} --issuer {} --tx-id {} --seed {} --db-dir {} {}",
             self.tx_id,
             self.ticker,
             self.amount,
             self.issuer.name,
-            self.mediator.name,
             self.tx_id,
             seed,
             path_to_string(&chain_db_dir),
@@ -462,7 +453,6 @@ impl Issue {
         );
         let ticker = self.ticker.clone();
         let issuer = self.issuer.name.clone();
-        let mediator = self.mediator.name.clone();
         let amount = self.amount;
         let tx_id = self.tx_id;
         let cheat = self.issuer.cheater;
@@ -472,43 +462,10 @@ impl Issue {
                 seed.clone(),
                 chain_db_dir.clone(),
                 issuer.clone(),
-                mediator.clone(),
                 ticker.clone(),
                 amount,
                 false, // Do not print the transaction data to stdout.
                 tx_id,
-                cheat,
-            )?;
-            Ok(value.clone())
-        });
-    }
-
-    pub fn mediate(&self, chain_db_dir: PathBuf) -> StepFunc {
-        let value = format!(
-            "tx-{}: $ mercat-mediator justify-issuance --account-id-from-ticker {} --issuer {} --mediator {} --tx-id {} --db-dir {} {}",
-            self.tx_id,
-            self.ticker,
-            self.issuer.name,
-            self.mediator.name,
-            self.tx_id,
-            path_to_string(&chain_db_dir),
-            cheater_flag(self.mediator.cheater)
-        );
-        let issuer = self.issuer.name.clone();
-        let mediator = self.mediator.name.clone();
-        let ticker = self.ticker.clone();
-        let tx_id = self.tx_id;
-        let reject = !self.mediator_approves;
-        let cheat = self.mediator.cheater;
-        return Box::new(move || {
-            info!("Running: {}", value.clone());
-            justify_asset_issuance_transaction(
-                chain_db_dir.clone(),
-                issuer.clone(),
-                mediator.clone(),
-                ticker.clone(),
-                tx_id,
-                reject,
                 cheat,
             )?;
             Ok(value.clone())
@@ -520,10 +477,7 @@ impl Issue {
         rng: &mut T,
         chain_db_dir: PathBuf,
     ) -> Vec<StepFunc> {
-        vec![
-            self.issue(rng, chain_db_dir.clone()),
-            self.mediate(chain_db_dir.clone()),
-        ]
+        vec![self.issue(rng, chain_db_dir.clone())]
     }
 }
 

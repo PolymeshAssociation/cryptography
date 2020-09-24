@@ -48,7 +48,6 @@ fn main() {
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.issuer,
-            cfg.mediator,
             cfg.account_id_from_ticker,
             cfg.amount,
             cfg.stdout,

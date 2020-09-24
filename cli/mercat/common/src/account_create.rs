@@ -1,7 +1,8 @@
 use crate::{
-    account_create_transaction_file, calc_account_id, create_rng_from_seed, errors::Error,
-    get_asset_ids, save_object, update_account_map, user_secret_account_file, OrderedPubAccountTx,
-    OrderingState, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    account_create_transaction_file, create_rng_from_seed, errors::Error, get_asset_ids,
+    non_empty_account_id, save_object, update_account_map, user_secret_account_file,
+    OrderedPubAccountTx, OrderingState, PrintableAccountId, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR,
+    ON_CHAIN_DIR,
 };
 use base64;
 use codec::Encode;
@@ -34,18 +35,11 @@ pub fn process_create_account(
     // Create the account.
     let secret_account = create_secret_account(&mut rng, ticker.clone())?;
     let valid_asset_ids = get_asset_ids(db_dir.clone())?;
-    let account_id = calc_account_id(user.clone(), ticker.clone());
 
     let create_account_timer = Instant::now();
     let account_creator = AccountCreator {};
     let mut account_tx = account_creator
-        .create(
-            tx_id,
-            &secret_account,
-            &valid_asset_ids,
-            account_id,
-            &mut rng,
-        )
+        .create(tx_id, &secret_account, &valid_asset_ids, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
     timing!("account.call_library", create_account_timer, Instant::now(), "tx_id" => tx_id.to_string());
     if cheat {
@@ -68,9 +62,9 @@ pub fn process_create_account(
                 account_tx.pub_account.enc_asset_id = EncryptedAssetId::from(cheat_enc_asset_id);
             }
             1 => {
-                info!("CLI log: tx-{}: Cheating by overwriting the account id but not the signature. Correct account id: {}",
-                      tx_id, account_tx.pub_account.id);
-                account_tx.pub_account.id += 1;
+                info!("CLI log: tx-{}: Cheating by overwriting the account id. Correct account id: {}",
+                      tx_id, PrintableAccountId(account_tx.pub_account.enc_asset_id.encode()));
+                account_tx.pub_account.enc_asset_id += non_empty_account_id();
             }
             _ => error!("CLI log: tx-{}: This should never happen!", tx_id),
         }
@@ -85,6 +79,8 @@ pub fn process_create_account(
         &user_secret_account_file(&ticker),
         &secret_account,
     )?;
+
+    let account_id = account_tx.pub_account.enc_asset_id.clone();
 
     let instruction = OrderedPubAccountTx {
         account_tx,

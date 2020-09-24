@@ -121,7 +121,7 @@ pub enum Error {
         display = "Could not find account id {} in the validator's local map.",
         account_id
     )]
-    AccountIdNotFound { account_id: u32 },
+    AccountIdNotFound { account_id: String },
 
     /// Invalid transaction file
     #[fail(display = "Invalid transaction file: {}.", path)]

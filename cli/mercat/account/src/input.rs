@@ -135,11 +135,6 @@ pub struct IssueAssetInfo {
     #[structopt(short, long, help = "The name of the issuer.")]
     pub issuer: String,
 
-    /// The transaction mediator's name. Used to retrieve mediator's public keys.
-    /// Use `mercat-mediator` CLI to create the credentials needed for this role.
-    #[structopt(short, long, help = "The name of the mediator.")]
-    pub mediator: String,
-
     /// An optional path to save the config used for this experiment.
     #[structopt(
         parse(from_os_str),
@@ -402,7 +397,6 @@ pub fn parse_input() -> CLI {
                 amount: cfg.amount,
                 db_dir,
                 issuer: cfg.issuer,
-                mediator: cfg.mediator,
                 save_config: cfg.save_config.clone(),
                 stdout: cfg.stdout,
                 cheat: cfg.cheat,
