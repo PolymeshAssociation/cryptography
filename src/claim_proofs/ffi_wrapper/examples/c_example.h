@@ -14,8 +14,6 @@ typedef struct CDDClaimData CDDClaimData;
 
 typedef struct ScopeClaimData ScopeClaimData;
 
-typedef struct Scalar Scalar;
-
 typedef struct RistrettoPoint RistrettoPoint;
 
 typedef struct Signature Signature;
@@ -45,11 +43,14 @@ void cdd_claim_data_free(CDDClaimData *ptr);
  * Create a new `CDDClaimData` object.
  *
  * Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
- * SAFETY: Caller is also responsible for making sure the `investor_did` and
- *         `investor_unique_id` are valid pointers to Scalar objects, created using
- *         `scalar_new()` API.
+ * SAFETY: Caller is also responsible for making sure `investor_did` and
+ *         `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
+ *         and `investor_unique_id_size` bytes respectively.
  */
-CDDClaimData *cdd_claim_data_new(Scalar *investor_did, Scalar *investor_unique_id);
+CDDClaimData *cdd_claim_data_new(const uint8_t *investor_did,
+                                 size_t investor_did_size,
+                                 const uint8_t *investor_unique_id,
+                                 size_t investor_unique_id_size);
 
 /**
  * Creates a CDD ID from a CDD claim.
@@ -93,32 +94,18 @@ void proof_public_key_free(ProofPublicKey *ptr);
  * Create a new `ProofPublicKey` object.
  *
  * Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
- * SAFETY: Caller is also responsible for making sure the `cdd_id`, `investor_did`,
- *         `scope_id`, and `scope_did` are valid pointers, created using
- *         `scalar_new()`, `compute_cdd_id_wrapper()`, and `compute_scope_id_wrapper()`
- *          API.
+ * SAFETY: Caller is responsible for making sure `investor_did` and
+ *         `scope_did` point to allocated blocks of memory of `investor_did_size`
+ *         and `scope_did_size` bytes respectively. Caller is also responsible
+ *         for making sure the `cdd_id` and `scope_id` are valid pointers, created using
+ *         `compute_cdd_id_wrapper()` and `compute_scope_id_wrapper()` API.
  */
 ProofPublicKey *proof_public_key_new(RistrettoPoint *cdd_id,
-                                     Scalar *investor_did,
+                                     const uint8_t *investor_did,
+                                     size_t investor_did_size,
                                      RistrettoPoint *scope_id,
-                                     Scalar *scope_did);
-
-/**
- * Deallocates a `Scalar` object's memory.
- *
- * Should only be called on a still-valid pointer to an object returned by
- * `scalar_new()`.
- */
-void scalar_free(Scalar *ptr);
-
-/**
- * Create a `Scalar` object from a 32 bytes array.
- *
- * Caller is responsible for calling `scalar_free()` to deallocate this object.
- * SAFETY: Caller is also responsible for making sure the `scalar_bits` pointer
- *         is not Null and points to a 32 bytes block of memory.
- */
-Scalar *scalar_new(const uint8_t *scalar_bits);
+                                     const uint8_t *scope_did,
+                                     size_t scope_did_size);
 
 /**
  * Deallocates a `ScopeClaimData` object's memory.
@@ -132,11 +119,14 @@ void scope_claim_data_free(ScopeClaimData *ptr);
  * Create a new `ScopeClaimData` object.
  *
  * Caller is responsible for calling `scope_claim_data_free()` to deallocate this object.
- * SAFETY: Caller is also responsible for making sure the `scope_did` and
- *         `investor_unique_id` are valid pointers to Scalar objects, created using
- *         `scalar_new()` API.
+ * SAFETY: Caller is also responsible for making sure `scope_did` and
+ *         `investor_unique_id` point to allocated blocks of memory of `scope_did_size`
+ *         and `investor_unique_id_size` bytes respectively.
  */
-ScopeClaimData *scope_claim_data_new(Scalar *scope_did, Scalar *investor_unique_id);
+ScopeClaimData *scope_claim_data_new(const uint8_t *scope_did,
+                                     size_t scope_did_size,
+                                     const uint8_t *investor_unique_id,
+                                     size_t investor_unique_id_size);
 
 /**
  * Deallocates a `ScopeClaimProofData` object's memory.
