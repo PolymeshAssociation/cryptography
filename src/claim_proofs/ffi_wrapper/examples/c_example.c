@@ -24,7 +24,7 @@ int main(void) {
     size_t message_size = sizeof(message);
 
     // Set up on Prover side:
-    CDDClaimData *cdd_claim = cdd_claim_data_new(investor_did, investor_did_size, investor_unique_id, investor_unique_id_size);
+    CddClaimData *cdd_claim = cdd_claim_data_new(investor_did, investor_did_size, investor_unique_id, investor_unique_id_size);
     ScopeClaimData *scope_claim = scope_claim_data_new(scope_did, scope_did_size, investor_unique_id, investor_unique_id_size);
     ScopeClaimProofData *prover = build_scope_claim_proof_data_wrapper(cdd_claim, scope_claim);
 

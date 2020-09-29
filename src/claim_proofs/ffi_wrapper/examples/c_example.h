@@ -10,7 +10,7 @@
 
 typedef struct ScopeClaimProofData ScopeClaimProofData;
 
-typedef struct CDDClaimData CDDClaimData;
+typedef struct CddClaimData CddClaimData;
 
 typedef struct ScopeClaimData ScopeClaimData;
 
@@ -24,30 +24,30 @@ typedef struct ProofPublicKey ProofPublicKey;
  * Creates a `ScopeClaimProofData` object from a CDD claim and an scope claim.
  *
  * SAFETY: Caller is responsible to make sure `cdd_claim` and `scope_claim`
- *         pointers are valid pointers to `CDDClaimData` and `ScopeClaimData`
+ *         pointers are valid pointers to `CddClaimData` and `ScopeClaimData`
  *         objects, created by this API.
  * Caller is responsible for deallocating memory after use.
  */
-ScopeClaimProofData *build_scope_claim_proof_data_wrapper(const CDDClaimData *cdd_claim,
+ScopeClaimProofData *build_scope_claim_proof_data_wrapper(const CddClaimData *cdd_claim,
                                                           const ScopeClaimData *scope_claim);
 
 /**
- * Deallocates a `CDDClaimData` object's memory.
+ * Deallocates a `CddClaimData` object's memory.
  *
  * Should only be called on a still-valid pointer to an object returned by
  * `cdd_claim_data_new()`.
  */
-void cdd_claim_data_free(CDDClaimData *ptr);
+void cdd_claim_data_free(CddClaimData *ptr);
 
 /**
- * Create a new `CDDClaimData` object.
+ * Create a new `CddClaimData` object.
  *
  * Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
  * SAFETY: Caller is also responsible for making sure `investor_did` and
  *         `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
  *         and `investor_unique_id_size` bytes respectively.
  */
-CDDClaimData *cdd_claim_data_new(const uint8_t *investor_did,
+CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
                                  size_t investor_did_size,
                                  const uint8_t *investor_unique_id,
                                  size_t investor_unique_id_size);
@@ -56,10 +56,10 @@ CDDClaimData *cdd_claim_data_new(const uint8_t *investor_did,
  * Creates a CDD ID from a CDD claim.
  *
  * SAFETY: Caller is responsible to make sure `cdd_claim` pointer is a valid
- *         `CDDClaimData` object, created by this API.
+ *         `CddClaimData` object, created by this API.
  * Caller is responsible for deallocating memory after use.
  */
-RistrettoPoint *compute_cdd_id_wrapper(const CDDClaimData *cdd_claim);
+RistrettoPoint *compute_cdd_id_wrapper(const CddClaimData *cdd_claim);
 
 /**
  * Creates a scope ID from a scope claim.

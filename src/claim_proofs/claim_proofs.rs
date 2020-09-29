@@ -11,7 +11,7 @@
 //!
 //! ```
 //! use cryptography::claim_proofs::{compute_cdd_id, compute_scope_id, build_scope_claim_proof_data,
-//!     CDDClaimData, ScopeClaimData, ProofKeyPair};
+//!     CddClaimData, ScopeClaimData, ProofKeyPair};
 //! use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 //!
 //! // Investor side:
@@ -19,7 +19,7 @@
 //!
 //! let investor_did = [1u8; 32];
 //! let investor_unique_id = [2u8; 32];
-//! let cdd_claim = CDDClaimData::new(&investor_did, &investor_unique_id);
+//! let cdd_claim = CddClaimData::new(&investor_did, &investor_unique_id);
 //!
 //! let scope_did = [4u8; 32];
 //! let scope_claim = ScopeClaimData::new(&scope_did, &investor_unique_id);
@@ -60,27 +60,22 @@ lazy_static! {
 fn slice_to_scalar(data: &[u8]) -> Scalar {
     use blake2::{Blake2b, Digest};
     let mut hash = [0u8; 64];
-    hash.copy_from_slice(
-        Blake2b::default()
-            .chain(data.as_ref())
-            .finalize()
-            .as_slice(),
-    );
+    hash.copy_from_slice(Blake2b::digest(data).as_slice());
     Scalar::from_bytes_mod_order_wide(&hash)
 }
 
 /// The data needed to generate a CDD ID.
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct CDDClaimData {
+pub struct CddClaimData {
     pub investor_did: Scalar,
     pub investor_unique_id: Scalar,
 }
 
-impl CDDClaimData {
+impl CddClaimData {
     /// Create a CDD Claim Data object from slices of data.
     pub fn new(investor_did: &[u8], investor_unique_id: &[u8]) -> Self {
-        CDDClaimData {
+        CddClaimData {
             investor_did: slice_to_scalar(investor_did),
             investor_unique_id: slice_to_scalar(investor_unique_id),
         }
@@ -149,7 +144,7 @@ fn generate_pedersen_commit(a: Scalar, b: Scalar) -> RistrettoPoint {
 ///
 /// # Output
 /// The Pedersen commitment result.
-pub fn compute_cdd_id(cdd_claim: &CDDClaimData) -> RistrettoPoint {
+pub fn compute_cdd_id(cdd_claim: &CddClaimData) -> RistrettoPoint {
     generate_pedersen_commit(cdd_claim.investor_did, cdd_claim.investor_unique_id)
 }
 
@@ -167,7 +162,7 @@ pub fn compute_scope_id(scope_claim: &ScopeClaimData) -> RistrettoPoint {
 }
 
 pub fn build_scope_claim_proof_data(
-    cdd_claim: &CDDClaimData,
+    cdd_claim: &CddClaimData,
     scope_claim: &ScopeClaimData,
 ) -> ScopeClaimProofData {
     ScopeClaimProofData {
@@ -307,7 +302,7 @@ mod tests {
         rng.fill_bytes(&mut did_bytes);
         let mut scope_id_bytes = [0u8; 128];
         rng.fill_bytes(&mut scope_id_bytes);
-        let cdd_claim = CDDClaimData::new(&did_bytes, &unique_id_bytes);
+        let cdd_claim = CddClaimData::new(&did_bytes, &unique_id_bytes);
         let scope_claim = ScopeClaimData::new(&scope_id_bytes, &unique_id_bytes);
 
         let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
@@ -338,7 +333,7 @@ mod tests {
         rng.fill_bytes(&mut did_bytes);
         let mut scope_id_bytes = [0u8; 128];
         rng.fill_bytes(&mut scope_id_bytes);
-        let cdd_claim = CDDClaimData::new(&did_bytes, &unique_id_bytes);
+        let cdd_claim = CddClaimData::new(&did_bytes, &unique_id_bytes);
         let scope_claim = ScopeClaimData::new(&scope_id_bytes, &unique_id_bytes);
 
         let message = &b"I didn't claim anything!".to_vec();
