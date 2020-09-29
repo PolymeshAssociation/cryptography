@@ -3,7 +3,7 @@
 This repository contains the CLI and test harness around the [Polymesh Cryptograph library][cryptography].
 
 The repository has following sections:
-- CLI for claim proofs library: see [agui][agui]
+- CLI for claim proofs library: see [cil][cil]
 - CLI for sending receiving confidential transactions: see [mercat][mercat] for a detailed description.
 - Test harness for the confidential transactions: see [mercat/common][harness] for a detailed description.
 
@@ -35,7 +35,7 @@ To run the library's unit tests as well has the test harness, run
 RUST_LOG=info cargo +nightly  test --release
 ```
 
-To build all the CLIs in mercat and agui, run
+To build all the CLIs in mercat and cil, run
 ```bash
 cargo +nightly build
 ```
@@ -46,6 +46,6 @@ cargo +nightly test -- --nocapture
 ```
 
 [cryptography]: https://github.com/PolymathNetwork/cryptography
-[agui]: https://github.com/PolymathNetwork/crypto-framework/tree/master/agui
+[cil]: https://github.com/PolymathNetwork/crypto-framework/tree/master/cil
 [mercat]: https://github.com/PolymathNetwork/crypto-framework/tree/master/mercat
 [harness]: https://github.com/PolymathNetwork/crypto-framework/tree/master/mercat/common

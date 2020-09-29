@@ -2,9 +2,9 @@
 
 members = [
 	"cryptography",
-	"agui/common",
-	"agui/scp",
-	"agui/scv",
+	"cil/common",
+	"cil/scp",
+	"cil/scv",
 	"mercat/account",
 	"mercat/chain_setup",
 	"mercat/common",

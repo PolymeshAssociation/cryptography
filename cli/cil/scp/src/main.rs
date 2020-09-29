@@ -3,12 +3,15 @@
 //! Use `polymath-scp --help` to see the usage.
 //!
 
-use cli_common::Proof;
+use cli_common::{
+    make_message, InvestorDID, Proof, ScopeDID, UniqueID, INVESTORDID_LEN, SCOPEDID_LEN,
+    UNIQUEID_LEN,
+};
 use cryptography::claim_proofs::{
-    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CDDClaimData, ProofKeyPair,
+    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CddClaimData, ProofKeyPair,
     ScopeClaimData,
 };
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::ristretto::RistrettoPoint;
 use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -17,6 +20,18 @@ use structopt::StructOpt;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CddId {
     pub cdd_id: RistrettoPoint,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RawCddClaimData {
+    pub investor_did: InvestorDID,
+    pub investor_unique_id: UniqueID,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RawScopeClaimData {
+    pub scope_did: ScopeDID,
+    pub investor_unique_id: UniqueID,
 }
 
 /// polymath-scp -- a simple claim prover.
@@ -40,10 +55,6 @@ pub struct CreateClaimProofInfo {
     /// Generate and use a random claim.
     #[structopt(short, long)]
     rand: bool,
-
-    /// Message to prove.
-    #[structopt(short, long, default_value = "A very important claim.")]
-    message: String,
 
     /// Get the Json formatted claim from file.
     /// If this option is provided along with `rand`,
@@ -106,37 +117,42 @@ pub enum CLI {
     CreateClaimProof(CreateClaimProofInfo),
 }
 
-pub fn random_claim<R: RngCore + CryptoRng>(rng: &mut R) -> (CDDClaimData, ScopeClaimData) {
-    let investor_unique_id = Scalar::random(rng);
-    (
-        CDDClaimData {
-            investor_did: Scalar::random(rng),
-            investor_unique_id,
-        },
-        ScopeClaimData {
-            scope_did: Scalar::random(rng),
-            investor_unique_id,
-        },
-    )
+/// Generate a random `InvestorDID` for experiments.
+fn random_investor_did<R: RngCore + CryptoRng>(rng: &mut R) -> InvestorDID {
+    let mut investor_did = [0u8; INVESTORDID_LEN];
+    rng.fill_bytes(&mut investor_did);
+    investor_did
 }
 
-pub fn random_cdd_claim<R: RngCore + CryptoRng>(rng: &mut R) -> CDDClaimData {
-    CDDClaimData {
-        investor_did: Scalar::random(rng),
-        investor_unique_id: Scalar::random(rng),
-    }
+/// Generate a random `ScopeDID` for experiments.
+fn random_scope_did<R: RngCore + CryptoRng>(rng: &mut R) -> ScopeDID {
+    let mut scope_did = [0u8; SCOPEDID_LEN];
+    rng.fill_bytes(&mut scope_did);
+    scope_did
+}
+
+/// Generate a random `UniqueID` for experiments.
+fn random_unique_id<R: RngCore + CryptoRng>(rng: &mut R) -> UniqueID {
+    let mut unique_id = [0u8; UNIQUEID_LEN];
+    rng.fill_bytes(&mut unique_id);
+    unique_id
 }
 
 fn process_create_cdd_id(cfg: CreateCDDIdInfo) {
-    let cdd_claim = if cfg.rand {
+    let raw_cdd_data = if cfg.rand {
         let mut rng = StdRng::from_seed([42u8; 32]);
-        let rand_cdd_claim = random_cdd_claim(&mut rng);
+        let rand_investor_did = random_investor_did(&mut rng);
+        let rand_unique_id = random_unique_id(&mut rng);
+        let raw_cdd_data = RawCddClaimData {
+            investor_did: rand_investor_did,
+            investor_unique_id: rand_unique_id,
+        };
 
         // If user provided the `claim` option, save this to file.
         if let Some(c) = cfg.cdd_claim {
             std::fs::write(
                 c,
-                serde_json::to_string(&rand_cdd_claim)
+                serde_json::to_string(&raw_cdd_data)
                     .unwrap_or_else(|error| panic!("Failed to serialize the cdd claim: {}", error)),
             )
             .expect("Failed to write the cdd claim to file.");
@@ -145,7 +161,7 @@ fn process_create_cdd_id(cfg: CreateCDDIdInfo) {
             }
         }
 
-        rand_cdd_claim
+        raw_cdd_data
     } else {
         let file_cdd_claim = match cfg.cdd_claim {
             Some(c) => {
@@ -160,6 +176,8 @@ fn process_create_cdd_id(cfg: CreateCDDIdInfo) {
 
         file_cdd_claim
     };
+
+    let cdd_claim = CddClaimData::new(&raw_cdd_data.investor_did, &raw_cdd_data.investor_unique_id);
 
     if cfg.verbose {
         println!(
@@ -186,15 +204,27 @@ fn process_create_cdd_id(cfg: CreateCDDIdInfo) {
 }
 
 fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
-    let (cdd_claim, scope_claim) = if cfg.rand {
+    let (raw_cdd_claim, raw_scope_claim) = if cfg.rand {
         let mut rng = StdRng::from_seed([42u8; 32]);
-        let (rand_cdd_claim, rand_scope_claim) = random_claim(&mut rng);
+        // let (rand_cdd_claim, rand_scope_claim) = random_claim(&mut rng);
+        let rand_investor_did = random_investor_did(&mut rng);
+        let rand_unique_id = random_unique_id(&mut rng);
+        let raw_cdd_data = RawCddClaimData {
+            investor_did: rand_investor_did,
+            investor_unique_id: rand_unique_id.clone(),
+        };
+
+        let rand_scope_did = random_scope_did(&mut rng);
+        let raw_scope_data = RawScopeClaimData {
+            scope_did: rand_scope_did,
+            investor_unique_id: rand_unique_id,
+        };
 
         // If user provided the `claim` option, save this to file.
         if let Some(c) = cfg.cdd_claim {
             std::fs::write(
                 c,
-                serde_json::to_string(&rand_cdd_claim)
+                serde_json::to_string(&raw_cdd_data)
                     .unwrap_or_else(|error| panic!("Failed to serialize the cdd claim: {}", error)),
             )
             .expect("Failed to write the cdd claim to file.");
@@ -206,7 +236,7 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
         if let Some(c) = cfg.scope_claim {
             std::fs::write(
                 c,
-                serde_json::to_string(&rand_scope_claim).unwrap_or_else(|error| {
+                serde_json::to_string(&raw_scope_data).unwrap_or_else(|error| {
                     panic!("Failed to serialize the scope claim: {}", error)
                 }),
             )
@@ -216,7 +246,7 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
             }
         }
 
-        (rand_cdd_claim, rand_scope_claim)
+        (raw_cdd_data, raw_scope_data)
     } else {
         let file_cdd_claim = match cfg.cdd_claim {
             Some(c) => {
@@ -241,33 +271,42 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
         (file_cdd_claim, file_scope_claim)
     };
 
+    let message = make_message(&raw_cdd_claim.investor_did, &raw_scope_claim.scope_did);
+
     if cfg.verbose {
         println!(
             "CDD Claim: {:?}",
-            serde_json::to_string(&cdd_claim).unwrap()
+            serde_json::to_string(&raw_cdd_claim).unwrap()
         );
         println!(
             "Scope Claim: {:?}",
-            serde_json::to_string(&scope_claim).unwrap()
+            serde_json::to_string(&raw_scope_claim).unwrap()
         );
-        println!("Message: {:?}", cfg.message);
+        println!("Message: {:?}", message);
     }
 
-    let message: &[u8] = cfg.message.as_bytes();
+    let cdd_claim = CddClaimData::new(
+        &raw_cdd_claim.investor_did,
+        &raw_cdd_claim.investor_unique_id,
+    );
+    let scope_claim = ScopeClaimData::new(
+        &raw_scope_claim.scope_did,
+        &raw_scope_claim.investor_unique_id,
+    );
     let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
 
     let pair = ProofKeyPair::from(scope_claim_proof_data);
-    let proof = pair.generate_id_match_proof(message).to_bytes().to_vec();
+    let proof = pair.generate_id_match_proof(&message).to_bytes().to_vec();
 
     let cdd_id = compute_cdd_id(&cdd_claim);
     let scope_id = compute_scope_id(&scope_claim);
 
-    // => Investor makes {did_label, claim_label, inv_id_0, iss_id, message, proof} public knowledge.
+    // => Investor makes {cdd_id, investor_did, scope_id, scope_did, proof} public knowledge.
     let packaged_proof = Proof {
         cdd_id: cdd_id,
-        investor_did: cdd_claim.investor_did,
+        investor_did: raw_cdd_claim.investor_did,
         scope_id: scope_id,
-        scope_did: scope_claim.scope_did,
+        scope_did: raw_scope_claim.scope_did,
         proof,
     };
     let proof_str = serde_json::to_string(&packaged_proof)
