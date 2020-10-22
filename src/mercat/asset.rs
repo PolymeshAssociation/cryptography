@@ -111,12 +111,11 @@ fn verify_auditor_payload(
 
 /// The confidential transaction issuer issues an asset for an issuer account, and
 /// encrypts the metadata to the mediator's public key.
-pub struct AssetIssuer {}
+pub struct AssetIssuer;
 
 impl AssetTransactionIssuer for AssetIssuer {
     fn initialize_asset_transaction<T: RngCore + CryptoRng>(
         &self,
-        tx_id: u32,
         issr_account: &Account,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
@@ -126,19 +125,18 @@ impl AssetTransactionIssuer for AssetIssuer {
 
         // Encrypt the balance to issuer's public key (memo).
         let (issr_amount_witness, issr_enc_amount) = issr_account
-            .scrt
+            .secret
             .enc_keys
-            .pblc
+            .public
             .encrypt_value(amount.into(), rng);
         let memo = AssetMemo {
             enc_issued_amount: issr_enc_amount,
-            tx_id,
         };
 
         // Proof of memo's wellformedness.
         let memo_wellformedness_proof = single_property_prover(
             WellformednessProverAwaitingChallenge {
-                pub_key: issr_account.scrt.enc_keys.pblc,
+                pub_key: issr_account.secret.enc_keys.public,
                 w: Zeroizing::new(issr_amount_witness.clone()),
                 pc_gens: &gens,
             },
@@ -148,7 +146,7 @@ impl AssetTransactionIssuer for AssetIssuer {
         // Proof of memo's correctness.
         let memo_correctness_proof = single_property_prover(
             CorrectnessProverAwaitingChallenge {
-                pub_key: issr_account.scrt.enc_keys.pblc,
+                pub_key: issr_account.secret.enc_keys.public,
                 w: issr_amount_witness.clone(),
                 pc_gens: &gens,
             },
@@ -158,14 +156,14 @@ impl AssetTransactionIssuer for AssetIssuer {
         // Add the necessary payload for auditors.
         let auditors_payload = add_asset_transaction_auditor(
             auditors_enc_pub_keys,
-            &issr_account.scrt.enc_keys.pblc,
+            &issr_account.secret.enc_keys.public,
             &issr_amount_witness,
             rng,
         )?;
 
         // Bundle the issuance data.
         Ok(InitializedAssetTx {
-            account_id: issr_account.pblc.enc_asset_id,
+            account_id: issr_account.public.enc_asset_id,
             memo,
             balance_wellformedness_proof: memo_wellformedness_proof,
             balance_correctness_proof: memo_correctness_proof,
@@ -219,7 +217,7 @@ fn add_asset_transaction_auditor<T: RngCore + CryptoRng>(
 // -                                    Validator                                      -
 // -------------------------------------------------------------------------------------
 
-pub struct AssetValidator {}
+pub struct AssetValidator;
 
 /// Called by validators to verify the ZKP of the wellformedness of encrypted balance.
 fn verify_initialization(
@@ -276,7 +274,7 @@ impl AssetTransactionVerifier for AssetValidator {
 
 /// Asset transaction auditor.
 #[derive(Clone, Debug)]
-pub struct AssetAuditor {}
+pub struct AssetAuditor;
 
 impl AssetTransactionAuditor for AssetAuditor {
     /// Verify the initialized, and justified transactions.
@@ -300,7 +298,7 @@ impl AssetTransactionAuditor for AssetAuditor {
                 if payload.auditor_id == auditor_enc_key.0 {
                     let amount = auditor_enc_key
                         .1
-                        .scrt
+                        .secret
                         .const_time_decrypt(&payload.encrypted_amount)?;
 
                     let result = single_property_verifier(
@@ -355,8 +353,8 @@ mod tests {
         // Generate keys for the issuer.
         let issuer_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let issuer_enc_key = EncryptionKeys {
-            pblc: issuer_elg_secret_key.get_public_key(),
-            scrt: issuer_elg_secret_key,
+            public: issuer_elg_secret_key.get_public_key(),
+            secret: issuer_elg_secret_key,
         };
         let asset_id = AssetId::from(1);
 
@@ -369,30 +367,28 @@ mod tests {
             vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
-        let account_creator = AccountCreator {};
-        let tx_id = 0;
+        let account_creator = AccountCreator;
         let issuer_account_tx = account_creator
-            .create(tx_id, &issuer_secret_account, &valid_asset_ids, &mut rng)
+            .create(&issuer_secret_account, &valid_asset_ids, &mut rng)
             .unwrap();
         let issuer_public_account = issuer_account_tx.pub_account;
         let issuer_init_balance = issuer_account_tx.initial_balance;
         let issuer_account = Account {
-            pblc: issuer_public_account.clone(),
-            scrt: issuer_secret_account,
+            public: issuer_public_account.clone(),
+            secret: issuer_secret_account,
         };
 
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
 
         // ----------------------- Initialization
-        let tx_id = tx_id + 1;
-        let issuer = AssetIssuer {};
+        let issuer = AssetIssuer;
         let asset_tx = issuer
-            .initialize_asset_transaction(tx_id, &issuer_account, &[], issued_amount, &mut rng)
+            .initialize_asset_transaction(&issuer_account, &[], issued_amount, &mut rng)
             .unwrap();
 
         // Positive test.
-        let validator = AssetValidator {};
+        let validator = AssetValidator;
         let updated_issuer_balance = validator
             .verify_asset_transaction(
                 issued_amount,
@@ -406,7 +402,7 @@ mod tests {
         // ----------------------- Processing
         // Check that the issued amount is added to the account balance.
         assert!(issuer_enc_key
-            .scrt
+            .secret
             .verify(&updated_issuer_balance, &issued_amount.into())
             .is_ok());
     }
@@ -424,8 +420,8 @@ mod tests {
         // Generate keys for the issuer.
         let issuer_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let issuer_enc_key = EncryptionKeys {
-            pblc: issuer_elg_secret_key.get_public_key(),
-            scrt: issuer_elg_secret_key,
+            public: issuer_elg_secret_key.get_public_key(),
+            secret: issuer_elg_secret_key,
         };
         let asset_id = AssetId::from(1);
 
@@ -435,29 +431,28 @@ mod tests {
         };
 
         let pub_account_enc_asset_id = issuer_enc_key
-            .pblc
+            .public
             .encrypt(&issuer_secret_account.asset_id_witness);
 
         // Note that we use default proof values since we don't reverify these proofs during asset issuance.
         let issuer_public_account = PubAccount {
             enc_asset_id: pub_account_enc_asset_id,
-            owner_enc_pub_key: issuer_enc_key.pblc,
+            owner_enc_pub_key: issuer_enc_key.public,
         };
         // Set the initial encrypted balance to 0.
         let issuer_init_balance = EncryptedAmount::default();
         let issuer_account = Account {
-            pblc: issuer_public_account.clone(),
-            scrt: issuer_secret_account,
+            public: issuer_public_account.clone(),
+            secret: issuer_secret_account,
         };
 
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
 
         // ----------------------- Initialization
-        let issuer = AssetIssuer {};
+        let issuer = AssetIssuer;
         let asset_tx = issuer
             .initialize_asset_transaction(
-                1234u32,
                 &issuer_account,
                 issuer_auditor_list,
                 issued_amount,
@@ -465,7 +460,7 @@ mod tests {
             )
             .unwrap();
 
-        let validator = AssetValidator {};
+        let validator = AssetValidator;
         let result = validator.verify_asset_transaction(
             issued_amount,
             &asset_tx,
@@ -482,13 +477,13 @@ mod tests {
         // ----------------------- Processing
         // Check that the issued amount is added to the account balance.
         assert!(issuer_enc_key
-            .scrt
+            .secret
             .verify(&updated_issuer_balance, &issued_amount.into())
             .is_ok());
 
         // ----------------------- Auditing
         let _ = auditors_list.iter().map(|auditor| {
-            let transaction_auditor = AssetAuditor {};
+            let transaction_auditor = AssetAuditor;
             assert!(transaction_auditor
                 .audit_asset_transaction(&asset_tx, &issuer_public_account, auditor,)
                 .is_ok());
@@ -500,8 +495,8 @@ mod tests {
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         EncryptionKeys {
-            pblc: elg_pub,
-            scrt: elg_secret,
+            public: elg_pub,
+            secret: elg_secret,
         }
     }
 
@@ -520,7 +515,7 @@ mod tests {
 
         let auditors_vec: Vec<(u32, EncryptionPubKey)> = auditors_secret_vec
             .iter()
-            .map(|a| (a.0, a.1.pblc))
+            .map(|a| (a.0, a.1.public))
             .collect();
 
         let auditors_list = auditors_vec.as_slice();

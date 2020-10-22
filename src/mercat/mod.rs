@@ -47,8 +47,8 @@ pub type EncryptionSecKey = ElgamalSecretKey;
 #[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct EncryptionKeys {
-    pub pblc: EncryptionPubKey,
-    pub scrt: EncryptionSecKey,
+    pub public: EncryptionPubKey,
+    pub secret: EncryptionSecKey,
 }
 
 /// New type for Twisted ElGamal ciphertext of asset ids.
@@ -87,7 +87,6 @@ pub struct PubAccountTx {
     pub asset_wellformedness_proof: WellformednessProof,
     pub asset_membership_proof: MembershipProof,
     pub initial_balance_correctness_proof: CorrectnessProof,
-    pub tx_id: u32,
 }
 
 /// Holds the secret keys and asset id of an account. This cannot be put on the change.
@@ -101,8 +100,8 @@ pub struct SecAccount {
 /// Wrapper for both the secret and public account info
 #[derive(Clone, Debug)]
 pub struct Account {
-    pub pblc: PubAccount,
-    pub scrt: SecAccount,
+    pub public: PubAccount,
+    pub secret: SecAccount,
 }
 
 /// The interface for the account creation.
@@ -112,8 +111,7 @@ pub trait AccountCreatorInitializer {
     /// This function assumes that the given input `account_id` is unique.
     fn create<T: RngCore + CryptoRng>(
         &self,
-        tx_id: u32,
-        scrt: &SecAccount,
+        secret: &SecAccount,
         valid_asset_ids: &[Scalar],
         rng: &mut T,
     ) -> Fallible<PubAccountTx>;
@@ -152,6 +150,7 @@ impl fmt::Display for TxSubstate {
         write!(f, "{}", str)
     }
 }
+
 /// Represents the two states (initialized, justified) of a
 /// confidential asset issuance transaction.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
@@ -231,7 +230,6 @@ impl core::fmt::Debug for TransferTxState {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AssetMemo {
     pub enc_issued_amount: EncryptedAmount,
-    pub tx_id: u32,
 }
 
 /// Holds the public portion of an asset issuance transaction after initialization.
@@ -253,7 +251,6 @@ pub trait AssetTransactionIssuer {
     /// to `CreateAssetIssuanceTx` MERCAT whitepaper.
     fn initialize_asset_transaction<T: RngCore + CryptoRng>(
         &self,
-        tx_id: u32,
         issr_account: &Account,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
@@ -300,16 +297,15 @@ pub struct AuditorPayload {
 #[derive(Default, Clone, Copy, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TransferTxMemo {
-    pub sndr_account_id: EncryptedAssetId,
-    pub rcvr_account_id: EncryptedAssetId,
-    pub enc_amount_using_sndr: EncryptedAmount,
-    pub enc_amount_using_rcvr: EncryptedAmount,
+    pub sender_account_id: EncryptedAssetId,
+    pub receiver_account_id: EncryptedAssetId,
+    pub enc_amount_using_sender: EncryptedAmount,
+    pub enc_amount_using_receiver: EncryptedAmount,
     pub refreshed_enc_balance: EncryptedAmount,
     pub refreshed_enc_asset_id: EncryptedAssetId,
-    pub enc_asset_id_using_rcvr: EncryptedAssetId,
+    pub enc_asset_id_using_receiver: EncryptedAssetId,
     pub enc_asset_id_for_mdtr: EncryptedAssetId,
     pub enc_amount_for_mdtr: EncryptedAmountWithHint,
-    pub tx_id: u32,
 }
 
 /// Holds the proofs and memo of the confidential transaction sent by the sender.
@@ -320,7 +316,7 @@ pub struct InitializedTransferTx {
     pub non_neg_amount_proof: InRangeProof,
     pub enough_fund_proof: InRangeProof,
     pub memo: TransferTxMemo,
-    pub asset_id_equal_cipher_with_sndr_rcvr_keys_proof: CipherEqualDifferentPubKeyProof,
+    pub asset_id_equal_cipher_with_sender_receiver_keys_proof: CipherEqualDifferentPubKeyProof,
     pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
     pub asset_id_correctness_proof: CorrectnessProof,
@@ -334,7 +330,7 @@ pub struct InitializedTransferTx {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FinalizedTransferTx {
     pub init_data: InitializedTransferTx,
-    pub asset_id_from_sndr_equal_to_rcvr_proof: CipherEqualSamePubKeyProof,
+    pub asset_id_from_sender_equal_to_receiver_proof: CipherEqualSamePubKeyProof,
 }
 
 /// Wrapper for the contents and auditors' payload.
@@ -350,10 +346,9 @@ pub trait TransferTransactionSender {
     /// MERCAT paper.
     fn create_transaction<T: RngCore + CryptoRng>(
         &self,
-        tx_id: u32,
-        sndr_account: &Account,
-        sndr_init_balance: &EncryptedAmount,
-        rcvr_pub_account: &PubAccount,
+        sender_account: &Account,
+        sender_init_balance: &EncryptedAmount,
+        receiver_pub_account: &PubAccount,
         mdtr_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
@@ -367,9 +362,8 @@ pub trait TransferTransactionReceiver {
     /// of the MERCAT paper.
     fn finalize_transaction<T: RngCore + CryptoRng>(
         &self,
-        tx_id: u32,
         initialized_transaction: InitializedTransferTx,
-        rcvr_account: Account,
+        receiver_account: Account,
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<FinalizedTransferTx>;
@@ -381,9 +375,9 @@ pub trait TransferTransactionMediator {
         &self,
         finalized_transaction: FinalizedTransferTx,
         mdtr_enc_keys: &EncryptionKeys,
-        sndr_account: &PubAccount,
-        sndr_init_balance: &EncryptedAmount,
-        rcvr_account: &PubAccount,
+        sender_account: &PubAccount,
+        sender_init_balance: &EncryptedAmount,
+        receiver_account: &PubAccount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         asset_id_hint: AssetId,
         rng: &mut R,
@@ -396,13 +390,12 @@ pub trait TransferTransactionVerifier {
     fn verify_transaction<R: RngCore + CryptoRng>(
         &self,
         justified_transaction: &JustifiedTransferTx,
-        sndr_account: &PubAccount,
-        sndr_init_balance: &EncryptedAmount,
-        rcvr_account: &PubAccount,
-        rcvr_init_balance: &EncryptedAmount,
+        sender_account: &PubAccount,
+        sender_init_balance: &EncryptedAmount,
+        receiver_account: &PubAccount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         rng: &mut R,
-    ) -> Fallible<(EncryptedAmount, EncryptedAmount)>;
+    ) -> Fallible<()>;
 }
 
 pub trait TransferTransactionAuditor {
@@ -411,8 +404,8 @@ pub trait TransferTransactionAuditor {
     fn audit_transaction(
         &self,
         justified_transaction: &JustifiedTransferTx,
-        sndr_account: &PubAccount,
-        rcvr_account: &PubAccount,
+        sender_account: &PubAccount,
+        receiver_account: &PubAccount,
         auditor_enc_keys: &(u32, EncryptionKeys),
     ) -> Fallible<()>;
 }
@@ -429,9 +422,9 @@ pub struct ReversedTransferTx {
 
 /// Holds the memo for reversal of the confidential transaction sent by the mediator.
 pub struct ReversedTransferTxMemo {
-    _enc_amount_using_rcvr: EncryptedAmount,
+    _enc_amount_using_receiver: EncryptedAmount,
     _enc_refreshed_amount: EncryptedAmount,
-    _enc_asset_id_using_rcvr: EncryptedAssetId,
+    _enc_asset_id_using_receiver: EncryptedAssetId,
 }
 
 pub trait ReversedTransferTransactionMediator {

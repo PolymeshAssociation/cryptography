@@ -28,12 +28,12 @@ pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
 ) -> (EncryptionPubKey, MediatorAccount) {
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
     let mediator_enc_key = EncryptionKeys {
-        pblc: mediator_elg_secret_key.get_public_key(),
-        scrt: mediator_elg_secret_key,
+        public: mediator_elg_secret_key.get_public_key(),
+        secret: mediator_elg_secret_key,
     };
 
     (
-        mediator_enc_key.pblc,
+        mediator_enc_key.public,
         MediatorAccount {
             encryption_key: mediator_enc_key,
         },
@@ -49,19 +49,18 @@ pub fn create_account_with_amount<R: RngCore + CryptoRng>(
 ) -> (Account, EncryptedAmount) {
     let secret_account = gen_keys(rng, asset_id);
 
-    let tx_id = 0;
-    let account_creator = AccountCreator {};
+    let account_creator = AccountCreator;
     let pub_account_tx = account_creator
-        .create(tx_id, &secret_account, valid_asset_ids, rng)
+        .create(&secret_account, valid_asset_ids, rng)
         .unwrap();
     let account = Account {
-        scrt: secret_account,
-        pblc: pub_account_tx.pub_account,
+        secret: secret_account,
+        public: pub_account_tx.pub_account,
     };
     let initial_balance = if initial_amount > 0 {
         issue_assets(
             rng,
-            &account.pblc,
+            &account.public,
             &pub_account_tx.initial_balance,
             initial_amount,
         )
@@ -77,13 +76,12 @@ pub fn create_account<R: RngCore + CryptoRng>(
     rng: &mut R,
     asset_id: &AssetId,
     valid_asset_ids: &Vec<Scalar>,
-    tx_id: u32,
 ) -> PubAccountTx {
     let secret_account = gen_keys(rng, asset_id);
 
-    let account_creator = AccountCreator {};
+    let account_creator = AccountCreator;
     account_creator
-        .create(tx_id, &secret_account, valid_asset_ids, rng)
+        .create(&secret_account, valid_asset_ids, rng)
         .unwrap()
 }
 
@@ -91,8 +89,8 @@ pub fn gen_keys<R: RngCore + CryptoRng>(rng: &mut R, asset_id: &AssetId) -> SecA
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
-        pblc: elg_pub,
-        scrt: elg_secret,
+        public: elg_pub,
+        secret: elg_secret,
     };
 
     let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));
