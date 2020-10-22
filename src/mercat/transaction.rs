@@ -172,8 +172,12 @@ impl TransferTransactionSender for CtxSender {
         )?;
 
         // Add the necessary payload for auditors.
-        let auditors_payload =
-            add_transaction_auditor(auditors_enc_pub_keys, &sender_enc_keys.public, &witness, rng)?;
+        let auditors_payload = add_transaction_auditor(
+            auditors_enc_pub_keys,
+            &sender_enc_keys.public,
+            &witness,
+            rng,
+        )?;
 
         Ok(InitializedTransferTx {
             amount_equal_cipher_proof,
@@ -773,8 +777,13 @@ mod tests {
             asset_id.clone(),
             &mut rng,
         );
-        let (pub_account, _enc_balance) =
-            mock_gen_account(receiver_enc_keys.public, asset_id.clone(), balance, &mut rng).unwrap();
+        let (pub_account, _enc_balance) = mock_gen_account(
+            receiver_enc_keys.public,
+            asset_id.clone(),
+            balance,
+            &mut rng,
+        )
+        .unwrap();
         let receiver_account = Account {
             public: pub_account,
             secret: SecAccount {
@@ -813,9 +822,14 @@ mod tests {
             &mut rng,
         );
         let receiver_account = Account {
-            public: mock_gen_account(receiver_enc_keys.public, asset_id.clone(), balance, &mut rng)
-                .unwrap()
-                .0,
+            public: mock_gen_account(
+                receiver_enc_keys.public,
+                asset_id.clone(),
+                balance,
+                &mut rng,
+            )
+            .unwrap()
+            .0,
             secret: SecAccount {
                 enc_keys: receiver_enc_keys,
                 asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
