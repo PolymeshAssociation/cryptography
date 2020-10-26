@@ -46,13 +46,13 @@ pub fn process_create_tx(
         &user_public_account_balance_file(&ticker),
     )?;
     let sender_account = Account {
-        scrt: load_object(
+        secret: load_object(
             db_dir.clone(),
             OFF_CHAIN_DIR,
             &sender,
             &user_secret_account_file(&ticker),
         )?,
-        pblc: sender_ordered_pub_account.pub_account,
+        public: sender_ordered_pub_account.pub_account,
     };
 
     let receiver_account: OrderedPubAccount = load_object(
@@ -98,7 +98,7 @@ pub fn process_create_tx(
         "------------> initiating transfer tx: {}, pending_balance: {}",
         tx_id,
         debug_decrypt(
-            sender_account.pblc.enc_asset_id,
+            sender_account.public.enc_asset_id,
             pending_balance.clone(),
             db_dir.clone()
         )?
@@ -131,15 +131,14 @@ pub fn process_create_tx(
     let create_tx_timer = Instant::now();
     let ctx_sender = CtxSender {};
     let pending_account = Account {
-        scrt: sender_account.scrt,
-        pblc: PubAccount {
-            enc_asset_id: sender_account.pblc.enc_asset_id,
-            owner_enc_pub_key: sender_account.pblc.owner_enc_pub_key,
+        secret: sender_account.secret,
+        public: PubAccount {
+            enc_asset_id: sender_account.public.enc_asset_id,
+            owner_enc_pub_key: sender_account.public.owner_enc_pub_key,
         },
     };
     let mut asset_tx = ctx_sender
         .create_transaction(
-            tx_id,
             &pending_account,
             &pending_balance,
             &receiver_account.pub_account,
@@ -161,9 +160,9 @@ pub fn process_create_tx(
         info!(
             "CLI log: tx-{}: Cheating by changing the sender's account id. Correct account id: {}",
             tx_id,
-            PrintableAccountId(pending_account.pblc.enc_asset_id.encode())
+            PrintableAccountId(pending_account.public.enc_asset_id.encode())
         );
-        asset_tx.memo.sndr_account_id += non_empty_account_id();
+        asset_tx.memo.sender_account_id += non_empty_account_id();
     }
 
     // Save the artifacts to file.
@@ -222,13 +221,13 @@ pub fn process_finalize_tx(
         &user_public_account_file(&ticker),
     )?;
     let receiver_account = Account {
-        scrt: load_object(
+        secret: load_object(
             db_dir.clone(),
             OFF_CHAIN_DIR,
             &receiver,
             &user_secret_account_file(&ticker),
         )?,
-        pblc: receiver_ordered_pub_account.pub_account,
+        public: receiver_ordered_pub_account.pub_account,
     };
 
     let instruction: OrderedTransferInstruction = load_object(
@@ -293,7 +292,7 @@ pub fn process_finalize_tx(
     let finalize_by_receiver_timer = Instant::now();
     let receiver = CtxReceiver {};
     let mut asset_tx = receiver
-        .finalize_transaction(tx_id, tx, receiver_account.clone(), amount, &mut rng)
+        .finalize_transaction(tx, receiver_account.clone(), amount, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     let ordering_state = OrderingState {
@@ -305,9 +304,9 @@ pub fn process_finalize_tx(
     if cheat && cheating_strategy == 1 {
         info!(
             "CLI log: tx-{}: Cheating by changing the receiver's account id. Correct account id: {}",
-            tx_id, PrintableAccountId(receiver_account.pblc.enc_asset_id.encode())
+            tx_id, PrintableAccountId(receiver_account.public.enc_asset_id.encode())
         );
-        asset_tx.init_data.memo.rcvr_account_id += non_empty_account_id();
+        asset_tx.init_data.memo.receiver_account_id += non_empty_account_id();
     }
 
     timing!(

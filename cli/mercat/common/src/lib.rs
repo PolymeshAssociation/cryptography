@@ -814,11 +814,11 @@ pub fn compute_enc_pending_balance(
             tx_id: _,
         } = core_tx
         {
-            pending_balance -= tx.memo.enc_amount_using_sndr;
-            let account_id = tx.memo.sndr_account_id;
+            pending_balance -= tx.memo.enc_amount_using_sender;
+            let account_id = tx.memo.sender_account_id;
             debug!(
                 "------> decremented by {}.",
-                debug_decrypt(account_id, tx.memo.enc_amount_using_sndr, db_dir.clone())?
+                debug_decrypt(account_id, tx.memo.enc_amount_using_sender, db_dir.clone())?
             );
         }
     }
@@ -963,18 +963,18 @@ fn debug_decrypt(
         &user_public_account_file(&ticker),
     )?;
     let account = Account {
-        scrt: load_object(
+        secret: load_object(
             db_dir.clone(),
             OFF_CHAIN_DIR,
             &user,
             &user_secret_account_file(&ticker),
         )?,
-        pblc: ordered_pub_account.pub_account,
+        public: ordered_pub_account.pub_account,
     };
     account
-        .scrt
+        .secret
         .enc_keys
-        .scrt
+        .secret
         .decrypt(&enc_balance)
         .map_err(|error| Error::LibraryError { error })
 }
@@ -992,14 +992,15 @@ pub fn debug_decrypt_account_balance(
         &user,
         &user_public_account_balance_file(&ticker),
     )?;
-    let scrt: SecAccount = load_object(
+    let secret: SecAccount = load_object(
         db_dir.clone(),
         OFF_CHAIN_DIR,
         &user,
         &user_secret_account_file(&ticker),
     )?;
-    scrt.enc_keys
-        .scrt
+    secret
+        .enc_keys
+        .secret
         .decrypt(&enc_balance)
         .map_err(|error| Error::LibraryError { error })
 }

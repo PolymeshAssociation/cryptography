@@ -37,9 +37,9 @@ pub fn process_create_account(
     let valid_asset_ids = get_asset_ids(db_dir.clone())?;
 
     let create_account_timer = Instant::now();
-    let account_creator = AccountCreator {};
+    let account_creator = AccountCreator;
     let mut account_tx = account_creator
-        .create(tx_id, &secret_account, &valid_asset_ids, &mut rng)
+        .create(&secret_account, &valid_asset_ids, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
     timing!("account.call_library", create_account_timer, Instant::now(), "tx_id" => tx_id.to_string());
     if cheat {
@@ -57,7 +57,7 @@ pub fn process_create_account(
                 let cheat_enc_asset_id = secret_account
                     .clone()
                     .enc_keys
-                    .pblc
+                    .public
                     .encrypt(&cheat_asset_id_witness);
                 account_tx.pub_account.enc_asset_id = EncryptedAssetId::from(cheat_enc_asset_id);
             }
@@ -116,8 +116,8 @@ fn create_secret_account<R: RngCore + CryptoRng>(
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
-        pblc: elg_pub.into(),
-        scrt: elg_secret.into(),
+        public: elg_pub.into(),
+        secret: elg_secret.into(),
     };
 
     let asset_id =

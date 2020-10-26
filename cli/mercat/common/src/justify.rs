@@ -26,12 +26,12 @@ fn generate_mediator_keys<R: RngCore + CryptoRng>(
 ) -> (EncryptionPubKey, MediatorAccount) {
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
     let mediator_enc_key = EncryptionKeys {
-        pblc: mediator_elg_secret_key.get_public_key().into(),
-        scrt: mediator_elg_secret_key.into(),
+        public: mediator_elg_secret_key.get_public_key().into(),
+        secret: mediator_elg_secret_key.into(),
     };
 
     (
-        mediator_enc_key.pblc,
+        mediator_enc_key.public,
         MediatorAccount {
             encryption_key: mediator_enc_key,
         },
@@ -173,7 +173,7 @@ pub fn justify_asset_transfer_transaction(
     )?;
 
     let asset_id = asset_id_from_ticker(&ticker).map_err(|error| Error::LibraryError { error })?;
-    let mut justified_tx = CtxMediator {}
+    let mut justified_tx = CtxMediator
         .justify_transaction(
             asset_tx.clone(),
             &mediator_account.encryption_key,
@@ -192,7 +192,7 @@ pub fn justify_asset_transfer_transaction(
             tx_id
         );
 
-        justified_tx.finalized_data.init_data.memo.sndr_account_id += non_empty_account_id();
+        justified_tx.finalized_data.init_data.memo.sender_account_id += non_empty_account_id();
     }
 
     timing!(

@@ -36,8 +36,8 @@ pub fn process_issue_asset(
         &user_public_account_file(&ticker),
     )?;
     let issuer_account = Account {
-        pblc: issuer_ordered_pub_account.pub_account,
-        scrt: load_object(
+        public: issuer_ordered_pub_account.pub_account,
+        secret: load_object(
             db_dir.clone(),
             OFF_CHAIN_DIR,
             &issuer,
@@ -90,9 +90,9 @@ pub fn process_issue_asset(
 
     // Initialize the asset issuance process.
     let issuance_init_timer = Instant::now();
-    let ctx_issuer = AssetIssuer {};
+    let ctx_issuer = AssetIssuer;
     let mut asset_tx = ctx_issuer
-        .initialize_asset_transaction(tx_id, &issuer_account, &[], amount, &mut rng)
+        .initialize_asset_transaction(&issuer_account, &[], amount, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     let ordering_state = OrderingState {
@@ -109,10 +109,10 @@ pub fn process_issue_asset(
         let cheat_asset_id_witness =
             CommitmentWitness::new(cheat_asset_id.clone().into(), Scalar::random(&mut rng));
         let cheat_enc_asset_id = issuer_account
-            .scrt
+            .secret
             .clone()
             .enc_keys
-            .pblc
+            .public
             .encrypt(&cheat_asset_id_witness);
 
         asset_tx.memo.enc_issued_amount = cheat_enc_asset_id;

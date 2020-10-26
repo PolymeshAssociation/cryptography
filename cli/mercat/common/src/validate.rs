@@ -59,7 +59,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                 tx_id,
                 mediator,
             } => {
-                let account_id = tx.finalized_data.init_data.memo.sndr_account_id;
+                let account_id = tx.finalized_data.init_data.memo.sender_account_id;
                 let (sender, ticker, _) = get_user_ticker_from(account_id, db_dir.clone())?;
                 let sender_ordered_pub_account: OrderedPubAccount = load_object(
                     db_dir.clone(),
@@ -286,7 +286,7 @@ pub fn validate_asset_issuance(
 
     let validate_issuance_transaction_timer = Instant::now();
 
-    let validator = AssetValidator {};
+    let validator = AssetValidator;
     // TODO: CRYP-165: This requires more work to handle properly. At the moment, I am ignoring the the balance returned.
     let _ = match validator
         .verify_asset_transaction(
@@ -422,25 +422,20 @@ fn process_transaction(
     sender_pub_account: PubAccount,
     receiver_pub_account: PubAccount,
     pending_balance: EncryptedAmount,
-) -> Result<(EncryptedAmount, EncryptedAmount), Error> {
+) -> Result<(), Error> {
     let mut rng = OsRng::default();
     let tx = JustifiedTransferTx::decode(&mut &instruction.data[..]).unwrap();
-    let validator = TransactionValidator {};
-    let (updated_sender_account, updated_receiver_account) = validator
+    let validator = TransactionValidator;
+    validator
         .verify_transaction(
             &tx,
             &sender_pub_account,
             &pending_balance,
             &receiver_pub_account,
-            // TODO: CRYP-165: This requires more work to handle properly. At the moment, I am ignoring the the balance returned.
-            //       and therefore the input pending balance is not important.
-            &pending_balance,
             &[],
             &mut rng,
         )
-        .map_err(|error| Error::LibraryError { error })?;
-
-    Ok((updated_sender_account, updated_receiver_account))
+        .map_err(|error| Error::LibraryError { error })
 }
 
 pub fn validate_transaction(
@@ -454,7 +449,7 @@ pub fn validate_transaction(
     // Load the transaction, mediator's account, and issuer's public account.
 
     let (sender, _, _) = match get_user_ticker_from(
-        tx.finalized_data.init_data.memo.sndr_account_id,
+        tx.finalized_data.init_data.memo.sender_account_id,
         db_dir.clone(),
     ) {
         Err(error) => {
@@ -468,7 +463,7 @@ pub fn validate_transaction(
     };
 
     let (receiver, ticker, _) = match get_user_ticker_from(
-        tx.finalized_data.init_data.memo.rcvr_account_id,
+        tx.finalized_data.init_data.memo.receiver_account_id,
         db_dir.clone(),
     ) {
         Err(error) => {
@@ -543,7 +538,7 @@ pub fn validate_transaction(
     );
 
     let validate_transaction_timer = Instant::now();
-    let (_, _) = match process_transaction(
+    let _result = match process_transaction(
         instruction.clone(),
         sender_ordered_pub_account.pub_account,
         receiver_ordered_pub_account.pub_account,
@@ -595,13 +590,13 @@ pub fn validate_transaction(
             user: sender,
             ticker: ticker.clone(),
             direction: Direction::Outgoing,
-            amount: Some(tx.finalized_data.init_data.memo.enc_amount_using_sndr),
+            amount: Some(tx.finalized_data.init_data.memo.enc_amount_using_sender),
         },
         ValidationResult {
             user: receiver,
             ticker: ticker.clone(),
             direction: Direction::Incoming,
-            amount: Some(tx.finalized_data.init_data.memo.enc_amount_using_rcvr),
+            amount: Some(tx.finalized_data.init_data.memo.enc_amount_using_receiver),
         },
     )
 }
