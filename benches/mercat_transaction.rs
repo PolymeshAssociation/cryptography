@@ -45,16 +45,14 @@ fn bench_transaction_sender(
         .map(|i| 10u32.pow(i))
         .zip(sender_balances)
         .collect();
-    let tx_id = 0;
 
     c.bench_function_over_inputs(
         &label,
         move |b, (amount, sender_balance)| {
             b.iter(|| {
-                let sender = CtxSender {};
+                let sender = CtxSender;
                 sender
                     .create_transaction(
-                        tx_id,
                         &sender_account_cloned,
                         sender_balance,
                         &rcvr_pub_account_cloned,
@@ -72,10 +70,9 @@ fn bench_transaction_sender(
     indexed_transaction
         .iter()
         .map(|(amount, sender_balance)| {
-            let ctx_sender = CtxSender {};
+            let ctx_sender = CtxSender;
             ctx_sender
                 .create_transaction(
-                    tx_id,
                     &sender_account.clone(),
                     sender_balance,
                     &rcvr_pub_account,
@@ -103,21 +100,14 @@ fn bench_transaction_receiver(
         .map(|i| 10u32.pow(i))
         .zip(transactions)
         .collect();
-    let tx_id = 0;
 
     c.bench_function_over_inputs(
         &label,
         move |b, (amount, tx)| {
             b.iter(|| {
-                let receiver = CtxReceiver {};
+                let receiver = CtxReceiver;
                 receiver
-                    .finalize_transaction(
-                        tx_id,
-                        tx.clone(),
-                        receiver_account.clone(),
-                        *amount,
-                        &mut rng,
-                    )
+                    .finalize_transaction(tx.clone(), receiver_account.clone(), *amount, &mut rng)
                     .unwrap()
             })
         },
@@ -127,10 +117,9 @@ fn bench_transaction_receiver(
     indexed_transaction
         .iter()
         .map(|(amount, tx)| {
-            let receiver = CtxReceiver {};
+            let receiver = CtxReceiver;
             receiver
                 .finalize_transaction(
-                    tx_id,
                     tx.clone(),
                     receiver_account_cloned.clone(),
                     *amount,
@@ -169,7 +158,7 @@ fn bench_transaction_mediator(
         &label,
         move |b, ((_label, sender_balance), tx)| {
             b.iter(|| {
-                let mediator = CtxMediator {};
+                let mediator = CtxMediator;
                 mediator
                     .justify_transaction(
                         tx.clone(),
@@ -190,7 +179,7 @@ fn bench_transaction_mediator(
     indexed_transaction
         .iter()
         .map(|((_, sender_balance), tx)| {
-            let mediator = CtxMediator {};
+            let mediator = CtxMediator;
             mediator
                 .justify_transaction(
                     tx.clone(),
@@ -212,7 +201,6 @@ fn bench_transaction_validator(
     sender_pub_account: PubAccount,
     sender_pub_balances: Vec<EncryptedAmount>,
     receiver_pub_account: PubAccount,
-    receiver_balance: EncryptedAmount,
     transactions: Vec<JustifiedTransferTx>,
 ) {
     let label = "MERCAT Transaction: Validator".to_string();
@@ -229,14 +217,13 @@ fn bench_transaction_validator(
         &label,
         move |b, ((_label, sender_balance), tx)| {
             b.iter(|| {
-                let validator = TransactionValidator {};
+                let validator = TransactionValidator;
                 validator
                     .verify_transaction(
                         &tx,
                         &sender_pub_account,
                         sender_balance,
                         &receiver_pub_account,
-                        &receiver_balance,
                         &[],
                         &mut rng,
                     )
@@ -256,10 +243,10 @@ fn bench_transaction(c: &mut Criterion) {
     let (enc_pub_key, private_account) = utility::generate_mediator_keys(&mut rng);
     let (sender_account, sender_init_balance) =
         utility::create_account_with_amount(&mut rng, &asset_id, &valid_asset_ids, 0);
-    let sender_pub_account = sender_account.pblc.clone();
+    let sender_pub_account = sender_account.public.clone();
 
     // Create a receiver account and load it with some assets.
-    let (receiver_account, receiver_balance) = utility::create_account_with_amount(
+    let (receiver_account, _receiver_balance) = utility::create_account_with_amount(
         &mut rng,
         &asset_id,
         &valid_asset_ids,
@@ -280,7 +267,7 @@ fn bench_transaction(c: &mut Criterion) {
         c,
         sender_account,
         sender_balances.clone(),
-        receiver_account.pblc.clone(),
+        receiver_account.public.clone(),
         enc_pub_key,
     );
 
@@ -294,7 +281,7 @@ fn bench_transaction(c: &mut Criterion) {
         private_account,
         sender_pub_account.clone(),
         sender_balances.clone(),
-        receiver_account.pblc.clone(),
+        receiver_account.public.clone(),
         finalized_transactions,
         asset_id,
     );
@@ -304,8 +291,7 @@ fn bench_transaction(c: &mut Criterion) {
         c,
         sender_pub_account,
         sender_balances,
-        receiver_account.pblc,
-        receiver_balance,
+        receiver_account.public,
         justified_transaction,
     );
 }

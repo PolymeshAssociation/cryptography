@@ -32,13 +32,12 @@ pub fn convert_asset_ids(valid_asset_ids: Vec<AssetId>) -> Vec<Scalar> {
         .collect::<Vec<_>>()
 }
 
-pub struct AccountCreator {}
+pub struct AccountCreator;
 
 impl AccountCreatorInitializer for AccountCreator {
     fn create<T: RngCore + CryptoRng>(
         &self,
-        tx_id: u32,
-        scrt: &SecAccount,
+        secret: &SecAccount,
         valid_asset_ids: &[Scalar],
         rng: &mut T,
     ) -> Fallible<PubAccountTx> {
@@ -46,12 +45,12 @@ impl AccountCreatorInitializer for AccountCreator {
         let gens = &PedersenGens::default();
 
         // Encrypt asset id and prove that the encrypted asset is wellformed
-        let enc_asset_id = scrt.enc_keys.pblc.encrypt(&scrt.asset_id_witness);
+        let enc_asset_id = secret.enc_keys.public.encrypt(&secret.asset_id_witness);
 
         let asset_wellformedness_proof = single_property_prover(
             WellformednessProverAwaitingChallenge {
-                pub_key: scrt.enc_keys.pblc,
-                w: Zeroizing::new(scrt.asset_id_witness.clone()),
+                pub_key: secret.enc_keys.public,
+                w: Zeroizing::new(secret.asset_id_witness.clone()),
                 pc_gens: &gens,
             },
             rng,
@@ -60,11 +59,11 @@ impl AccountCreatorInitializer for AccountCreator {
         // Encrypt the balance and prove that the encrypted balance is correct
         let balance: Balance = 0;
         let balance_witness = CommitmentWitness::new(balance.into(), balance_blinding);
-        let initial_balance = scrt.enc_keys.pblc.encrypt(&balance_witness);
+        let initial_balance = secret.enc_keys.public.encrypt(&balance_witness);
 
         let initial_balance_correctness_proof = single_property_prover(
             CorrectnessProverAwaitingChallenge {
-                pub_key: scrt.enc_keys.pblc,
+                pub_key: secret.enc_keys.public,
                 w: balance_witness,
                 pc_gens: &gens,
             },
@@ -73,11 +72,11 @@ impl AccountCreatorInitializer for AccountCreator {
 
         // Prove that the encrypted asset id that is stored as `enc_asset_id.y` is among the list of publicly known asset ids.
         let generators = &OooNProofGenerators::new(BASE, EXPONENT);
-        let asset_id = scrt.asset_id_witness.value();
+        let asset_id = secret.asset_id_witness.value();
         let asset_membership_proof = single_property_prover(
             MembershipProverAwaitingChallenge::new(
                 asset_id,
-                scrt.asset_id_witness.blinding(),
+                secret.asset_id_witness.blinding(),
                 generators,
                 valid_asset_ids,
                 BASE,
@@ -89,13 +88,12 @@ impl AccountCreatorInitializer for AccountCreator {
         Ok(PubAccountTx {
             pub_account: PubAccount {
                 enc_asset_id,
-                owner_enc_pub_key: scrt.enc_keys.pblc,
+                owner_enc_pub_key: secret.enc_keys.public,
             },
             initial_balance,
             asset_wellformedness_proof,
             asset_membership_proof,
             initial_balance_correctness_proof,
-            tx_id,
         })
     }
 }
@@ -115,7 +113,7 @@ pub fn withdraw(
 // -                                          Validator                                           -
 // ------------------------------------------------------------------------------------------------
 
-pub struct AccountValidator {}
+pub struct AccountValidator;
 
 impl AccountCreatorVerifier for AccountValidator {
     fn verify(&self, account: &PubAccountTx, valid_asset_ids: &[Scalar]) -> Fallible<()> {
@@ -180,36 +178,34 @@ mod tests {
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let enc_keys = EncryptionKeys {
-            pblc: elg_pub,
-            scrt: elg_secret,
+            public: elg_pub,
+            secret: elg_secret,
         };
         let asset_id = AssetId::from(1);
         let valid_asset_ids: Vec<AssetId> =
             vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
         let asset_id_witness = CommitmentWitness::from((asset_id.into(), &mut rng));
-        let scrt_account = SecAccount {
+        let secret_account = SecAccount {
             enc_keys,
             asset_id_witness,
         };
 
         // ----------------------- test
-
-        let tx_id = 0;
-        let account_creator = AccountCreator {};
-        let sndr_account_tx = account_creator
-            .create(tx_id, &scrt_account, &valid_asset_ids, &mut rng)
+        let account_creator = AccountCreator;
+        let sender_account_tx = account_creator
+            .create(&secret_account, &valid_asset_ids, &mut rng)
             .unwrap();
 
-        let decrypted_balance = scrt_account
+        let decrypted_balance = secret_account
             .enc_keys
-            .scrt
-            .decrypt(&sndr_account_tx.initial_balance)
+            .secret
+            .decrypt(&sender_account_tx.initial_balance)
             .unwrap();
         assert_eq!(decrypted_balance, 0);
 
-        let account_vldtr = AccountValidator {};
-        let result = account_vldtr.verify(&sndr_account_tx, &valid_asset_ids);
+        let account_vldtr = AccountValidator;
+        let result = account_vldtr.verify(&sender_account_tx, &valid_asset_ids);
         result.unwrap();
     }
 
@@ -221,59 +217,57 @@ mod tests {
         let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
         let elg_pub = elg_secret.get_public_key();
         let enc_keys = EncryptionKeys {
-            pblc: elg_pub,
-            scrt: elg_secret,
+            public: elg_pub,
+            secret: elg_secret,
         };
         let asset_id = AssetId::from(1);
         let valid_asset_ids: Vec<AssetId> =
             vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
         let valid_asset_ids = convert_asset_ids(valid_asset_ids);
         let asset_id_witness = CommitmentWitness::from((asset_id.into(), &mut rng));
-        let scrt_account = SecAccount {
+        let secret_account = SecAccount {
             enc_keys,
             asset_id_witness,
         };
 
         // ----------------------- test
-
-        let tx_id = 0;
-        let account_creator = AccountCreator {};
+        let account_creator = AccountCreator;
         let pub_account_tx = account_creator
-            .create(tx_id, &scrt_account, &valid_asset_ids, &mut rng)
+            .create(&secret_account, &valid_asset_ids, &mut rng)
             .unwrap();
 
-        let balance = scrt_account
+        let balance = secret_account
             .enc_keys
-            .scrt
+            .secret
             .decrypt(&pub_account_tx.initial_balance)
             .unwrap();
         assert_eq!(balance, 0);
 
         let ten: Balance = 10;
-        let ten = scrt_account
+        let ten = secret_account
             .enc_keys
-            .pblc
+            .public
             .encrypt_value(ten.into(), &mut rng)
             .1;
         let five: Balance = 5;
-        let five = scrt_account
+        let five = secret_account
             .enc_keys
-            .pblc
+            .public
             .encrypt_value(five.into(), &mut rng)
             .1;
 
         let new_enc_balance = deposit(&pub_account_tx.initial_balance, &ten);
-        let balance = scrt_account
+        let balance = secret_account
             .enc_keys
-            .scrt
+            .secret
             .decrypt(&new_enc_balance)
             .unwrap();
         assert_eq!(balance, 10);
 
         let new_enc_balance = withdraw(&new_enc_balance, &five);
-        let balance = scrt_account
+        let balance = secret_account
             .enc_keys
-            .scrt
+            .secret
             .decrypt(&new_enc_balance)
             .unwrap();
         assert_eq!(balance, 5);

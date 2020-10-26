@@ -22,7 +22,6 @@ fn bench_account_creation(c: &mut Criterion) {
     let valid_asset_ids_cloned = valid_asset_ids.clone();
 
     let mut rng = thread_rng();
-    let tx_id = 0;
 
     let label = "MERCAT Transaction: Creator".to_string();
     let secret_accounts: Vec<(String, SecAccount)> = ASSET_IDS
@@ -38,9 +37,9 @@ fn bench_account_creation(c: &mut Criterion) {
         &label,
         move |b, (_label, secret_account)| {
             b.iter(|| {
-                let account_creator = AccountCreator {};
+                let account_creator = AccountCreator;
                 account_creator
-                    .create(tx_id, &secret_account, &valid_asset_ids, &mut rng)
+                    .create(&secret_account, &valid_asset_ids, &mut rng)
                     .unwrap();
             })
         },
@@ -52,12 +51,7 @@ fn bench_account_creation(c: &mut Criterion) {
         .map(|&id| {
             (
                 format!("asset_id: {:?}", id),
-                utility::create_account(
-                    &mut rng,
-                    &AssetId::from(id),
-                    &valid_asset_ids_cloned,
-                    tx_id,
-                ),
+                utility::create_account(&mut rng, &AssetId::from(id), &valid_asset_ids_cloned),
             )
         })
         .collect();
@@ -67,7 +61,7 @@ fn bench_account_creation(c: &mut Criterion) {
         &label,
         move |b, (_label, account)| {
             b.iter(|| {
-                let validator = AccountValidator {};
+                let validator = AccountValidator;
                 validator.verify(account, &valid_asset_ids_cloned).unwrap()
             })
         },

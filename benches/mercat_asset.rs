@@ -30,16 +30,14 @@ fn bench_transaction_issuer(
     let label = "MERCAT Transaction: Issuer".to_string();
     let mut rng = thread_rng();
     let issuer_account_cloned = issuer_account.clone();
-    let tx_id = 0;
 
     c.bench_function_over_inputs(
         &label,
         move |b, &amount| {
             b.iter(|| {
-                let issuer = AssetIssuer {};
+                let issuer = AssetIssuer;
                 issuer
                     .initialize_asset_transaction(
-                        tx_id,
                         &issuer_account_cloned.clone(),
                         &[],
                         amount,
@@ -54,9 +52,9 @@ fn bench_transaction_issuer(
     amounts
         .iter()
         .map(|&amount| {
-            let issuer = AssetIssuer {};
+            let issuer = AssetIssuer;
             issuer
-                .initialize_asset_transaction(tx_id, &issuer_account.clone(), &[], amount, &mut rng)
+                .initialize_asset_transaction(&issuer_account.clone(), &[], amount, &mut rng)
                 .unwrap()
         })
         .collect()
@@ -83,7 +81,7 @@ fn bench_transaction_validator(
         &label,
         move |b, ((_label, amount), tx)| {
             b.iter(|| {
-                let validator = AssetValidator {};
+                let validator = AssetValidator;
                 validator
                     .verify_asset_transaction(
                         *amount,
@@ -116,7 +114,7 @@ fn bench_asset_transaction(c: &mut Criterion) {
     let transactions = bench_transaction_issuer(c, issuer_account.clone(), issued_amounts);
 
     // Validation
-    bench_transaction_validator(c, transactions, issuer_account.pblc, issuer_init_balance);
+    bench_transaction_validator(c, transactions, issuer_account.public, issuer_init_balance);
 }
 
 criterion_group! {
