@@ -352,6 +352,7 @@ impl Transfer {
                 mediator.clone(),
                 ticker.clone(),
                 seed.clone(),
+                false, // Do not print the transaction data to stdout.
                 tx_id,
                 reject,
                 cheat,

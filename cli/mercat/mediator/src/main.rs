@@ -39,6 +39,7 @@ fn main() {
             cfg.mediator,
             cfg.ticker,
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),
+            cfg.stdout,
             cfg.tx_id,
             cfg.reject,
             cfg.cheat,

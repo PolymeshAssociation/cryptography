@@ -185,6 +185,13 @@ pub struct JustifyTransferInfo {
     /// Instructs the CLI to act as a cheater.
     #[structopt(long, help = "Instructs the CLI to act as a cheater.")]
     pub cheat: bool,
+
+    /// Instructs the CLI to print the transaction data in stdout.
+    #[structopt(
+        long,
+        help = "Instructs the CLI to print the transaction data in stdout."
+    )]
+    pub stdout: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
@@ -243,6 +250,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 reject: cfg.reject,
                 save_config: cfg.save_config.clone(),
                 cheat: cfg.cheat,
+                stdout: cfg.stdout,
             };
 
             info!(

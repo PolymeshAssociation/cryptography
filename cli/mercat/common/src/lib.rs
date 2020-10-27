@@ -193,7 +193,7 @@ pub struct OrderingState {
 }
 
 impl OrderingState {
-    fn new(tx_id: u32) -> Self {
+    pub fn new(tx_id: u32) -> Self {
         Self {
             last_processed_tx_counter: None,
             last_pending_tx_counter: 0,
@@ -309,7 +309,7 @@ pub fn non_empty_account_id() -> EncryptedAssetId {
 /// Parses the transaction file name and returns: (tx_id, user_name, state, the_input_file_path).
 #[inline]
 pub fn parse_tx_name(tx_file_path: String) -> Result<(u32, String, String, String), Error> {
-    let re = Regex::new(r"^tx_([0-9]+)_([a-z]+)_([a-zA-Z-#]+).json$").map_err(|_| {
+    let re = Regex::new(r"^tx_([0-9]+)_([a-z]+)_([a-zA-Z-#0-9]+).json$").map_err(|_| {
         Error::RegexError {
             reason: String::from("Failed to compile the transaction file name regex"),
         }
@@ -1000,6 +1000,28 @@ pub fn debug_decrypt_account_balance(
     )?;
     secret
         .enc_keys
+        .secret
+        .decrypt(&enc_balance)
+        .map_err(|error| Error::LibraryError { error })
+}
+
+/// Use only for debugging purposes.
+#[inline]
+pub fn debug_decrypt_base64_account_balance(
+    user: String,
+    encrypted_value: String,
+    ticker: String,
+    db_dir: PathBuf,
+) -> Result<u32, Error> {
+    let mut data: &[u8] = &base64::decode(encrypted_value).unwrap();
+    let enc_balance = EncryptedAmount::decode(&mut data).unwrap();
+    let scrt: SecAccount = load_object(
+        db_dir.clone(),
+        OFF_CHAIN_DIR,
+        &user,
+        &user_secret_account_file(&ticker),
+    )?;
+    scrt.enc_keys
         .secret
         .decrypt(&enc_balance)
         .map_err(|error| Error::LibraryError { error })

@@ -98,7 +98,7 @@ pub fn process_create_account(
         info!(
             "CLI log: tx-{}: Transaction as base64:\n{}\n",
             tx_id,
-            base64::encode(instruction.encode())
+            base64::encode(instruction.account_tx.encode())
         );
     }
 

@@ -186,7 +186,7 @@ pub fn process_create_tx(
         info!(
             "CLI log: tx-{}: Transaction as base64:\n{}\n",
             tx_id,
-            base64::encode(instruction.encode())
+            base64::encode(asset_tx.encode())
         );
     }
 
@@ -337,7 +337,7 @@ pub fn process_finalize_tx(
         info!(
             "CLI log: tx-{}: Transaction as base64:\n{}\n",
             tx_id,
-            base64::encode(instruction.encode())
+            base64::encode(asset_tx.encode())
         );
     }
 

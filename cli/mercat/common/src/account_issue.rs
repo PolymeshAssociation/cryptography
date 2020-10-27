@@ -145,7 +145,7 @@ pub fn process_issue_asset(
         info!(
             "CLI log: tx-{}: Transaction as base64:\n{}\n",
             tx_id,
-            base64::encode(instruction.encode())
+            base64::encode(asset_tx.encode())
         );
     }
 

@@ -5,6 +5,7 @@ use crate::{
     OrderedTransferInstruction, TransferInstruction, COMMON_OBJECTS_DIR,
     MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
 };
+use base64;
 use codec::{Decode, Encode};
 use cryptography::{
     asset_id_from_ticker,
@@ -68,6 +69,10 @@ pub fn process_create_mediator(seed: String, db_dir: PathBuf, user: String) -> R
         SECRET_ACCOUNT_FILE,
         &private_account,
     )?;
+    info!(
+        "CLI log: Mediator keys as base64:\n{}\n",
+        base64::encode(public_account.encode())
+    );
     timing!(
         "mediator.save_keys",
         mediator_save_keys_timer,
@@ -85,6 +90,7 @@ pub fn justify_asset_transfer_transaction(
     mediator: String,
     ticker: String,
     seed: String,
+    stdout: bool,
     tx_id: u32,
     reject: bool,
     cheat: bool,
@@ -219,6 +225,13 @@ pub fn justify_asset_transfer_transaction(
             &confidential_transaction_file(tx_id, &sender, rejected_state),
             &next_instruction,
         )?;
+        if stdout {
+            info!(
+                "CLI log: tx-{}: Transaction as base64:\n{}\n",
+                tx_id,
+                base64::encode(asset_tx.encode())
+            );
+        }
     } else {
         let new_state = TransferTxState::Justification(TxSubstate::Started);
         // Save the updated_issuer_account, and the justified transaction.
@@ -234,6 +247,13 @@ pub fn justify_asset_transfer_transaction(
             &confidential_transaction_file(tx_id, &mediator, new_state),
             &next_instruction,
         )?;
+        if stdout {
+            info!(
+                "CLI log: tx-{}: Transaction as base64:\n{}\n",
+                tx_id,
+                base64::encode(justified_tx.encode())
+            );
+        }
     }
 
     timing!(

@@ -10,4 +10,5 @@ members = [
 	"mercat/common",
 	"mercat/mediator",
 	"mercat/validator",
+	"mercat/interactive",
 ]
