@@ -32,6 +32,11 @@ use std::path::PathBuf;
 
 const TX_ID: u32 = 1;
 
+enum Op {
+    Add,
+    Subtract,
+}
+
 fn main() {
     env_logger::init();
     info!("Starting the program.");
@@ -108,6 +113,11 @@ fn main() {
                 cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap()
             )
             .unwrap()
+        ),
+        CLI::Add(cfg) => info!("Result: {}", add_subtract(Op::Add, cfg.first, cfg.second,)),
+        CLI::Subtract(cfg) => info!(
+            "Result: {}",
+            add_subtract(Op::Subtract, cfg.first, cfg.second,)
         ),
     };
     info!("The program finished successfully.");
@@ -379,4 +389,16 @@ pub fn justify_asset_transfer_transaction(
     );
 
     Ok(())
+}
+
+fn add_subtract(op: Op, first: String, second: String) -> String {
+    let mut data: &[u8] = &base64::decode(first).unwrap();
+    let first = EncryptedAmount::decode(&mut data).unwrap();
+    let mut data: &[u8] = &base64::decode(second).unwrap();
+    let second = EncryptedAmount::decode(&mut data).unwrap();
+
+    match op {
+        Op::Add => base64::encode((first + second).encode()),
+        Op::Subtract => base64::encode((first - second).encode()),
+    }
 }

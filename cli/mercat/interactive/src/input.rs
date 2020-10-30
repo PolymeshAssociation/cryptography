@@ -308,6 +308,17 @@ pub struct DecryptAccountInfo {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
+pub struct OpsInfo {
+    /// The first encrypted value.
+    #[structopt(short, long, help = "The first encrypted value (base64 encoded)")]
+    pub first: String,
+
+    /// The second encrypted value.
+    #[structopt(short, long, help = "The second encrypted value (base64 encoded)")]
+    pub second: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub enum CLI {
     CreateUserAccount(CreateUserAccountInfo),
     CreateMediatorAccount(CreateMediatorAccountInfo),
@@ -316,6 +327,8 @@ pub enum CLI {
     FinalizeTransaction(FinalizeTransactionInfo),
     JustifyTransaction(JustifyTransferInfo),
     Decrypt(DecryptAccountInfo),
+    Add(OpsInfo),
+    Subtract(OpsInfo),
 }
 
 pub fn parse_input() -> CLI {
@@ -471,6 +484,12 @@ pub fn parse_input() -> CLI {
             );
 
             return CLI::Decrypt(cfg);
+        }
+        CLI::Add(cfg) => {
+            return CLI::Add(cfg);
+        }
+        CLI::Subtract(cfg) => {
+            return CLI::Subtract(cfg);
         }
     }
 }
