@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
-use sp_std::{mem, cmp::min, convert::TryFrom, prelude::*};
+use sp_std::{cmp::min, convert::TryFrom, mem, prelude::*};
 
 pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
@@ -67,7 +67,7 @@ impl Decode for MembershipProofInitialMessage {
         Ok(MembershipProofInitialMessage {
             ooon_proof_initial_message,
             secret_element_comm,
-            elements_set_size
+            elements_set_size,
         })
     }
 }
