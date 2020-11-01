@@ -386,7 +386,6 @@ pub trait TransferTransactionMediator {
 
 pub trait TransferTransactionVerifier {
     /// Verify the initialized, finalized, and justified transactions.
-    /// Returns the updated sender and receiver accounts.
     fn verify_transaction<R: RngCore + CryptoRng>(
         &self,
         justified_transaction: &JustifiedTransferTx,

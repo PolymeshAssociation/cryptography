@@ -1,7 +1,7 @@
 //! Membership proofs are zero-knowledge proofs systems which enables to efficiently prove
 //! that the committed secret belongs to the given set of public elements without
 //! revealing any other information about the secret.
-//! This implementation is based on one-out-of-many proof construction desribed in the following paper
+//! This implementation is based on one-out-of-many proof construction described in the following paper
 //! <https://eprint.iacr.org/2015/643.pdf>
 
 use crate::asset_proofs::{
@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
-use sp_std::{cmp::min, convert::TryFrom, prelude::*};
+use sp_std::{mem, cmp::min, convert::TryFrom, prelude::*};
 
 pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
@@ -38,12 +38,13 @@ const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallen
 pub struct MembershipProofInitialMessage {
     ooon_proof_initial_message: OOONProofInitialMessage,
     secret_element_comm: RistrettoPoint,
+    elements_set_size: u32,
 }
 
 impl Encode for MembershipProofInitialMessage {
     #[inline]
     fn size_hint(&self) -> usize {
-        32usize + self.ooon_proof_initial_message.size_hint()
+        32usize + mem::size_of::<u32>() + self.ooon_proof_initial_message.size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -51,13 +52,14 @@ impl Encode for MembershipProofInitialMessage {
 
         self.ooon_proof_initial_message.encode_to(dest);
         secret_element_comm.as_bytes().encode_to(dest);
+        self.elements_set_size.encode_to(dest);
     }
 }
 
 impl Decode for MembershipProofInitialMessage {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (ooon_proof_initial_message, secret) =
-            <(OOONProofInitialMessage, [u8; 32])>::decode(input)?;
+        let (ooon_proof_initial_message, secret, elements_set_size) =
+            <(OOONProofInitialMessage, [u8; 32], u32)>::decode(input)?;
         let secret_element_comm = CompressedRistretto(secret).decompress().ok_or_else(|| {
             CodecError::from("MembershipProofInitialMessage::secret_element_comm is invalid")
         })?;
@@ -65,6 +67,7 @@ impl Decode for MembershipProofInitialMessage {
         Ok(MembershipProofInitialMessage {
             ooon_proof_initial_message,
             secret_element_comm,
+            elements_set_size
         })
     }
 }
@@ -107,7 +110,7 @@ pub struct MembershipProverAwaitingChallenge<'a> {
     pub generators: &'a OooNProofGenerators,
     /// The set of elements which the committed secret element belongs to.
     pub elements_set: &'a [Scalar],
-    /// Indicates the index of the secret eleent in the elements set.
+    /// Indicates the index of the secret element in the elements set.
     pub secret_position: u32,
     /// The element set size is represented as a power of the given base.
     pub base: u32,
@@ -248,6 +251,7 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             MembershipProver { ooon_prover },
             MembershipProofInitialMessage {
                 ooon_proof_initial_message,
+                elements_set_size: initial_size,
                 secret_element_comm: secret_commitment,
             },
         )
@@ -285,7 +289,9 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         let exp = u32::try_from(m).map_err(|_| ErrorKind::InvalidExponentParameter)?;
         let size = initial_message.ooon_proof_initial_message.n.pow(exp) as usize;
 
-        let initial_size = min(self.elements_set.len(), size);
+        let element_set_size = initial_message.elements_set_size as usize;
+
+        let initial_size = min(element_set_size, size);
         ensure!(initial_size != 0, ErrorKind::EmptyElementsSet);
         let b_comm = initial_message
             .ooon_proof_initial_message
@@ -341,14 +347,14 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
             sum1 += p_i;
             sum2 += self.elements_set[i] * p_i;
         }
-        // Membership proof require the list of asset ids to have a certain lenght `size`.
-        // In case of the list actual size is smaller than the required size. we should pad the list
+        // Membership proof require the list of asset ids to have a certain length `size`.
+        // In case of the list actual size is smaller than the required size. We should pad the list
         // with the last element until the size of the resulted set will be equal to `size`.
         // This padding operation can be directly incorporated into the computation
         // of the aggregated value `sum2`.
 
         // The code snippet within the lines 316-321 duplicates the snippet from 299-304 and obviously we
-        // could avoid of this by simply checking if `i > initial_size` during the `sum2` aggregation,
+        // could have avoided this by simply checking if `i > initial_size` during the `sum2` aggregation,
         // but that would require making the `if` checks for all `i in initial_size..size`
         // which would be more inefficient approach.
 
