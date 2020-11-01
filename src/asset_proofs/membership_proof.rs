@@ -289,7 +289,13 @@ impl<'a> AssetProofVerifier for MembershipProofVerifier<'a> {
         let exp = u32::try_from(m).map_err(|_| ErrorKind::InvalidExponentParameter)?;
         let size = initial_message.ooon_proof_initial_message.n.pow(exp) as usize;
 
-        let element_set_size = initial_message.elements_set_size as usize;
+        // Use the minimum of the prover and verifier's elements set size.
+        // This way if on the verifier side, new elements are appended to the elements
+        // set, the proofs made with the old element set will still verify.
+        let element_set_size = min(
+            initial_message.elements_set_size as usize,
+            self.elements_set.len(),
+        );
 
         let initial_size = min(element_set_size, size);
         ensure!(initial_size != 0, ErrorKind::EmptyElementsSet);
