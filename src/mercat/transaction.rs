@@ -151,7 +151,8 @@ impl TransferTransactionSender for CtxSender {
         let amount_witness_blinding_for_mediator = Scalar::random(rng);
         let amount_witness_for_mediator =
             CommitmentWitness::new(amount.into(), amount_witness_blinding_for_mediator);
-        let enc_amount_for_mediator = mediator_pub_key.const_time_encrypt(&amount_witness_for_mediator, rng);
+        let enc_amount_for_mediator =
+            mediator_pub_key.const_time_encrypt(&amount_witness_for_mediator, rng);
 
         let asset_id_correctness_proof = single_property_prover(
             CorrectnessProverAwaitingChallenge {
