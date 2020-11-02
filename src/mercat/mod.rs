@@ -304,8 +304,8 @@ pub struct TransferTxMemo {
     pub refreshed_enc_balance: EncryptedAmount,
     pub refreshed_enc_asset_id: EncryptedAssetId,
     pub enc_asset_id_using_receiver: EncryptedAssetId,
-    pub enc_asset_id_for_mdtr: EncryptedAssetId,
-    pub enc_amount_for_mdtr: EncryptedAmountWithHint,
+    pub enc_asset_id_for_mediator: EncryptedAssetId,
+    pub enc_amount_for_mediator: EncryptedAmountWithHint,
 }
 
 /// Holds the proofs and memo of the confidential transaction sent by the sender.
@@ -349,7 +349,7 @@ pub trait TransferTransactionSender {
         sender_account: &Account,
         sender_init_balance: &EncryptedAmount,
         receiver_pub_account: &PubAccount,
-        mdtr_pub_key: &EncryptionPubKey,
+        mediator_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
@@ -374,7 +374,7 @@ pub trait TransferTransactionMediator {
     fn justify_transaction<R: RngCore + CryptoRng>(
         &self,
         finalized_transaction: FinalizedTransferTx,
-        mdtr_enc_keys: &EncryptionKeys,
+        mediator_enc_keys: &EncryptionKeys,
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
@@ -432,7 +432,7 @@ pub trait ReversedTransferTransactionMediator {
     fn create(
         &self,
         transaction_final_data: FinalizedTransferTx,
-        mdtr_enc_keys: EncryptionSecKey,
+        mediator_enc_keys: EncryptionSecKey,
         state: TransferTxState,
     ) -> Fallible<(ReversedTransferTx, TransferTxState)>;
 }
