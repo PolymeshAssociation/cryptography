@@ -45,7 +45,7 @@ impl TransferTransactionSender for CtxSender {
         sender_account: &Account,
         sender_init_balance: &EncryptedAmount,
         receiver_pub_account: &PubAccount,
-        mdtr_pub_key: &EncryptionPubKey,
+        mediator_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
@@ -143,15 +143,16 @@ impl TransferTransactionSender for CtxSender {
         )?;
 
         // Prepare the correctness proofs for the mediator.
-        let asset_id_witness_blinding_for_mdtr = Scalar::random(rng);
-        let asset_id_witness_for_mdtr =
-            CommitmentWitness::new(asset_id, asset_id_witness_blinding_for_mdtr);
-        let enc_asset_id_for_mdtr = mdtr_pub_key.encrypt(&asset_id_witness_for_mdtr);
+        let asset_id_witness_blinding_for_mediator = Scalar::random(rng);
+        let asset_id_witness_for_mediator =
+            CommitmentWitness::new(asset_id, asset_id_witness_blinding_for_mediator);
+        let enc_asset_id_for_mediator = mediator_pub_key.encrypt(&asset_id_witness_for_mediator);
 
-        let amount_witness_blinding_for_mdtr = Scalar::random(rng);
-        let amount_witness_for_mdtr =
-            CommitmentWitness::new(amount.into(), amount_witness_blinding_for_mdtr);
-        let enc_amount_for_mdtr = mdtr_pub_key.const_time_encrypt(&amount_witness_for_mdtr, rng);
+        let amount_witness_blinding_for_mediator = Scalar::random(rng);
+        let amount_witness_for_mediator =
+            CommitmentWitness::new(amount.into(), amount_witness_blinding_for_mediator);
+        let enc_amount_for_mediator =
+            mediator_pub_key.const_time_encrypt(&amount_witness_for_mediator, rng);
 
         let asset_id_correctness_proof = single_property_prover(
             CorrectnessProverAwaitingChallenge {
@@ -196,8 +197,8 @@ impl TransferTransactionSender for CtxSender {
                 refreshed_enc_balance,
                 refreshed_enc_asset_id,
                 enc_asset_id_using_receiver,
-                enc_asset_id_for_mdtr,
-                enc_amount_for_mdtr,
+                enc_asset_id_for_mediator,
+                enc_amount_for_mediator,
             },
             auditors_payload,
         })
@@ -306,7 +307,7 @@ impl TransferTransactionMediator for CtxMediator {
     fn justify_transaction<R: RngCore + CryptoRng>(
         &self,
         finalized_transaction: FinalizedTransferTx,
-        mdtr_enc_keys: &EncryptionKeys,
+        mediator_enc_keys: &EncryptionKeys,
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
@@ -333,9 +334,9 @@ impl TransferTransactionMediator for CtxMediator {
         let tx_data = &init_tx_data;
 
         // Verify that the encrypted amount is correct.
-        let amount = mdtr_enc_keys
+        let amount = mediator_enc_keys
             .secret
-            .const_time_decrypt(&tx_data.memo.enc_amount_for_mdtr)?;
+            .const_time_decrypt(&tx_data.memo.enc_amount_for_mediator)?;
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),
@@ -347,8 +348,8 @@ impl TransferTransactionMediator for CtxMediator {
         )?;
 
         // Verify that the encrypted asset_id is correct.
-        mdtr_enc_keys.secret.verify(
-            &tx_data.memo.enc_asset_id_for_mdtr,
+        mediator_enc_keys.secret.verify(
+            &tx_data.memo.enc_asset_id_for_mediator,
             &asset_id_hint.clone().into(),
         )?;
 
@@ -714,8 +715,8 @@ mod tests {
             refreshed_enc_balance: EncryptedAmount::default(),
             refreshed_enc_asset_id: EncryptedAssetId::default(),
             enc_asset_id_using_receiver,
-            enc_asset_id_for_mdtr: EncryptedAssetId::default(),
-            enc_amount_for_mdtr: EncryptedAmountWithHint::default(),
+            enc_asset_id_for_mediator: EncryptedAssetId::default(),
+            enc_amount_for_mediator: EncryptedAmountWithHint::default(),
         }
     }
 
@@ -856,7 +857,7 @@ mod tests {
     fn test_ctx_create_finalize_validate_success() {
         let sender = CtxSender;
         let receiver = CtxReceiver;
-        let mdtr = CtxMediator;
+        let mediator = CtxMediator;
         let tx_validator = TransactionValidator;
         let asset_id = AssetId::from(20);
         let sender_balance = 40;
@@ -869,7 +870,7 @@ mod tests {
 
         let receiver_enc_keys = mock_gen_enc_key_pair(12u8);
 
-        let mdtr_enc_keys = mock_gen_enc_key_pair(14u8);
+        let mediator_enc_keys = mock_gen_enc_key_pair(14u8);
 
         let (receiver_pub_account, receiver_init_balance) = mock_gen_account(
             receiver_enc_keys.public,
@@ -906,7 +907,7 @@ mod tests {
             &sender_account,
             &sender_init_balance,
             &receiver_account.public,
-            &mdtr_enc_keys.public,
+            &mediator_enc_keys.public,
             &[],
             amount,
             &mut rng,
@@ -923,9 +924,9 @@ mod tests {
         let ctx_finalized_data = result.unwrap();
 
         // Justify the transaction
-        let result = mdtr.justify_transaction(
+        let result = mediator.justify_transaction(
             ctx_finalized_data,
-            &mdtr_enc_keys,
+            &mediator_enc_keys,
             &sender_account.public,
             &sender_init_balance,
             &receiver_account.public,
@@ -1015,7 +1016,7 @@ mod tests {
     ) {
         let sender = CtxSender;
         let receiver = CtxReceiver;
-        let mdtr = CtxMediator;
+        let mediator = CtxMediator;
         let validator = TransactionValidator;
         let asset_id = AssetId::from(20);
         let sender_balance = 500;
@@ -1024,7 +1025,7 @@ mod tests {
 
         let mut rng = StdRng::from_seed([19u8; 32]);
 
-        let mdtr_enc_keys = mock_gen_enc_key_pair(140u8);
+        let mediator_enc_keys = mock_gen_enc_key_pair(140u8);
 
         let (receiver_account, receiver_init_balance) =
             account_create_helper([18u8; 32], 120u8, receiver_balance, asset_id.clone());
@@ -1038,7 +1039,7 @@ mod tests {
                 &sender_account,
                 &sender_init_balance,
                 &receiver_account.public,
-                &mdtr_enc_keys.public,
+                &mediator_enc_keys.public,
                 sender_auditor_list,
                 amount,
                 &mut rng,
@@ -1051,9 +1052,9 @@ mod tests {
             .unwrap();
 
         // Justify the transaction
-        let result = mdtr.justify_transaction(
+        let result = mediator.justify_transaction(
             ctx_final,
-            &mdtr_enc_keys,
+            &mediator_enc_keys,
             &sender_account.public,
             &sender_init_balance,
             &receiver_account.public,

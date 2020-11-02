@@ -32,7 +32,7 @@ fn bench_transaction_sender(
     sender_account: Account,
     sender_balances: Vec<EncryptedAmount>,
     rcvr_pub_account: PubAccount,
-    mdtr_pub_key: EncryptionPubKey,
+    mediator_pub_key: EncryptionPubKey,
 ) -> Vec<InitializedTransferTx> {
     let label = "MERCAT Transaction: Sender".to_string();
     let mut rng = thread_rng();
@@ -56,7 +56,7 @@ fn bench_transaction_sender(
                         &sender_account_cloned,
                         sender_balance,
                         &rcvr_pub_account_cloned,
-                        &mdtr_pub_key.clone(),
+                        &mediator_pub_key.clone(),
                         &[],
                         *amount,
                         &mut rng,
@@ -76,7 +76,7 @@ fn bench_transaction_sender(
                     &sender_account.clone(),
                     sender_balance,
                     &rcvr_pub_account,
-                    &mdtr_pub_key.clone(),
+                    &mediator_pub_key.clone(),
                     &[],
                     *amount,
                     &mut rng,
