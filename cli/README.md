@@ -1,6 +1,7 @@
 # crypto-framework
 
-This repository contains the CLI and test harness around the [Polymesh Cryptograph library][cryptography].
+This repository contains the CLI and test harness around the
+[Polymesh Cryptograph library][cryptography].
 
 The repository has following sections:
 - CLI for claim proofs library: see [cil][cil]
@@ -12,6 +13,7 @@ The repository has following sections:
 Install rust!
 
 Install the nightly version of rust and WASM toolchain.
+
 ```bash
 # In the root directory
 rustup toolchain install nightly
@@ -21,31 +23,29 @@ rustup toolchain install nightly
 cd cryptography
 rustup target add wasm32-unknown-unknown --toolchain nightly
 ```
-Fetch the cryptography submodule.
 
-```bash
-git submodule update --init
-```
-
-If you use a different command to install a specific nightly version, use the same format for adding WASM.
-
+If you use a different command to install a specific nightly version, use the same format for
+adding WASM.
 
 To run the library's unit tests as well has the test harness, run
+
+```bash
+cargo +nightly test --release -- --nocapture
+```
+
+For a more verbose test output, run
+
 ```bash
 RUST_LOG=info cargo +nightly  test --release
 ```
 
 To build all the CLIs in mercat and cil, run
-```bash
-cargo +nightly build
-```
 
-To run the unit tests:
-```
-cargo +nightly test -- --nocapture
+```bash
+cargo +nightly build --release
 ```
 
 [cryptography]: https://github.com/PolymathNetwork/cryptography
-[cil]: https://github.com/PolymathNetwork/crypto-framework/tree/master/cil
-[mercat]: https://github.com/PolymathNetwork/crypto-framework/tree/master/mercat
-[harness]: https://github.com/PolymathNetwork/crypto-framework/tree/master/mercat/common
+[cil]: cli/cil
+[mercat]: cli/mercat
+[harness]: cli/mercat/common

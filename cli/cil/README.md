@@ -1,6 +1,7 @@
 # Confidential Identity Library
 
 ## Simple Claim Prover
+
 CDD Claims and Scope Claims are types of claims that can be attached to an investor's identity on the PolyMesh.
 CDD claims are registered by a trusted CDD provider using [cdd-register-did][cdd-register-did] API, and Scope
 claims are created and added to the chain by the investor using [add_claim][add-claim] API.
