@@ -7,7 +7,7 @@ description = "MERCAT Transaction Validator"
 edition = "2018"
 
 [dependencies]
-cryptography = { path = "../../cryptography/" }
+cryptography = { path = "../../../cryptography/" }
 mercat_common = { package = "mercat-common", path = "../common/" }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.8"}

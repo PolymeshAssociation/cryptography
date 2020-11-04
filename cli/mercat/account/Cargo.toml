@@ -7,7 +7,7 @@ repository = "https://github.com/PolymathNetwork/cryptography"
 description = "MERCAT account CLI."
 
 [dependencies]
-cryptography = { path = "../../cryptography/" }
+cryptography = { path = "../../../cryptography/" }
 mercat_common = { package = "mercat-common", path = "../common/" }
 
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
