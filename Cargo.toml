@@ -1,0 +1,14 @@
+[workspace]
+
+members = [
+	"cryptography",
+	"cli/cil/common",
+	"cli/cil/scp",
+	"cli/cil/scv",
+	"cli/mercat/account",
+	"cli/mercat/chain_setup",
+	"cli/mercat/common",
+	"cli/mercat/mediator",
+	"cli/mercat/validator",
+	"cli/mercat/interactive",
+]
