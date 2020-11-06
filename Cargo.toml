@@ -32,10 +32,13 @@ rand_core = { version = "0.5", default-features = false}
 rand = { version = "0.7", default-features = false }
 getrandom = { version = "0.1.14", default-features = false, optional = true}
 
-curve25519-dalek = { version = "2", default-features = false, features = ["nightly"] }
-schnorrkel = { version = "0.9.1", default-features = false }
+# version 3.0.0 that depends on packed_simd_2-3.4.0
+curve25519-dalek = { git = "https://github.com/dalek-cryptography/curve25519-dalek.git", rev = "a787300ba169ae035bcdf2d540cf2b61b950405c", default-features = false, features = ["nightly"] }
+# master branch commit that depends on curve25519-dalek-3.0.0
+schnorrkel = { git = "https://github.com/w3f/schnorrkel.git", rev = "8fa2ad3e9fbf0b652c724df6a87a4b3c5500f759", default-features = false }
 merlin = { version = "2.0.0", default-features = false }
-bulletproofs = { git = "https://github.com/PolymathNetwork/bulletproofs.git", branch = "main", default-features = false, features = ["zeroize"] }
+bulletproofs = { git = "https://github.com/PolymathNetwork/bulletproofs.git", branch = "dalek-v3", default-features = false, features = ["zeroize"] }
+subtle = "^2.3.0"
 
 [dev-dependencies]
 wasm-bindgen-test = { version = "0.3.10"}
