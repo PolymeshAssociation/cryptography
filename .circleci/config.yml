@@ -51,7 +51,31 @@ jobs:
       - run:
           name: Run tests
           command: >-
-            RUST_LOG=info cargo +nightly test &&
+            RUST_LOG=info cargo +nightly test
+          no_output_timeout: 30m
+      - save_cache:
+          key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+          paths:
+            - "~/.cargo"
+            - "./target"
+  build_wasm:
+    docker:
+      - image: maxsam4/rust
+    environment:
+      VERBOSE: "1"
+    steps:
+      - checkout
+      - run:
+          name: Store rust version in a file for cache key
+          command: rustc --version > rust.version
+      - restore_cache:
+          keys:
+            - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+            - v6-test-cache-{{ checksum "./rust.version" }}
+      - run:
+          name: Run tests
+          command: >-
+            cd cryptography &&
             cargo +nightly build --bench elgamal_decryption &&
             cargo +nightly build --bench mercat_account &&
             cargo +nightly build --bench mercat_asset &&

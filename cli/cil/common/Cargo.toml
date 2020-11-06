@@ -1,0 +1,19 @@
+[package]
+name = "cli-common"
+version = "0.1.0"
+authors = [ "Polymath Inc" ]
+edition = "2018"
+repository = "https://github.com/PolymathNetwork/cryptography"
+description = "Confidential Identity Library: CLI common library"
+
+[dependencies]
+cryptography = { path = "../../../cryptography/" }
+
+serde = { version = "1.0.105", features = ["derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]}
+
+# Crypto
+rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
+curve25519-dalek = { version = "2.0.0", features = ["u64_backend", "alloc", "serde"], default-features = false }
+blake2 = { version = "0.9.0", default-features = false }
