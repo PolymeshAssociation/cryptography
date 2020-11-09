@@ -1,0 +1,12 @@
+[package]
+name = "wasm-builder"
+version = "0.1.0"
+authors = ["Polymath Inc"]
+description = "A sample project with wasm-pack"
+repository = "https://github.com/PolymathNetwork/cryptography"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
