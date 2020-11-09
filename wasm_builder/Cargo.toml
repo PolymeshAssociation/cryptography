@@ -9,4 +9,5 @@ repository = "https://github.com/PolymathNetwork/cryptography"
 crate-type = ["cdylib"]
 
 [dependencies]
+cryptography = { path = "../cryptography/" }
 wasm-bindgen = "0.2"
