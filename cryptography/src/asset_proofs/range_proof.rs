@@ -144,7 +144,6 @@ mod tests {
     use super::*;
     use crate::asset_proofs::*;
     use rand::{rngs::StdRng, SeedableRng};
-    use sp_std::prelude::*;
     use wasm_bindgen_test::*;
 
     const SEED_1: [u8; 32] = [42u8; 32];
