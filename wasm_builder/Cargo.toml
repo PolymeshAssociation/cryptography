@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Polymath Inc"]
 description = "A sample project with wasm-pack"
 repository = "https://github.com/PolymathNetwork/cryptography"
+edition = "2018"
 
 [lib]
 crate-type = ["cdylib"]

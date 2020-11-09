@@ -41,6 +41,9 @@ merlin = { version = "2.0.0", default-features = false }
 [dev-dependencies]
 wasm-bindgen-test = { version = "0.3.10"}
 
+# [build-dependencies]
+# wasm-builder-runner = { package = "substrate-wasm-builder-runner", git = "https://github.com/paritytech/substrate", default-features = false, tag = "v2.0.0"}
+
 [features]
 default = ["std", "avx2_backend"]
 
