@@ -14,6 +14,8 @@ cryptography = { path = "../cryptography/" }
 rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
 rand_core = { version = "0.5", default-features = false}
 curve25519-dalek = { version = "2", default-features = false, features = ["nightly"] }
+blake2 = { version = "0.9.0", default-features = false }
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]}
 wasm-bindgen = "0.2"
