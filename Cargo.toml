@@ -2,7 +2,7 @@
 
 members = [
 	"cryptography",
-    "wasm_builder",
+	"wasm_builder",
 	"cli/cil/common",
 	"cli/cil/scp",
 	"cli/cil/scv",
