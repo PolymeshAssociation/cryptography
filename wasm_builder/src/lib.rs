@@ -5,6 +5,7 @@ use cryptography::claim_proofs::{
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use wasm_bindgen::prelude::*;
 
 type InvestorDID = [u8; 32];
@@ -58,11 +59,12 @@ pub fn make_message(investor_did: &InvestorDID, scope_did: &ScopeDID) -> [u8; 32
 ///   { "investor_did": [32_bytes_array], "investor_unique_id": [16_bytes_array] }
 ///
 /// # Errors
-/// * `TODO` panicing at the moment.
+/// * Failure to deserialize the cdd claim.
+/// * Failure to serialize the cdd id.
 #[wasm_bindgen]
-pub fn process_create_cdd_id(cdd_claim: String) -> String {
+pub fn process_create_cdd_id(cdd_claim: String) -> Result<String, JsValue> {
     let raw_cdd_data: RawCddClaimData = serde_json::from_str(&cdd_claim)
-        .unwrap_or_else(|error| panic!("Failed to deserialize the cdd claim: {}", error));
+        .map_err(|error| format!("Failed to deserialize the cdd claim: {}", error))?;
 
     let cdd_claim = CddClaimData::new(&raw_cdd_data.investor_did, &raw_cdd_data.investor_unique_id);
 
@@ -70,9 +72,9 @@ pub fn process_create_cdd_id(cdd_claim: String) -> String {
 
     let packaged_cdd_id = CddId { cdd_id: cdd_id };
     let cdd_id_str = serde_json::to_string(&packaged_cdd_id)
-        .unwrap_or_else(|error| panic!("Failed to serialize the CDD Id: {}", error));
+        .map_err(|error| format!("Failed to serialize the CDD Id: {}", error))?;
 
-    cdd_id_str
+    Ok(cdd_id_str)
 }
 
 /// Creates a scope claim proof for an investor from investor did, investor uid, and scope did.
@@ -84,14 +86,19 @@ pub fn process_create_cdd_id(cdd_claim: String) -> String {
 ///   { "scope_did":[12_bytes_array], "investor_unique_id":[16_bytes_array] }
 ///
 /// # Errors
-/// * `TODO` panicing at the moment.
+/// * Failure to deserialize the cdd claim.
+/// * Failure to deserialize the scope claim.
+/// * Failure to serialize the proof.
 #[wasm_bindgen]
-pub fn process_create_claim_proof(cdd_claim: String, scoped_claim: String) -> String {
+pub fn process_create_claim_proof(
+    cdd_claim: String,
+    scoped_claim: String,
+) -> Result<String, JsValue> {
     let raw_cdd_claim: RawCddClaimData = serde_json::from_str(&cdd_claim)
-        .unwrap_or_else(|error| panic!("Failed to deserialize the cdd claim: {}", error));
+        .map_err(|error| format!("Failed to deserialize the cdd claim: {}", error))?;
 
     let raw_scope_claim: RawScopeClaimData = serde_json::from_str(&scoped_claim)
-        .unwrap_or_else(|error| panic!("Failed to deserialize the scope claim: {}", error));
+        .map_err(|error| format!("Failed to deserialize the scope claim: {}", error))?;
 
     let message = make_message(&raw_cdd_claim.investor_did, &raw_scope_claim.scope_did);
 
@@ -120,7 +127,7 @@ pub fn process_create_claim_proof(cdd_claim: String, scoped_claim: String) -> St
         proof,
     };
     let proof_str = serde_json::to_string(&packaged_proof)
-        .unwrap_or_else(|error| panic!("Failed to serialize the proof: {}", error));
+        .map_err(|error| format!("Failed to serialize the proof: {}", error))?;
 
-    proof_str
+    Ok(proof_str)
 }
