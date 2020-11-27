@@ -107,3 +107,54 @@ wasm-pack test --node
 [wiki_crypto_design]: https://polymath.atlassian.net/wiki/spaces/CE/pages/202571817/Claim+Proof+Prototype
 [cryptography-framework]: https://github.com/PolymathNetwork/crypto-framework
 [mercat-paper]: https://info.polymath.network/cs/c/?cta_guid=9dab4f08-f83b-4682-9aff-806161fadfa7&signature=AAH58kGwwttiprV_ahCcsg9jx4d7sDcTug&placement_guid=7b405314-ade5-48d5-8143-1622a545448a&click=34bcee43-5f48-4d28-b28f-71a27f9a901b&hsutk=b438673d645d6ae5ac515c177200a48e&canon=https%3A%2F%2Fpolymath.network%2Fresources&portal_id=4703451&redirect_url=APefjpGNTUtthjOVK6QYdk_-PL9D6OAzM2VCYb7J4LhcV3iCGtpU2IRpNw3ZYh-dU7CZpEGmueyCnKbsmj6KYiF23DUwQL_CB0uteyVXdrLMO0LO32kxSDhtnCK2kWZYwgk6XH47zFTvb_vPNlHLEN9FeceoaUSdrVaJ4pGzgFjL6q2XRWBDX_W0i4P28C0JZxnAKfM-UQH2VH2xWt2wyBvk9kcuV-bu42BOTu1RJSPSGy27MArSihbQVeL8Cccu0IUOK6Ld7vTEGanGK8dtDPUOzpEhkxmaOpwFfpoyDum-NaSZtBWNQ6fZhvEJhqz9NLBYFjju5w9REDT8Iso3jKIu0EM7cLsAivTS2DBgYofp_Q6-Dq6ubhw&__hstc=225977093.b438673d645d6ae5ac515c177200a48e.1593533608372.1603731569270.1604512109227.10&__hssc=225977093.1.1604512109227&__hsfp=4241984383
+# crypto-framework
+
+This repository contains the CLI and test harness around the
+[Polymesh Cryptograph library][cryptography].
+
+The repository has following sections:
+- CLI for claim proofs library: see [cil][cil]
+- CLI for sending receiving confidential transactions: see [mercat][mercat] for a detailed description.
+- Test harness for the confidential transactions: see [mercat/common][harness] for a detailed description.
+
+### Build Instructions
+
+Install rust!
+
+Install the nightly version of rust and WASM toolchain.
+
+```bash
+# In the root directory
+rustup toolchain install nightly
+
+# install wasm pack from https://rustwasm.github.io/wasm-pack/installer/
+# then, inside the cryptography sub-directory, add the nightly version as target
+cd cryptography
+rustup target add wasm32-unknown-unknown --toolchain nightly
+```
+
+If you use a different command to install a specific nightly version, use the same format for
+adding WASM.
+
+To run the library's unit tests as well has the test harness, run
+
+```bash
+cargo +nightly test --release -- --nocapture
+```
+
+For a more verbose test output, run
+
+```bash
+RUST_LOG=info cargo +nightly  test --release
+```
+
+To build all the CLIs in mercat and cil, run
+
+```bash
+cargo +nightly build --release
+```
+
+[cryptography]: https://github.com/PolymathNetwork/cryptography
+[cil]: cli/cil
+[mercat]: cli/mercat
+[harness]: cli/mercat/common

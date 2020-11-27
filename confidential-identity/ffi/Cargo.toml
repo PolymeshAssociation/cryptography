@@ -1,0 +1,28 @@
+[package]
+name = "confidential_identity_ffi"
+version = "1.0.0"
+authors = [ "Polymath Inc" ]
+readme = "README.md"
+edition = "2018"
+description = "FFI bindings for the confidential identity crate"
+
+[lib]
+name = "claim_proofs_ffi"
+crate-type = ["cdylib"]
+
+[features]
+default = ["cbindgen"]
+
+[dependencies.confidential_identity]
+path = ".."
+
+[dependencies]
+libc = "^0.2"
+curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly", "u64_backend"] }
+schnorrkel = { git = "https://github.com/PolymathNetwork/schnorrkel.git", branch = "fix-simd-issue", default-features = false }
+
+[build-dependencies]
+cbindgen = { version = "^0.13", optional = true }
+
+[package.metadata.docs.rs]
+no-default-features = true
