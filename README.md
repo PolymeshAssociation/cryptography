@@ -36,7 +36,7 @@ issuance, and confidential asset transfer, as outlined in section 6 of the MERCA
 
 ## APIs and CLIs
 
-Each library exposes various apis and clis, which can be found inside
+Each library exposes various APIs and CLIs, which can be found inside
 each library directory. For example, the confidential identity library
 exposes a wasm api, an FFI wrapper, and a CLI.
 
