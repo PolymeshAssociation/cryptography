@@ -49,5 +49,4 @@ macro_rules! assert_err {
 }
 
 mod claim_proofs;
-pub mod errors;
 pub mod pedersen_commitments;

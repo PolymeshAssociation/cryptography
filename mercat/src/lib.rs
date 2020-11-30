@@ -470,5 +470,4 @@ pub trait ReversedTransferTransactionVerifier {
 
 pub mod account;
 pub mod asset;
-pub mod errors;
 pub mod transaction;
