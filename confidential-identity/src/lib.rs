@@ -51,3 +51,5 @@ macro_rules! assert_err {
 
 mod claim_proofs;
 pub mod pedersen_commitments;
+pub mod mocked;
+pub mod uuid;
