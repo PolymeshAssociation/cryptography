@@ -80,6 +80,7 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"failure/std",
+	"cryptography_core/std"
 ]
 
 
