@@ -27,3 +27,6 @@ pub fn random_claim<R: RngCore + CryptoRng>(rng: &mut R) -> (CddClaimData, Scope
         },
     )
 }
+
+pub mod mocked;
+pub mod uuid;

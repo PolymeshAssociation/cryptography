@@ -8,10 +8,11 @@ use cli_common::{
     UNIQUEID_LEN,
 };
 use cryptography::claim_proofs::{
-    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CddClaimData, ProofKeyPair,
-    ScopeClaimData,
+    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, mocked, CddClaimData,
+    ProofKeyPair, ScopeClaimData,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
+use hex;
 use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -108,6 +109,18 @@ pub struct CreateCDDIdInfo {
     verbose: bool,
 }
 
+/// The polymath-scp/create-cdd-id utility which creates an Identity with a mocked CDD Id.
+#[derive(Clone, Debug, StructOpt)]
+pub struct CreateMockedCDDIdInfo {
+    /// Generate and use a random CDD claim.
+    #[structopt(short, long)]
+    did: String,
+
+    /// Output as standard string format, i.e "cae66941-d9ef-4d40-8e4d-88758ea67670"
+    #[structopt(short, long)]
+    formatted: bool,
+}
+
 #[derive(Clone, Debug, StructOpt)]
 pub enum CLI {
     /// Create the CDD Id.
@@ -115,6 +128,9 @@ pub enum CLI {
 
     /// Create a Claim proof.
     CreateClaimProof(CreateClaimProofInfo),
+
+    /// Create Mocked CDD Id.
+    CreateMockedCDDId(CreateMockedCDDIdInfo),
 }
 
 /// Generate a random `InvestorDID` for experiments.
@@ -322,11 +338,38 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
     }
 }
 
+fn process_create_mocked_cdd_id(cfg: CreateMockedCDDIdInfo) {
+    // Sanitize Did input.
+    let did = cfg.did.strip_prefix("0x").unwrap_or(&cfg.did);
+    let did = did.chars().filter(|c| *c != '-').collect::<String>();
+    let raw_did = hex::decode(did).expect("Invalid input DID, please use hex format");
+    assert!(
+        raw_did.len() == 32,
+        "Invalid input DID, len should be 64 hex characters"
+    );
+
+    // Generate the mocked InvestorUid
+    let investor_uid = mocked::make_investor_uid(&raw_did);
+    if cfg.formatted {
+        println!(
+            "{}-{}-{}-{}-{}",
+            hex::encode(&investor_uid[0..4]),
+            hex::encode(&investor_uid[4..6]),
+            hex::encode(&investor_uid[6..8]),
+            hex::encode(&investor_uid[8..10]),
+            hex::encode(&investor_uid[10..16])
+        );
+    } else {
+        println!("{}", hex::encode(investor_uid));
+    }
+}
+
 fn main() {
     let args: CLI = CLI::from_args();
 
     match args {
         CLI::CreateCDDId(cfg) => process_create_cdd_id(cfg),
         CLI::CreateClaimProof(cfg) => process_create_claim_proof(cfg),
+        CLI::CreateMockedCDDId(cfg) => process_create_mocked_cdd_id(cfg),
     }
 }
