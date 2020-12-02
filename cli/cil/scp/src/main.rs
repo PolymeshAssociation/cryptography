@@ -112,7 +112,7 @@ pub struct CreateCDDIdInfo {
 /// The polymath-scp/create-cdd-id utility which creates an Identity with a mocked CDD Id.
 #[derive(Clone, Debug, StructOpt)]
 pub struct CreateMockedCDDIdInfo {
-    /// Generate and use a random CDD claim.
+    /// Input DID in hex, i.e "0x0600000000000000000000000000000000000000000000000000000000000000"
     #[structopt(short, long)]
     did: String,
 
