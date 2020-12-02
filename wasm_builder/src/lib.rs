@@ -1,9 +1,10 @@
 use blake2::{Blake2s, Digest};
 use cryptography::claim_proofs::{
-    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CddClaimData, ProofKeyPair,
-    ScopeClaimData,
+    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, mocked, CddClaimData,
+    ProofKeyPair, ScopeClaimData,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
+use hex;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -123,4 +124,21 @@ pub fn process_create_claim_proof(cdd_claim: String, scoped_claim: String) -> St
         .unwrap_or_else(|error| panic!("Failed to serialize the proof: {}", error));
 
     proof_str
+}
+
+#[wasm_bindgen]
+pub fn process_create_mocked_investor_uid(did: String) -> String {
+    // Sanitize Did input.
+    let did = did.strip_prefix("0x").unwrap_or(&did);
+    let did = did.chars().filter(|c| *c != '-').collect::<String>();
+    let raw_did = hex::decode(did).expect("Invalid input DID, please use hex format");
+    assert!(
+        raw_did.len() == 32,
+        "Invalid input DID, len should be 64 hex characters"
+    );
+
+    // Generate the mocked InvestorUid
+    let investor_uid = mocked::make_investor_uid(&raw_did);
+
+    hex::encode(investor_uid)
 }

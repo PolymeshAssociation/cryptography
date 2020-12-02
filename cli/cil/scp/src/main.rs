@@ -111,7 +111,7 @@ pub struct CreateCDDIdInfo {
 
 /// The polymath-scp/create-cdd-id utility which creates an Identity with a mocked CDD Id.
 #[derive(Clone, Debug, StructOpt)]
-pub struct CreateMockedCDDIdInfo {
+pub struct CreateMockedInvestorUidInfo {
     /// Input DID in hex, i.e "0x0600000000000000000000000000000000000000000000000000000000000000"
     #[structopt(short, long)]
     did: String,
@@ -130,7 +130,7 @@ pub enum CLI {
     CreateClaimProof(CreateClaimProofInfo),
 
     /// Create Mocked CDD Id.
-    CreateMockedCDDId(CreateMockedCDDIdInfo),
+    CreateMockedInvestorUid(CreateMockedInvestorUidInfo),
 }
 
 /// Generate a random `InvestorDID` for experiments.
@@ -338,7 +338,7 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
     }
 }
 
-fn process_create_mocked_cdd_id(cfg: CreateMockedCDDIdInfo) {
+fn process_create_mocked_investor_uid(cfg: CreateMockedInvestorUidInfo) {
     // Sanitize Did input.
     let did = cfg.did.strip_prefix("0x").unwrap_or(&cfg.did);
     let did = did.chars().filter(|c| *c != '-').collect::<String>();
@@ -370,6 +370,6 @@ fn main() {
     match args {
         CLI::CreateCDDId(cfg) => process_create_cdd_id(cfg),
         CLI::CreateClaimProof(cfg) => process_create_claim_proof(cfg),
-        CLI::CreateMockedCDDId(cfg) => process_create_mocked_cdd_id(cfg),
+        CLI::CreateMockedInvestorUid(cfg) => process_create_mocked_investor_uid(cfg),
     }
 }
