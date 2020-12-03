@@ -10,7 +10,7 @@ members = [
 	"mercat/cli/validator",
 	"mercat/cli/interactive",
 	"confidential-identity",
-	"confidential-identity/ffi",
+	# "confidential-identity/ffi",
 	"confidential-identity/cli/scp",
 	"confidential-identity/cli/scv",
 	"confidential-identity/wasm",
