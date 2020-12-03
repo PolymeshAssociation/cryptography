@@ -7,9 +7,11 @@ extern crate alloc;
 pub use bulletproofs::RangeProof;
 use codec::{Decode, Encode};
 pub use curve25519_dalek::{
+    self,
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
+pub use schnorrkel;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
