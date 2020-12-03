@@ -73,7 +73,7 @@ alloc = [
 	"curve25519-dalek/alloc",
 ]
 
-no_std = [ ]
+no_std = [ "u64_backend" ]
 std = [
 	# General and optional
 	"serde_all",
