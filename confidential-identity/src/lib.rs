@@ -12,9 +12,10 @@ pub use claim_proofs::{
     build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CddClaimData, ProofKeyPair,
     ProofPublicKey, ScopeClaimData, ScopeClaimProofData,
 };
-use curve25519_dalek::scalar::Scalar;
+pub use curve25519_dalek::{self, ristretto::CompressedRistretto, scalar::Scalar};
 pub use pedersen_commitments::PedersenGenerators;
 use rand_core::{CryptoRng, RngCore};
+pub use schnorrkel;
 
 pub fn random_claim<R: RngCore + CryptoRng>(rng: &mut R) -> (CddClaimData, ScopeClaimData) {
     let investor_unique_id = Scalar::random(rng);

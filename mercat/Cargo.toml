@@ -23,16 +23,12 @@ byteorder = { version = "^1.2.3", default-features = false, features = ["i128"] 
 
 # Crypto
 sha3 = { version = "0.8", default-features = false }
-cryptography_core = { path = "../cryptography-core" }
+cryptography_core = { path = "../cryptography-core", default-features = false }
 
 rand_core = { version = "0.5", default-features = false}
 rand = { version = "0.7", default-features = false }
 getrandom = { version = "0.1.14", default-features = false, optional = true}
 
-curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly", "u64_backend"] }
-bulletproofs = { git = "https://github.com/PolymathNetwork/bulletproofs.git", branch = "v2-packed-simd", default-features = false, features = ["zeroize"] }
-
-merlin = { version = "2.0.0", default-features = false }
 
 [dev-dependencies]
 wasm-bindgen-test = { version = "0.3.10"}
@@ -42,40 +38,28 @@ criterion = { version = "0.3" }
 default = ["std", "avx2_backend"]
 
 # Backends
-u32_backend = [
-	"curve25519-dalek/u32_backend",
-	"bulletproofs/u32_backend"
-]
-u64_backend = [
-	"curve25519-dalek/u64_backend",
-	"bulletproofs/u64_backend"
-]
-avx2_backend = [
-	"curve25519-dalek/avx2_backend",
-	"bulletproofs/avx2_backend"
-]
+u32_backend = [ "cryptography_core/u32_backend" ]
+u64_backend = [ "cryptography_core/u64_backend" ]
+avx2_backend = [ "cryptography_core/avx2_backend" ]
 
 serde_all = [
 	"serde",
 	"serde_json",
-	"curve25519-dalek/serde",
-	"bulletproofs/serde",
+	"cryptography_core/serde_all",
 ]
 
 alloc = [
-	"rand_core/alloc",
-	"rand/alloc",
-	"curve25519-dalek/alloc",
+	"cryptography_core/alloc",
 ]
 
-no_std = [ ]
+no_std = [ "cryptography_core/no_std" ]
 std = [
 	# General and optional
 	"serde_all",
 	# Crypto
+	"cryptography_core/std",
 	"rand_core/std",
 	"rand/std",
-	"bulletproofs/std",
 	# Other
 	"codec/std",
 	"sp-std/std",
@@ -94,4 +78,3 @@ harness = false
 [[bench]]
 name = "mercat_transaction"
 harness = false
-

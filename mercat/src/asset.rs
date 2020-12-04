@@ -16,11 +16,11 @@ use cryptography_core::{
         wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
         CommitmentWitness,
     },
+    bulletproofs::PedersenGens,
     errors::{ErrorKind, Fallible},
     Balance,
 };
 
-use bulletproofs::PedersenGens;
 use rand_core::{CryptoRng, RngCore};
 use sp_std::vec::Vec;
 use zeroize::Zeroizing;
@@ -335,10 +335,10 @@ mod tests {
     };
     use cryptography_core::{
         asset_proofs::{CommitmentWitness, ElgamalSecretKey},
+        curve25519_dalek::scalar::Scalar,
         errors::ErrorKind,
         AssetId,
     };
-    use curve25519_dalek::scalar::Scalar;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use wasm_bindgen_test::*;

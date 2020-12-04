@@ -20,12 +20,12 @@ use cryptography_core::{
         range_proof::{prove_within_range, verify_within_range},
         CommitmentWitness,
     },
+    bulletproofs::PedersenGens,
+    curve25519_dalek::scalar::Scalar,
     errors::{ErrorKind, Fallible},
     AssetId, Balance, BALANCE_RANGE,
 };
 
-use bulletproofs::PedersenGens;
-use curve25519_dalek::scalar::Scalar;
 use rand_core::{CryptoRng, RngCore};
 use sp_std::vec::Vec;
 use zeroize::Zeroizing;
@@ -680,9 +680,9 @@ mod tests {
             encrypting_same_value_proof::CipherEqualDifferentPubKeyProof,
             range_proof::InRangeProof, ElgamalSecretKey,
         },
+        curve25519_dalek::scalar::Scalar,
         AssetId,
     };
-    use curve25519_dalek::scalar::Scalar;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use rand_core::{CryptoRng, RngCore};

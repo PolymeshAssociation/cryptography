@@ -2,7 +2,6 @@ use crate::{
     AccountCreatorInitializer, AccountCreatorVerifier, EncryptedAmount, PubAccount, PubAccountTx,
     SecAccount, BASE, EXPONENT,
 };
-use bulletproofs::PedersenGens;
 use cryptography_core::{
     asset_proofs::{
         correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
@@ -13,11 +12,13 @@ use cryptography_core::{
         wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
         CommitmentWitness,
     },
+    bulletproofs::PedersenGens,
+    curve25519_dalek::scalar::Scalar,
     errors::Fallible,
     AssetId, Balance,
 };
-use curve25519_dalek::scalar::Scalar;
 use rand_core::{CryptoRng, RngCore};
+
 use sp_std::vec::Vec;
 use zeroize::Zeroizing;
 
@@ -166,8 +167,7 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::EncryptionKeys;
-    use cryptography_core::asset_proofs::ElgamalSecretKey;
-    use curve25519_dalek::scalar::Scalar;
+    use cryptography_core::{asset_proofs::ElgamalSecretKey, curve25519_dalek::scalar::Scalar};
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
 

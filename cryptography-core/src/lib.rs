@@ -4,8 +4,10 @@
 #[macro_use]
 extern crate alloc;
 
+pub use bulletproofs;
 use codec::{Decode, Encode};
 pub use curve25519_dalek::{
+    self,
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
