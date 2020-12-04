@@ -21,11 +21,11 @@ use cryptography_core::{
         CommitmentWitness,
     },
     errors::{ErrorKind, Fallible},
+    bulletproofs::PedersenGens,
+    curve25519_dalek::scalar::Scalar,
     AssetId, Balance, BALANCE_RANGE,
 };
 
-use bulletproofs::PedersenGens;
-use curve25519_dalek::scalar::Scalar;
 use rand_core::{CryptoRng, RngCore};
 use sp_std::vec::Vec;
 use zeroize::Zeroizing;

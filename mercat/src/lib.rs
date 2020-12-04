@@ -17,14 +17,14 @@ use cryptography_core::{
         wellformedness_proof::WellformednessProof, CipherText, CipherTextWithHint,
         CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     },
+    curve25519_dalek::{ scalar::Scalar, },
     errors::Fallible,
     AssetId, Balance,
+
 };
-pub use curve25519_dalek::{
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
-};
+pub use cryptography_core;
 use rand_core::{CryptoRng, RngCore};
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sp_std::{fmt, vec::Vec};

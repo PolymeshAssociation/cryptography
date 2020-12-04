@@ -2,7 +2,6 @@ use crate::{
     AccountCreatorInitializer, AccountCreatorVerifier, EncryptedAmount, PubAccount, PubAccountTx,
     SecAccount, BASE, EXPONENT,
 };
-use bulletproofs::PedersenGens;
 use cryptography_core::{
     asset_proofs::{
         correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
@@ -13,11 +12,13 @@ use cryptography_core::{
         wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
         CommitmentWitness,
     },
+    curve25519_dalek::scalar::Scalar,
+    bulletproofs::PedersenGens,
     errors::Fallible,
     AssetId, Balance,
 };
-use curve25519_dalek::scalar::Scalar;
 use rand_core::{CryptoRng, RngCore};
+
 use sp_std::vec::Vec;
 use zeroize::Zeroizing;
 

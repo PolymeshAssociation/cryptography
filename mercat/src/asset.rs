@@ -17,10 +17,10 @@ use cryptography_core::{
         CommitmentWitness,
     },
     errors::{ErrorKind, Fallible},
+    bulletproofs::PedersenGens,
     Balance,
 };
 
-use bulletproofs::PedersenGens;
 use rand_core::{CryptoRng, RngCore};
 use sp_std::vec::Vec;
 use zeroize::Zeroizing;

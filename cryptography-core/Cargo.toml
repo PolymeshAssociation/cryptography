@@ -27,7 +27,7 @@ rand_core = { version = "0.5", default-features = false}
 rand = { version = "0.7", default-features = false }
 getrandom = { version = "0.1.14", default-features = false, optional = true}
 
-curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly", "u64_backend"] }
+curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly"] }
 bulletproofs = { git = "https://github.com/PolymathNetwork/bulletproofs.git", branch = "v2-packed-simd", default-features = false, features = ["zeroize"] }
 
 merlin = { version = "2.0.0", default-features = false }
@@ -65,7 +65,7 @@ alloc = [
 	"curve25519-dalek/alloc",
 ]
 
-no_std = [ ]
+no_std = [ "u64_backend" ]
 std = [
 	# General and optional
 	"serde_all",
