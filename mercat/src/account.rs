@@ -12,8 +12,8 @@ use cryptography_core::{
         wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
         CommitmentWitness,
     },
-    curve25519_dalek::scalar::Scalar,
     bulletproofs::PedersenGens,
+    curve25519_dalek::scalar::Scalar,
     errors::Fallible,
     AssetId, Balance,
 };

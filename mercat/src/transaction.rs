@@ -20,9 +20,9 @@ use cryptography_core::{
         range_proof::{prove_within_range, verify_within_range},
         CommitmentWitness,
     },
-    errors::{ErrorKind, Fallible},
     bulletproofs::PedersenGens,
     curve25519_dalek::scalar::Scalar,
+    errors::{ErrorKind, Fallible},
     AssetId, Balance, BALANCE_RANGE,
 };
 

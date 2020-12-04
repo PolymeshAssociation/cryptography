@@ -16,8 +16,8 @@ use cryptography_core::{
         wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
         CommitmentWitness,
     },
-    errors::{ErrorKind, Fallible},
     bulletproofs::PedersenGens,
+    errors::{ErrorKind, Fallible},
     Balance,
 };
 
