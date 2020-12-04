@@ -680,9 +680,9 @@ mod tests {
             encrypting_same_value_proof::CipherEqualDifferentPubKeyProof,
             range_proof::InRangeProof, ElgamalSecretKey,
         },
+        curve25519_dalek::scalar::Scalar,
         AssetId,
     };
-    use curve25519_dalek::scalar::Scalar;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use rand_core::{CryptoRng, RngCore};
