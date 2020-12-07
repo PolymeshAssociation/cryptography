@@ -17,7 +17,7 @@ cargo install cbindgen
 Second:
 
 ```bash
-cbindgen --config cbindgen.toml --crate claim-proofs-ffi --output examples/c_example.h
+cbindgen --config cbindgen.toml --crate confidential-identity-ffi --output examples/c_example.h
 ```
 
 Note that unfortunately `cbindgen` doesn't map the typedefs properly, so manually replace `typedef`
@@ -30,5 +30,5 @@ typedef struct <StructName> <StructName>;
 To build the example using gcc, run:
 
 ```bash
-gcc examples/c_example.c -Ltarget/release/ -l claim_proofs_ffi -o example.out
+gcc examples/c_example.c -L../../target/release/ -l confidential_identity_ffi -o example.out
 ```

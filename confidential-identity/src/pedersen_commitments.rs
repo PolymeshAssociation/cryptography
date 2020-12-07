@@ -10,7 +10,7 @@
 //! the investor's signature on his claims.
 //!
 //! In this setup the entire system is using the same set of
-//! 3 Pedersen generators: G0, G1, and G2. To create thse generators:
+//! 3 Pedersen generators: G0, G1, and G2. To create these generators:
 //! ```
 //! use confidential_identity::pedersen_commitments::PedersenGenerators;
 //!

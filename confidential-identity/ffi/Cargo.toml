@@ -1,5 +1,5 @@
 [package]
-name = "confidential_identity_ffi"
+name = "confidential-identity-ffi"
 version = "1.0.0"
 authors = [ "Polymath Inc" ]
 readme = "README.md"
@@ -7,11 +7,12 @@ edition = "2018"
 description = "FFI bindings for the confidential identity crate"
 
 [lib]
-name = "claim_proofs_ffi"
+name = "confidential_identity_ffi"
 crate-type = ["cdylib"]
 
 [features]
 default = ["cbindgen"]
+no_std = []
 
 [dependencies.confidential_identity]
 path = ".."

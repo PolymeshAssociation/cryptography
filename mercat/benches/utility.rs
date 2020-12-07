@@ -1,8 +1,7 @@
 use cryptography_core::{
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
-    AssetId,
+    AssetId, Scalar,
 };
-use curve25519_dalek::scalar::Scalar;
 use mercat::{
     account::{deposit, AccountCreator},
     Account, AccountCreatorInitializer, EncryptedAmount, EncryptionKeys, EncryptionPubKey,

@@ -1,5 +1,5 @@
-//! The `claim_proofs_ffi` is the Foreign Function Interface (FFI)
-//! for the `claim_proofs` library. It contains API for generating
+//! The `confidential_identity_ffi` is the Foreign Function Interface (FFI)
+//! for the `confidential_identity` library. It contains API for generating
 //! claim proofs and verifying them as part of the
 //! Asset Granularity Unique Identity project.
 
