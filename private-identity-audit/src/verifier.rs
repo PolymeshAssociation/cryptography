@@ -5,6 +5,7 @@ use crate::{
 use blake2::{Blake2b, Digest};
 use confidential_identity::pedersen_commitments::PedersenGenerators;
 use cryptography_core::curve25519_dalek::scalar::Scalar;
+use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
 use uuid::{Builder, Uuid, Variant, Version};
 
@@ -32,12 +33,15 @@ impl PrivateSetGenerator for VerifierSetGenerator {
 
         // Commit to each element.
         let pg = PedersenGenerators::default();
-        Ok(padded_vec
+        let mut commitments = padded_vec
             .into_iter()
             .map(|uid| uuid_to_scalar(uid))
             .map(|scalar_uid| Scalar::random(rng) * scalar_uid)
             .map(|blinded_uid| pg.generators[0] * blinded_uid)
-            .collect())
+            .collect::<EncryptedUIDs>();
+        commitments.shuffle(rng);
+
+        Ok(commitments)
     }
 }
 
