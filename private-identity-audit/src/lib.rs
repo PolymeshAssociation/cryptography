@@ -12,6 +12,7 @@ mod verifier;
 use blake2::{Blake2b, Digest};
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use errors::Fallible;
+use proofs::{FinalResponse, InitialMessage, Secrets};
 use rand_core::{CryptoRng, RngCore};
 //#[cfg(feature = "serde")]
 //use serde::{Deserialize, Serialize};
@@ -42,12 +43,36 @@ macro_rules! assert_err {
 pub const SET_SIZE_ANONYMITY_PARAM: usize = 100_000;
 
 pub type PrivateUIDs = Vec<Uuid>;
+
 pub type EncryptedUIDs = Vec<RistrettoPoint>;
+
 pub struct InvestorID {
     did: Scalar,
     uid: Scalar,
 }
-pub struct Proof();
+
+pub struct Proofs {
+    cdd_id_proof: InitialMessage,
+    cdd_id_second_half_proof: InitialMessage,
+    uid_commitment_proof: InitialMessage,
+}
+
+pub struct ProverFinalResponse {
+    cdd_id_proof_response: FinalResponse,
+    cdd_id_second_half_proof_response: FinalResponse,
+    uid_commitment_proof_response: FinalResponse,
+}
+
+pub struct ProverSecrets {
+    cdd_id_proof_secrets: Secrets,
+    cdd_id_second_half_proof_secrets: Secrets,
+    uid_commitment_proof_secrets: Secrets,
+    rand: Scalar,
+}
+
+pub struct VerifierSecrets {
+    rand: Scalar,
+}
 
 /// Modified version of `slice_to_scalar` of Confidential Identity Library.
 /// Creates a scalar from a UUID.
@@ -71,17 +96,90 @@ pub trait PrivateSetGenerator {
         private_unique_identifiers: PrivateUIDs,
         min_set_size: Option<usize>,
         rng: &mut T,
-    ) -> Fallible<EncryptedUIDs>;
+    ) -> Fallible<(VerifierSecrets, EncryptedUIDs, Scalar)>;
 }
 
 pub trait ProofGenerator {
     fn generate_membership_proof<T: RngCore + CryptoRng>(
         investor: InvestorID,
-        encrypted_uids: EncryptedUIDs,
         rng: &mut T,
-    ) -> Fallible<Proof>;
+    ) -> Fallible<(ProverSecrets, Proofs, RistrettoPoint)>;
+}
+pub trait ChallengeResponder {
+    fn generate_challenge_response<T: RngCore + CryptoRng>(
+        secrets: ProverSecrets,
+        encrypted_uids: EncryptedUIDs,
+        challenge: Scalar,
+        rng: &mut T,
+    ) -> Fallible<(ProverFinalResponse, EncryptedUIDs)>;
 }
 
 pub trait ProofVerifier {
-    fn verify_membership_proof(proof: Proof, encrypted_uids: EncryptedUIDs) -> Fallible<()>;
+    fn verify_membership_proof(
+        initial_message: Proofs,
+        final_response: ProverFinalResponse,
+        challenge: Scalar,
+        cdd_id: RistrettoPoint,
+        cdd_id_second_half: RistrettoPoint,
+        verifier_secrets: VerifierSecrets,
+        re_encrypted_uids: EncryptedUIDs,
+    ) -> Fallible<()>;
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        prover::{generate_bliding_factor, FinalProver, InitialProver},
+        verifier::{gen_random_uuids, Verifier, VerifierSetGenerator},
+        ChallengeResponder, InvestorID, PrivateSetGenerator, ProofGenerator, ProofVerifier,
+        SET_SIZE_ANONYMITY_PARAM,
+    };
+    use confidential_identity::pedersen_commitments::PedersenGenerators;
+    use cryptography_core::curve25519_dalek::scalar::Scalar;
+    use rand::{rngs::StdRng, SeedableRng};
+
+    #[test]
+    fn test_success_end_to_end() {
+        let mut rng = StdRng::from_seed([10u8; 32]);
+        let pg = PedersenGenerators::default();
+
+        // Prover generates and sends the initial message.
+        let investor = InvestorID {
+            uid: Scalar::random(&mut rng),
+            did: Scalar::random(&mut rng),
+        };
+        let cdd_id = pg.commit(&[
+            investor.did,
+            investor.uid,
+            generate_bliding_factor(investor.did, investor.uid),
+        ]);
+        let (prover_secrets, proofs, cdd_id_second_half) =
+            InitialProver::generate_membership_proof(investor, &mut rng).unwrap();
+
+        // Prover sends `proofs` and Verifier returns a list of 10 uids and the challenge.
+        let (verifier_secrets, encrypted_uids, challenge) = VerifierSetGenerator
+            .generate_encrypted_unique_ids(gen_random_uuids(100, &mut rng), None, &mut rng)
+            .unwrap();
+
+        // Verifier sends the encrytped_uids and the challenge to the Prover.
+        let (prover_response, re_encrypted_uids) = FinalProver::generate_challenge_response(
+            prover_secrets,
+            encrypted_uids,
+            challenge,
+            &mut rng,
+        )
+        .unwrap();
+
+        // Verifier verifies the proofs and check membership.
+        Verifier::verify_membership_proof(
+            proofs,
+            prover_response,
+            challenge,
+            cdd_id,
+            cdd_id_second_half,
+            verifier_secrets,
+            re_encrypted_uids,
+        )
+        .unwrap();
+    }
 }
