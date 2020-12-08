@@ -1,15 +1,20 @@
 //! pial is the library that implements the private identity audit protocol
 //! of the PIAL, as defined in the section TODO of the whitepaper TODO.
+//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(iterator_fold_self)]
 
 mod errors;
+mod proofs;
+mod prover;
 mod verifier;
-use cryptography_core::curve25519_dalek::ristretto::RistrettoPoint;
+use blake2::{Blake2b, Digest};
+use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use errors::Fallible;
 use rand_core::{CryptoRng, RngCore};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+//#[cfg(feature = "serde")]
+//use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// That `ensure` does not transform into a string representation like `failure::ensure` is doing.
@@ -38,11 +43,19 @@ pub const SET_SIZE_ANONYMITY_PARAM: usize = 100_000;
 
 pub type PrivateUIDs = Vec<Uuid>;
 pub type EncryptedUIDs = Vec<RistrettoPoint>;
-pub struct MultipartCDDId {
-    part1: RistrettoPoint,
-    part2: RistrettoPoint,
+pub struct InvestorID {
+    did: Scalar,
+    uid: Scalar,
 }
 pub struct Proof();
+
+/// Modified version of `slice_to_scalar` of Confidential Identity Library.
+/// Creates a scalar from a UUID.
+pub fn uuid_to_scalar(uuid: Uuid) -> Scalar {
+    let mut hash = [0u8; 64];
+    hash.copy_from_slice(Blake2b::digest(uuid.as_bytes()).as_slice());
+    Scalar::from_bytes_mod_order_wide(&hash)
+}
 
 pub trait PrivateSetGenerator {
     /// This is called by PUIS to create an encrypted version of the set of all unique
@@ -63,9 +76,9 @@ pub trait PrivateSetGenerator {
 
 pub trait ProofGenerator {
     fn generate_membership_proof<T: RngCore + CryptoRng>(
-        cdd_id: MultipartCDDId,
+        investor: InvestorID,
         encrypted_uids: EncryptedUIDs,
-        rng: T,
+        rng: &mut T,
     ) -> Fallible<Proof>;
 }
 

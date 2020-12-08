@@ -1,8 +1,7 @@
 use crate::{
-    errors::{ErrorKind, Fallible},
-    EncryptedUIDs, PrivateSetGenerator, PrivateUIDs, SET_SIZE_ANONYMITY_PARAM,
+    errors::Fallible, uuid_to_scalar, EncryptedUIDs, PrivateSetGenerator, PrivateUIDs,
+    SET_SIZE_ANONYMITY_PARAM,
 };
-use blake2::{Blake2b, Digest};
 use confidential_identity::pedersen_commitments::PedersenGenerators;
 use cryptography_core::curve25519_dalek::scalar::Scalar;
 use rand::seq::SliceRandom;
@@ -43,14 +42,6 @@ impl PrivateSetGenerator for VerifierSetGenerator {
 
         Ok(commitments)
     }
-}
-
-/// Modified version of `slice_to_scalar` of Confidential Identity Library.
-/// Creates a scalar from a UUID.
-fn uuid_to_scalar(uuid: Uuid) -> Scalar {
-    let mut hash = [0u8; 64];
-    hash.copy_from_slice(Blake2b::digest(uuid.as_bytes()).as_slice());
-    Scalar::from_bytes_mod_order_wide(&hash)
 }
 
 fn gen_random_uuids<T: RngCore + CryptoRng>(count: usize, rng: &mut T) -> Vec<Uuid> {
