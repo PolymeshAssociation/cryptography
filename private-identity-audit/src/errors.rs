@@ -50,6 +50,10 @@ impl fmt::Display for Error {
 
 #[derive(Fail, Clone, Debug, Eq, PartialEq)]
 pub enum ErrorKind {
+    /// ZKP initial message gen failed.
+    #[fail(display = "Error in generating initial ZKP message")]
+    InitialMessageGenError,
+
     /// ZKP proof failed.
     #[fail(display = "ZK Proof of {} failed", kind)]
     ZKPVerificationError { kind: String },

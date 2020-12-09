@@ -15,6 +15,7 @@
 //!   4. V: H^s1 * F^s2 == A * q^c
 //!
 
+use crate::errors::{ErrorKind, Fallible};
 use crate::Challenge;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_core::{CryptoRng, RngCore};
@@ -39,7 +40,7 @@ pub fn generate_initial_message<T: RngCore + CryptoRng>(
     secrets: Vec<Scalar>,
     generators: Vec<RistrettoPoint>,
     rng: &mut T,
-) -> (Secrets, InitialMessage) {
+) -> Fallible<(Secrets, InitialMessage)> {
     let rands: Vec<Scalar> = vec![0; generators.len()]
         .into_iter()
         .map(|_| Scalar::random(rng))
@@ -50,15 +51,14 @@ pub fn generate_initial_message<T: RngCore + CryptoRng>(
         .zip(&rands)
         .map(|(gen, rand)| gen * rand)
         .fold_first(|v1, v2| v1 + v2)
-        .unwrap();
-
-    (
+        .ok_or(ErrorKind::InitialMessageGenError)?;
+    Ok((
         Secrets { rands, secrets },
         InitialMessage {
             a,
             generators: generators.clone(),
         },
-    )
+    ))
 }
 
 pub fn apply_challenge(prover_secrets: Secrets, c: Challenge) -> FinalResponse {
@@ -109,7 +109,7 @@ mod tests {
         let statement = RistrettoPoint::multiscalar_mul(&secrets, &generators);
 
         let (prover_secrets, initial_message) =
-            generate_initial_message(secrets, generators, &mut rng);
+            generate_initial_message(secrets, generators, &mut rng).unwrap();
 
         let c = Scalar::random(&mut rng);
         let final_response = apply_challenge(prover_secrets, c);
@@ -142,7 +142,7 @@ mod tests {
         let r = Scalar::random(&mut rng);
         let statement = cdd_id * r;
         let (cdd_id_proof_secrets, cdd_id_proof) =
-            generate_initial_message(vec![r], vec![cdd_id], &mut rng);
+            generate_initial_message(vec![r], vec![cdd_id], &mut rng).unwrap();
 
         let challenge = Scalar::random(&mut rng);
         let cdd_id_proof_response = apply_challenge(cdd_id_proof_secrets, challenge);
