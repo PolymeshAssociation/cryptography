@@ -1,3 +1,5 @@
+//! Provides interactive ZKP for statements of muliple base.
+//!
 //! Statement: q=G^x
 //! ZKP(q, G):
 //!   1. P -> V: A = G^r
@@ -13,10 +15,9 @@
 //!   4. V: H^s1 * F^s2 == A * q^c
 //!
 
+use crate::Challenge;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_core::{CryptoRng, RngCore};
-
-type Challenge = Scalar;
 
 #[derive(Clone)]
 pub struct InitialMessage {

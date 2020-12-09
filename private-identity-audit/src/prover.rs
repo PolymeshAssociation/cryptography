@@ -8,8 +8,8 @@
 use crate::{
     errors::Fallible,
     proofs::{apply_challenge, generate_initial_message},
-    ChallengeResponder, EncryptedUIDs, InvestorID, ProofGenerator, Proofs, ProverFinalResponse,
-    ProverSecrets,
+    ChallengeResponder, CommittedCDDID, CommittedSecondHalfCDDID, EncryptedUIDs, InvestorID,
+    ProofGenerator, Proofs, ProverFinalResponse, ProverSecrets,
 };
 use confidential_identity::pedersen_commitments::PedersenGenerators;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
@@ -29,10 +29,15 @@ pub fn generate_bliding_factor(uid: Scalar, did: Scalar) -> Scalar {
 }
 
 impl ProofGenerator for InitialProver {
-    fn generate_membership_proof<T: RngCore + CryptoRng>(
+    fn generate_initial_proofs<T: RngCore + CryptoRng>(
         investor: InvestorID,
         rng: &mut T,
-    ) -> Fallible<(ProverSecrets, Proofs, RistrettoPoint, RistrettoPoint)> {
+    ) -> Fallible<(
+        ProverSecrets,
+        Proofs,
+        CommittedCDDID,
+        CommittedSecondHalfCDDID,
+    )> {
         let pg = PedersenGenerators::default();
         let blinding_factor = generate_bliding_factor(investor.uid, investor.did);
         let secrets = [investor.uid, investor.did, blinding_factor];
@@ -103,20 +108,5 @@ impl ChallengeResponder for FinalProver {
             },
             recommitted_uids,
         ))
-    }
-}
-
-// ------------------------------------------------------------------------------------------------
-// -                                            Tests                                             -
-// ------------------------------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    //use crate::{PrivateSetGenerator, SET_SIZE_ANONYMITY_PARAM};
-    //use rand::{rngs::StdRng, SeedableRng};
-
-    #[test]
-    fn test_generate_proof() {
-        //let mut rng = StdRng::from_seed([10u8; 32]);
     }
 }

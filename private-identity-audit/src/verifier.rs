@@ -1,7 +1,7 @@
 use crate::{
-    errors::Fallible, proofs::verify, uuid_to_scalar, EncryptedUIDs, PrivateSetGenerator,
-    PrivateUIDs, ProofVerifier, Proofs, ProverFinalResponse, VerifierSecrets,
-    SET_SIZE_ANONYMITY_PARAM,
+    errors::Fallible, proofs::verify, uuid_to_scalar, Challenge, ChallengeGenerator,
+    CommittedCDDID, CommittedSecondHalfCDDID, EncryptedUIDs, PrivateUIDs, ProofVerifier, Proofs,
+    ProverFinalResponse, VerifierSecrets, SET_SIZE_ANONYMITY_PARAM,
 };
 use confidential_identity::pedersen_commitments::PedersenGenerators;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
@@ -12,13 +12,13 @@ use uuid::{Builder, Uuid, Variant, Version};
 pub struct VerifierSetGenerator;
 pub struct Verifier;
 
-impl PrivateSetGenerator for VerifierSetGenerator {
-    fn generate_encrypted_unique_ids<T: RngCore + CryptoRng>(
+impl ChallengeGenerator for VerifierSetGenerator {
+    fn generate_encrypted_set_and_challenge<T: RngCore + CryptoRng>(
         &self,
         private_unique_identifiers: PrivateUIDs,
         min_set_size: Option<usize>,
         rng: &mut T,
-    ) -> Fallible<(VerifierSecrets, EncryptedUIDs, Scalar)> {
+    ) -> Fallible<(VerifierSecrets, EncryptedUIDs, Challenge)> {
         // Pad the input vector with randomly generated uuids.
         let min_size = if let Some(overriden_size) = min_set_size {
             overriden_size
@@ -28,7 +28,11 @@ impl PrivateSetGenerator for VerifierSetGenerator {
         let padded_vec = if private_unique_identifiers.len() >= min_size {
             private_unique_identifiers
         } else {
-            let padding = gen_random_uuids(min_size - private_unique_identifiers.len(), rng);
+            let padding: Vec<Scalar> =
+                gen_random_uuids(min_size - private_unique_identifiers.len(), rng)
+                    .into_iter()
+                    .map(|uuid| uuid_to_scalar(uuid))
+                    .collect();
             [&private_unique_identifiers[..], &padding[..]].concat()
         };
 
@@ -37,7 +41,6 @@ impl PrivateSetGenerator for VerifierSetGenerator {
         let r = Scalar::random(rng);
         let mut commitments = padded_vec
             .into_iter()
-            .map(|uid| uuid_to_scalar(uid))
             .map(|scalar_uid| pg.generators[0] * scalar_uid * r)
             .collect::<EncryptedUIDs>();
         commitments.shuffle(rng);
@@ -49,13 +52,13 @@ impl PrivateSetGenerator for VerifierSetGenerator {
 }
 
 impl ProofVerifier for Verifier {
-    fn verify_membership_proof(
+    fn verify_proofs(
         initial_message: Proofs,
         final_response: ProverFinalResponse,
-        challenge: Scalar,
-        cdd_id: RistrettoPoint, // TODO: need to find a way of using this.
-        committed_cdd_id: RistrettoPoint,
-        committed_cdd_id_second_half: RistrettoPoint,
+        challenge: Challenge,
+        cdd_id: RistrettoPoint,
+        committed_cdd_id: CommittedCDDID,
+        committed_cdd_id_second_half: CommittedSecondHalfCDDID,
         verifier_secrets: VerifierSecrets,
         re_encrypted_uids: EncryptedUIDs,
     ) -> Fallible<()> {
@@ -113,8 +116,9 @@ pub fn gen_random_uuids<T: RngCore + CryptoRng>(count: usize, rng: &mut T) -> Ve
 #[cfg(test)]
 mod tests {
     use crate::{
+        uuid_to_scalar,
         verifier::{gen_random_uuids, VerifierSetGenerator},
-        PrivateSetGenerator, SET_SIZE_ANONYMITY_PARAM,
+        ChallengeGenerator, SET_SIZE_ANONYMITY_PARAM,
     };
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -125,7 +129,14 @@ mod tests {
 
         // Test original anonoymity param.
         let (_, encrytped_uids, _) = VerifierSetGenerator
-            .generate_encrypted_unique_ids(gen_random_uuids(input_len, &mut rng), None, &mut rng)
+            .generate_encrypted_set_and_challenge(
+                gen_random_uuids(input_len, &mut rng)
+                    .into_iter()
+                    .map(|uuid| uuid_to_scalar(uuid))
+                    .collect(),
+                None,
+                &mut rng,
+            )
             .expect("Success");
 
         assert_eq!(encrytped_uids.len(), SET_SIZE_ANONYMITY_PARAM);
@@ -133,8 +144,11 @@ mod tests {
         // Test overridden anonoymity param.
         let different_annonymity_size = 20;
         let (_, encrytped_uids, _) = VerifierSetGenerator
-            .generate_encrypted_unique_ids(
-                gen_random_uuids(input_len, &mut rng),
+            .generate_encrypted_set_and_challenge(
+                gen_random_uuids(input_len, &mut rng)
+                    .into_iter()
+                    .map(|uuid| uuid_to_scalar(uuid))
+                    .collect(),
                 Some(different_annonymity_size),
                 &mut rng,
             )
@@ -145,8 +159,11 @@ mod tests {
         // Test no padding.
         let different_annonymity_size = 5;
         let (_, encrytped_uids, _) = VerifierSetGenerator
-            .generate_encrypted_unique_ids(
-                gen_random_uuids(input_len, &mut rng),
+            .generate_encrypted_set_and_challenge(
+                gen_random_uuids(input_len, &mut rng)
+                    .into_iter()
+                    .map(|uuid| uuid_to_scalar(uuid))
+                    .collect(),
                 Some(different_annonymity_size),
                 &mut rng,
             )
