@@ -103,7 +103,7 @@ pub trait ProofGenerator {
     fn generate_membership_proof<T: RngCore + CryptoRng>(
         investor: InvestorID,
         rng: &mut T,
-    ) -> Fallible<(ProverSecrets, Proofs, RistrettoPoint)>;
+    ) -> Fallible<(ProverSecrets, Proofs, RistrettoPoint, RistrettoPoint)>;
 }
 pub trait ChallengeResponder {
     fn generate_challenge_response<T: RngCore + CryptoRng>(
@@ -120,7 +120,8 @@ pub trait ProofVerifier {
         final_response: ProverFinalResponse,
         challenge: Scalar,
         cdd_id: RistrettoPoint,
-        cdd_id_second_half: RistrettoPoint,
+        committed_cdd_id: RistrettoPoint,
+        committed_cdd_id_second_half: RistrettoPoint,
         verifier_secrets: VerifierSecrets,
         re_encrypted_uids: EncryptedUIDs,
     ) -> Fallible<()>;
@@ -132,7 +133,6 @@ mod tests {
         prover::{generate_bliding_factor, FinalProver, InitialProver},
         verifier::{gen_random_uuids, Verifier, VerifierSetGenerator},
         ChallengeResponder, InvestorID, PrivateSetGenerator, ProofGenerator, ProofVerifier,
-        SET_SIZE_ANONYMITY_PARAM,
     };
     use confidential_identity::pedersen_commitments::PedersenGenerators;
     use cryptography_core::curve25519_dalek::scalar::Scalar;
@@ -153,14 +153,15 @@ mod tests {
             investor.uid,
             generate_bliding_factor(investor.did, investor.uid),
         ]);
-        let (prover_secrets, proofs, cdd_id_second_half) =
+        let (prover_secrets, proofs, committed_cdd_id, committed_cdd_id_second_half) =
             InitialProver::generate_membership_proof(investor, &mut rng).unwrap();
 
         // Prover sends `proofs` and Verifier returns a list of 10 uids and the challenge.
         let (verifier_secrets, encrypted_uids, challenge) = VerifierSetGenerator
-            .generate_encrypted_unique_ids(gen_random_uuids(100, &mut rng), None, &mut rng)
+            .generate_encrypted_unique_ids(gen_random_uuids(100, &mut rng), Some(100), &mut rng)
             .unwrap();
 
+        let rr = prover_secrets.rand;
         // Verifier sends the encrytped_uids and the challenge to the Prover.
         let (prover_response, re_encrypted_uids) = FinalProver::generate_challenge_response(
             prover_secrets,
@@ -176,7 +177,8 @@ mod tests {
             prover_response,
             challenge,
             cdd_id,
-            cdd_id_second_half,
+            committed_cdd_id,
+            committed_cdd_id_second_half,
             verifier_secrets,
             re_encrypted_uids,
         )

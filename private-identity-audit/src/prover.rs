@@ -32,28 +32,30 @@ impl ProofGenerator for InitialProver {
     fn generate_membership_proof<T: RngCore + CryptoRng>(
         investor: InvestorID,
         rng: &mut T,
-    ) -> Fallible<(ProverSecrets, Proofs, RistrettoPoint)> {
+    ) -> Fallible<(ProverSecrets, Proofs, RistrettoPoint, RistrettoPoint)> {
         let pg = PedersenGenerators::default();
         let blinding_factor = generate_bliding_factor(investor.did, investor.uid);
-        let secrets = [investor.did, investor.uid, blinding_factor];
+        let secrets = [investor.uid, investor.did, blinding_factor];
         let cdd_id = pg.commit(&secrets);
-        let cdd_id_second_half =
-            pg.generators[1] * investor.uid + pg.generators[2] * blinding_factor;
 
         let r = Scalar::random(rng);
 
-        // Corresponds to proving a = C^r, where C is cdd_id
+        // Corresponds to proving a = C^r, where C is cdd_id. `a` is represented as
+        // `committed_cdd_id`.
         let (cdd_id_proof_secrets, cdd_id_proof) =
             generate_initial_message(vec![r], vec![cdd_id], rng);
+        let committed_cdd_id = cdd_id * r;
 
-        // Corresponds to proving b = h^{y*r} * f^{z*r}
+        // Corresponds to proving b = h^{y*r} * f^{z*r}, b is represented as `commited_cdd_id_second_half`.
         let (cdd_id_second_half_proof_secrets, cdd_id_second_half_proof) = generate_initial_message(
             [investor.did * r, blinding_factor * r].to_vec(),
             vec![pg.generators[1], pg.generators[2]],
             rng,
         );
+        let commited_cdd_id_second_half =
+            (pg.generators[1] * investor.did + pg.generators[2] * blinding_factor) * r;
 
-        // Corresponds to proving a/b = g^{x*r}, where a/b
+        // Corresponds to proving a/b = g^{x*r}.
         let (uid_commitment_proof_secrets, uid_commitment_proof) =
             generate_initial_message(vec![investor.uid * r], vec![pg.generators[0]], rng);
 
@@ -69,7 +71,8 @@ impl ProofGenerator for InitialProver {
                 cdd_id_second_half_proof,
                 uid_commitment_proof,
             },
-            cdd_id_second_half,
+            committed_cdd_id,
+            commited_cdd_id_second_half,
         ))
     }
 }

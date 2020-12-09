@@ -54,23 +54,24 @@ impl ProofVerifier for Verifier {
         initial_message: Proofs,
         final_response: ProverFinalResponse,
         challenge: Scalar,
-        cdd_id: RistrettoPoint,
-        cdd_id_second_half: RistrettoPoint,
+        cdd_id: RistrettoPoint, // TODO: need to find a way of using this.
+        committed_cdd_id: RistrettoPoint,
+        committed_cdd_id_second_half: RistrettoPoint,
         verifier_secrets: VerifierSecrets,
         re_encrypted_uids: EncryptedUIDs,
     ) -> Fallible<()> {
-        let uid_commitment = cdd_id - cdd_id_second_half;
+        let uid_commitment = committed_cdd_id - committed_cdd_id_second_half;
 
         assert!(verify(
             initial_message.cdd_id_proof,
             final_response.cdd_id_proof_response,
-            cdd_id,
+            committed_cdd_id,
             challenge,
         )); // TODO
         assert!(verify(
             initial_message.cdd_id_second_half_proof,
             final_response.cdd_id_second_half_proof_response,
-            cdd_id_second_half,
+            committed_cdd_id_second_half,
             challenge,
         )); // TODO
         assert!(verify(

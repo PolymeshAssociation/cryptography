@@ -91,14 +91,20 @@ pub fn verify(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{prover::generate_bliding_factor, InvestorID};
+    use confidential_identity::pedersen_commitments::PedersenGenerators;
+    use cryptography_core::curve25519_dalek::traits::MultiscalarMul;
     use rand::{rngs::StdRng, SeedableRng};
 
     #[test]
     fn test_zkp_proof() {
         let mut rng = StdRng::from_seed([42u8; 32]);
-        let generators = vec![RistrettoPoint::random(&mut rng)];
-        let secrets = vec![Scalar::random(&mut rng)];
-        let statement = generators[0] * secrets[0];
+        let generators = vec![
+            RistrettoPoint::random(&mut rng),
+            RistrettoPoint::random(&mut rng),
+        ];
+        let secrets = vec![Scalar::random(&mut rng), Scalar::random(&mut rng)];
+        let statement = RistrettoPoint::multiscalar_mul(&secrets, &generators);
 
         let (prover_secrets, initial_message) =
             generate_initial_message(secrets, generators, &mut rng);
@@ -118,5 +124,31 @@ mod tests {
         let statement = RistrettoPoint::random(&mut rng) * Scalar::random(&mut rng);
         let is_valid = verify(initial_message, final_response, statement, c);
         assert!(!is_valid);
+    }
+
+    #[test]
+    fn test_zkp_cdd_id() {
+        let mut rng = StdRng::from_seed([42u8; 32]);
+        let pg = PedersenGenerators::default();
+        let investor = InvestorID {
+            uid: Scalar::random(&mut rng),
+            did: Scalar::random(&mut rng),
+        };
+        let blinding_factor = generate_bliding_factor(investor.did, investor.uid);
+        let secrets = [investor.did, investor.uid, blinding_factor];
+        let cdd_id = pg.commit(&secrets);
+        let r = Scalar::random(&mut rng);
+        let statement = cdd_id * r;
+        let (cdd_id_proof_secrets, cdd_id_proof) =
+            generate_initial_message(vec![r], vec![cdd_id], &mut rng);
+
+        let challenge = Scalar::random(&mut rng);
+        let cdd_id_proof_response = apply_challenge(cdd_id_proof_secrets, challenge);
+        assert!(verify(
+            cdd_id_proof,
+            cdd_id_proof_response,
+            statement,
+            challenge,
+        ));
     }
 }
