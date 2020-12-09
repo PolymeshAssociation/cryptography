@@ -21,7 +21,7 @@ type Challenge = Scalar;
 #[derive(Clone)]
 pub struct InitialMessage {
     a: RistrettoPoint,
-    generators: Vec<RistrettoPoint>,
+    pub generators: Vec<RistrettoPoint>,
 }
 
 #[derive(Clone)]
@@ -97,7 +97,7 @@ mod tests {
     use rand::{rngs::StdRng, SeedableRng};
 
     #[test]
-    fn test_zkp_proof() {
+    fn test_zkp_multiple_base_proof() {
         let mut rng = StdRng::from_seed([42u8; 32]);
         let generators = vec![
             RistrettoPoint::random(&mut rng),

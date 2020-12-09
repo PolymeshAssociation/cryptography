@@ -34,7 +34,7 @@ impl ProofGenerator for InitialProver {
         rng: &mut T,
     ) -> Fallible<(ProverSecrets, Proofs, RistrettoPoint, RistrettoPoint)> {
         let pg = PedersenGenerators::default();
-        let blinding_factor = generate_bliding_factor(investor.did, investor.uid);
+        let blinding_factor = generate_bliding_factor(investor.uid, investor.did);
         let secrets = [investor.uid, investor.did, blinding_factor];
         let cdd_id = pg.commit(&secrets);
 

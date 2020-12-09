@@ -60,6 +60,7 @@ impl ProofVerifier for Verifier {
         re_encrypted_uids: EncryptedUIDs,
     ) -> Fallible<()> {
         let uid_commitment = committed_cdd_id - committed_cdd_id_second_half;
+        assert_eq!(initial_message.cdd_id_proof.generators[0], cdd_id);
 
         assert!(verify(
             initial_message.cdd_id_proof,
