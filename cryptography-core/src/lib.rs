@@ -11,7 +11,6 @@ pub use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-pub use schnorrkel;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
