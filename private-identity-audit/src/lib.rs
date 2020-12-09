@@ -131,6 +131,7 @@ pub trait ProofVerifier {
 mod tests {
     use crate::{
         prover::{generate_bliding_factor, FinalProver, InitialProver},
+        uuid_to_scalar,
         verifier::{gen_random_uuids, Verifier, VerifierSetGenerator},
         ChallengeResponder, InvestorID, PrivateSetGenerator, ProofGenerator, ProofVerifier,
     };
@@ -144,24 +145,24 @@ mod tests {
         let pg = PedersenGenerators::default();
 
         // Prover generates and sends the initial message.
+        let private_uid_set = gen_random_uuids(100, &mut rng);
         let investor = InvestorID {
-            uid: Scalar::random(&mut rng),
+            uid: uuid_to_scalar(private_uid_set[0]),
             did: Scalar::random(&mut rng),
         };
         let cdd_id = pg.commit(&[
-            investor.did,
             investor.uid,
-            generate_bliding_factor(investor.did, investor.uid),
+            investor.did,
+            generate_bliding_factor(investor.uid, investor.did),
         ]);
         let (prover_secrets, proofs, committed_cdd_id, committed_cdd_id_second_half) =
             InitialProver::generate_membership_proof(investor, &mut rng).unwrap();
 
         // Prover sends `proofs` and Verifier returns a list of 10 uids and the challenge.
         let (verifier_secrets, encrypted_uids, challenge) = VerifierSetGenerator
-            .generate_encrypted_unique_ids(gen_random_uuids(100, &mut rng), Some(100), &mut rng)
+            .generate_encrypted_unique_ids(private_uid_set, Some(100), &mut rng)
             .unwrap();
 
-        let rr = prover_secrets.rand;
         // Verifier sends the encrytped_uids and the challenge to the Prover.
         let (prover_response, re_encrypted_uids) = FinalProver::generate_challenge_response(
             prover_secrets,

@@ -38,8 +38,7 @@ impl PrivateSetGenerator for VerifierSetGenerator {
         let mut commitments = padded_vec
             .into_iter()
             .map(|uid| uuid_to_scalar(uid))
-            .map(|scalar_uid| r * scalar_uid)
-            .map(|blinded_uid| pg.generators[0] * blinded_uid)
+            .map(|scalar_uid| pg.generators[0] * scalar_uid * r)
             .collect::<EncryptedUIDs>();
         commitments.shuffle(rng);
 

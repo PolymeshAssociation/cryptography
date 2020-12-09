@@ -21,10 +21,10 @@ pub struct InitialProver;
 pub struct FinalProver;
 
 /// Modified version of `generate_pedersen_commit` function of Confidential Identity Library.
-pub fn generate_bliding_factor(did: Scalar, uid: Scalar) -> Scalar {
+pub fn generate_bliding_factor(uid: Scalar, did: Scalar) -> Scalar {
     let hash = Sha3_512::default()
-        .chain(did.as_bytes())
-        .chain(uid.as_bytes());
+        .chain(uid.as_bytes())
+        .chain(did.as_bytes());
     Scalar::from_hash(hash)
 }
 
