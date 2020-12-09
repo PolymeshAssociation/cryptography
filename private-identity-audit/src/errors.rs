@@ -50,9 +50,17 @@ impl fmt::Display for Error {
 
 #[derive(Fail, Clone, Debug, Eq, PartialEq)]
 pub enum ErrorKind {
-    /// TODO
-    #[fail(display = "TODO")]
-    TODOError,
+    /// ZKP proof failed.
+    #[fail(display = "ZK Proof of {} failed", kind)]
+    ZKPVerificationError { kind: String },
+
+    /// Membership proof failed.
+    #[fail(display = "Membership proof failed")]
+    MembershipProofError,
+
+    /// CDD_ID mismatched.
+    #[fail(display = "CDD ID in the proof is different from the CDD ID of the chain.")]
+    CDDIdMismatchError,
 }
 
 pub type Fallible<T, E = Error> = Result<T, E>;

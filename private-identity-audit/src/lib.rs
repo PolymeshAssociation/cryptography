@@ -6,6 +6,8 @@
 #![feature(iterator_fold_self)]
 
 mod errors;
+#[macro_use]
+mod macros;
 mod proofs;
 mod prover;
 mod verifier;
@@ -15,24 +17,6 @@ use errors::Fallible;
 use proofs::{FinalResponse, InitialMessage, Secrets};
 use rand_core::{CryptoRng, RngCore};
 use uuid::Uuid;
-
-/// That `ensure` does not transform into a string representation like `failure::ensure` is doing.
-#[allow(unused_macros)]
-macro_rules! ensure {
-    ($predicate:expr, $context_selector:expr) => {
-        if !$predicate {
-            return Err($context_selector.into());
-        }
-    };
-}
-
-/// Helper macro to assert that `predicate` is an `Error::from( $err)`.
-#[allow(unused_macros)]
-macro_rules! assert_err {
-    ($predicate:expr, $err:expr) => {
-        assert_eq!($predicate.expect_err("Error expected").kind(), &$err);
-    };
-}
 
 /// This is a security parameter. The larger the value, the higher the security guarantees.
 /// This value is used to pad the set of private unique ids set such that the encrypted set,

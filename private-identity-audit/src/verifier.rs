@@ -1,7 +1,9 @@
 use crate::{
-    errors::Fallible, proofs::verify, uuid_to_scalar, Challenge, ChallengeGenerator,
-    CommittedCDDID, CommittedSecondHalfCDDID, EncryptedUIDs, PrivateUIDs, ProofVerifier, Proofs,
-    ProverFinalResponse, VerifierSecrets, SET_SIZE_ANONYMITY_PARAM,
+    errors::{ErrorKind, Fallible},
+    proofs::verify,
+    uuid_to_scalar, Challenge, ChallengeGenerator, CommittedCDDID, CommittedSecondHalfCDDID,
+    EncryptedUIDs, PrivateUIDs, ProofVerifier, Proofs, ProverFinalResponse, VerifierSecrets,
+    SET_SIZE_ANONYMITY_PARAM,
 };
 use confidential_identity::pedersen_commitments::PedersenGenerators;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
@@ -63,33 +65,51 @@ impl ProofVerifier for Verifier {
         re_encrypted_uids: EncryptedUIDs,
     ) -> Fallible<()> {
         let uid_commitment = committed_cdd_id - committed_cdd_id_second_half;
-        assert_eq!(initial_message.cdd_id_proof.generators[0], cdd_id);
+        ensure!(
+            initial_message.cdd_id_proof.generators[0] == cdd_id,
+            ErrorKind::CDDIdMismatchError
+        );
 
-        assert!(verify(
-            initial_message.cdd_id_proof,
-            final_response.cdd_id_proof_response,
-            committed_cdd_id,
-            challenge,
-        )); // TODO
-        assert!(verify(
-            initial_message.cdd_id_second_half_proof,
-            final_response.cdd_id_second_half_proof_response,
-            committed_cdd_id_second_half,
-            challenge,
-        )); // TODO
-        assert!(verify(
-            initial_message.uid_commitment_proof,
-            final_response.uid_commitment_proof_response,
-            uid_commitment,
-            challenge,
-        )); // TODO
+        ensure!(
+            verify(
+                initial_message.cdd_id_proof,
+                final_response.cdd_id_proof_response,
+                committed_cdd_id,
+                challenge,
+            ),
+            ErrorKind::ZKPVerificationError {
+                kind: "CDD ID".into()
+            }
+        );
+        ensure!(
+            verify(
+                initial_message.cdd_id_second_half_proof,
+                final_response.cdd_id_second_half_proof_response,
+                committed_cdd_id_second_half,
+                challenge,
+            ),
+            ErrorKind::ZKPVerificationError {
+                kind: "CDD ID Second Half".into()
+            }
+        );
+        ensure!(
+            verify(
+                initial_message.uid_commitment_proof,
+                final_response.uid_commitment_proof_response,
+                uid_commitment,
+                challenge,
+            ),
+            ErrorKind::ZKPVerificationError { kind: "UID".into() }
+        );
 
         let looking_for = uid_commitment * verifier_secrets.rand;
 
-        let found = re_encrypted_uids
-            .into_iter()
-            .any(|element| element == looking_for);
-        assert!(found); // TODO
+        ensure!(
+            re_encrypted_uids
+                .into_iter()
+                .any(|element| element == looking_for),
+            ErrorKind::MembershipProofError
+        );
         Ok(())
     }
 }

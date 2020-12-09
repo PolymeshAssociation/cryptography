@@ -77,16 +77,17 @@ pub fn verify(
     statement: RistrettoPoint,
     c: Challenge,
 ) -> bool {
-    let lhs = initial_message
+    if let Some(lhs) = initial_message
         .generators
         .into_iter()
         .zip(final_response.s)
         .map(|(gen, s)| gen * s)
         .fold_first(|v1, v2| v1 + v2)
-        .unwrap(); // TODO
-    let rhs = initial_message.a + statement * c;
+    {
+        return lhs == initial_message.a + statement * c;
+    }
 
-    lhs == rhs
+    false
 }
 
 #[cfg(test)]
