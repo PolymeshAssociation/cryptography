@@ -10,14 +10,12 @@ use mercat::{
         AssetId,
     },
     transaction::{CtxMediator, CtxReceiver, CtxSender},
-    Account as MercatAccount, AccountCreatorInitializer, AssetTransactionIssuer, EncryptionKeys,
-    FinalizedTransferTx, InitializedTransferTx, MediatorAccount, PubAccount as MercatPubAccount,
-    SecAccount, TransferTransactionMediator, TransferTransactionReceiver,
-    TransferTransactionSender,
+    Account as MercatAccount, AccountCreatorInitializer, AssetTransactionIssuer, EncryptedAmount,
+    EncryptionKeys, FinalizedTransferTx, InitializedTransferTx,
+    MediatorAccount as MercatMediatorAccount, PubAccount as MercatPubAccount, SecAccount,
+    TransferTransactionMediator, TransferTransactionReceiver, TransferTransactionSender,
 };
-use rand::{rngs::StdRng, SeedableRng};
-use rand_core::{OsRng, RngCore};
-use serde::{Deserialize, Serialize};
+use rand_core::OsRng;
 use wasm_bindgen::prelude::*;
 
 pub type PlainHex = String;
@@ -33,7 +31,7 @@ pub struct CreatAccountOutput {
 
 #[wasm_bindgen]
 pub struct CreatMediatorAccountOutput {
-    secret_account: Base64,
+    secret_account: MediatorAccount,
     public_account: Base64,
 }
 
@@ -45,6 +43,11 @@ pub struct CreateTransactionOutput {
 #[wasm_bindgen]
 pub struct FinalizedTransactionOutput {
     finalized_tx: Base64,
+}
+
+#[wasm_bindgen]
+pub struct JustifiedTransactionOutput {
+    justified_tx: Base64,
 }
 
 #[wasm_bindgen]
@@ -61,6 +64,11 @@ pub struct ValidAssetIds {
 pub struct Account {
     secret_account: Base64,
     public_account: PubAccount,
+}
+
+#[wasm_bindgen]
+pub struct MediatorAccount {
+    secret: Base64,
 }
 
 #[wasm_bindgen]
@@ -93,6 +101,13 @@ impl Account {
             secret,
             public: self.public_account.to_mercat(),
         }
+    }
+}
+
+impl MediatorAccount {
+    fn to_mercat(&self) -> MercatMediatorAccount {
+        let decoded = base64::decode(&self.secret).unwrap();
+        MercatMediatorAccount::decode(&mut &decoded[..]).unwrap()
     }
 }
 
@@ -160,12 +175,14 @@ pub fn create_mediator_account() -> CreatMediatorAccountOutput {
 
     CreatMediatorAccountOutput {
         public_account: base64::encode(mediator_enc_key.public.encode()),
-        secret_account: base64::encode(
-            MediatorAccount {
-                encryption_key: mediator_enc_key,
-            }
-            .encode(),
-        ),
+        secret_account: MediatorAccount {
+            secret: base64::encode(
+                MercatMediatorAccount {
+                    encryption_key: mediator_enc_key,
+                }
+                .encode(),
+            ),
+        },
     }
 }
 
@@ -264,43 +281,55 @@ pub fn finalize_transaction(
     }
 }
 
-///// TODO
-/////
-///// # Arguments
-///// * `todo`: todo
-/////
-///// # Outputs
-///// * `todo`: todo
-/////
-///// # Errors
-///// * todo
-//#[wasm_bindgen]
-//pub fn justify_transaction(
-//    finalized_tx: Base64,
-//    mediator_account: MediatorAccount,
-//) -> FinalizedTransactionOutput {
-//    let mut rng = OsRng;
-//
-//    let decoded = base64::decode(finalized_tx).unwrap();
-//    let finalized_tx = FinalizedTransferTx::decode(&mut &decoded[..]).unwrap();
-//
-//    let justified_tx = CtxMediator
-//        .justify_transaction(
-//            finalized_tx,
-//            &mediator_account.encryption_key,
-//            &sender_pub_account,
-//            &sender_balance,
-//            &receiver_pub_account,
-//            &[],
-//            asset_id,
-//            &mut rng,
-//        )
-//        .unwrap();
-//
-//    FinalizedTransactionOutput {
-//        finalized_tx: base64::encode(finalized_tx.encode()),
-//    }
-//}
+/// TODO
+///
+/// # Arguments
+/// * `todo`: todo
+///
+/// # Outputs
+/// * `todo`: todo
+///
+/// # Errors
+/// * todo
+#[wasm_bindgen]
+pub fn justify_transaction(
+    finalized_tx: Base64,
+    mediator_account: MediatorAccount,
+    sender_public_account: PubAccount,
+    sender_encrypted_pending_balance: Base64,
+    receiver_public_account: PubAccount,
+    ticker_id: PlainHex,
+) -> JustifiedTransactionOutput {
+    let mut rng = OsRng;
+
+    let decoded = base64::decode(finalized_tx).unwrap();
+    let finalized_tx = FinalizedTransferTx::decode(&mut &decoded[..]).unwrap();
+
+    let mut asset_id = [0u8; 12];
+    let decoded = hex::decode(ticker_id).unwrap();
+    asset_id[..decoded.len()].copy_from_slice(&decoded);
+    let asset_id = AssetId { id: asset_id };
+
+    let decoded = base64::decode(sender_encrypted_pending_balance).unwrap();
+    let sender_balance = EncryptedAmount::decode(&mut &decoded[..]).unwrap();
+
+    let justified_tx = CtxMediator
+        .justify_transaction(
+            finalized_tx,
+            &mediator_account.to_mercat().encryption_key,
+            &sender_public_account.to_mercat(),
+            &sender_balance,
+            &receiver_public_account.to_mercat(),
+            &[],
+            asset_id,
+            &mut rng,
+        )
+        .unwrap();
+
+    JustifiedTransactionOutput {
+        justified_tx: base64::encode(justified_tx.encode()),
+    }
+}
 
 fn create_secret_account(rng: &mut OsRng, ticker_id: String) -> Result<SecAccount, Error> {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
