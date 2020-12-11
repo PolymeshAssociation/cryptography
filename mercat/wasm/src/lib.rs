@@ -18,6 +18,10 @@ use mercat::{
 use rand_core::OsRng;
 use wasm_bindgen::prelude::*;
 
+// ------------------------------------------------------------------------------------
+// -                                  Type Definitions                                -
+// ------------------------------------------------------------------------------------
+
 pub type PlainHex = String;
 
 pub type Base64 = String;
@@ -126,14 +130,26 @@ pub struct ValidAssetIds {
 }
 
 #[wasm_bindgen]
+pub struct MediatorAccount {
+    secret: Base64,
+}
+
+#[wasm_bindgen]
 pub struct Account {
     secret_account: Base64,
     public_account: PubAccount,
 }
 
-#[wasm_bindgen]
-pub struct MediatorAccount {
-    secret: Base64,
+impl Account {
+    fn to_mercat(&self) -> MercatAccount {
+        let decoded = base64::decode(&self.secret_account).unwrap();
+        let secret = SecAccount::decode(&mut &decoded[..]).unwrap();
+
+        MercatAccount {
+            secret,
+            public: self.public_account.to_mercat(),
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -157,24 +173,16 @@ impl PubAccount {
     }
 }
 
-impl Account {
-    fn to_mercat(&self) -> MercatAccount {
-        let decoded = base64::decode(&self.secret_account).unwrap();
-        let secret = SecAccount::decode(&mut &decoded[..]).unwrap();
-
-        MercatAccount {
-            secret,
-            public: self.public_account.to_mercat(),
-        }
-    }
-}
-
 impl MediatorAccount {
     fn to_mercat(&self) -> MercatMediatorAccount {
         let decoded = base64::decode(&self.secret).unwrap();
         MercatMediatorAccount::decode(&mut &decoded[..]).unwrap()
     }
 }
+
+// ------------------------------------------------------------------------------------
+// -                                     Public API                                   -
+// ------------------------------------------------------------------------------------
 
 /// TODO
 ///
@@ -197,12 +205,7 @@ pub fn create_account(
     let valid_asset_ids: Vec<AssetId> = valid_ticker_ids
         .plain_hex_ids
         .into_iter()
-        .map(|ticker_id| {
-            let mut asset_id = [0u8; 12];
-            let decoded = hex::decode(ticker_id).unwrap(); // TODO
-            asset_id[..decoded.len()].copy_from_slice(&decoded);
-            Ok(AssetId { id: asset_id })
-        })
+        .map(|ticker_id| Ok(ticker_id_to_asset_id(ticker_id)))
         .collect::<Result<Vec<AssetId>, Error>>()
         .unwrap();
     let valid_asset_ids = convert_asset_ids(valid_asset_ids);
@@ -293,18 +296,12 @@ pub fn create_transaction(
 ) -> CreateTransactionOutput {
     let mut rng = OsRng;
 
-    let decoded = base64::decode(encrypted_pending_balance).unwrap();
-    let pending_balance = CipherText::decode(&mut &decoded[..]).unwrap();
-
-    let decoded = base64::decode(mediator_public_key).unwrap();
-    let mediator_public_key = ElgamalPublicKey::decode(&mut &decoded[..]).unwrap();
-
     let init_tx = CtxSender
         .create_transaction(
             &sender_account.to_mercat(),
-            &pending_balance,
+            &decode::<CipherText>(encrypted_pending_balance),
             &receiver_public_account.to_mercat(),
-            &mediator_public_key,
+            &decode::<ElgamalPublicKey>(mediator_public_key),
             &[],
             amount,
             &mut rng,
@@ -334,11 +331,13 @@ pub fn finalize_transaction(
 ) -> FinalizedTransactionOutput {
     let mut rng = OsRng;
 
-    let decoded = base64::decode(init_tx).unwrap();
-    let tx = InitializedTransferTx::decode(&mut &decoded[..]).unwrap();
-
     let finalized_tx = CtxReceiver
-        .finalize_transaction(tx, receiver_account.to_mercat(), amount, &mut rng)
+        .finalize_transaction(
+            decode::<InitializedTransferTx>(init_tx),
+            receiver_account.to_mercat(),
+            amount,
+            &mut rng,
+        )
         .unwrap();
 
     FinalizedTransactionOutput {
@@ -367,26 +366,15 @@ pub fn justify_transaction(
 ) -> JustifiedTransactionOutput {
     let mut rng = OsRng;
 
-    let decoded = base64::decode(finalized_tx).unwrap();
-    let finalized_tx = FinalizedTransferTx::decode(&mut &decoded[..]).unwrap();
-
-    let mut asset_id = [0u8; 12];
-    let decoded = hex::decode(ticker_id).unwrap();
-    asset_id[..decoded.len()].copy_from_slice(&decoded);
-    let asset_id = AssetId { id: asset_id };
-
-    let decoded = base64::decode(sender_encrypted_pending_balance).unwrap();
-    let sender_balance = EncryptedAmount::decode(&mut &decoded[..]).unwrap();
-
     let justified_tx = CtxMediator
         .justify_transaction(
-            finalized_tx,
+            decode::<FinalizedTransferTx>(finalized_tx),
             &mediator_account.to_mercat().encryption_key,
             &sender_public_account.to_mercat(),
-            &sender_balance,
+            &decode::<EncryptedAmount>(sender_encrypted_pending_balance),
             &receiver_public_account.to_mercat(),
             &[],
-            asset_id,
+            ticker_id_to_asset_id(ticker_id),
             &mut rng,
         )
         .unwrap();
@@ -394,6 +382,22 @@ pub fn justify_transaction(
     JustifiedTransactionOutput {
         justified_tx: base64::encode(justified_tx.encode()),
     }
+}
+
+// ------------------------------------------------------------------------------------
+// -                               Internal Functions                                 -
+// ------------------------------------------------------------------------------------
+
+fn decode<T: Decode>(data: Base64) -> T {
+    let decoded = base64::decode(data).unwrap();
+    T::decode(&mut &decoded[..]).unwrap()
+}
+
+fn ticker_id_to_asset_id(ticker_id: PlainHex) -> AssetId {
+    let mut asset_id = [0u8; 12];
+    let decoded = hex::decode(ticker_id).unwrap();
+    asset_id[..decoded.len()].copy_from_slice(&decoded);
+    AssetId { id: asset_id }
 }
 
 fn create_secret_account(rng: &mut OsRng, ticker_id: String) -> Result<SecAccount, Error> {
