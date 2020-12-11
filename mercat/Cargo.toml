@@ -28,14 +28,13 @@ cryptography_core = { path = "../cryptography-core", default-features = false }
 
 rand_core = { version = "0.5", default-features = false}
 rand = { version = "0.7", default-features = false }
-getrandom = { version = "0.1.14", default-features = false, optional = true}
-
+getrandom = { version = "0.1.14", default-features = false, optional = true }
 
 [dev-dependencies]
-wasm-bindgen-test = { version = "0.3.10"}
+wasm-bindgen-test = { version = "0.3.10" }
 
 [features]
-default = ["std", "avx2_backend"]
+default = ["std", "u64_backend"]
 
 # Backends
 u32_backend = [ "cryptography_core/u32_backend" ]
@@ -66,7 +65,6 @@ std = [
 	"failure/std",
 	"criterion"
 ]
-
 
 [[bench]]
 name = "mercat_account"

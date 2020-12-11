@@ -37,7 +37,7 @@ merlin = { version = "2.0.0", default-features = false }
 wasm-bindgen-test = { version = "0.3.10"}
 
 [features]
-default = ["std", "avx2_backend"]
+default = ["std", "u64_backend"]
 
 # Backends
 u32_backend = [
