@@ -30,9 +30,42 @@ pub struct CreatAccountOutput {
 }
 
 #[wasm_bindgen]
+impl CreatAccountOutput {
+    #[wasm_bindgen(getter)]
+    pub fn secret_account(&self) -> Base64 {
+        self.secret_account.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn account_id(&self) -> Base64 {
+        self.account_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn account_tx(&self) -> Base64 {
+        self.account_tx.clone()
+    }
+}
+
+#[wasm_bindgen]
 pub struct CreatMediatorAccountOutput {
     secret_account: MediatorAccount,
     public_account: Base64,
+}
+
+#[wasm_bindgen]
+impl CreatMediatorAccountOutput {
+    #[wasm_bindgen(getter)]
+    pub fn secret_account(&self) -> MediatorAccount {
+        MediatorAccount {
+            secret: self.secret_account.secret.clone(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn public_account(&self) -> Base64 {
+        self.public_account.clone()
+    }
 }
 
 #[wasm_bindgen]
@@ -41,8 +74,24 @@ pub struct CreateTransactionOutput {
 }
 
 #[wasm_bindgen]
+impl CreateTransactionOutput {
+    #[wasm_bindgen(getter)]
+    pub fn init_tx(&self) -> Base64 {
+        self.init_tx.clone()
+    }
+}
+
+#[wasm_bindgen]
 pub struct FinalizedTransactionOutput {
     finalized_tx: Base64,
+}
+
+#[wasm_bindgen]
+impl FinalizedTransactionOutput {
+    #[wasm_bindgen(getter)]
+    pub fn finalized_tx(&self) -> Base64 {
+        self.finalized_tx.clone()
+    }
 }
 
 #[wasm_bindgen]
@@ -51,8 +100,24 @@ pub struct JustifiedTransactionOutput {
 }
 
 #[wasm_bindgen]
+impl JustifiedTransactionOutput {
+    #[wasm_bindgen(getter)]
+    pub fn justified_tx(&self) -> Base64 {
+        self.justified_tx.clone()
+    }
+}
+
+#[wasm_bindgen]
 pub struct MintAssetOutput {
     asset_tx: Base64,
+}
+
+#[wasm_bindgen]
+impl MintAssetOutput {
+    #[wasm_bindgen(getter)]
+    pub fn asset_tx(&self) -> Base64 {
+        self.asset_tx.clone()
+    }
 }
 
 #[wasm_bindgen]
