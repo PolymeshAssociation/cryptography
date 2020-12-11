@@ -1,4 +1,3 @@
-use base64;
 use codec::{Decode, Encode};
 use mercat::{
     account::{convert_asset_ids, AccountCreator},
@@ -6,16 +5,18 @@ use mercat::{
     cryptography_core::{
         asset_proofs::{CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey},
         curve25519_dalek::scalar::Scalar,
-        errors::Error,
         AssetId,
     },
     transaction::{CtxMediator, CtxReceiver, CtxSender},
     Account as MercatAccount, AccountCreatorInitializer, AssetTransactionIssuer, EncryptedAmount,
-    EncryptionKeys, FinalizedTransferTx, InitializedTransferTx,
-    MediatorAccount as MercatMediatorAccount, PubAccount as MercatPubAccount, SecAccount,
-    TransferTransactionMediator, TransferTransactionReceiver, TransferTransactionSender,
+    EncryptionKeys, FinalizedTransferTx, InitializedAssetTx, InitializedTransferTx,
+    MediatorAccount as MercatMediatorAccount, PubAccount as MercatPubAccount, PubAccountTx,
+    SecAccount, TransferTransactionMediator, TransferTransactionReceiver,
+    TransferTransactionSender,
 };
 use rand_core::OsRng;
+use serde::Serialize;
+use std::convert::Into;
 use wasm_bindgen::prelude::*;
 
 // ------------------------------------------------------------------------------------
@@ -141,14 +142,11 @@ pub struct Account {
 }
 
 impl Account {
-    fn to_mercat(&self) -> MercatAccount {
-        let decoded = base64::decode(&self.secret_account).unwrap();
-        let secret = SecAccount::decode(&mut &decoded[..]).unwrap();
-
-        MercatAccount {
-            secret,
-            public: self.public_account.to_mercat(),
-        }
+    fn to_mercat(&self) -> Fallible<MercatAccount> {
+        Ok(MercatAccount {
+            secret: decode::<SecAccount>(self.secret_account.clone())?,
+            public: self.public_account.to_mercat()?,
+        })
     }
 }
 
@@ -159,26 +157,48 @@ pub struct PubAccount {
 }
 
 impl PubAccount {
-    fn to_mercat(&self) -> MercatPubAccount {
-        let decoded = base64::decode(&self.public_key).unwrap();
-        let owner_enc_pub_key = ElgamalPublicKey::decode(&mut &decoded[..]).unwrap();
-
-        let decoded = base64::decode(&self.account_id).unwrap();
-        let enc_asset_id = CipherText::decode(&mut &decoded[..]).unwrap();
-
-        MercatPubAccount {
-            owner_enc_pub_key,
-            enc_asset_id,
-        }
+    fn to_mercat(&self) -> Fallible<MercatPubAccount> {
+        Ok(MercatPubAccount {
+            owner_enc_pub_key: decode::<ElgamalPublicKey>(self.public_key.clone())?,
+            enc_asset_id: decode::<CipherText>(self.account_id.clone())?,
+        })
     }
 }
 
 impl MediatorAccount {
-    fn to_mercat(&self) -> MercatMediatorAccount {
-        let decoded = base64::decode(&self.secret).unwrap();
-        MercatMediatorAccount::decode(&mut &decoded[..]).unwrap()
+    fn to_mercat(&self) -> Fallible<MercatMediatorAccount> {
+        decode::<MercatMediatorAccount>(self.secret.clone())
     }
 }
+
+// ------------------------------------------------------------------------------------
+// -                                     Error Types                                  -
+// ------------------------------------------------------------------------------------
+
+#[wasm_bindgen]
+#[derive(Serialize)]
+pub enum Error {
+    AccountCreationError,
+    AssetIssuanceError,
+    TransactionCreationError,
+    TransactionFinalizationError,
+    TransactionJustificationError,
+    DeserializationError,
+    Base64DecodingError,
+    HexDecodingError,
+}
+
+impl From<Error> for JsValue {
+    fn from(e: Error) -> JsValue {
+        if let Ok(msg) = serde_json::to_string(&e) {
+            msg.into()
+        } else {
+            "Failed to serialized the error to string!".into()
+        }
+    }
+}
+
+type Fallible<T> = Result<T, JsValue>;
 
 // ------------------------------------------------------------------------------------
 // -                                     Public API                                   -
@@ -198,21 +218,20 @@ impl MediatorAccount {
 pub fn create_account(
     valid_ticker_ids: ValidAssetIds,
     ticker_id: PlainHex,
-) -> Result<CreatAccountOutput, JsValue> {
+) -> Fallible<CreatAccountOutput> {
     let mut rng = OsRng;
 
-    let secret_account = create_secret_account(&mut rng, ticker_id.clone()).unwrap(); // TODO
+    let secret_account = create_secret_account(&mut rng, ticker_id)?;
     let valid_asset_ids: Vec<AssetId> = valid_ticker_ids
         .plain_hex_ids
         .into_iter()
-        .map(|ticker_id| Ok(ticker_id_to_asset_id(ticker_id)))
-        .collect::<Result<Vec<AssetId>, Error>>()
-        .unwrap();
+        .map(ticker_id_to_asset_id)
+        .collect::<Fallible<Vec<AssetId>>>()?;
     let valid_asset_ids = convert_asset_ids(valid_asset_ids);
-    let account_tx = AccountCreator
+    let account_tx: PubAccountTx = AccountCreator
         .create(&secret_account, &valid_asset_ids, &mut rng)
-        .unwrap();
-    let account_id = account_tx.pub_account.enc_asset_id.clone();
+        .map_err(|_| Error::AccountCreationError)?;
+    let account_id = account_tx.pub_account.enc_asset_id;
 
     Ok(CreatAccountOutput {
         secret_account: base64::encode(secret_account.encode()),
@@ -237,8 +256,8 @@ pub fn create_mediator_account() -> CreatMediatorAccountOutput {
 
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
     let mediator_enc_key = EncryptionKeys {
-        public: mediator_elg_secret_key.get_public_key().into(),
-        secret: mediator_elg_secret_key.into(),
+        public: mediator_elg_secret_key.get_public_key(),
+        secret: mediator_elg_secret_key,
     };
 
     CreatMediatorAccountOutput {
@@ -265,15 +284,15 @@ pub fn create_mediator_account() -> CreatMediatorAccountOutput {
 /// # Errors
 /// * todo
 #[wasm_bindgen]
-pub fn mint_asset(amount: u32, issuer_account: Account) -> MintAssetOutput {
+pub fn mint_asset(amount: u32, issuer_account: Account) -> Fallible<MintAssetOutput> {
     let mut rng = OsRng;
-    let asset_tx = AssetIssuer
-        .initialize_asset_transaction(&issuer_account.to_mercat(), &[], amount, &mut rng)
-        .unwrap(); // TODO
+    let asset_tx: InitializedAssetTx = AssetIssuer
+        .initialize_asset_transaction(&issuer_account.to_mercat()?, &[], amount, &mut rng)
+        .map_err(|_| Error::AssetIssuanceError)?;
 
-    MintAssetOutput {
+    Ok(MintAssetOutput {
         asset_tx: base64::encode(asset_tx.encode()),
-    }
+    })
 }
 
 /// TODO
@@ -293,24 +312,24 @@ pub fn create_transaction(
     encrypted_pending_balance: Base64,
     receiver_public_account: PubAccount,
     mediator_public_key: Base64,
-) -> CreateTransactionOutput {
+) -> Fallible<CreateTransactionOutput> {
     let mut rng = OsRng;
 
     let init_tx = CtxSender
         .create_transaction(
-            &sender_account.to_mercat(),
-            &decode::<CipherText>(encrypted_pending_balance),
-            &receiver_public_account.to_mercat(),
-            &decode::<ElgamalPublicKey>(mediator_public_key),
+            &sender_account.to_mercat()?,
+            &decode::<CipherText>(encrypted_pending_balance)?,
+            &receiver_public_account.to_mercat()?,
+            &decode::<ElgamalPublicKey>(mediator_public_key)?,
             &[],
             amount,
             &mut rng,
         )
-        .unwrap();
+        .map_err(|_| Error::TransactionCreationError)?;
 
-    CreateTransactionOutput {
+    Ok(CreateTransactionOutput {
         init_tx: base64::encode(init_tx.encode()),
-    }
+    })
 }
 
 /// TODO
@@ -328,21 +347,21 @@ pub fn finalize_transaction(
     amount: u32,
     init_tx: Base64,
     receiver_account: Account,
-) -> FinalizedTransactionOutput {
+) -> Fallible<FinalizedTransactionOutput> {
     let mut rng = OsRng;
 
     let finalized_tx = CtxReceiver
         .finalize_transaction(
-            decode::<InitializedTransferTx>(init_tx),
-            receiver_account.to_mercat(),
+            decode::<InitializedTransferTx>(init_tx)?,
+            receiver_account.to_mercat()?,
             amount,
             &mut rng,
         )
-        .unwrap();
+        .map_err(|_| Error::TransactionFinalizationError)?;
 
-    FinalizedTransactionOutput {
+    Ok(FinalizedTransactionOutput {
         finalized_tx: base64::encode(finalized_tx.encode()),
-    }
+    })
 }
 
 /// TODO
@@ -363,57 +382,63 @@ pub fn justify_transaction(
     sender_encrypted_pending_balance: Base64,
     receiver_public_account: PubAccount,
     ticker_id: PlainHex,
-) -> JustifiedTransactionOutput {
+) -> Fallible<JustifiedTransactionOutput> {
     let mut rng = OsRng;
 
     let justified_tx = CtxMediator
         .justify_transaction(
-            decode::<FinalizedTransferTx>(finalized_tx),
-            &mediator_account.to_mercat().encryption_key,
-            &sender_public_account.to_mercat(),
-            &decode::<EncryptedAmount>(sender_encrypted_pending_balance),
-            &receiver_public_account.to_mercat(),
+            decode::<FinalizedTransferTx>(finalized_tx)?,
+            &mediator_account.to_mercat()?.encryption_key,
+            &sender_public_account.to_mercat()?,
+            &decode::<EncryptedAmount>(sender_encrypted_pending_balance)?,
+            &receiver_public_account.to_mercat()?,
             &[],
-            ticker_id_to_asset_id(ticker_id),
+            ticker_id_to_asset_id(ticker_id)?,
             &mut rng,
         )
-        .unwrap();
+        .map_err(|_| Error::TransactionJustificationError)?;
 
-    JustifiedTransactionOutput {
+    Ok(JustifiedTransactionOutput {
         justified_tx: base64::encode(justified_tx.encode()),
-    }
+    })
 }
 
 // ------------------------------------------------------------------------------------
 // -                               Internal Functions                                 -
 // ------------------------------------------------------------------------------------
 
-fn decode<T: Decode>(data: Base64) -> T {
-    let decoded = base64::decode(data).unwrap();
-    T::decode(&mut &decoded[..]).unwrap()
+fn decode<T: Decode>(data: Base64) -> Fallible<T> {
+    if let Ok(decoded) = base64::decode(data) {
+        if let Ok(ret) = T::decode(&mut &decoded[..]) {
+            return Ok(ret);
+        }
+        return Err(Error::DeserializationError.into());
+    }
+
+    Err(Error::Base64DecodingError.into())
 }
 
-fn ticker_id_to_asset_id(ticker_id: PlainHex) -> AssetId {
+fn ticker_id_to_asset_id(ticker_id: PlainHex) -> Fallible<AssetId> {
     let mut asset_id = [0u8; 12];
-    let decoded = hex::decode(ticker_id).unwrap();
+    let decoded = hex::decode(ticker_id).map_err(|_| Error::HexDecodingError)?;
     asset_id[..decoded.len()].copy_from_slice(&decoded);
-    AssetId { id: asset_id }
+    Ok(AssetId { id: asset_id })
 }
 
-fn create_secret_account(rng: &mut OsRng, ticker_id: String) -> Result<SecAccount, Error> {
+fn create_secret_account(rng: &mut OsRng, ticker_id: String) -> Fallible<SecAccount> {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
-        public: elg_pub.into(),
-        secret: elg_secret.into(),
+        public: elg_pub,
+        secret: elg_secret,
     };
 
     let mut asset_id = [0u8; 12];
-    let decoded = hex::decode(ticker_id).unwrap();
+    let decoded = hex::decode(ticker_id).map_err(|_| Error::HexDecodingError)?;
     asset_id[..decoded.len()].copy_from_slice(&decoded);
 
     let asset_id = AssetId { id: asset_id };
-    let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));
+    let asset_id_witness = CommitmentWitness::new(asset_id.into(), Scalar::random(rng));
 
     Ok(SecAccount {
         enc_keys,
