@@ -1,14 +1,14 @@
-//! Provides interactive ZKP for statements of muliple base.
+//! Provides interactive ZKP for statements of multiple base.
 //!
 //! Statement: q=G^x
-//! ZKP(q, G):
+//! ZKP(q; G):
 //!   1. P -> V: A = G^r
 //!   2. V -> P: c
 //!   3. P -> V: s = r + c*x
 //!   4. V: G^s == A * q^c
 //!
 //! Statement: q=H^y*F^z
-//! ZKP(q, G):
+//! ZKP(q; H, F):
 //!   1. P -> V: A = H^r1 * F^r2
 //!   2. V -> P: c
 //!   3. P -> V: s1 = r1 + c*y, s2 = r2 + c*z
@@ -93,7 +93,7 @@ pub fn verify(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{prover::generate_bliding_factor, InvestorID};
+    use crate::{prover::generate_blinding_factor, InvestorID};
     use confidential_identity::pedersen_commitments::PedersenGenerators;
     use cryptography_core::curve25519_dalek::traits::MultiscalarMul;
     use rand::{rngs::StdRng, SeedableRng};
@@ -136,7 +136,7 @@ mod tests {
             uid: Scalar::random(&mut rng),
             did: Scalar::random(&mut rng),
         };
-        let blinding_factor = generate_bliding_factor(investor.did, investor.uid);
+        let blinding_factor = generate_blinding_factor(investor.did, investor.uid);
         let secrets = [investor.did, investor.uid, blinding_factor];
         let cdd_id = pg.commit(&secrets);
         let r = Scalar::random(&mut rng);
