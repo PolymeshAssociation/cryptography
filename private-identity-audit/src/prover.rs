@@ -8,10 +8,9 @@
 use crate::{
     errors::Fallible,
     proofs::{apply_challenge, generate_initial_message},
-    ChallengeResponder, CommittedUids, InvestorID, ProofGenerator, Proofs, ProverFinalResponse,
-    ProverSecrets,
+    ChallengeResponder, CommittedUids, ProofGenerator, Proofs, ProverFinalResponse, ProverSecrets,
 };
-use confidential_identity::pedersen_commitments::PedersenGenerators;
+use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
@@ -30,12 +29,17 @@ pub fn generate_blinding_factor(uid: Scalar, did: Scalar) -> Scalar {
 
 impl ProofGenerator for InitialProver {
     fn generate_initial_proofs<T: RngCore + CryptoRng>(
-        investor: InvestorID,
+        claim: CddClaimData,
         rng: &mut T,
     ) -> Fallible<(ProverSecrets, Proofs)> {
         let pg = PedersenGenerators::default();
-        let blinding_factor = generate_blinding_factor(investor.uid, investor.did);
-        let secrets = [investor.uid, investor.did, blinding_factor];
+        let blinding_factor =
+            generate_blinding_factor(claim.investor_unique_id, claim.investor_did);
+        let secrets = [
+            claim.investor_unique_id,
+            claim.investor_did,
+            blinding_factor,
+        ];
         let cdd_id = pg.commit(&secrets);
 
         let r = Scalar::random(rng);
@@ -48,15 +52,18 @@ impl ProofGenerator for InitialProver {
         // Corresponds to proving b = h^{y*r} * f^{z*r}.
         let (cdd_id_second_half_proof_secrets, cdd_id_second_half_proof) =
             generate_initial_message(
-                [investor.did * r, blinding_factor * r].to_vec(),
+                [claim.investor_did * r, blinding_factor * r].to_vec(),
                 vec![pg.generators[1], pg.generators[2]],
                 rng,
             )?;
-        let b = (pg.generators[1] * investor.did + pg.generators[2] * blinding_factor) * r;
+        let b = (pg.generators[1] * claim.investor_did + pg.generators[2] * blinding_factor) * r;
 
         // Corresponds to proving a/b = g^{x*r}.
-        let (uid_commitment_proof_secrets, uid_commitment_proof) =
-            generate_initial_message(vec![investor.uid * r], vec![pg.generators[0]], rng)?;
+        let (uid_commitment_proof_secrets, uid_commitment_proof) = generate_initial_message(
+            vec![claim.investor_unique_id * r],
+            vec![pg.generators[0]],
+            rng,
+        )?;
 
         Ok((
             ProverSecrets {
@@ -86,6 +93,9 @@ impl ChallengeResponder for FinalProver {
         let r = secrets.rand;
         let mut recommitted_uids: Vec<RistrettoPoint> =
             committed_uids.into_iter().map(|e_uid| e_uid * r).collect();
+        // The prover reshuffles the set. Otherwise, once the verifiers searches for the element
+        // and finds it, the verifier can tell which element it was based on the position in the
+        // set.
         recommitted_uids.shuffle(rng);
 
         let cdd_id_proof_response = apply_challenge(secrets.cdd_id_proof_secrets, challenge);
@@ -111,9 +121,9 @@ mod tests {
         prover::{generate_blinding_factor, FinalProver, InitialProver},
         uuid_to_scalar,
         verifier::{gen_random_uuids, Verifier, VerifierSetGenerator},
-        ChallengeGenerator, ChallengeResponder, InvestorID, ProofGenerator, ProofVerifier,
+        ChallengeGenerator, ChallengeResponder, ProofGenerator, ProofVerifier,
     };
-    use confidential_identity::pedersen_commitments::PedersenGenerators;
+    use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
     use cryptography_core::curve25519_dalek::scalar::Scalar;
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -129,21 +139,21 @@ mod tests {
             .collect();
 
         // Verifier shares one of its uids with the Prover.
-        let investor = InvestorID {
-            uid: private_uid_set[0],
-            did: Scalar::random(&mut rng),
+        let claim = CddClaimData {
+            investor_did: private_uid_set[0],
+            investor_unique_id: Scalar::random(&mut rng),
         };
 
         // Prover generates cdd_id and places it on the chain.
         let cdd_id = pg.commit(&[
-            investor.uid,
-            investor.did,
-            generate_blinding_factor(investor.uid, investor.did),
+            claim.investor_unique_id,
+            claim.investor_did,
+            generate_blinding_factor(claim.investor_unique_id, claim.investor_did),
         ]);
 
         // P -> V: Prover generates and sends the initial message.
         let (prover_secrets, proofs) =
-            InitialProver::generate_initial_proofs(investor, &mut rng).unwrap();
+            InitialProver::generate_initial_proofs(claim, &mut rng).unwrap();
 
         // V -> P: Prover sends `proofs` and Verifier returns a list of 10 uids and the challenge.
         let (verifier_secrets, committed_uids, challenge) = VerifierSetGenerator

@@ -12,6 +12,7 @@ mod proofs;
 mod prover;
 mod verifier;
 use blake2::{Blake2b, Digest};
+use confidential_identity::CddClaimData;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use errors::Fallible;
 use proofs::{FinalResponse, InitialMessage, Secrets};
@@ -32,13 +33,6 @@ pub type CommittedUids = Vec<RistrettoPoint>;
 
 /// The Zero-Knowledge challenge.
 pub type Challenge = Scalar;
-
-/// Holds the information about the investor. The DID is public while the uID is private
-/// to the CDD Provider.
-pub struct InvestorID {
-    did: Scalar,
-    uid: Scalar,
-}
 
 /// Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.
 pub struct Proofs {
@@ -95,7 +89,7 @@ pub trait ProofGenerator {
     ///    the protocol and should be stored locally.
     /// * `Proofs`: The initial messages of ZKPs.
     fn generate_initial_proofs<T: RngCore + CryptoRng>(
-        investor: InvestorID,
+        investor: CddClaimData,
         rng: &mut T,
     ) -> Fallible<(ProverSecrets, Proofs)>;
 }
