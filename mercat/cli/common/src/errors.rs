@@ -1,4 +1,3 @@
-use crate::CoreTransaction;
 use failure::Fail;
 use std::path::PathBuf;
 
@@ -130,8 +129,8 @@ pub enum Error {
     InvalidTransactionFile { path: String },
 
     /// Transaction is not ready for validation
-    #[fail(display = "Transaction is not ready for validation: {:?}.", tx)]
-    TransactionIsNotReadyForValidation { tx: CoreTransaction },
+    #[fail(display = "Transaction is not ready for validation.")]
+    TransactionIsNotReadyForValidation,
 
     /// Last transaction could not be found for user.
     #[fail(display = "Last transaction could not be found for user: {:?}.", user)]

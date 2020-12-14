@@ -5,7 +5,6 @@ use crate::{
     OrderedTransferInstruction, TransferInstruction, COMMON_OBJECTS_DIR,
     MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
 };
-use base64;
 use codec::{Decode, Encode};
 use cryptography_core::{asset_id_from_ticker, asset_proofs::ElgamalSecretKey};
 use curve25519_dalek::scalar::Scalar;
@@ -23,8 +22,8 @@ fn generate_mediator_keys<R: RngCore + CryptoRng>(
 ) -> (EncryptionPubKey, MediatorAccount) {
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
     let mediator_enc_key = EncryptionKeys {
-        public: mediator_elg_secret_key.get_public_key().into(),
-        secret: mediator_elg_secret_key.into(),
+        public: mediator_elg_secret_key.get_public_key(),
+        secret: mediator_elg_secret_key,
     };
 
     (
@@ -129,7 +128,7 @@ pub fn justify_asset_transfer_transaction(
     let sender_ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
-        &sender.clone(),
+        &sender,
         &user_public_account_file(&ticker),
     )?;
     let sender_account_balance: EncryptedAmount = load_object(
@@ -142,7 +141,7 @@ pub fn justify_asset_transfer_transaction(
     let receiver_ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
-        &receiver.clone(),
+        &receiver,
         &user_public_account_file(&ticker),
     )?;
 
@@ -215,7 +214,7 @@ pub fn justify_asset_transfer_transaction(
         };
 
         save_object(
-            db_dir.clone(),
+            db_dir,
             ON_CHAIN_DIR,
             COMMON_OBJECTS_DIR,
             &confidential_transaction_file(tx_id, &sender, rejected_state),

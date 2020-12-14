@@ -3,7 +3,6 @@ use crate::{
     save_object, user_public_account_file, user_secret_account_file, OrderedAssetInstruction,
     OrderedPubAccount, OrderingState, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
-use base64;
 use codec::Encode;
 use cryptography_core::{asset_id_from_ticker, asset_proofs::CommitmentWitness};
 use curve25519_dalek::scalar::Scalar;
@@ -104,10 +103,9 @@ pub fn process_issue_asset(
         let cheat_asset_id =
             asset_id_from_ticker("CHEAT").map_err(|error| Error::LibraryError { error })?;
         let cheat_asset_id_witness =
-            CommitmentWitness::new(cheat_asset_id.clone().into(), Scalar::random(&mut rng));
+            CommitmentWitness::new(cheat_asset_id.into(), Scalar::random(&mut rng));
         let cheat_enc_asset_id = issuer_account
             .secret
-            .clone()
             .enc_keys
             .public
             .encrypt(&cheat_asset_id_witness);

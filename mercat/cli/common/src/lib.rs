@@ -9,7 +9,6 @@ mod harness;
 pub mod justify;
 pub mod validate;
 
-use base64;
 use codec::{Decode, Encode};
 use cryptography_core::asset_proofs::CipherText;
 use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
@@ -111,15 +110,13 @@ impl CoreTransaction {
 
     /// Returns true for outgoing transactions.
     fn decreases_account_balance(&self) -> bool {
-        match self {
-            CoreTransaction::TransferInit {
-                tx: _,
-                sender: _,
-                ordering_state: _,
-                tx_id: _,
-            } => true,
-            _ => false,
-        }
+        matches!(self,
+        CoreTransaction::TransferInit {
+            tx: _,
+            sender: _,
+            ordering_state: _,
+            tx_id: _,
+        })
     }
 
     pub fn ordering_state(&self) -> OrderingState {
@@ -195,7 +192,7 @@ impl OrderingState {
         Self {
             last_processed_tx_counter: None,
             last_pending_tx_counter: 0,
-            tx_id: tx_id,
+            tx_id,
         }
     }
 }
@@ -261,37 +258,37 @@ impl fmt::Display for PrintableAccountId {
 
 impl PrintableAccountId {
     fn to_string(&self) -> String {
-        format!("{}", base64::encode(self.0.clone()))
+        base64::encode(self.0.clone())
     }
 }
 
 #[inline]
-pub fn asset_transaction_file(tx_id: u32, user: &String, state: AssetTxState) -> String {
+pub fn asset_transaction_file(tx_id: u32, user: &str, state: AssetTxState) -> String {
     format!("tx_{}_{}_{}.json", tx_id, user, state)
 }
 
 #[inline]
-pub fn confidential_transaction_file(tx_id: u32, user: &String, state: TransferTxState) -> String {
+pub fn confidential_transaction_file(tx_id: u32, user: &str, state: TransferTxState) -> String {
     format!("tx_{}_{}_{}.json", tx_id, user, state)
 }
 
 #[inline]
-pub fn account_create_transaction_file(tx_id: u32, user: &String, ticker: &String) -> String {
+pub fn account_create_transaction_file(tx_id: u32, user: &str, ticker: &str) -> String {
     format!("tx_{}_{}_ticker#{}.json", tx_id, user, ticker)
 }
 
 #[inline]
-pub fn user_public_account_file(ticker: &String) -> String {
+pub fn user_public_account_file(ticker: &str) -> String {
     format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_FILE)
 }
 
 #[inline]
-pub fn user_public_account_balance_file(ticker: &String) -> String {
+pub fn user_public_account_balance_file(ticker: &str) -> String {
     format!("{}_{}", ticker, VALIDATED_PUBLIC_ACCOUNT_BALANCE_FILE)
 }
 
 #[inline]
-pub fn user_secret_account_file(ticker: &String) -> String {
+pub fn user_secret_account_file(ticker: &str) -> String {
     format!("{}_{}", ticker, SECRET_ACCOUNT_FILE)
 }
 
@@ -624,13 +621,13 @@ pub fn get_user_ticker_from(
     account_id: EncryptedAssetId,
     db_dir: PathBuf,
 ) -> Result<(String, String, u32), Error> {
-    let mapping = load_account_map(db_dir.clone());
+    let mapping = load_account_map(db_dir);
     let (user, ticker, tx_id) = mapping
         .get(&PrintableAccountId(account_id.encode()).to_string())
         .ok_or(Error::AccountIdNotFound {
             account_id: PrintableAccountId(account_id.encode()).to_string(),
         })?;
-    Ok((user.clone(), ticker.clone(), tx_id.clone()))
+    Ok((user.clone(), ticker.clone(), *tx_id))
 }
 
 /// Searches the on-chain transactions to find the last transaction that the give user has submitted
@@ -646,7 +643,7 @@ pub fn last_ordering_state(
 
     let parsed: (Option<Error>, Option<u32>, Option<u32>, CoreTransaction) = all_tx_files
         .into_iter()
-        .map(|tx| parse_tx_name(tx)) // Extract info from file name.
+        .map(parse_tx_name) // Extract info from file name.
         .filter(|res| {
             // Keep only the files that are created for the current user.
             res.as_ref().map_or_else(
@@ -696,7 +693,7 @@ pub fn last_ordering_state(
             },
         );
     let (prev_error, last_processed_tx_counter, last_pending_tx_counter, _) = parsed;
-    if let Some(_) = prev_error {
+    if prev_error.is_some() {
         return Err(Error::LastTransactionNotFound { user });
     }
     if last_pending_tx_counter == None {
@@ -718,14 +715,14 @@ pub fn last_ordering_state(
 /// between `start` and `end`.
 #[inline]
 pub fn load_tx_between_counters(
-    user: &String,
+    user: &str,
     db_dir: PathBuf,
     start: u32,
     end: u32,
 ) -> Result<Vec<CoreTransaction>, Error> {
     all_unverified_tx_files(db_dir)?
         .into_iter()
-        .map(|tx| parse_tx_name(tx))
+        .map(parse_tx_name)
         .filter(|res| {
             // keep only the files that are created for the current user.
             res.as_ref()
@@ -755,7 +752,7 @@ pub fn load_tx_between_counters(
 /// given user and computes the pending balance.
 #[inline]
 pub fn compute_enc_pending_balance(
-    sender: &String,
+    sender: &str,
     ordering_state: OrderingState, // The state at the time of creating the last transaction.
     last_processed_tx_counter: Option<u32>, // The current last processed tx counter.
     enc_balance_in_account: EncryptedAmount,
@@ -785,7 +782,7 @@ pub fn compute_enc_pending_balance(
         "------------> found {} outgoing transactions",
         transfer_inits.len()
     );
-    if transfer_inits.len() == 0 {
+    if transfer_inits.is_empty() {
         // There are no pending transactions.
         return Ok(enc_balance_in_account);
     }
@@ -826,7 +823,7 @@ pub fn compute_enc_pending_balance(
 /// Searches the on-chain data and returns all the transactions since the last verification.
 pub fn all_unverified_tx_files(db_dir: PathBuf) -> Result<Vec<String>, Error> {
     let start = last_verified_tx_id(db_dir.clone());
-    let mut dir = db_dir.clone();
+    let mut dir = db_dir;
     dir.push(ON_CHAIN_DIR);
     dir.push(COMMON_OBJECTS_DIR);
 
@@ -962,7 +959,7 @@ fn debug_decrypt(
     )?;
     let account = Account {
         secret: load_object(
-            db_dir.clone(),
+            db_dir,
             OFF_CHAIN_DIR,
             &user,
             &user_secret_account_file(&ticker),
@@ -991,7 +988,7 @@ pub fn debug_decrypt_account_balance(
         &user_public_account_balance_file(&ticker),
     )?;
     let secret: SecAccount = load_object(
-        db_dir.clone(),
+        db_dir,
         OFF_CHAIN_DIR,
         &user,
         &user_secret_account_file(&ticker),
@@ -1014,7 +1011,7 @@ pub fn debug_decrypt_base64_account_balance(
     let mut data: &[u8] = &base64::decode(encrypted_value).unwrap();
     let enc_balance = EncryptedAmount::decode(&mut data).unwrap();
     let scrt: SecAccount = load_object(
-        db_dir.clone(),
+        db_dir,
         OFF_CHAIN_DIR,
         &user,
         &user_secret_account_file(&ticker),

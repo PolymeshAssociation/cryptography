@@ -130,7 +130,7 @@ impl<'a> MembershipProverAwaitingChallenge<'a> {
         let secret_position: u32 = elements_set
             .iter()
             .position(|&r| r == secret_element)
-            .ok_or_else(|| ErrorKind::MembershipProofInvalidAssetError)?
+            .ok_or(ErrorKind::MembershipProofInvalidAssetError)?
             as u32;
 
         ensure!(!elements_set.is_empty(), ErrorKind::EmptyElementsSet);
@@ -209,8 +209,8 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
         for i in 0..size as usize {
             polynomials.push(one.clone());
             let i_rep = convert_to_base(i, self.base as usize, exp);
-            for k in 0..self.exp as usize {
-                let t: usize = k * self.base as usize + i_rep[k];
+            for (k, item) in i_rep.iter().enumerate().take(self.exp as usize) {
+                let t: usize = k * self.base as usize + item;
                 polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
             }
         }
@@ -220,15 +220,18 @@ impl<'a> AssetProofProverAwaitingChallenge for MembershipProverAwaitingChallenge
             g_values.push(rho[k] * pc_gens.B_blinding);
             let mut sum1 = Scalar::zero();
             let mut sum2 = Scalar::zero();
-            for i in 0..initial_size as usize {
-                sum1 += polynomials[i].coeffs[k];
-                sum2 += polynomials[i].coeffs[k] * self.elements_set[i];
+            for (i, polynomial) in polynomials.iter().enumerate().take(initial_size as usize) {
+                sum1 += polynomial.coeffs[k];
+                sum2 += polynomial.coeffs[k] * self.elements_set[i];
             }
             if size > initial_size {
-                for i in (initial_size as usize)..size as usize {
-                    sum1 += polynomials[i].coeffs[k];
-                    sum2 +=
-                        polynomials[i].coeffs[k] * self.elements_set[(initial_size - 1) as usize];
+                for polynomial in polynomials
+                    .iter()
+                    .take(size as usize)
+                    .skip(initial_size as usize)
+                {
+                    sum1 += polynomial.coeffs[k];
+                    sum2 += polynomial.coeffs[k] * self.elements_set[(initial_size - 1) as usize];
                 }
             }
             g_values[k] += (sum1 * secret_commitment) - (sum2 * pc_gens.B);

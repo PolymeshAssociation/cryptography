@@ -12,7 +12,6 @@ use confidential_identity::{
     ProofKeyPair, ScopeClaimData,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
-use hex;
 use rand::{rngs::StdRng, SeedableRng};
 use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -179,7 +178,7 @@ fn process_create_cdd_id(cfg: CreateCDDIdInfo) {
 
         raw_cdd_data
     } else {
-        let file_cdd_claim = match cfg.cdd_claim {
+        match cfg.cdd_claim {
             Some(c) => {
                 let json_file_content =
                     std::fs::read_to_string(&c).expect("Failed to read the cdd claim from file.");
@@ -188,9 +187,7 @@ fn process_create_cdd_id(cfg: CreateCDDIdInfo) {
                 })
             }
             None => panic!("You must either pass in a claim file or generate it randomly."),
-        };
-
-        file_cdd_claim
+        }
     };
 
     let cdd_claim = CddClaimData::new(&raw_cdd_data.investor_did, &raw_cdd_data.investor_unique_id);
@@ -205,7 +202,7 @@ fn process_create_cdd_id(cfg: CreateCDDIdInfo) {
     let cdd_id = compute_cdd_id(&cdd_claim);
 
     // => CDD provider includes the CDD Id in their claim and submits it to the PolyMesh.
-    let packaged_cdd_id = CddId { cdd_id: cdd_id };
+    let packaged_cdd_id = CddId { cdd_id };
     let cdd_id_str = serde_json::to_string(&packaged_cdd_id)
         .unwrap_or_else(|error| panic!("Failed to serialize the CDD Id: {}", error));
 
@@ -227,7 +224,7 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
         let rand_unique_id = random_unique_id(&mut rng);
         let raw_cdd_data = RawCddClaimData {
             investor_did: rand_investor_did,
-            investor_unique_id: rand_unique_id.clone(),
+            investor_unique_id: rand_unique_id,
         };
 
         let rand_scope_did = random_scope_did(&mut rng);
@@ -319,9 +316,9 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
 
     // => Investor makes {cdd_id, investor_did, scope_id, scope_did, proof} public knowledge.
     let packaged_proof = Proof {
-        cdd_id: cdd_id,
+        cdd_id,
         investor_did: raw_cdd_claim.investor_did,
-        scope_id: scope_id,
+        scope_id,
         scope_did: raw_scope_claim.scope_did,
         proof,
     };

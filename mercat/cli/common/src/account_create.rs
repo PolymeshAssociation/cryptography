@@ -4,7 +4,6 @@ use crate::{
     OrderedPubAccountTx, OrderingState, PrintableAccountId, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR,
     ON_CHAIN_DIR,
 };
-use base64;
 use codec::Encode;
 use cryptography_core::{
     asset_id_from_ticker,
@@ -12,10 +11,7 @@ use cryptography_core::{
 };
 use curve25519_dalek::scalar::Scalar;
 use log::{error, info};
-use mercat::{
-    account::AccountCreator, AccountCreatorInitializer, EncryptedAssetId, EncryptionKeys,
-    SecAccount,
-};
+use mercat::{account::AccountCreator, AccountCreatorInitializer, EncryptionKeys, SecAccount};
 use metrics::timing;
 use rand::{CryptoRng, Rng, RngCore};
 use std::{path::PathBuf, time::Instant};
@@ -53,13 +49,12 @@ pub fn process_create_account(
                 let cheat_asset_id =
                     asset_id_from_ticker("CHEAT").map_err(|error| Error::LibraryError { error })?;
                 let cheat_asset_id_witness =
-                    CommitmentWitness::new(cheat_asset_id.clone().into(), Scalar::random(&mut rng));
+                    CommitmentWitness::new(cheat_asset_id.into(), Scalar::random(&mut rng));
                 let cheat_enc_asset_id = secret_account
-                    .clone()
                     .enc_keys
                     .public
                     .encrypt(&cheat_asset_id_witness);
-                account_tx.pub_account.enc_asset_id = EncryptedAssetId::from(cheat_enc_asset_id);
+                account_tx.pub_account.enc_asset_id = cheat_enc_asset_id;
             }
             1 => {
                 info!("CLI log: tx-{}: Cheating by overwriting the account id. Correct account id: {}",
@@ -80,7 +75,7 @@ pub fn process_create_account(
         &secret_account,
     )?;
 
-    let account_id = account_tx.pub_account.enc_asset_id.clone();
+    let account_id = account_tx.pub_account.enc_asset_id;
 
     let instruction = OrderedPubAccountTx {
         account_tx,
@@ -116,13 +111,13 @@ fn create_secret_account<R: RngCore + CryptoRng>(
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
-        public: elg_pub.into(),
-        secret: elg_secret.into(),
+        public: elg_pub,
+        secret: elg_secret,
     };
 
     let asset_id =
         asset_id_from_ticker(&ticker_id).map_err(|error| Error::LibraryError { error })?;
-    let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));
+    let asset_id_witness = CommitmentWitness::new(asset_id.into(), Scalar::random(rng));
 
     Ok(SecAccount {
         enc_keys,
