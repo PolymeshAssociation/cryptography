@@ -52,18 +52,12 @@ pub fn generate_initial_message<T: RngCore + CryptoRng>(
         .map(|(gen, rand)| gen * rand)
         .fold_first(|v1, v2| v1 + v2)
         .ok_or(ErrorKind::InitialMessageGenError)?;
-    Ok((
-        Secrets { rands, secrets },
-        InitialMessage {
-            a,
-            generators: generators.clone(),
-        },
-    ))
+    Ok((Secrets { rands, secrets }, InitialMessage { a, generators }))
 }
 
 pub fn apply_challenge(prover_secrets: Secrets, c: Challenge) -> FinalResponse {
     let s = (&prover_secrets.rands)
-        .into_iter()
+        .iter()
         .zip(&prover_secrets.secrets)
         .map(|(rand, secret)| rand + c * secret)
         .collect();

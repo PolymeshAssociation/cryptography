@@ -4,7 +4,6 @@ use confidential_identity::{
     ProofKeyPair, ScopeClaimData,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
-use hex;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -70,7 +69,7 @@ pub fn process_create_cdd_id(cdd_claim: String) -> Result<String, JsValue> {
 
     let cdd_id = compute_cdd_id(&cdd_claim);
 
-    let packaged_cdd_id = CddId { cdd_id: cdd_id };
+    let packaged_cdd_id = CddId { cdd_id };
     let cdd_id_str = serde_json::to_string(&packaged_cdd_id)
         .map_err(|error| format!("Failed to serialize the CDD Id: {}", error))?;
 
@@ -120,9 +119,9 @@ pub fn process_create_claim_proof(
 
     // => Investor makes {cdd_id, investor_did, scope_id, scope_did, proof} public knowledge.
     let packaged_proof = Proof {
-        cdd_id: cdd_id,
+        cdd_id,
         investor_did: raw_cdd_claim.investor_did,
-        scope_id: scope_id,
+        scope_id,
         scope_did: raw_scope_claim.scope_did,
         proof,
     };

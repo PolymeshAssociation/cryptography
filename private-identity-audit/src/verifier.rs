@@ -32,7 +32,7 @@ impl ChallengeGenerator for VerifierSetGenerator {
             let padding: Vec<Scalar> =
                 gen_random_uuids(min_size - private_unique_identifiers.len(), rng)
                     .into_iter()
-                    .map(|uuid| uuid_to_scalar(uuid))
+                    .map(uuid_to_scalar)
                     .collect();
             [&private_unique_identifiers[..], &padding[..]].concat()
         };

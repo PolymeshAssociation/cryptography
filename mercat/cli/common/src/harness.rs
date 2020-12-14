@@ -172,7 +172,7 @@ impl TryFrom<String> for Validate {
         if segment != "validate" {
             return Err(Error::RegexError {
                 reason: format!("Expected 'validate', got {}", segment),
-            })?;
+            });
         }
         Ok(Self {})
     }
@@ -235,8 +235,8 @@ impl Transaction {
     ) -> Vec<StepFunc> {
         match self {
             Transaction::Validate(validate) => validate.operations_order(chain_db_dir),
-            Transaction::Issue(fund) => fund.operations_order(rng, chain_db_dir.clone()),
-            Transaction::Transfer(transfer) => transfer.operations_order(rng, chain_db_dir.clone()),
+            Transaction::Issue(fund) => fund.operations_order(rng, chain_db_dir),
+            Transaction::Transfer(transfer) => transfer.operations_order(rng, chain_db_dir),
             Transaction::Create(create) => create.operations_order(rng, chain_db_dir),
         }
     }
@@ -266,7 +266,8 @@ impl Transfer {
         let amount = self.amount;
         let tx_id = self.tx_id;
         let cheat = self.sender.cheater;
-        return Box::new(move || {
+
+        Box::new(move || {
             info!("Running: {}", value.clone());
             process_create_tx(
                 seed.clone(),
@@ -281,7 +282,7 @@ impl Transfer {
                 cheat,
             )?;
             Ok(value.clone())
-        });
+        })
     }
 
     pub fn receive<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
@@ -305,7 +306,8 @@ impl Transfer {
         let amount = self.amount;
         let tx_id = self.tx_id;
         let cheat = self.receiver.cheater;
-        return Box::new(move || {
+
+        Box::new(move || {
             info!("Running: {}", value.clone());
             process_finalize_tx(
                 seed.clone(),
@@ -319,7 +321,7 @@ impl Transfer {
                 cheat,
             )?;
             Ok(value.clone())
-        });
+        })
     }
 
     pub fn mediate<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
@@ -343,7 +345,8 @@ impl Transfer {
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
         let cheat = self.mediator.cheater;
-        return Box::new(move || {
+
+        Box::new(move || {
             info!("Running: {}", value.clone());
             justify_asset_transfer_transaction(
                 chain_db_dir.clone(),
@@ -358,7 +361,7 @@ impl Transfer {
                 cheat,
             )?;
             Ok(value.clone())
-        });
+        })
     }
 
     pub fn operations_order<T: RngCore + CryptoRng>(
@@ -369,7 +372,7 @@ impl Transfer {
         vec![
             self.send(rng, chain_db_dir.clone()),
             self.receive(rng, chain_db_dir.clone()),
-            self.mediate(rng, chain_db_dir.clone()),
+            self.mediate(rng, chain_db_dir),
         ]
     }
 }
@@ -393,11 +396,11 @@ impl Create {
                 self.tx_id,
                 cheater_flag(self.owner.cheater)
             );
-            let ticker = ticker.clone();
             let owner = self.owner.name.clone();
             let cheat = self.owner.cheater;
             let tx_id = self.tx_id;
-            return Box::new(move || {
+
+            Box::new(move || {
                 info!("Running: {}", value.clone());
                 process_create_account(
                     Some(seed.clone()),
@@ -409,7 +412,7 @@ impl Create {
                     cheat,
                 )?;
                 Ok(value.clone())
-            });
+            })
         } else {
             // create a mediator account
             let value = format!(
@@ -421,11 +424,12 @@ impl Create {
                 cheater_flag(self.owner.cheater)
             );
             let owner = self.owner.name.clone();
-            return Box::new(move || {
+
+            Box::new(move || {
                 info!("Running: {}", value.clone());
                 process_create_mediator(seed.clone(), chain_db_dir.clone(), owner.clone())?;
                 Ok(value.clone())
-            });
+            })
         }
     }
 
@@ -434,7 +438,7 @@ impl Create {
         rng: &mut T,
         chain_db_dir: PathBuf,
     ) -> Vec<StepFunc> {
-        vec![self.create_account(rng, chain_db_dir.clone())]
+        vec![self.create_account(rng, chain_db_dir)]
     }
 }
 
@@ -457,7 +461,8 @@ impl Issue {
         let amount = self.amount;
         let tx_id = self.tx_id;
         let cheat = self.issuer.cheater;
-        return Box::new(move || {
+
+        Box::new(move || {
             info!("Running: {}", value.clone());
             process_issue_asset(
                 seed.clone(),
@@ -470,7 +475,7 @@ impl Issue {
                 cheat,
             )?;
             Ok(value.clone())
-        });
+        })
     }
 
     pub fn operations_order<T: RngCore + CryptoRng>(
@@ -478,7 +483,7 @@ impl Issue {
         rng: &mut T,
         chain_db_dir: PathBuf,
     ) -> Vec<StepFunc> {
-        vec![self.issue(rng, chain_db_dir.clone())]
+        vec![self.issue(rng, chain_db_dir)]
     }
 }
 
@@ -489,11 +494,12 @@ impl Validate {
             "tx-NA: $ mercat-validator validate --db-dir {}",
             path_to_string(&chain_db_dir),
         );
-        return Box::new(move || {
+
+        Box::new(move || {
             info!("Running: {}", value.clone());
             validate_all_pending(chain_db_dir.clone())?;
             Ok(value.clone())
-        });
+        })
     }
 
     pub fn operations_order(&self, chain_db_dir: PathBuf) -> Vec<StepFunc> {
@@ -538,9 +544,9 @@ impl TransactionMode {
                 let mut rng = StdRng::from_seed(seed);
                 let mut seq: Vec<StepFunc> = vec![];
 
-                while seqs.len() != 0 {
+                while !seqs.is_empty() {
                     let next = rng.gen_range(0, seqs.len());
-                    if seqs[next].len() == 0 {
+                    if seqs[next].is_empty() {
                         seqs.remove(next);
                         continue;
                     }
@@ -662,7 +668,7 @@ fn all_dirs_in_dir(dir: PathBuf) -> Result<Vec<PathBuf>, Error> {
     }
     Ok(files)
 }
-fn make_empty_accounts(accounts: &Vec<InputAccount>) -> Result<(u32, TransactionMode), Error> {
+fn make_empty_accounts(accounts: &[InputAccount]) -> Result<(u32, TransactionMode), Error> {
     let mut transaction_counter = 0;
     let mut seq: Vec<TransactionMode> = vec![];
     for account in accounts {
@@ -686,7 +692,7 @@ fn to_string(value: &Yaml, path: PathBuf, attribute: &str) -> Result<String, Err
     Ok(value
         .as_str()
         .ok_or(Error::ErrorParsingTestHarnessConfig {
-            path: path,
+            path,
             reason: format!("Failed to read {}", attribute),
         })?
         .to_string())
@@ -731,7 +737,7 @@ fn parse_transactions(
         return Ok((transaction_id, transaction_list));
     }
     let transactions = to_array(value, path.clone(), attribute)?;
-    for transaction in transactions.into_iter() {
+    for transaction in transactions.iter() {
         // In the yaml file, either the transaction starts with a keyword of sequence or concurrent,
         // or it is simply a string. If it is a string, then it either represents an asset issuance or a transfer.
         match &transaction {
@@ -747,13 +753,13 @@ fn parse_transactions(
                     )?;
                     transaction_id = new_transaction_id;
                     if key == "sequence" {
-                        // TODO: CRYP-122: Add repeat to the config. Create new story for it.
+                        // TODO: CRYP-122: Add repeat to the config.
                         transaction_list.push(TransactionMode::Sequence { repeat: 1, steps });
                     } else if key == "concurrent" {
                         transaction_list.push(TransactionMode::Concurrent { repeat: 1, steps });
                     } else {
                         return Err(Error::ErrorParsingTestHarnessConfig {
-                            path: path.clone(),
+                            path,
                             reason: format!("key: {} is invalid", key),
                         });
                     }
@@ -761,33 +767,33 @@ fn parse_transactions(
             }
             // check if a string is found
             Yaml::String(transaction) => {
-                if let Some(issue) = Issue::try_from((transaction_id, transaction.to_string()))
+                if let Ok(issue) = Issue::try_from((transaction_id, transaction.to_string()))
                     .map_err(|_| Error::ErrorParsingTestHarnessConfig {
                         path: path.clone(),
                         reason: String::from("issuance"),
                     })
-                    .ok()
                 {
                     transaction_id += 1;
                     transaction_list.push(TransactionMode::Transaction(Transaction::Issue(issue)));
-                } else if let Some(transfer) =
-                    Transfer::try_from((transaction_id, transaction.to_string()))
-                        .map_err(|_| Error::ErrorParsingTestHarnessConfig {
+                } else if let Ok(transfer) =
+                    Transfer::try_from((transaction_id, transaction.to_string())).map_err(|_| {
+                        Error::ErrorParsingTestHarnessConfig {
                             path: path.clone(),
                             reason: String::from("transfer"),
-                        })
-                        .ok()
+                        }
+                    })
                 {
                     transaction_id += 1;
                     transaction_list.push(TransactionMode::Transaction(Transaction::Transfer(
                         transfer,
                     )));
-                } else if let Some(validate) = Validate::try_from(transaction.to_string())
-                    .map_err(|_| Error::ErrorParsingTestHarnessConfig {
-                        path: path.clone(),
-                        reason: String::from("validate"),
+                } else if let Ok(validate) =
+                    Validate::try_from(transaction.to_string()).map_err(|_| {
+                        Error::ErrorParsingTestHarnessConfig {
+                            path: path.clone(),
+                            reason: String::from("validate"),
+                        }
                     })
-                    .ok()
                 {
                     // validate does not need a transaction id
                     transaction_list.push(TransactionMode::Transaction(Transaction::Validate(
@@ -795,7 +801,7 @@ fn parse_transactions(
                     )));
                 } else {
                     return Err(Error::ErrorParsingTestHarnessConfig {
-                        path: path.clone(),
+                        path,
                         reason: format!(
                             "Transaction {} does not match neither issuance or transfer format",
                             transaction
@@ -805,7 +811,7 @@ fn parse_transactions(
             }
             _ => {
                 return Err(Error::ErrorParsingTestHarnessConfig {
-                    path: path.clone(),
+                    path,
                         reason: format!("Expected 'sequence', 'concurrent', or a transaction description. Got {:#?}", transaction),
                 });
             }
@@ -859,14 +865,14 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         }
     }
 
-    if &config["mediators"] != &Yaml::BadValue {
+    if config["mediators"] != Yaml::BadValue {
         let accounts = to_array(&config["mediators"], path.clone(), "mediators")?;
         for user in accounts {
             let user = to_string(&user, path.clone(), "mediator.user")?;
-            let user: &str = &user.to_lowercase();
+            let user = user.to_lowercase();
             all_accounts.push(InputAccount {
                 balance: 0,
-                owner: Party::try_from(user.clone())?,
+                owner: Party::try_from(user.as_str())?,
                 ticker: None,
             });
         }
@@ -880,16 +886,13 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
             let key = to_string(key, path.clone(), "outcome.key")?;
             let accounts_for_user =
                 to_array(&value, path.clone(), &format!("outcome.{}.ticker", key))?;
-            let owner: &str = &key.clone();
+            let owner = key.clone();
             for accounts in accounts_for_user {
                 let accounts =
                     to_hash(&accounts, path.clone(), &format!("outcome.{}.ticker", key))?;
                 for (ticker, amount) in accounts {
-                    let ticker = to_string(
-                        &ticker,
-                        path.clone(),
-                        &format!("outcome.{}.ticker", owner.clone()),
-                    )?;
+                    let ticker =
+                        to_string(&ticker, path.clone(), &format!("outcome.{}.ticker", owner))?;
                     let balance = amount
                         .as_i64()
                         .ok_or(Error::ErrorParsingTestHarnessConfig {
@@ -903,7 +906,7 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
                     let balance = u32::try_from(balance).map_err(|_| Error::BalanceTooBig)?;
                     if ticker != "NONE" {
                         accounts_outcome.insert(InputAccount {
-                            owner: Party::try_from(owner.clone())?,
+                            owner: Party::try_from(owner.as_str())?,
                             ticker: Some(ticker.clone()),
                             balance,
                         });
@@ -918,7 +921,7 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
     // Declared mutable since later I want to consume a single element of it.
     let (_, mut transactions_list) = parse_transactions(
         &config["transactions"],
-        path.clone(),
+        path,
         "transactions",
         next_transaction_id,
     )?;
@@ -964,7 +967,7 @@ fn run_from(mode: &str) {
         for config in configs {
             let file_name = config.file_name().unwrap();
             let file_name = file_name.to_str().unwrap();
-            if file_name.starts_with("_") {
+            if file_name.starts_with('_') {
                 // skip the test case
                 warn!("Skipping test case: {}", file_name);
                 continue;
@@ -979,13 +982,10 @@ fn run_from(mode: &str) {
             let want = &testcase.accounts_outcome;
             let got = testcase.run();
             if let Err(error) = got {
-                assert!(
-                    false,
-                    format!(
-                        "Test was expected to succeed, but failed with {:#?}.",
-                        error
-                    )
-                );
+                panic!(format!(
+                    "Test was expected to succeed, but failed with {:#?}.",
+                    error
+                ));
             } else {
                 let got = got.unwrap();
                 assert!(

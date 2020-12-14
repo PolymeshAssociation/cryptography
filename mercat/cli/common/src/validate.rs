@@ -22,7 +22,7 @@ use std::{collections::HashSet, path::PathBuf, time::Instant};
 fn load_all_unverified_and_ready(db_dir: PathBuf) -> Result<Vec<CoreTransaction>, Error> {
     all_unverified_tx_files(db_dir)?
         .into_iter()
-        .map(|tx| parse_tx_name(tx))
+        .map(parse_tx_name)
         .map(|res| match res {
             Err(error) => Err(error),
             Ok((tx_id, user, state, tx_file_path)) => {
@@ -89,7 +89,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                 debug!(
                     "------------> validating tx: {}, pending transfer balance: {}",
                     tx_id,
-                    debug_decrypt(account_id, pending_balance.clone(), db_dir.clone())?
+                    debug_decrypt(account_id, pending_balance, db_dir.clone())?
                 );
                 let (sender_result, receiver_result) =
                     validate_transaction(db_dir.clone(), tx, mediator, pending_balance, tx_id);
@@ -102,17 +102,16 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                 tx_id,
                 ordering_state: _,
             } => {
-                match validate_account(db_dir.clone(), account_tx.pub_account.enc_asset_id) {
-                    Err(error) => {
-                        error!("Error in validation of tx-{}: {:#?}", tx_id, error);
-                        error!("tx-{}: Ignoring the validation error and continuing the with rest of the validations.", tx_id);
-                    }
-                    Ok(_) => (),
-                };
+                if let Err(error) =
+                    validate_account(db_dir.clone(), account_tx.pub_account.enc_asset_id)
+                {
+                    error!("Error in validation of tx-{}: {:#?}", tx_id, error);
+                    error!("tx-{}: Ignoring the validation error and continuing the with rest of the validations.", tx_id);
+                }
                 last_tx_id = Some(std::cmp::max(last_tx_id.unwrap_or_default(), tx_id));
             }
             _ => {
-                return Err(Error::TransactionIsNotReadyForValidation { tx });
+                return Err(Error::TransactionIsNotReadyForValidation);
             }
         }
     }
@@ -155,7 +154,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
             &ticker,
             debug_decrypt(
                 ordered_pub_account.pub_account.enc_asset_id,
-                new_balance.clone(),
+                new_balance,
                 db_dir.clone()
             )?
         );
@@ -170,11 +169,11 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                                 &ticker,
                                 debug_decrypt(
                                     ordered_pub_account.pub_account.enc_asset_id,
-                                    amount.clone(),
+                                    amount,
                                     db_dir.clone()
                                 )?
                             );
-                            new_balance += amount.clone();
+                            new_balance += amount;
                         } else {
                             // based on the reason and the strategy, we can break the loop or ignore
                             // TODO: add strategy selection to the config. CRYP-132
@@ -188,11 +187,11 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                                 &ticker,
                                 debug_decrypt(
                                     ordered_pub_account.pub_account.enc_asset_id,
-                                    amount.clone(),
+                                    amount,
                                     db_dir.clone()
                                 )?
                             );
-                            new_balance -= amount.clone();
+                            new_balance -= amount;
                         } else {
                             // based on the reason and the strategy, we can break the loop or ignore
                         }
@@ -320,7 +319,7 @@ pub fn validate_asset_issuance(
         data: asset_tx.encode().to_vec(),
     };
     if let Err(error) = save_object(
-        db_dir.clone(),
+        db_dir,
         ON_CHAIN_DIR,
         &issuer,
         &asset_transaction_file(tx_id, &issuer, new_state),
@@ -565,7 +564,7 @@ pub fn validate_transaction(
     // Save the transaction under the new state.
     instruction.state = TransferTxState::Justification(TxSubstate::Validated);
     if let Err(error) = save_object(
-        db_dir.clone(),
+        db_dir,
         ON_CHAIN_DIR,
         COMMON_OBJECTS_DIR,
         &confidential_transaction_file(tx_id, &sender, instruction.state),
@@ -594,7 +593,7 @@ pub fn validate_transaction(
         },
         ValidationResult {
             user: receiver,
-            ticker: ticker.clone(),
+            ticker,
             direction: Direction::Incoming,
             amount: Some(tx.finalized_data.init_data.memo.enc_amount_using_receiver),
         },

@@ -6,7 +6,6 @@ use crate::{
     PrintableAccountId, COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR,
     ON_CHAIN_DIR,
 };
-use base64;
 use codec::{Decode, Encode};
 use log::{debug, info};
 use mercat::{
@@ -99,7 +98,7 @@ pub fn process_create_tx(
         tx_id,
         debug_decrypt(
             sender_account.public.enc_asset_id,
-            pending_balance.clone(),
+            pending_balance,
             db_dir.clone()
         )?
     );
@@ -234,7 +233,7 @@ pub fn process_finalize_tx(
         db_dir.clone(),
         ON_CHAIN_DIR,
         COMMON_OBJECTS_DIR,
-        &confidential_transaction_file(tx_id.clone(), &sender, state),
+        &confidential_transaction_file(tx_id, &sender, state),
     )?;
 
     let tx = InitializedTransferTx::decode(&mut &instruction.data[..]).map_err(|error| {
@@ -244,7 +243,7 @@ pub fn process_finalize_tx(
                 db_dir.clone(),
                 ON_CHAIN_DIR,
                 &sender.clone(),
-                &confidential_transaction_file(tx_id.clone(), &sender, state),
+                &confidential_transaction_file(tx_id, &sender, state),
             ),
         }
     })?;

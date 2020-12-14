@@ -831,8 +831,8 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
         for i in 0..n {
             polynomials.push(one.clone());
             let i_rep = convert_to_base(i, self.base as usize, exp);
-            for k in 0..self.exp as usize {
-                let t = k * self.base as usize + i_rep[k];
+            for (k, item) in i_rep.iter().enumerate().take(self.exp as usize) {
+                let t = k * self.base as usize + item;
                 polynomials[i].add_factor(l_bit_matrix[t], r1_prover.a_values[t]);
             }
         }
@@ -840,8 +840,8 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
         let mut G_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp as usize);
         for k in 0..self.exp as usize {
             G_values.push(rho[k] * generators.com_gens.B_blinding); // #TODO: Double check if this matches the El-Gamal generators.
-            for i in 0..n {
-                G_values[k] += (polynomials[i].coeffs[k]) * self.commitments[i];
+            for (i, polynomial) in polynomials.iter().enumerate().take(n) {
+                G_values[k] += (polynomial.coeffs[k]) * self.commitments[i];
             }
         }
 
