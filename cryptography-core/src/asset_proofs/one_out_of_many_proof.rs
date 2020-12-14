@@ -839,7 +839,7 @@ impl<'a> AssetProofProverAwaitingChallenge for OOONProverAwaitingChallenge<'a> {
 
         let mut G_values: Vec<RistrettoPoint> = Vec::with_capacity(self.exp as usize);
         for k in 0..self.exp as usize {
-            G_values.push(rho[k] * generators.com_gens.B_blinding); // #TODO: Double check if this matches the El-Gamal generators.
+            G_values.push(rho[k] * generators.com_gens.B_blinding);
             for (i, polynomial) in polynomials.iter().enumerate().take(n) {
                 G_values[k] += (polynomial.coeffs[k]) * self.commitments[i];
             }
