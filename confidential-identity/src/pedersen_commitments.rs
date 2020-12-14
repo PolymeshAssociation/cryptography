@@ -79,7 +79,7 @@ pub struct PedersenGenerators {
     /// generator, G0, is the hash of G2 in points format, and the
     /// second generator, G1, is the hash of G0 converted to a
     /// Ristretto point.
-    generators: [RistrettoPoint; PEDERSEN_COMMITMENT_NUM_GENERATORS],
+    pub generators: [RistrettoPoint; PEDERSEN_COMMITMENT_NUM_GENERATORS],
 }
 
 impl Default for PedersenGenerators {

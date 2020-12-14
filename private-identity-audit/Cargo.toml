@@ -1,0 +1,44 @@
+[package]
+name = "private_identity_audit"
+version = "0.1.0"
+authors = [ "Polymath Inc" ]
+repository = "https://github.com/PolymathNetwork/cryptography"
+description = "The Private Identity Audit Library."
+readme = "README.md"
+edition = "2018"
+exclude = [".gitignore"]
+
+[dependencies]
+cryptography_core = { path = "../cryptography-core/", default_features = false }
+confidential_identity = { path = "../confidential-identity", default_features = false }
+rand_core = { version = "0.5", default-features = false}
+rand = { version = "0.7", default-features = false }
+serde = { version = "1.0.105", default-features = false, features = ["derive"], optional = true }
+uuid = { version = "0.8.1", features = ["serde", "v4"], optional = true }
+failure = { version = "0.1.7", default-features = false, features = ["derive"], optional = true }
+blake2 = { version = "0.9.0", default-features = false }
+sha3 = { version = "0.8", default-features = false }
+
+[features]
+default = ["std"]
+
+serde_all = [
+    "serde",
+    "cryptography_core/serde_all",
+]
+
+no_std = [
+    "cryptography_core/no_std",
+]
+
+std = [
+    "serde_all",
+    "cryptography_core/std",
+    "confidential_identity/std",
+    "rand_core/std",
+    "rand/std",
+    "failure/std",
+    "uuid/std",
+    "blake2/std",
+]
+
