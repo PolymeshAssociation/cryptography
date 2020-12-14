@@ -140,8 +140,8 @@ mod tests {
 
         // Verifier shares one of its uids with the Prover.
         let claim = CddClaimData {
-            investor_did: private_uid_set[0],
-            investor_unique_id: Scalar::random(&mut rng),
+            investor_unique_id: private_uid_set[0],
+            investor_did: Scalar::random(&mut rng),
         };
 
         // Prover generates cdd_id and places it on the chain.

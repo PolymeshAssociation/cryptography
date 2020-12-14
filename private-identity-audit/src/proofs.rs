@@ -93,8 +93,8 @@ pub fn verify(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{prover::generate_blinding_factor, InvestorID};
-    use confidential_identity::pedersen_commitments::PedersenGenerators;
+    use crate::prover::generate_blinding_factor;
+    use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
     use cryptography_core::curve25519_dalek::traits::MultiscalarMul;
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -132,12 +132,17 @@ mod tests {
     fn test_zkp_cdd_id() {
         let mut rng = StdRng::from_seed([42u8; 32]);
         let pg = PedersenGenerators::default();
-        let investor = InvestorID {
-            uid: Scalar::random(&mut rng),
-            did: Scalar::random(&mut rng),
+        let claim = CddClaimData {
+            investor_unique_id: Scalar::random(&mut rng),
+            investor_did: Scalar::random(&mut rng),
         };
-        let blinding_factor = generate_blinding_factor(investor.did, investor.uid);
-        let secrets = [investor.did, investor.uid, blinding_factor];
+        let blinding_factor =
+            generate_blinding_factor(claim.investor_did, claim.investor_unique_id);
+        let secrets = [
+            claim.investor_did,
+            claim.investor_unique_id,
+            blinding_factor,
+        ];
         let cdd_id = pg.commit(&secrets);
         let r = Scalar::random(&mut rng);
         let statement = cdd_id * r;
