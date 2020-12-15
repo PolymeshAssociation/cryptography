@@ -1,4 +1,4 @@
-//! pial is the library that implements the private identity audit protocol
+//! PIAL is the library that implements the private identity audit protocol
 //! of the PIAL, as defined in the section TODO of the whitepaper TODO.
 //!
 
@@ -33,6 +33,12 @@ pub type CommittedUids = Vec<RistrettoPoint>;
 
 /// The Zero-Knowledge challenge.
 pub type Challenge = Scalar;
+
+pub struct InitialProver;
+pub struct FinalProver;
+
+pub struct VerifierSetGenerator; // todo fix this name
+pub struct Verifier;
 
 /// Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.
 pub struct Proofs {
@@ -113,7 +119,6 @@ pub trait ChallengeGenerator {
     ///    be sent to CDD Provider.
     /// * `Challenge`: the ZKP random challenge.
     fn generate_committed_set_and_challenge<T: RngCore + CryptoRng>(
-        &self,
         private_unique_identifiers: PrivateUids,
         min_set_size: Option<usize>,
         rng: &mut T,
