@@ -177,7 +177,7 @@ impl MediatorAccount {
 
 #[wasm_bindgen]
 #[derive(Serialize)]
-pub enum Error {
+pub enum WasmError {
     AccountCreationError,
     AssetIssuanceError,
     TransactionCreationError,
@@ -188,8 +188,8 @@ pub enum Error {
     HexDecodingError,
 }
 
-impl From<Error> for JsValue {
-    fn from(e: Error) -> JsValue {
+impl From<WasmError> for JsValue {
+    fn from(e: WasmError) -> JsValue {
         if let Ok(msg) = serde_json::to_string(&e) {
             msg.into()
         } else {
@@ -230,7 +230,7 @@ pub fn create_account(
     let valid_asset_ids = convert_asset_ids(valid_asset_ids);
     let account_tx: PubAccountTx = AccountCreator
         .create(&secret_account, &valid_asset_ids, &mut rng)
-        .map_err(|_| Error::AccountCreationError)?;
+        .map_err(|_| WasmError::AccountCreationError)?;
     let account_id = account_tx.pub_account.enc_asset_id;
 
     Ok(CreatAccountOutput {
@@ -288,7 +288,7 @@ pub fn mint_asset(amount: u32, issuer_account: Account) -> Fallible<MintAssetOut
     let mut rng = OsRng;
     let asset_tx: InitializedAssetTx = AssetIssuer
         .initialize_asset_transaction(&issuer_account.to_mercat()?, &[], amount, &mut rng)
-        .map_err(|_| Error::AssetIssuanceError)?;
+        .map_err(|_| WasmError::AssetIssuanceError)?;
 
     Ok(MintAssetOutput {
         asset_tx: base64::encode(asset_tx.encode()),
@@ -325,7 +325,7 @@ pub fn create_transaction(
             amount,
             &mut rng,
         )
-        .map_err(|_| Error::TransactionCreationError)?;
+        .map_err(|_| WasmError::TransactionCreationError)?;
 
     Ok(CreateTransactionOutput {
         init_tx: base64::encode(init_tx.encode()),
@@ -357,7 +357,7 @@ pub fn finalize_transaction(
             amount,
             &mut rng,
         )
-        .map_err(|_| Error::TransactionFinalizationError)?;
+        .map_err(|_| WasmError::TransactionFinalizationError)?;
 
     Ok(FinalizedTransactionOutput {
         finalized_tx: base64::encode(finalized_tx.encode()),
@@ -396,7 +396,7 @@ pub fn justify_transaction(
             ticker_id_to_asset_id(ticker_id)?,
             &mut rng,
         )
-        .map_err(|_| Error::TransactionJustificationError)?;
+        .map_err(|_| WasmError::TransactionJustificationError)?;
 
     Ok(JustifiedTransactionOutput {
         justified_tx: base64::encode(justified_tx.encode()),
@@ -412,15 +412,15 @@ fn decode<T: Decode>(data: Base64) -> Fallible<T> {
         if let Ok(ret) = T::decode(&mut &decoded[..]) {
             return Ok(ret);
         }
-        return Err(Error::DeserializationError.into());
+        return Err(WasmError::DeserializationError.into());
     }
 
-    Err(Error::Base64DecodingError.into())
+    Err(WasmError::Base64DecodingError.into())
 }
 
 fn ticker_id_to_asset_id(ticker_id: PlainHex) -> Fallible<AssetId> {
     let mut asset_id = [0u8; 12];
-    let decoded = hex::decode(ticker_id).map_err(|_| Error::HexDecodingError)?;
+    let decoded = hex::decode(ticker_id).map_err(|_| WasmError::HexDecodingError)?;
     asset_id[..decoded.len()].copy_from_slice(&decoded);
     Ok(AssetId { id: asset_id })
 }
@@ -434,7 +434,7 @@ fn create_secret_account(rng: &mut OsRng, ticker_id: String) -> Fallible<SecAcco
     };
 
     let mut asset_id = [0u8; 12];
-    let decoded = hex::decode(ticker_id).map_err(|_| Error::HexDecodingError)?;
+    let decoded = hex::decode(ticker_id).map_err(|_| WasmError::HexDecodingError)?;
     asset_id[..decoded.len()].copy_from_slice(&decoded);
 
     let asset_id = AssetId { id: asset_id };
