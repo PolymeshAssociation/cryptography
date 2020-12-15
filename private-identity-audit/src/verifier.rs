@@ -3,6 +3,7 @@ use crate::{
     proofs::verify,
     uuid_to_scalar, Challenge, ChallengeGenerator, CommittedUids, PrivateUids, ProofVerifier,
     Proofs, ProverFinalResponse, VerifierSecrets, SET_SIZE_ANONYMITY_PARAM,
+    VerifierSetGenerator, Verifier,
 };
 use confidential_identity::pedersen_commitments::PedersenGenerators;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
@@ -10,12 +11,8 @@ use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
 use uuid::{Builder, Uuid, Variant, Version};
 
-pub struct VerifierSetGenerator;
-pub struct Verifier;
-
 impl ChallengeGenerator for VerifierSetGenerator {
     fn generate_committed_set_and_challenge<T: RngCore + CryptoRng>(
-        &self,
         private_unique_identifiers: PrivateUids,
         min_set_size: Option<usize>,
         rng: &mut T,
@@ -134,8 +131,9 @@ pub fn gen_random_uuids<T: RngCore + CryptoRng>(count: usize, rng: &mut T) -> Ve
 mod tests {
     use crate::{
         uuid_to_scalar,
-        verifier::{gen_random_uuids, VerifierSetGenerator},
+        verifier::{gen_random_uuids},
         ChallengeGenerator, SET_SIZE_ANONYMITY_PARAM,
+        VerifierSetGenerator
     };
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -146,7 +144,7 @@ mod tests {
 
         // Test original anonoymity param.
         let (_, committed_uids, _) = VerifierSetGenerator
-            .generate_committed_set_and_challenge(
+            ::generate_committed_set_and_challenge(
                 gen_random_uuids(input_len, &mut rng)
                     .into_iter()
                     .map(|uuid| uuid_to_scalar(uuid))
@@ -161,7 +159,7 @@ mod tests {
         // Test overridden anonoymity param.
         let different_annonymity_size = 20;
         let (_, committed_uids, _) = VerifierSetGenerator
-            .generate_committed_set_and_challenge(
+            ::generate_committed_set_and_challenge(
                 gen_random_uuids(input_len, &mut rng)
                     .into_iter()
                     .map(|uuid| uuid_to_scalar(uuid))
@@ -176,7 +174,7 @@ mod tests {
         // Test no padding.
         let different_annonymity_size = 5;
         let (_, committed_uids, _) = VerifierSetGenerator
-            .generate_committed_set_and_challenge(
+            ::generate_committed_set_and_challenge(
                 gen_random_uuids(input_len, &mut rng)
                     .into_iter()
                     .map(|uuid| uuid_to_scalar(uuid))

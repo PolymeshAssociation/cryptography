@@ -9,15 +9,13 @@ use crate::{
     errors::Fallible,
     proofs::{apply_challenge, generate_initial_message},
     ChallengeResponder, CommittedUids, ProofGenerator, Proofs, ProverFinalResponse, ProverSecrets,
+    InitialProver, FinalProver,
 };
 use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
 use sha3::{Digest, Sha3_512};
-
-pub struct InitialProver;
-pub struct FinalProver;
 
 /// Modified version of `generate_pedersen_commit` function of Confidential Identity Library.
 pub fn generate_blinding_factor(uid: Scalar, did: Scalar) -> Scalar {
@@ -115,13 +113,18 @@ impl ChallengeResponder for FinalProver {
     }
 }
 
+// ------------------------------------------------------------------------
+// Tests
+// ------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use crate::{
-        prover::{generate_blinding_factor, FinalProver, InitialProver},
+        prover::{generate_blinding_factor},
         uuid_to_scalar,
-        verifier::{gen_random_uuids, Verifier, VerifierSetGenerator},
+        verifier::{gen_random_uuids},
         ChallengeGenerator, ChallengeResponder, ProofGenerator, ProofVerifier,
+        FinalProver, InitialProver, VerifierSetGenerator, Verifier,
     };
     use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
     use cryptography_core::curve25519_dalek::scalar::Scalar;
@@ -157,7 +160,7 @@ mod tests {
 
         // V -> P: Prover sends `proofs` and Verifier returns a list of 10 uids and the challenge.
         let (verifier_secrets, committed_uids, challenge) = VerifierSetGenerator
-            .generate_committed_set_and_challenge(private_uid_set, Some(100), &mut rng)
+            ::generate_committed_set_and_challenge(private_uid_set, Some(100), &mut rng)
             .unwrap();
 
         // P -> V: Verifier sends the committed_uids and the challenge to the Prover.
