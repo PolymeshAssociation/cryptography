@@ -37,7 +37,7 @@ pub type Challenge = Scalar;
 pub struct InitialProver;
 pub struct FinalProver;
 
-pub struct VerifierSetGenerator;
+pub struct VerifierSetGenerator; // todo fix this name
 pub struct Verifier;
 
 /// Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.

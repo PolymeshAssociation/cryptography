@@ -6,6 +6,7 @@
 extern crate libc;
 use libc::size_t;
 use rand::{rngs::StdRng, SeedableRng};
+<<<<<<< HEAD
 use std::{ptr::null_mut, slice};
 use uuid::{Builder, Variant, Version};
 
@@ -13,6 +14,12 @@ use private_identity_audit::{
     uuid_to_scalar, ChallengeGenerator, ChallengeResponder, ProofGenerator, ProofVerifier,
     Verifier, VerifierSetGenerator,
 };
+=======
+use std::slice;
+
+// use confidential_identity::{build_scope_claim_proof_data, compute_cdd_id, compute_scope_id};
+use private_identity_audit::{ChallengeGenerator, ProofGenerator, VerifierSetGenerator};
+>>>>>>> Implment wrappers for the first 2 API.
 
 pub type PrivateUids = private_identity_audit::PrivateUids;
 pub type CommittedUids = private_identity_audit::CommittedUids;
@@ -21,6 +28,7 @@ pub type Proofs = private_identity_audit::Proofs;
 pub type ProverFinalResponse = private_identity_audit::ProverFinalResponse;
 pub type ProverSecrets = private_identity_audit::ProverSecrets;
 pub type VerifierSecrets = private_identity_audit::VerifierSecrets;
+<<<<<<< HEAD
 pub type InitialProver = private_identity_audit::InitialProver;
 pub type FinalProver = private_identity_audit::FinalProver;
 pub type CddClaimData = cryptography_core::cdd_claim::CddClaimData;
@@ -47,6 +55,30 @@ pub struct FinalProverResults {
     pub committed_uids: *mut CommittedUids,
 }
 
+=======
+
+pub type InitialProver = private_identity_audit::InitialProver;
+pub type FinalProver = private_identity_audit::FinalProver;
+
+pub type CddClaimData = confidential_identity::CddClaimData;
+
+pub type RistrettoPoint = cryptography_core::curve25519_dalek::ristretto::RistrettoPoint;
+pub type Scalar = cryptography_core::curve25519_dalek::scalar::Scalar;
+
+pub struct InitialProverResults {
+    pub prover_secrets: *mut ProverSecrets,
+    pub proofs: *mut Proofs,
+    // todo maybe add the error code.
+}
+
+pub struct VerifierSetGeneratorResults {
+    // (VerifierSecrets, CommittedUids, Challenge)
+    pub verifier_secrets: *mut VerifierSecrets,
+    pub committed_uids: *mut CommittedUids,
+    pub challenge: *mut Challenge,
+}
+
+>>>>>>> Implment wrappers for the first 2 API.
 fn box_alloc<T>(x: T) -> *mut T {
     Box::into_raw(Box::new(x))
 }
@@ -55,6 +87,7 @@ fn box_alloc<T>(x: T) -> *mut T {
 // Data Structures
 // ------------------------------------------------------------------------
 
+<<<<<<< HEAD
 /// Convert a Uuid byte array into a scalar object.
 ///
 /// Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
@@ -89,6 +122,8 @@ pub unsafe extern "C" fn scalar_free(ptr: *mut Scalar) {
     Box::from_raw(ptr);
 }
 
+=======
+>>>>>>> Implment wrappers for the first 2 API.
 /// Create a new `CddClaimData` object.
 ///
 /// Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
@@ -124,6 +159,7 @@ pub unsafe extern "C" fn cdd_claim_data_free(ptr: *mut CddClaimData) {
     Box::from_raw(ptr);
 }
 
+<<<<<<< HEAD
 /// Deallocates a `InitialProverResults` object's memory.
 ///
 /// Should only be called on a still-valid pointer to an object returned by
@@ -172,6 +208,12 @@ pub unsafe extern "C" fn final_prover_results_free(ptr: *mut FinalProverResults)
 ///         pointer to a `CddClaimData` object, and `seed` is a random
 ///         32-byte array.
 /// Caller is responsible for deallocating memory after use.
+=======
+// ------------------------------------------------------------------------
+// Prover API
+// ------------------------------------------------------------------------
+
+>>>>>>> Implment wrappers for the first 2 API.
 #[no_mangle]
 pub unsafe extern "C" fn generate_initial_proofs_wrapper(
     cdd_claim: *const CddClaimData,
@@ -180,7 +222,11 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
 ) -> *mut InitialProverResults {
     assert!(!cdd_claim.is_null());
     assert!(!seed.is_null());
+<<<<<<< HEAD
     assert!(seed_size == 32);
+=======
+    assert!(seed_size != 32);
+>>>>>>> Implment wrappers for the first 2 API.
 
     let cdd_claim: CddClaimData = *cdd_claim;
 
@@ -188,6 +234,7 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
     rng_seed.copy_from_slice(slice::from_raw_parts(seed, seed_size as usize));
     let mut rng = StdRng::from_seed(rng_seed);
 
+<<<<<<< HEAD
     let result = InitialProver::generate_initial_proofs(cdd_claim, &mut rng);
 
     // Log the error and return.
@@ -198,12 +245,17 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
 
     let (prover_secrets, proofs) = result.unwrap();
 
+=======
+    let (prover_secrets, proofs) =
+        InitialProver::generate_initial_proofs(cdd_claim, &mut rng).unwrap();
+>>>>>>> Implment wrappers for the first 2 API.
     box_alloc(InitialProverResults {
         prover_secrets: box_alloc(prover_secrets),
         proofs: box_alloc(proofs),
     })
 }
 
+<<<<<<< HEAD
 // ------------------------------------------------------------------------
 // VerifierSetGenerator API
 // ------------------------------------------------------------------------
@@ -215,22 +267,46 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
 ///         is a valid pointer to a `Scalar` object, and `seed` is a random
 ///         32-byte array.
 /// Caller is responsible for deallocating memory after use.
+=======
+// fn generate_committed_set_and_challenge<T: RngCore + CryptoRng>(
+//     &self,
+//     private_unique_identifiers: PrivateUids,
+//     min_set_size: Option<usize>,
+//     rng: &mut T,
+// ) -> Fallible<(VerifierSecrets, CommittedUids, Challenge)>;
+
+>>>>>>> Implment wrappers for the first 2 API.
 #[no_mangle]
 pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     private_unique_identifiers: *mut Scalar,
     private_unique_identifiers_size: size_t,
+<<<<<<< HEAD
     min_set_size: *const size_t,
+=======
+    min_set_size: *const size_t, // this is optional
+>>>>>>> Implment wrappers for the first 2 API.
     seed: *const u8,
     seed_size: size_t,
 ) -> *mut VerifierSetGeneratorResults {
     assert!(!private_unique_identifiers.is_null());
     assert!(private_unique_identifiers_size != 0);
     assert!(!seed.is_null());
+<<<<<<< HEAD
     assert!(seed_size == 32);
+=======
+    assert!(seed_size != 32);
+>>>>>>> Implment wrappers for the first 2 API.
 
     let unique_identifiers_vec: PrivateUids =
         slice::from_raw_parts_mut(private_unique_identifiers, private_unique_identifiers_size)
             .into();
+<<<<<<< HEAD
+=======
+    // Vec::with_capacity(private_unique_identifiers_size);
+    // for i in 0..private_unique_identifiers_size as usize {
+    //     unique_identifiers_vec.push(private_unique_identifiers[i]);
+    // }
+>>>>>>> Implment wrappers for the first 2 API.
 
     let min_set_size: Option<usize> = match min_set_size.is_null() {
         true => None,
@@ -241,6 +317,7 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     rng_seed.copy_from_slice(slice::from_raw_parts(seed, seed_size as usize));
     let mut rng = StdRng::from_seed(rng_seed);
 
+<<<<<<< HEAD
     let result = VerifierSetGenerator::generate_committed_set_and_challenge(
         unique_identifiers_vec,
         min_set_size,
@@ -256,10 +333,20 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     let (verifier_secrets, committed_uids, challenge) = result.unwrap();
 
     let committed_uids_size = committed_uids.len();
+=======
+    let (verifier_secrets, committed_uids, challenge) =
+        VerifierSetGenerator::generate_committed_set_and_challenge(
+            unique_identifiers_vec,
+            min_set_size,
+            &mut rng,
+        )
+        .unwrap();
+>>>>>>> Implment wrappers for the first 2 API.
 
     box_alloc(VerifierSetGeneratorResults {
         verifier_secrets: box_alloc(verifier_secrets),
         committed_uids: box_alloc(committed_uids),
+<<<<<<< HEAD
         committed_uids_size: committed_uids_size,
         challenge: box_alloc(challenge),
     })
@@ -372,3 +459,8 @@ pub unsafe extern "C" fn verify_proofs(
 
     result.is_ok()
 }
+=======
+        challenge: box_alloc(challenge),
+    })
+}
+>>>>>>> Implment wrappers for the first 2 API.
