@@ -20,7 +20,7 @@ blake2 = { version = "0.9.0", default-features = false }
 sha3 = { version = "0.8", default-features = false }
 
 [features]
-default = ["std"]
+default = ["std", "u64_backend"]
 
 serde_all = [
     "serde",
@@ -30,6 +30,8 @@ serde_all = [
 no_std = [
     "cryptography_core/no_std",
 ]
+
+u64_backend = ["cryptography_core/u64_backend"]
 
 std = [
     "serde_all",
