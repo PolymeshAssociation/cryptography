@@ -16,8 +16,10 @@ use mercat::{
 };
 use rand_core::OsRng;
 use serde::Serialize;
+use serde_json;
 use std::convert::Into;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsValue;
 
 // ------------------------------------------------------------------------------------
 // -                                  Type Definitions                                -
@@ -126,13 +128,16 @@ impl MintAssetOutput {
 }
 
 #[wasm_bindgen]
-pub struct ValidAssetIds {
-    plain_hex_ids: Vec<PlainHex>,
+pub struct MediatorAccount {
+    secret: Base64,
 }
 
 #[wasm_bindgen]
-pub struct MediatorAccount {
-    secret: Base64,
+impl MediatorAccount {
+    #[wasm_bindgen(constructor)]
+    pub fn new(secret: Base64) -> Self {
+        Self { secret }
+    }
 }
 
 #[wasm_bindgen]
@@ -141,7 +146,16 @@ pub struct Account {
     public_account: PubAccount,
 }
 
+#[wasm_bindgen]
 impl Account {
+    #[wasm_bindgen(constructor)]
+    pub fn new(secret_account: Base64, public_account: PubAccount) -> Self {
+        Self {
+            secret_account,
+            public_account,
+        }
+    }
+
     fn to_mercat(&self) -> Fallible<MercatAccount> {
         Ok(MercatAccount {
             secret: decode::<SecAccount>(self.secret_account.clone())?,
@@ -156,7 +170,16 @@ pub struct PubAccount {
     public_key: Base64,
 }
 
+#[wasm_bindgen]
 impl PubAccount {
+    #[wasm_bindgen(constructor)]
+    pub fn new(account_id: Base64, public_key: Base64) -> Self {
+        Self {
+            account_id,
+            public_key,
+        }
+    }
+
     fn to_mercat(&self) -> Fallible<MercatPubAccount> {
         Ok(MercatPubAccount {
             owner_enc_pub_key: decode::<ElgamalPublicKey>(self.public_key.clone())?,
@@ -186,6 +209,7 @@ pub enum WasmError {
     DeserializationError,
     Base64DecodingError,
     HexDecodingError,
+    PlainTickerIdsError,
 }
 
 impl From<WasmError> for JsValue {
@@ -216,14 +240,16 @@ type Fallible<T> = Result<T, JsValue>;
 /// * todo
 #[wasm_bindgen]
 pub fn create_account(
-    valid_ticker_ids: ValidAssetIds,
+    valid_ticker_ids: JsValue,
     ticker_id: PlainHex,
 ) -> Fallible<CreatAccountOutput> {
     let mut rng = OsRng;
+    let valid_ticker_ids: Vec<String> = valid_ticker_ids
+        .into_serde()
+        .map_err(|_| WasmError::PlainTickerIdsError)?;
 
     let secret_account = create_secret_account(&mut rng, ticker_id)?;
     let valid_asset_ids: Vec<AssetId> = valid_ticker_ids
-        .plain_hex_ids
         .into_iter()
         .map(ticker_id_to_asset_id)
         .collect::<Fallible<Vec<AssetId>>>()?;
