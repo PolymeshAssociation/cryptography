@@ -32,6 +32,7 @@ pub type Base64 = String;
 #[wasm_bindgen]
 pub struct CreatAccountOutput {
     secret_account: Base64,
+    public_key: Base64,
     account_id: Base64,
     account_tx: Base64,
 }
@@ -41,6 +42,11 @@ impl CreatAccountOutput {
     #[wasm_bindgen(getter)]
     pub fn secret_account(&self) -> Base64 {
         self.secret_account.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn public_key(&self) -> Base64 {
+        self.public_key.clone()
     }
 
     #[wasm_bindgen(getter)]
@@ -57,7 +63,7 @@ impl CreatAccountOutput {
 #[wasm_bindgen]
 pub struct CreatMediatorAccountOutput {
     secret_account: MediatorAccount,
-    public_account: Base64,
+    public_key: Base64,
 }
 
 #[wasm_bindgen]
@@ -70,8 +76,8 @@ impl CreatMediatorAccountOutput {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn public_account(&self) -> Base64 {
-        self.public_account.clone()
+    pub fn public_key(&self) -> Base64 {
+        self.public_key.clone()
     }
 }
 
@@ -261,6 +267,7 @@ pub fn create_account(
 
     Ok(CreatAccountOutput {
         secret_account: base64::encode(secret_account.encode()),
+        public_key: base64::encode(secret_account.enc_keys.public.encode()),
         account_id: base64::encode(account_id.encode()),
         account_tx: base64::encode(account_tx.encode()),
     })
@@ -287,7 +294,7 @@ pub fn create_mediator_account() -> CreatMediatorAccountOutput {
     };
 
     CreatMediatorAccountOutput {
-        public_account: base64::encode(mediator_enc_key.public.encode()),
+        public_key: base64::encode(mediator_enc_key.public.encode()),
         secret_account: MediatorAccount {
             secret: base64::encode(
                 MercatMediatorAccount {
