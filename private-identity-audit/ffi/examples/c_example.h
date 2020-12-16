@@ -8,6 +8,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+<<<<<<< HEAD
+=======
+typedef struct FinalProverResults FinalProverResults;
+
+typedef struct InitialProverResults InitialProverResults;
+
+>>>>>>> add the rest of wrappers.
 /**
  * Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.
  */
@@ -28,6 +35,7 @@ typedef struct ProverSecrets ProverSecrets;
  */
 typedef struct VerifierSecrets VerifierSecrets;
 
+<<<<<<< HEAD
 typedef struct Scalar Scalar;
 
 typedef struct CddClaimData CddClaimData;
@@ -72,6 +80,17 @@ Scalar *uuid_new(const uint8_t *unique_id, size_t unique_id_size);
  * `uuid_new()`.
  */
 void scalar_free(Scalar *ptr);
+=======
+typedef struct VerifierSetGeneratorResults VerifierSetGeneratorResults;
+
+typedef struct CddClaimData CddClaimData;
+
+typedef struct Scalar Scalar;
+
+typedef struct RistrettoPoint RistrettoPoint;
+
+typedef struct CommittedUids CommittedUids;
+>>>>>>> add the rest of wrappers.
 
 /**
  * Create a new `CddClaimData` object.
@@ -94,6 +113,7 @@ CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
  */
 void cdd_claim_data_free(CddClaimData *ptr);
 
+<<<<<<< HEAD
 /**
  * Deallocates a `InitialProverResults` object's memory.
  *
@@ -126,10 +146,15 @@ void final_prover_results_free(FinalProverResults *ptr);
  *         32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
+=======
+void initial_prover_results_free(InitialProverResults *ptr);
+
+>>>>>>> add the rest of wrappers.
 InitialProverResults *generate_initial_proofs_wrapper(const CddClaimData *cdd_claim,
                                                       const uint8_t *seed,
                                                       size_t seed_size);
 
+<<<<<<< HEAD
 /**
  * Creates a `VerifierSetGeneratorResults` object from a private Uuid (as
  * a Scalar object), a minimum set size, and a seed.
@@ -139,12 +164,15 @@ InitialProverResults *generate_initial_proofs_wrapper(const CddClaimData *cdd_cl
  *         32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
+=======
+>>>>>>> add the rest of wrappers.
 VerifierSetGeneratorResults *generate_committed_set_and_challenge_wrapper(Scalar *private_unique_identifiers,
                                                                           size_t private_unique_identifiers_size,
                                                                           const size_t *min_set_size,
                                                                           const uint8_t *seed,
                                                                           size_t seed_size);
 
+<<<<<<< HEAD
 /**
  * Creates a `FinalProverResults` object from a prover's secret, a
  * committed set of Uids, a challenge, and a seed.
@@ -174,6 +202,18 @@ FinalProverResults *generate_challenge_response_wrapper(const ProverSecrets *sec
 bool verify_proofs(const Proofs *initial_message,
                    const ProverFinalResponse *final_response,
                    Challenge *challenge,
+=======
+FinalProverResults *generate_challenge_response_wrapper(ProverSecrets *secrets,
+                                                        RistrettoPoint *committed_uids,
+                                                        size_t committed_uids_size,
+                                                        Scalar *challenge,
+                                                        const uint8_t *seed,
+                                                        size_t seed_size);
+
+bool verify_proofs(const Proofs *initial_message,
+                   const ProverFinalResponse *final_response,
+                   Scalar *challenge,
+>>>>>>> add the rest of wrappers.
                    RistrettoPoint *cdd_id,
                    const VerifierSecrets *verifier_secrets,
                    const CommittedUids *re_committed_uids);

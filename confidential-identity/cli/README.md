@@ -49,6 +49,44 @@ a confidential proof which PolyMesh will later use to verify the integrity of sc
 investments made by identities that share the same unique identifier (`investor_unique_id`) without having the knowledge
 of the unique id.
 
+<<<<<<< HEAD
+=======
+## Simple Claim Verifier
+The `polymath-scv` CLI can be used to verify an investor's claim proof the same way that the PolyMesh would do.
+Note that this verification does not apply to the CDD Id that the CDD Provider generates.
+
+## Build the CLIs
+
+```bash
+cargo +nightly build --release
+```
+
+The two CLIs (`polymath-scp` and `polymath-scv`) are placed in `cryptography/target/release`. You can
+call them by adding `cryptography/target/release` to your `PATH` environment variable,
+or call them using the absolute path to the CLI file.
+
+## Run the CLIs
+### CDD Provider Usage
+To create the CDD Id using the prover CLI:
+```bash
+polymath-scp create-cdd-id -v --cdd-claim my_cdd_claim.json
+```
+For your convenience we have provided an optional flag (`-r` or `--rand`) to randomly generate the inputted JSON file:
+```bash
+polymath-scp create-cdd-id -v -r --cdd-claim rand_cdd_claim.json
+```
+You can optionally save the resulting CDD Id to file, if you pass in the `cdd-id` with a file name:
+```bash
+polymath-scp create-cdd-id -v --cdd-claim my_cdd_claim.json --cdd-id my_cdd_id.json
+```
+To see the usage for this sub-command, run:
+```bash
+polymath-scp create-cdd-id -h
+```
+
+### Investors' Usage
+To run Claim prover CLI:
+>>>>>>> add the rest of wrappers.
 ```bash
 polymath-scp create-claim-proof -v --cdd-claim my_cdd_claim.json --scope-claim my_scope_claim.json --proof proof.json
 

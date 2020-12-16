@@ -9,6 +9,7 @@ use crate::{
     errors::Fallible,
     proofs::{apply_challenge, generate_initial_message},
 <<<<<<< HEAD
+<<<<<<< HEAD
     ChallengeResponder, CommittedUids, FinalProver, InitialProver, ProofGenerator, Proofs,
     ProverFinalResponse, ProverSecrets,
 };
@@ -18,6 +19,10 @@ use cryptography_core::cdd_claim::{
     ChallengeResponder, CommittedUids, ProofGenerator, Proofs, ProverFinalResponse, ProverSecrets,
     InitialProver, FinalProver,
 >>>>>>> Implment wrappers for the first 2 API.
+=======
+    ChallengeResponder, CommittedUids, FinalProver, InitialProver, ProofGenerator, Proofs,
+    ProverFinalResponse, ProverSecrets,
+>>>>>>> add the rest of wrappers.
 };
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::seq::SliceRandom;
@@ -126,6 +131,7 @@ impl ChallengeResponder for FinalProver {
 mod tests {
     use crate::{
 <<<<<<< HEAD
+<<<<<<< HEAD
         uuid_to_scalar, verifier::gen_random_uuids, ChallengeGenerator, ChallengeResponder,
         FinalProver, InitialProver, ProofGenerator, ProofVerifier, Verifier, VerifierSetGenerator,
 =======
@@ -135,6 +141,11 @@ mod tests {
         ChallengeGenerator, ChallengeResponder, ProofGenerator, ProofVerifier,
         FinalProver, InitialProver, VerifierSetGenerator, Verifier,
 >>>>>>> Implment wrappers for the first 2 API.
+=======
+        prover::generate_blinding_factor, uuid_to_scalar, verifier::gen_random_uuids,
+        ChallengeGenerator, ChallengeResponder, FinalProver, InitialProver, ProofGenerator,
+        ProofVerifier, Verifier, VerifierSetGenerator,
+>>>>>>> add the rest of wrappers.
     };
     use cryptography_core::cdd_claim::{compute_cdd_id, CddClaimData};
     use cryptography_core::curve25519_dalek::scalar::Scalar;
@@ -170,6 +181,7 @@ mod tests {
 
         // V -> P: Prover sends `proofs` and Verifier returns a list of 10 uids and the challenge.
 <<<<<<< HEAD
+<<<<<<< HEAD
         let (verifier_secrets, committed_uids, challenge) =
             VerifierSetGenerator::generate_committed_set_and_challenge(
                 private_uid_scalar_set,
@@ -180,6 +192,14 @@ mod tests {
         let (verifier_secrets, committed_uids, challenge) = VerifierSetGenerator
             ::generate_committed_set_and_challenge(private_uid_set, Some(100), &mut rng)
 >>>>>>> Implment wrappers for the first 2 API.
+=======
+        let (verifier_secrets, committed_uids, challenge) =
+            VerifierSetGenerator::generate_committed_set_and_challenge(
+                private_uid_set,
+                Some(100),
+                &mut rng,
+            )
+>>>>>>> add the rest of wrappers.
             .unwrap();
 
         // P -> V: Verifier sends the committed_uids and the challenge to the Prover.
@@ -192,7 +212,11 @@ mod tests {
         .unwrap();
 
         // Only V: Verifier verifies the proofs and check membership.
+<<<<<<< HEAD
         assert!(Verifier::verify_proofs(
+=======
+        Verifier::verify_proofs(
+>>>>>>> add the rest of wrappers.
             &proofs,
             &prover_response,
             challenge,
