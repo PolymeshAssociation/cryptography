@@ -153,7 +153,6 @@ pub fn compute_cdd_id(cdd_claim: &CddClaimData) -> RistrettoPoint {
 ///
 /// # Inputs
 /// * `scope_claim` is the scope claim from which to generate the SCOPE_ID
-/// * `id1` is the second value to commit.
 ///
 /// # Output
 /// The Pedersen commitment result.

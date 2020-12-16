@@ -9,7 +9,10 @@ use rand::{rngs::StdRng, SeedableRng};
 use std::slice;
 
 // use confidential_identity::{build_scope_claim_proof_data, compute_cdd_id, compute_scope_id};
-use private_identity_audit::{ChallengeGenerator, ProofGenerator, VerifierSetGenerator};
+use private_identity_audit::{
+    ChallengeGenerator, ChallengeResponder, ProofGenerator, ProofVerifier, Verifier,
+    VerifierSetGenerator,
+};
 
 pub type PrivateUids = private_identity_audit::PrivateUids;
 pub type CommittedUids = private_identity_audit::CommittedUids;
@@ -38,6 +41,12 @@ pub struct VerifierSetGeneratorResults {
     pub verifier_secrets: *mut VerifierSecrets,
     pub committed_uids: *mut CommittedUids,
     pub challenge: *mut Challenge,
+}
+
+pub struct FinalProverResults {
+    pub prover_final_response: *mut ProverFinalResponse,
+    pub committed_uids: *mut CommittedUids,
+    // todo maybe add error code.
 }
 
 fn box_alloc<T>(x: T) -> *mut T {
@@ -83,6 +92,14 @@ pub unsafe extern "C" fn cdd_claim_data_free(ptr: *mut CddClaimData) {
     Box::from_raw(ptr);
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn initial_prover_results_free(ptr: *mut InitialProverResults) {
+    if ptr.is_null() {
+        return;
+    }
+    Box::from_raw(ptr);
+}
+
 // ------------------------------------------------------------------------
 // Prover API
 // ------------------------------------------------------------------------
@@ -95,7 +112,7 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
 ) -> *mut InitialProverResults {
     assert!(!cdd_claim.is_null());
     assert!(!seed.is_null());
-    assert!(seed_size != 32);
+    assert!(seed_size == 32);
 
     let cdd_claim: CddClaimData = *cdd_claim;
 
@@ -129,7 +146,7 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     assert!(!private_unique_identifiers.is_null());
     assert!(private_unique_identifiers_size != 0);
     assert!(!seed.is_null());
-    assert!(seed_size != 32);
+    assert!(seed_size == 32);
 
     let unique_identifiers_vec: PrivateUids =
         slice::from_raw_parts_mut(private_unique_identifiers, private_unique_identifiers_size)
@@ -161,4 +178,89 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
         committed_uids: box_alloc(committed_uids),
         challenge: box_alloc(challenge),
     })
+}
+
+// fn generate_challenge_response<T: RngCore + CryptoRng>(
+//     secrets: ProverSecrets,
+//     committed_uids: CommittedUids,
+//     challenge: Scalar,
+//     rng: &mut T,
+// ) -> Fallible<(ProverFinalResponse, CommittedUids)>;
+#[no_mangle]
+pub unsafe extern "C" fn generate_challenge_response_wrapper(
+    secrets: *mut ProverSecrets,
+    committed_uids: *mut RistrettoPoint,
+    committed_uids_size: size_t,
+    challenge: *mut Scalar,
+    seed: *const u8,
+    seed_size: size_t,
+) -> *mut FinalProverResults {
+    assert!(!secrets.is_null());
+    assert!(!committed_uids.is_null());
+    assert!(committed_uids_size != 0);
+    assert!(!seed.is_null());
+    assert!(seed_size == 32);
+
+    let secrets: &ProverSecrets = &*secrets;
+
+    let committed_uids_vec: CommittedUids =
+        slice::from_raw_parts_mut(committed_uids, committed_uids_size).into();
+
+    let challenge: Scalar = *challenge;
+
+    let mut rng_seed = [0u8; 32];
+    rng_seed.copy_from_slice(slice::from_raw_parts(seed, seed_size as usize));
+    let mut rng = StdRng::from_seed(rng_seed);
+
+    let (prover_final_response, committed_uids) =
+        FinalProver::generate_challenge_response(secrets, committed_uids_vec, challenge, &mut rng)
+            .unwrap();
+    box_alloc(FinalProverResults {
+        prover_final_response: box_alloc(prover_final_response),
+        committed_uids: box_alloc(committed_uids),
+    })
+}
+
+// fn verify_proofs(
+//     initial_message: Proofs,
+//     final_response: ProverFinalResponse,
+//     challenge: Scalar,
+//     cdd_id: RistrettoPoint,
+//     verifier_secrets: VerifierSecrets,
+//     re_committed_uids: CommittedUids,
+// ) -> Fallible<()>;
+
+#[no_mangle]
+pub unsafe extern "C" fn verify_proofs(
+    initial_message: *const Proofs,
+    final_response: *const ProverFinalResponse,
+    challenge: *mut Scalar,
+    cdd_id: *mut RistrettoPoint,
+    verifier_secrets: *const VerifierSecrets,
+    re_committed_uids: *const CommittedUids,
+) -> bool {
+    // todo maybe turn this into an error code.
+    assert!(!initial_message.is_null());
+    assert!(!final_response.is_null());
+    assert!(!challenge.is_null());
+    assert!(!cdd_id.is_null());
+    assert!(!verifier_secrets.is_null());
+    assert!(!re_committed_uids.is_null());
+
+    let initial_message: &Proofs = &*initial_message;
+    let final_response: &ProverFinalResponse = &*final_response;
+    let challenge: Scalar = *challenge;
+    let cdd_id: RistrettoPoint = *cdd_id;
+    let verifier_secrets: &VerifierSecrets = &*verifier_secrets;
+    let re_committed_uids: &CommittedUids = &*re_committed_uids;
+
+    Verifier::verify_proofs(
+        initial_message,
+        final_response,
+        challenge,
+        cdd_id,
+        verifier_secrets,
+        re_committed_uids,
+    )
+    .is_ok()
 }

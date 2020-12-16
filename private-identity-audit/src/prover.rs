@@ -8,8 +8,8 @@
 use crate::{
     errors::Fallible,
     proofs::{apply_challenge, generate_initial_message},
-    ChallengeResponder, CommittedUids, ProofGenerator, Proofs, ProverFinalResponse, ProverSecrets,
-    InitialProver, FinalProver,
+    ChallengeResponder, CommittedUids, FinalProver, InitialProver, ProofGenerator, Proofs,
+    ProverFinalResponse, ProverSecrets,
 };
 use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
@@ -83,7 +83,7 @@ impl ProofGenerator for InitialProver {
 
 impl ChallengeResponder for FinalProver {
     fn generate_challenge_response<T: RngCore + CryptoRng>(
-        secrets: ProverSecrets,
+        secrets: &ProverSecrets,
         committed_uids: CommittedUids,
         challenge: Scalar,
         rng: &mut T,
@@ -96,11 +96,11 @@ impl ChallengeResponder for FinalProver {
         // set.
         recommitted_uids.shuffle(rng);
 
-        let cdd_id_proof_response = apply_challenge(secrets.cdd_id_proof_secrets, challenge);
+        let cdd_id_proof_response = apply_challenge(&secrets.cdd_id_proof_secrets, challenge);
         let cdd_id_second_half_proof_response =
-            apply_challenge(secrets.cdd_id_second_half_proof_secrets, challenge);
+            apply_challenge(&secrets.cdd_id_second_half_proof_secrets, challenge);
         let uid_commitment_proof_response =
-            apply_challenge(secrets.uid_commitment_proof_secrets, challenge);
+            apply_challenge(&secrets.uid_commitment_proof_secrets, challenge);
 
         Ok((
             ProverFinalResponse {
@@ -120,11 +120,9 @@ impl ChallengeResponder for FinalProver {
 #[cfg(test)]
 mod tests {
     use crate::{
-        prover::{generate_blinding_factor},
-        uuid_to_scalar,
-        verifier::{gen_random_uuids},
-        ChallengeGenerator, ChallengeResponder, ProofGenerator, ProofVerifier,
-        FinalProver, InitialProver, VerifierSetGenerator, Verifier,
+        prover::generate_blinding_factor, uuid_to_scalar, verifier::gen_random_uuids,
+        ChallengeGenerator, ChallengeResponder, FinalProver, InitialProver, ProofGenerator,
+        ProofVerifier, Verifier, VerifierSetGenerator,
     };
     use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
     use cryptography_core::curve25519_dalek::scalar::Scalar;
@@ -159,13 +157,17 @@ mod tests {
             InitialProver::generate_initial_proofs(claim, &mut rng).unwrap();
 
         // V -> P: Prover sends `proofs` and Verifier returns a list of 10 uids and the challenge.
-        let (verifier_secrets, committed_uids, challenge) = VerifierSetGenerator
-            ::generate_committed_set_and_challenge(private_uid_set, Some(100), &mut rng)
+        let (verifier_secrets, committed_uids, challenge) =
+            VerifierSetGenerator::generate_committed_set_and_challenge(
+                private_uid_set,
+                Some(100),
+                &mut rng,
+            )
             .unwrap();
 
         // P -> V: Verifier sends the committed_uids and the challenge to the Prover.
         let (prover_response, re_committed_uids) = FinalProver::generate_challenge_response(
-            prover_secrets,
+            &prover_secrets,
             committed_uids,
             challenge,
             &mut rng,
@@ -174,12 +176,12 @@ mod tests {
 
         // Only V: Verifier verifies the proofs and check membership.
         Verifier::verify_proofs(
-            proofs,
-            prover_response,
+            &proofs,
+            &prover_response,
             challenge,
             cdd_id,
-            verifier_secrets,
-            re_committed_uids,
+            &verifier_secrets,
+            &re_committed_uids,
         )
         .unwrap();
     }
