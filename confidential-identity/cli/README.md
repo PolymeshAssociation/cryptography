@@ -51,12 +51,11 @@ Note that this verification does not apply to the CDD Id that the CDD Provider g
 ## Build the CLIs
 
 ```bash
-cd crypto-framework
 cargo +nightly build --release
 ```
 
-The two CLIs (`polymath-scp` and `polymath-scv`) are placed in `crypto-framework/target/release`. You can
-call them by adding `crypto-framework/target/release` to your `PATH` environment variable,
+The two CLIs (`polymath-scp` and `polymath-scv`) are placed in `cryptography/target/release`. You can
+call them by adding `cryptography/target/release` to your `PATH` environment variable,
 or call them using the absolute path to the CLI file.
 
 ## Run the CLIs

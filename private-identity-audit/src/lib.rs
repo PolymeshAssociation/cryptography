@@ -59,6 +59,7 @@ pub struct ProverFinalResponse {
 }
 
 /// Holds CDD Provider secret data.
+#[derive(Clone)]
 pub struct ProverSecrets {
     cdd_id_proof_secrets: Secrets,
     cdd_id_second_half_proof_secrets: Secrets,
@@ -140,7 +141,7 @@ pub trait ChallengeResponder {
     /// * `ProverFinalResponse`: The ZKP response.
     /// * `CommittedUids`: These re-committed uIDs form part of the proof of membership.
     fn generate_challenge_response<T: RngCore + CryptoRng>(
-        secrets: ProverSecrets,
+        secrets: &ProverSecrets,
         committed_uids: CommittedUids,
         challenge: Scalar,
         rng: &mut T,
@@ -159,11 +160,11 @@ pub trait ProofVerifier {
     /// * `verifier_secrets`: The PUIS secrets generated in the second step of the protocol.
     /// * `rng`: Cryptographically secure random number generator.
     fn verify_proofs(
-        initial_message: Proofs,
-        final_response: ProverFinalResponse,
+        initial_message: &Proofs,
+        final_response: &ProverFinalResponse,
         challenge: Scalar,
         cdd_id: RistrettoPoint,
-        verifier_secrets: VerifierSecrets,
-        re_committed_uids: CommittedUids,
+        verifier_secrets: &VerifierSecrets,
+        re_committed_uids: &CommittedUids,
     ) -> Fallible<()>;
 }
