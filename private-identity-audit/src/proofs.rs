@@ -31,6 +31,7 @@ pub struct FinalResponse {
     s: Vec<Scalar>,
 }
 
+#[derive(Clone)]
 pub struct Secrets {
     rands: Vec<Scalar>,
     secrets: Vec<Scalar>,
@@ -55,7 +56,7 @@ pub fn generate_initial_message<T: RngCore + CryptoRng>(
     Ok((Secrets { rands, secrets }, InitialMessage { a, generators }))
 }
 
-pub fn apply_challenge(prover_secrets: Secrets, c: Challenge) -> FinalResponse {
+pub fn apply_challenge(prover_secrets: &Secrets, c: Challenge) -> FinalResponse {
     let s = (&prover_secrets.rands)
         .iter()
         .zip(&prover_secrets.secrets)
@@ -67,14 +68,14 @@ pub fn apply_challenge(prover_secrets: Secrets, c: Challenge) -> FinalResponse {
 
 pub fn verify(
     initial_message: InitialMessage,
-    final_response: FinalResponse,
-    statement: RistrettoPoint,
-    c: Challenge,
+    final_response: &FinalResponse,
+    statement: &RistrettoPoint,
+    c: &Challenge,
 ) -> bool {
     if let Some(lhs) = initial_message
         .generators
         .into_iter()
-        .zip(final_response.s)
+        .zip(&final_response.s)
         .map(|(gen, s)| gen * s)
         .fold_first(|v1, v2| v1 + v2)
     {
@@ -106,19 +107,19 @@ mod tests {
             generate_initial_message(secrets, generators, &mut rng).unwrap();
 
         let c = Scalar::random(&mut rng);
-        let final_response = apply_challenge(prover_secrets, c);
+        let final_response = apply_challenge(&prover_secrets, c);
 
         // Positive test
         assert!(verify(
             initial_message.clone(),
-            final_response.clone(),
-            statement,
-            c
+            &final_response.clone(),
+            &statement,
+            &c
         ));
 
         // Negative test
         let statement = RistrettoPoint::random(&mut rng) * Scalar::random(&mut rng);
-        let is_valid = verify(initial_message, final_response, statement, c);
+        let is_valid = verify(initial_message, &final_response, &statement, &c);
         assert!(!is_valid);
     }
 
@@ -144,12 +145,12 @@ mod tests {
             generate_initial_message(vec![r], vec![cdd_id], &mut rng).unwrap();
 
         let challenge = Scalar::random(&mut rng);
-        let cdd_id_proof_response = apply_challenge(cdd_id_proof_secrets, challenge);
+        let cdd_id_proof_response = apply_challenge(&cdd_id_proof_secrets, challenge);
         assert!(verify(
             cdd_id_proof,
-            cdd_id_proof_response,
-            statement,
-            challenge,
+            &cdd_id_proof_response,
+            &statement,
+            &challenge,
         ));
     }
 }
