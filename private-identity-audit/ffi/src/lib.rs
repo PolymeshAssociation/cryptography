@@ -7,11 +7,12 @@ extern crate libc;
 use libc::size_t;
 use rand::{rngs::StdRng, SeedableRng};
 use std::slice;
+use uuid::{Builder, Variant, Version};
 
 // use confidential_identity::{build_scope_claim_proof_data, compute_cdd_id, compute_scope_id};
 use private_identity_audit::{
-    ChallengeGenerator, ChallengeResponder, ProofGenerator, ProofVerifier, Verifier,
-    VerifierSetGenerator,
+    uuid_to_scalar, ChallengeGenerator, ChallengeResponder, ProofGenerator, ProofVerifier,
+    Verifier, VerifierSetGenerator,
 };
 
 pub type PrivateUids = private_identity_audit::PrivateUids;
@@ -40,6 +41,7 @@ pub struct VerifierSetGeneratorResults {
     // (VerifierSecrets, CommittedUids, Challenge)
     pub verifier_secrets: *mut VerifierSecrets,
     pub committed_uids: *mut CommittedUids,
+    pub committed_uids_size: *mut usize,
     pub challenge: *mut Challenge,
 }
 
@@ -57,6 +59,23 @@ fn box_alloc<T>(x: T) -> *mut T {
 // Data Structures
 // ------------------------------------------------------------------------
 
+// pub fn uuid_to_scalar(uuid: Uuid) -> Scalar {
+#[no_mangle]
+pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) -> *mut Scalar {
+    assert!(!unique_id.is_null());
+    assert!(unique_id_size == 16);
+
+    let mut uuid_bytes = [0u8; 16];
+    uuid_bytes.copy_from_slice(slice::from_raw_parts(unique_id, unique_id_size as usize));
+
+    let uuid = Builder::from_bytes(uuid_bytes)
+        .set_variant(Variant::RFC4122)
+        .set_version(Version::Random)
+        .build();
+
+    box_alloc(uuid_to_scalar(uuid))
+}
+
 /// Create a new `CddClaimData` object.
 ///
 /// Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
@@ -67,17 +86,21 @@ fn box_alloc<T>(x: T) -> *mut T {
 pub unsafe extern "C" fn cdd_claim_data_new(
     investor_did: *const u8,
     investor_did_size: size_t,
-    investor_unique_id: *const u8,
-    investor_unique_id_size: size_t,
+    investor_unique_id: *const Scalar,
+    // investor_unique_id: *const u8,
+    // investor_unique_id_size: size_t,
 ) -> *mut CddClaimData {
     assert!(!investor_did.is_null());
     assert!(!investor_unique_id.is_null());
     let investor_did = slice::from_raw_parts(investor_did, investor_did_size as usize);
 
-    let investor_unique_id =
-        slice::from_raw_parts(investor_unique_id, investor_unique_id_size as usize);
+    let investor_unique_id = *investor_unique_id;
+    // slice::from_raw_parts(investor_unique_id, investor_unique_id_size as usize);
 
-    box_alloc(CddClaimData::new(investor_did, investor_unique_id))
+    box_alloc(CddClaimData::new(
+        investor_did,
+        investor_unique_id.as_bytes(),
+    ))
 }
 
 /// Deallocates a `CddClaimData` object's memory.
@@ -94,6 +117,24 @@ pub unsafe extern "C" fn cdd_claim_data_free(ptr: *mut CddClaimData) {
 
 #[no_mangle]
 pub unsafe extern "C" fn initial_prover_results_free(ptr: *mut InitialProverResults) {
+    if ptr.is_null() {
+        return;
+    }
+    Box::from_raw(ptr);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn verifier_set_generator_results_free(
+    ptr: *mut VerifierSetGeneratorResults,
+) {
+    if ptr.is_null() {
+        return;
+    }
+    Box::from_raw(ptr);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn final_prover_results_free(ptr: *mut FinalProverResults) {
     if ptr.is_null() {
         return;
     }
@@ -120,8 +161,12 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
     rng_seed.copy_from_slice(slice::from_raw_parts(seed, seed_size as usize));
     let mut rng = StdRng::from_seed(rng_seed);
 
-    let (prover_secrets, proofs) =
-        InitialProver::generate_initial_proofs(cdd_claim, &mut rng).unwrap();
+    let result = InitialProver::generate_initial_proofs(cdd_claim, &mut rng);
+
+    println!("1) P->V err: {:?}", result.is_err());
+
+    let (prover_secrets, proofs) = result.unwrap();
+
     box_alloc(InitialProverResults {
         prover_secrets: box_alloc(prover_secrets),
         proofs: box_alloc(proofs),
@@ -165,17 +210,22 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     rng_seed.copy_from_slice(slice::from_raw_parts(seed, seed_size as usize));
     let mut rng = StdRng::from_seed(rng_seed);
 
-    let (verifier_secrets, committed_uids, challenge) =
-        VerifierSetGenerator::generate_committed_set_and_challenge(
-            unique_identifiers_vec,
-            min_set_size,
-            &mut rng,
-        )
-        .unwrap();
+    let result = VerifierSetGenerator::generate_committed_set_and_challenge(
+        unique_identifiers_vec,
+        min_set_size,
+        &mut rng,
+    );
+
+    println!("2) V->P err: {:?}", result.is_err());
+
+    let (verifier_secrets, committed_uids, challenge) = result.unwrap();
+
+    let committed_uids_size = committed_uids.len();
 
     box_alloc(VerifierSetGeneratorResults {
         verifier_secrets: box_alloc(verifier_secrets),
         committed_uids: box_alloc(committed_uids),
+        committed_uids_size: box_alloc(committed_uids_size),
         challenge: box_alloc(challenge),
     })
 }
@@ -189,35 +239,40 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
 #[no_mangle]
 pub unsafe extern "C" fn generate_challenge_response_wrapper(
     secrets: *mut ProverSecrets,
-    committed_uids: *mut RistrettoPoint,
+    committed_uids: *mut CommittedUids,
     committed_uids_size: size_t,
-    challenge: *mut Scalar,
+    challenge: *mut Challenge,
     seed: *const u8,
     seed_size: size_t,
 ) -> *mut FinalProverResults {
     assert!(!secrets.is_null());
-    assert!(!committed_uids.is_null());
+    // assert!(!committed_uids.is_null());
     assert!(committed_uids_size != 0);
     assert!(!seed.is_null());
     assert!(seed_size == 32);
 
     let secrets: &ProverSecrets = &*secrets;
 
-    let committed_uids_vec: CommittedUids =
-        slice::from_raw_parts_mut(committed_uids, committed_uids_size).into();
+    let committed_uids_vec: &CommittedUids = &*committed_uids;
 
-    let challenge: Scalar = *challenge;
+    let challenge: Challenge = *challenge;
 
     let mut rng_seed = [0u8; 32];
     rng_seed.copy_from_slice(slice::from_raw_parts(seed, seed_size as usize));
     let mut rng = StdRng::from_seed(rng_seed);
 
-    let (prover_final_response, committed_uids) =
-        FinalProver::generate_challenge_response(secrets, committed_uids_vec, challenge, &mut rng)
-            .unwrap();
+    let result = FinalProver::generate_challenge_response(
+        secrets,
+        committed_uids_vec.clone(),
+        challenge,
+        &mut rng,
+    );
+    println!("3) P->V err: {:?}", result.is_err());
+
+    let (prover_final_response, re_committed_uids) = result.unwrap();
     box_alloc(FinalProverResults {
         prover_final_response: box_alloc(prover_final_response),
-        committed_uids: box_alloc(committed_uids),
+        committed_uids: box_alloc(re_committed_uids),
     })
 }
 
@@ -234,7 +289,7 @@ pub unsafe extern "C" fn generate_challenge_response_wrapper(
 pub unsafe extern "C" fn verify_proofs(
     initial_message: *const Proofs,
     final_response: *const ProverFinalResponse,
-    challenge: *mut Scalar,
+    challenge: *mut Challenge,
     cdd_id: *mut RistrettoPoint,
     verifier_secrets: *const VerifierSecrets,
     re_committed_uids: *const CommittedUids,
@@ -249,18 +304,21 @@ pub unsafe extern "C" fn verify_proofs(
 
     let initial_message: &Proofs = &*initial_message;
     let final_response: &ProverFinalResponse = &*final_response;
-    let challenge: Scalar = *challenge;
+    let challenge: Challenge = *challenge;
     let cdd_id: RistrettoPoint = *cdd_id;
     let verifier_secrets: &VerifierSecrets = &*verifier_secrets;
     let re_committed_uids: &CommittedUids = &*re_committed_uids;
 
-    Verifier::verify_proofs(
+    let result = Verifier::verify_proofs(
         initial_message,
         final_response,
         challenge,
         cdd_id,
         verifier_secrets,
         re_committed_uids,
-    )
-    .is_ok()
+    );
+
+    println!("err: {:?}", result);
+
+    result.is_ok()
 }
