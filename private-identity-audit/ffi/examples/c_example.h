@@ -8,39 +8,68 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-typedef struct FinalProverResults FinalProverResults;
-
-typedef struct InitialProverResults InitialProverResults;
-
 /**
  * Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.
  */
 typedef struct Proofs Proofs;
 
 /**
- * Holds the CDD Provider's response to the PUIS challenge.
- */
-typedef struct ProverFinalResponse ProverFinalResponse;
-
-/**
  * Holds CDD Provider secret data.
  */
 typedef struct ProverSecrets ProverSecrets;
+
+struct InitialProverResults {
+    ProverSecrets *prover_secrets;
+    Proofs *proofs;
+};
+typedef struct InitialProverResults InitialProverResults;
+
+typedef struct CommittedUids CommittedUids;
+typedef struct ProverFinalResponse ProverFinalResponse;
+/**
+ * Holds the CDD Provider's response to the PUIS challenge.
+ */
+struct FinalProverResults {
+    ProverFinalResponse *prover_final_response;
+    CommittedUids *committed_uids;
+};
+typedef struct FinalProverResults FinalProverResults;
 
 /**
  * Holds PUIS secret data.
  */
 typedef struct VerifierSecrets VerifierSecrets;
 
+typedef struct  Challenge Challenge;
+typedef struct  VerifierSecrets VerifierSecrets;
+
+struct VerifierSetGeneratorResults {
+    // (VerifierSecrets, CommittedUids, Challenge)
+    VerifierSecrets *verifier_secrets;
+    CommittedUids *committed_uids;
+    size_t committed_uids_size;
+    Challenge *challenge;
+};
 typedef struct VerifierSetGeneratorResults VerifierSetGeneratorResults;
 
-typedef struct CddClaimData CddClaimData;
-
 typedef struct Scalar Scalar;
+
+typedef struct CddClaimData CddClaimData;
 
 typedef struct RistrettoPoint RistrettoPoint;
 
 typedef struct CommittedUids CommittedUids;
+
+/**
+ * Creates a CDD ID from a CDD claim.
+ *
+ * SAFETY: Caller is responsible to make sure `cdd_claim` pointer is a valid
+ *         `CddClaimData` object, created by this API.
+ * Caller is responsible for deallocating memory after use.
+ */
+RistrettoPoint *compute_cdd_id_wrapper(const CddClaimData *cdd_claim);
+
+Scalar *uuid_new(const uint8_t *unique_id, size_t unique_id_size);
 
 /**
  * Create a new `CddClaimData` object.
@@ -52,8 +81,7 @@ typedef struct CommittedUids CommittedUids;
  */
 CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
                                  size_t investor_did_size,
-                                 const uint8_t *investor_unique_id,
-                                 size_t investor_unique_id_size);
+                                 const Scalar *investor_unique_id);
 
 /**
  * Deallocates a `CddClaimData` object's memory.
@@ -64,6 +92,10 @@ CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
 void cdd_claim_data_free(CddClaimData *ptr);
 
 void initial_prover_results_free(InitialProverResults *ptr);
+
+void verifier_set_generator_results_free(VerifierSetGeneratorResults *ptr);
+
+void final_prover_results_free(FinalProverResults *ptr);
 
 InitialProverResults *generate_initial_proofs_wrapper(const CddClaimData *cdd_claim,
                                                       const uint8_t *seed,
@@ -76,15 +108,15 @@ VerifierSetGeneratorResults *generate_committed_set_and_challenge_wrapper(Scalar
                                                                           size_t seed_size);
 
 FinalProverResults *generate_challenge_response_wrapper(ProverSecrets *secrets,
-                                                        RistrettoPoint *committed_uids,
+                                                        CommittedUids *committed_uids,
                                                         size_t committed_uids_size,
-                                                        Scalar *challenge,
+                                                        Challenge *challenge,
                                                         const uint8_t *seed,
                                                         size_t seed_size);
 
 bool verify_proofs(const Proofs *initial_message,
                    const ProverFinalResponse *final_response,
-                   Scalar *challenge,
+                   Challenge *challenge,
                    RistrettoPoint *cdd_id,
                    const VerifierSecrets *verifier_secrets,
                    const CommittedUids *re_committed_uids);

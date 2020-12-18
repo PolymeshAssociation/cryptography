@@ -39,7 +39,7 @@ impl ChallengeGenerator for VerifierSetGenerator {
         let r = Scalar::random(rng);
         let mut commitments = padded_vec
             .into_iter()
-            .map(|scalar_uid| pg.generators[0] * scalar_uid * r)
+            .map(|scalar_uid| pg.generators[1] * scalar_uid * r)
             .collect::<CommittedUids>();
         commitments.shuffle(rng);
 
@@ -97,11 +97,13 @@ impl ProofVerifier for Verifier {
         );
 
         let looking_for = uid_commitment * verifier_secrets.rand;
+        println!("looking for: {:?}", looking_for);
 
         ensure!(
-            re_committed_uids
-                .into_iter()
-                .any(|element| *element == looking_for),
+            re_committed_uids.into_iter().any(|element| {
+                println!("element: {:?}", *element);
+                *element == looking_for
+            }),
             ErrorKind::MembershipProofError
         );
         Ok(())

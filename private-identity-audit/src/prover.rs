@@ -32,10 +32,10 @@ impl ProofGenerator for InitialProver {
     ) -> Fallible<(ProverSecrets, Proofs)> {
         let pg = PedersenGenerators::default();
         let blinding_factor =
-            generate_blinding_factor(claim.investor_unique_id, claim.investor_did);
+            generate_blinding_factor(claim.investor_did, claim.investor_unique_id);
         let secrets = [
-            claim.investor_unique_id,
             claim.investor_did,
+            claim.investor_unique_id,
             blinding_factor,
         ];
         let cdd_id = pg.commit(&secrets);
@@ -51,15 +51,15 @@ impl ProofGenerator for InitialProver {
         let (cdd_id_second_half_proof_secrets, cdd_id_second_half_proof) =
             generate_initial_message(
                 [claim.investor_did * r, blinding_factor * r].to_vec(),
-                vec![pg.generators[1], pg.generators[2]],
+                vec![pg.generators[0], pg.generators[2]],
                 rng,
             )?;
-        let b = (pg.generators[1] * claim.investor_did + pg.generators[2] * blinding_factor) * r;
+        let b = (pg.generators[0] * claim.investor_did + pg.generators[2] * blinding_factor) * r;
 
         // Corresponds to proving a/b = g^{x*r}.
         let (uid_commitment_proof_secrets, uid_commitment_proof) = generate_initial_message(
             vec![claim.investor_unique_id * r],
-            vec![pg.generators[0]],
+            vec![pg.generators[1]],
             rng,
         )?;
 
@@ -147,9 +147,9 @@ mod tests {
 
         // Prover generates cdd_id and places it on the chain.
         let cdd_id = pg.commit(&[
-            claim.investor_unique_id,
             claim.investor_did,
-            generate_blinding_factor(claim.investor_unique_id, claim.investor_did),
+            claim.investor_unique_id,
+            generate_blinding_factor(claim.investor_did, claim.investor_unique_id),
         ]);
 
         // P -> V: Prover generates and sends the initial message.
@@ -175,7 +175,7 @@ mod tests {
         .unwrap();
 
         // Only V: Verifier verifies the proofs and check membership.
-        Verifier::verify_proofs(
+        assert!(Verifier::verify_proofs(
             &proofs,
             &prover_response,
             challenge,
@@ -183,6 +183,6 @@ mod tests {
             &verifier_secrets,
             &re_committed_uids,
         )
-        .unwrap();
+        .is_ok());
     }
 }
