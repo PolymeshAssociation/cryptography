@@ -8,37 +8,15 @@
 use crate::{
     errors::Fallible,
     proofs::{apply_challenge, generate_initial_message},
-<<<<<<< HEAD
-<<<<<<< HEAD
     ChallengeResponder, CommittedUids, FinalProver, InitialProver, ProofGenerator, Proofs,
     ProverFinalResponse, ProverSecrets,
 };
 use cryptography_core::cdd_claim::{
     compute_cdd_id, get_blinding_factor, pedersen_commitments::PedersenGenerators, CddClaimData,
-=======
-    ChallengeResponder, CommittedUids, ProofGenerator, Proofs, ProverFinalResponse, ProverSecrets,
-    InitialProver, FinalProver,
->>>>>>> Implment wrappers for the first 2 API.
-=======
-    ChallengeResponder, CommittedUids, FinalProver, InitialProver, ProofGenerator, Proofs,
-    ProverFinalResponse, ProverSecrets,
->>>>>>> add the rest of wrappers.
 };
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
-<<<<<<< HEAD
-=======
-use sha3::{Digest, Sha3_512};
-
-/// Modified version of `generate_pedersen_commit` function of Confidential Identity Library.
-pub fn generate_blinding_factor(uid: Scalar, did: Scalar) -> Scalar {
-    let hash = Sha3_512::default()
-        .chain(uid.as_bytes())
-        .chain(did.as_bytes());
-    Scalar::from_hash(hash)
-}
->>>>>>> Implment wrappers for the first 2 API.
 
 impl ProofGenerator for InitialProver {
     fn generate_initial_proofs<T: RngCore + CryptoRng>(
@@ -130,22 +108,8 @@ impl ChallengeResponder for FinalProver {
 #[cfg(test)]
 mod tests {
     use crate::{
-<<<<<<< HEAD
-<<<<<<< HEAD
         uuid_to_scalar, verifier::gen_random_uuids, ChallengeGenerator, ChallengeResponder,
         FinalProver, InitialProver, ProofGenerator, ProofVerifier, Verifier, VerifierSetGenerator,
-=======
-        prover::{generate_blinding_factor},
-        uuid_to_scalar,
-        verifier::{gen_random_uuids},
-        ChallengeGenerator, ChallengeResponder, ProofGenerator, ProofVerifier,
-        FinalProver, InitialProver, VerifierSetGenerator, Verifier,
->>>>>>> Implment wrappers for the first 2 API.
-=======
-        prover::generate_blinding_factor, uuid_to_scalar, verifier::gen_random_uuids,
-        ChallengeGenerator, ChallengeResponder, FinalProver, InitialProver, ProofGenerator,
-        ProofVerifier, Verifier, VerifierSetGenerator,
->>>>>>> add the rest of wrappers.
     };
     use cryptography_core::cdd_claim::{compute_cdd_id, CddClaimData};
     use cryptography_core::curve25519_dalek::scalar::Scalar;
@@ -180,26 +144,12 @@ mod tests {
             InitialProver::generate_initial_proofs(claim, &mut rng).unwrap();
 
         // V -> P: Prover sends `proofs` and Verifier returns a list of 10 uids and the challenge.
-<<<<<<< HEAD
-<<<<<<< HEAD
         let (verifier_secrets, committed_uids, challenge) =
             VerifierSetGenerator::generate_committed_set_and_challenge(
                 private_uid_scalar_set,
                 Some(100),
                 &mut rng,
             )
-=======
-        let (verifier_secrets, committed_uids, challenge) = VerifierSetGenerator
-            ::generate_committed_set_and_challenge(private_uid_set, Some(100), &mut rng)
->>>>>>> Implment wrappers for the first 2 API.
-=======
-        let (verifier_secrets, committed_uids, challenge) =
-            VerifierSetGenerator::generate_committed_set_and_challenge(
-                private_uid_set,
-                Some(100),
-                &mut rng,
-            )
->>>>>>> add the rest of wrappers.
             .unwrap();
 
         // P -> V: Verifier sends the committed_uids and the challenge to the Prover.
@@ -212,11 +162,7 @@ mod tests {
         .unwrap();
 
         // Only V: Verifier verifies the proofs and check membership.
-<<<<<<< HEAD
         assert!(Verifier::verify_proofs(
-=======
-        Verifier::verify_proofs(
->>>>>>> add the rest of wrappers.
             &proofs,
             &prover_response,
             challenge,

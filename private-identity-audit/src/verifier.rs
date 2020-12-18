@@ -2,18 +2,8 @@ use crate::{
     errors::{ErrorKind, Fallible},
     proofs::verify,
     uuid_to_scalar, Challenge, ChallengeGenerator, CommittedUids, PrivateUids, ProofVerifier,
-<<<<<<< HEAD
-<<<<<<< HEAD
     Proofs, ProverFinalResponse, Verifier, VerifierSecrets, VerifierSetGenerator,
     SET_SIZE_ANONYMITY_PARAM,
-=======
-    Proofs, ProverFinalResponse, VerifierSecrets, SET_SIZE_ANONYMITY_PARAM,
-    VerifierSetGenerator, Verifier,
->>>>>>> Implment wrappers for the first 2 API.
-=======
-    Proofs, ProverFinalResponse, Verifier, VerifierSecrets, VerifierSetGenerator,
-    SET_SIZE_ANONYMITY_PARAM,
->>>>>>> add the rest of wrappers.
 };
 use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
@@ -110,13 +100,9 @@ impl ProofVerifier for Verifier {
         let looking_for = uid_commitment * verifier_secrets.rand;
 
         ensure!(
-            re_committed_uids
-                .into_iter()
-<<<<<<< HEAD
-                .any(|element| { *element == looking_for }),
-=======
-                .any(|element| *element == looking_for),
->>>>>>> add the rest of wrappers.
+            re_committed_uids.into_iter().any(|element| {
+                *element == looking_for
+            }),
             ErrorKind::MembershipProofError
         );
         Ok(())
@@ -145,20 +131,8 @@ pub fn gen_random_uuids<T: RngCore + CryptoRng>(count: usize, rng: &mut T) -> Ve
 #[cfg(test)]
 mod tests {
     use crate::{
-<<<<<<< HEAD
-<<<<<<< HEAD
         uuid_to_scalar, verifier::gen_random_uuids, ChallengeGenerator, VerifierSetGenerator,
         SET_SIZE_ANONYMITY_PARAM,
-=======
-        uuid_to_scalar,
-        verifier::{gen_random_uuids},
-        ChallengeGenerator, SET_SIZE_ANONYMITY_PARAM,
-        VerifierSetGenerator
->>>>>>> Implment wrappers for the first 2 API.
-=======
-        uuid_to_scalar, verifier::gen_random_uuids, ChallengeGenerator, VerifierSetGenerator,
-        SET_SIZE_ANONYMITY_PARAM,
->>>>>>> add the rest of wrappers.
     };
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -167,7 +141,6 @@ mod tests {
         let mut rng = StdRng::from_seed([10u8; 32]);
         let input_len = 10;
 
-<<<<<<< HEAD
         // Test original anonymity param.
         let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
             gen_random_uuids(input_len, &mut rng)
@@ -192,52 +165,12 @@ mod tests {
             &mut rng,
         )
         .expect("Success");
-=======
-        // Test original anonoymity param.
-        let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
-            gen_random_uuids(input_len, &mut rng)
-                .into_iter()
-                .map(|uuid| uuid_to_scalar(uuid))
-                .collect(),
-            None,
-            &mut rng,
-        )
-        .expect("Success");
-
-        assert_eq!(committed_uids.len(), SET_SIZE_ANONYMITY_PARAM);
-
-        // Test overridden anonoymity param.
-        let different_annonymity_size = 20;
-<<<<<<< HEAD
-        let (_, committed_uids, _) = VerifierSetGenerator
-            ::generate_committed_set_and_challenge(
-                gen_random_uuids(input_len, &mut rng)
-                    .into_iter()
-                    .map(|uuid| uuid_to_scalar(uuid))
-                    .collect(),
-                Some(different_annonymity_size),
-                &mut rng,
-            )
-            .expect("Success");
->>>>>>> Implment wrappers for the first 2 API.
-=======
-        let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
-            gen_random_uuids(input_len, &mut rng)
-                .into_iter()
-                .map(|uuid| uuid_to_scalar(uuid))
-                .collect(),
-            Some(different_annonymity_size),
-            &mut rng,
-        )
-        .expect("Success");
->>>>>>> add the rest of wrappers.
 
         assert_eq!(committed_uids.len(), different_anonymity_size);
 
         // Test no padding.
-<<<<<<< HEAD
         let different_anonymity_size = 5;
-        let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
+        let (_, _committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
             gen_random_uuids(input_len, &mut rng)
                 .into_iter()
                 .map(|uuid| uuid_to_scalar(uuid))
@@ -246,9 +179,8 @@ mod tests {
             &mut rng,
         )
         .expect("Success");
-=======
+
         let different_annonymity_size = 5;
-<<<<<<< HEAD
         let (_, committed_uids, _) = VerifierSetGenerator
             ::generate_committed_set_and_challenge(
                 gen_random_uuids(input_len, &mut rng)
@@ -259,18 +191,6 @@ mod tests {
                 &mut rng,
             )
             .expect("Success");
->>>>>>> Implment wrappers for the first 2 API.
-=======
-        let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
-            gen_random_uuids(input_len, &mut rng)
-                .into_iter()
-                .map(|uuid| uuid_to_scalar(uuid))
-                .collect(),
-            Some(different_annonymity_size),
-            &mut rng,
-        )
-        .expect("Success");
->>>>>>> add the rest of wrappers.
 
         assert_eq!(committed_uids.len(), input_len);
     }
