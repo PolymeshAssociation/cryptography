@@ -216,6 +216,7 @@ pub enum WasmError {
     Base64DecodingError,
     HexDecodingError,
     PlainTickerIdsError,
+    DecryptionError,
 }
 
 impl From<WasmError> for JsValue {
@@ -434,6 +435,31 @@ pub fn justify_transaction(
     Ok(JustifiedTransactionOutput {
         justified_tx: base64::encode(justified_tx.encode()),
     })
+}
+
+/// TODO
+///
+/// # Arguments
+/// * `todo`: todo
+///
+/// # Outputs
+/// * `todo`: todo
+///
+/// # Errors
+/// * todo
+#[wasm_bindgen]
+pub fn decrypt(encrypted_value: Base64, account: Account) -> Fallible<u32> {
+    let enc_balance = decode::<EncryptedAmount>(encrypted_value)?;
+    let account = account.to_mercat()?;
+
+    let decrypted_value = account
+        .secret
+        .enc_keys
+        .secret
+        .decrypt(&enc_balance)
+        .map_err(|_| WasmError::DecryptionError)?;
+
+    Ok(decrypted_value)
 }
 
 // ------------------------------------------------------------------------------------
