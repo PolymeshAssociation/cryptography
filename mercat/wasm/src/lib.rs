@@ -25,10 +25,13 @@ use wasm_bindgen::JsValue;
 // -                                  Type Definitions                                -
 // ------------------------------------------------------------------------------------
 
+/// A hex string without the "0x". Values of this type are plain values (i.e., not encrypted).
 pub type PlainHex = String;
 
+/// A base64 encoded string.
 pub type Base64 = String;
 
+/// Contains the secret and public account information of a party.
 #[wasm_bindgen]
 pub struct CreatAccountOutput {
     secret_account: Base64,
@@ -39,27 +42,39 @@ pub struct CreatAccountOutput {
 
 #[wasm_bindgen]
 impl CreatAccountOutput {
+    /// The secret account must be kept confidential and not shared with anyone else.
     #[wasm_bindgen(getter)]
     pub fn secret_account(&self) -> Base64 {
         self.secret_account.clone()
     }
 
+    /// The public cryptographic key of the account.
     #[wasm_bindgen(getter)]
     pub fn public_key(&self) -> Base64 {
         self.public_key.clone()
     }
 
+    /// The account id. The account id is the same as the encrypted ticker id.
     #[wasm_bindgen(getter)]
     pub fn account_id(&self) -> Base64 {
         self.account_id.clone()
     }
 
+    /// The Zero Knowledge proofs of the account creation.
     #[wasm_bindgen(getter)]
     pub fn account_tx(&self) -> Base64 {
         self.account_tx.clone()
     }
+
+    pub fn account(&self) -> Account {
+        Account::new(
+            self.secret_account(),
+            PubAccount::new(self.account_id(), self.public_key()),
+        )
+    }
 }
 
+/// Contains the secret and public account information of a mediator.
 #[wasm_bindgen]
 pub struct CreatMediatorAccountOutput {
     secret_account: MediatorAccount,
@@ -68,6 +83,7 @@ pub struct CreatMediatorAccountOutput {
 
 #[wasm_bindgen]
 impl CreatMediatorAccountOutput {
+    /// The secret account must be kept confidential and not shared with anyone else.
     #[wasm_bindgen(getter)]
     pub fn secret_account(&self) -> MediatorAccount {
         MediatorAccount {
@@ -75,51 +91,14 @@ impl CreatMediatorAccountOutput {
         }
     }
 
+    /// The public cryptographic key of the account.
     #[wasm_bindgen(getter)]
     pub fn public_key(&self) -> Base64 {
         self.public_key.clone()
     }
 }
 
-#[wasm_bindgen]
-pub struct CreateTransactionOutput {
-    init_tx: Base64,
-}
-
-#[wasm_bindgen]
-impl CreateTransactionOutput {
-    #[wasm_bindgen(getter)]
-    pub fn init_tx(&self) -> Base64 {
-        self.init_tx.clone()
-    }
-}
-
-#[wasm_bindgen]
-pub struct FinalizedTransactionOutput {
-    finalized_tx: Base64,
-}
-
-#[wasm_bindgen]
-impl FinalizedTransactionOutput {
-    #[wasm_bindgen(getter)]
-    pub fn finalized_tx(&self) -> Base64 {
-        self.finalized_tx.clone()
-    }
-}
-
-#[wasm_bindgen]
-pub struct JustifiedTransactionOutput {
-    justified_tx: Base64,
-}
-
-#[wasm_bindgen]
-impl JustifiedTransactionOutput {
-    #[wasm_bindgen(getter)]
-    pub fn justified_tx(&self) -> Base64 {
-        self.justified_tx.clone()
-    }
-}
-
+/// Contains the Zero Knowledge Proof of minting an asset by the issuer.
 #[wasm_bindgen]
 pub struct MintAssetOutput {
     asset_tx: Base64,
@@ -127,12 +106,59 @@ pub struct MintAssetOutput {
 
 #[wasm_bindgen]
 impl MintAssetOutput {
+    /// The Zero Knowledge proofs of the asset minting.
     #[wasm_bindgen(getter)]
     pub fn asset_tx(&self) -> Base64 {
         self.asset_tx.clone()
     }
 }
 
+/// Contains the Zero Knowledge Proof of initializing a confidential transaction by the sender.
+#[wasm_bindgen]
+pub struct CreateTransactionOutput {
+    init_tx: Base64,
+}
+
+#[wasm_bindgen]
+impl CreateTransactionOutput {
+    /// The Zero Knowledge proofs of the initialized confidential transaction.
+    #[wasm_bindgen(getter)]
+    pub fn init_tx(&self) -> Base64 {
+        self.init_tx.clone()
+    }
+}
+
+/// Contains the Zero Knowledge Proof of finalizing a confidential transaction by the receiver.
+#[wasm_bindgen]
+pub struct FinalizedTransactionOutput {
+    finalized_tx: Base64,
+}
+
+#[wasm_bindgen]
+impl FinalizedTransactionOutput {
+    /// The Zero Knowledge proofs of the finalized confidential transaction.
+    #[wasm_bindgen(getter)]
+    pub fn finalized_tx(&self) -> Base64 {
+        self.finalized_tx.clone()
+    }
+}
+
+/// Contains the Zero Knowledge Proof of justifying a confidential transaction by the mediator.
+#[wasm_bindgen]
+pub struct JustifiedTransactionOutput {
+    justified_tx: Base64,
+}
+
+#[wasm_bindgen]
+impl JustifiedTransactionOutput {
+    /// The Zero Knowledge proofs of the justified confidential transaction.
+    #[wasm_bindgen(getter)]
+    pub fn justified_tx(&self) -> Base64 {
+        self.justified_tx.clone()
+    }
+}
+
+/// A wrapper around base64 encoding of mediator secret account.
 #[wasm_bindgen]
 pub struct MediatorAccount {
     secret: Base64,
@@ -144,8 +170,13 @@ impl MediatorAccount {
     pub fn new(secret: Base64) -> Self {
         Self { secret }
     }
+
+    fn to_mercat(&self) -> Fallible<MercatMediatorAccount> {
+        decode::<MercatMediatorAccount>(self.secret.clone())
+    }
 }
 
+/// A wrapper around base64 encoding of a mercat account.
 #[wasm_bindgen]
 pub struct Account {
     secret_account: Base64,
@@ -170,6 +201,7 @@ impl Account {
     }
 }
 
+/// A wrapper around base64 encoding of mercat public account.
 #[wasm_bindgen]
 pub struct PubAccount {
     account_id: Base64,
@@ -191,12 +223,6 @@ impl PubAccount {
             owner_enc_pub_key: decode::<ElgamalPublicKey>(self.public_key.clone())?,
             enc_asset_id: decode::<CipherText>(self.account_id.clone())?,
         })
-    }
-}
-
-impl MediatorAccount {
-    fn to_mercat(&self) -> Fallible<MercatMediatorAccount> {
-        decode::<MercatMediatorAccount>(self.secret.clone())
     }
 }
 
@@ -235,16 +261,23 @@ type Fallible<T> = Result<T, JsValue>;
 // -                                     Public API                                   -
 // ------------------------------------------------------------------------------------
 
-/// TODO
+/// Creates a mercat account for a given `ticker_id`. It is the responsibility of the caller
+/// to properly store and safeguard the secret values returned by this function.
 ///
 /// # Arguments
-/// * `todo`: todo
+/// * `valid_ticker_ids`: The list of all valid confidential ticker ids. These values can be
+///                       obtained from the chain. The values are expected to be a list of
+///                       `PlainHex` strings.
+///
+/// * `ticker_id`: The ticker id of this account.
 ///
 /// # Outputs
-/// * `todo`: todo
+/// * `CreatAccountOutput`: Contains both the public and secret account information.
 ///
 /// # Errors
-/// * todo
+/// * `PlainTickerIdsError`: If the `valid_ticker_ids` is not a list of `PlainHex`s.
+/// * `HexDecodingError`: If `ticker_id` or `valid_ticker_ids`s are not a proper Hex values.
+/// * `AccountCreationError`: If mercat library throws an error while creating the account.
 #[wasm_bindgen]
 pub fn create_account(
     valid_ticker_ids: JsValue,
@@ -274,16 +307,15 @@ pub fn create_account(
     })
 }
 
-/// TODO
+/// Creates a mercat mediator account. It is the responsibility of the caller
+/// to properly store and safeguard the secret values returned by this function.
 ///
 /// # Arguments
-/// * `todo`: todo
 ///
 /// # Outputs
-/// * `todo`: todo
+/// * `CreatMediatorAccountOutput`: Contains the public and secret mediator account.
 ///
 /// # Errors
-/// * todo
 #[wasm_bindgen]
 pub fn create_mediator_account() -> CreatMediatorAccountOutput {
     let mut rng = OsRng;
@@ -307,16 +339,18 @@ pub fn create_mediator_account() -> CreatMediatorAccountOutput {
     }
 }
 
-/// TODO
+/// Creates a Zero Knowledge Proof of minting a confidential asset.
 ///
 /// # Arguments
-/// * `todo`: todo
+/// * `amount`: An integer with a max value of `2^32` representing the mint amount.
+/// * `issuer_account`: The mercat account. Can be obtained from `CreatAccountOutput.account`.
 ///
 /// # Outputs
-/// * `todo`: todo
+/// * `MintAssetOutput`: The ZKP of minting the asset.
 ///
 /// # Errors
-/// * todo
+/// * `Base64DecodingError`: If the `issuer_account` cannot be decoded from base64.
+/// * `DeserializationError`: If the `issuer_account` cannot be deserialized to a mercat account.
 #[wasm_bindgen]
 pub fn mint_asset(amount: u32, issuer_account: Account) -> Fallible<MintAssetOutput> {
     let mut rng = OsRng;
@@ -329,16 +363,25 @@ pub fn mint_asset(amount: u32, issuer_account: Account) -> Fallible<MintAssetOut
     })
 }
 
-/// TODO
+/// Creates the ZKP for the initial phase of creating a confidential transaction. This function
+/// is called by the sender and depends on secret information from the sender and public
+/// information of the receiver and the mediator.
 ///
 /// # Arguments
-/// * `todo`: todo
+/// * `amount`: An integer with a max value of `2^32` representing the mint amount.
+/// * `sender_account`: The mercat account. Can be obtained from `CreatAccountOutput.account`.
+/// * `encrypted_pending_balance`: Sender's encrypted pending balance. Can be obtained from the
+///                                chain.
+/// * `receiver_public_account`: Receiver's public account. Can be obtained from the chain.
+/// * `mediator_public_key`: Mediator's public key. Can be obtained from the chain.
 ///
 /// # Outputs
-/// * `todo`: todo
+/// * `CreateAccountOutput`: The ZKP of the initialized transaction.
 ///
 /// # Errors
-/// * todo
+/// * `Base64DecodingError`: If either of the inputs cannot be decoded from base64.
+/// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
+/// * `TransactionCreationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn create_transaction(
     amount: u32,
@@ -366,16 +409,22 @@ pub fn create_transaction(
     })
 }
 
-/// TODO
+/// Creates the ZKP for the finalized phase of creating a confidential transaction. This function
+/// is called by the receiver and depends on secret information from the receiver and public
+/// information of the sender.
 ///
 /// # Arguments
-/// * `todo`: todo
+/// * `amount`: An integer with a max value of `2^32` representing the mint amount.
+/// * `init_tx`: The initialized transaction proof. Can be obtained from the chain.
+/// * `receiver_account`: The mercat account. Can be obtained from `CreatAccountOutput.account`.
 ///
 /// # Outputs
-/// * `todo`: todo
+/// * `FinalizedTransactionOutput`: The ZKP of the finalized transaction.
 ///
 /// # Errors
-/// * todo
+/// * `Base64DecodingError`: If either of the inputs cannot be decoded from base64.
+/// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
+/// * `TransactionFinalizationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn finalize_transaction(
     amount: u32,
@@ -398,16 +447,28 @@ pub fn finalize_transaction(
     })
 }
 
-/// TODO
+/// Creates the ZKP for the justification phase of creating a confidential transaction.
+/// This function is called by the mediator and depends on secret information from the
+/// mediator and public information of the sender and the receiver. Moreover, this function
+/// expects the plain ticker id which should be communicated to the mediator off-chain.
 ///
 /// # Arguments
-/// * `todo`: todo
+/// * `finalized_tx`: The finalized transaction proof. Can be obtained from the chain.
+/// * `mediator_account`: The secret portion of the mediator's account. Can be obtained from
+///                       `CreatMediatorAccountOutput.secret_account`.
+/// * `sender_public_account`: Sender's public account. Can be obtained from the chain.
+/// * `sender_encrypted_pending_balance`: Sender's encrypted pending balance.
+///                                       Can be obtained from the chain.
+/// * `receiver_public_account`: Receiver's public account. Can be obtained from the chain.
+/// * `ticker_id`: The plain ticker id. Should be communicated off-chain.
 ///
 /// # Outputs
-/// * `todo`: todo
+/// * `JustifiedTransactionOutput`: The ZKP of the justify_transaction transaction.
 ///
 /// # Errors
-/// * todo
+/// * `Base64DecodingError`: If either of the inputs cannot be decoded from base64.
+/// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
+/// * `TransactionJustificationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn justify_transaction(
     finalized_tx: Base64,
@@ -437,16 +498,19 @@ pub fn justify_transaction(
     })
 }
 
-/// TODO
+/// Decrypts an `encrypted_value` given the secret account information.
 ///
 /// # Arguments
-/// * `todo`: todo
+/// * `encrypted_value`: The encrypted value.
+/// * `account`: The mercat account. Can be obtained from `CreatAccountOutput.account`.
 ///
 /// # Outputs
-/// * `todo`: todo
+/// * `u32`: The decrypted value.
 ///
 /// # Errors
-/// * todo
+/// * `Base64DecodingError`: If either of the inputs cannot be decoded from base64.
+/// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
+/// * `DecryptionError`: If the mercat library throws an error while decrypting the value.
 #[wasm_bindgen]
 pub fn decrypt(encrypted_value: Base64, account: Account) -> Fallible<u32> {
     let enc_balance = decode::<EncryptedAmount>(encrypted_value)?;
