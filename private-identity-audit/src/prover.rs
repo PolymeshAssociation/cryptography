@@ -38,6 +38,7 @@ impl ProofGenerator for InitialProver {
             claim.investor_unique_id,
             blinding_factor,
         ];
+
         let cdd_id = pg.commit(&secrets);
 
         let r = Scalar::random(rng);

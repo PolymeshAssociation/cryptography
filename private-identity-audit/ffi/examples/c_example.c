@@ -73,7 +73,7 @@ int main(void) {
     //                                                                       const size_t *min_set_size,
     //                                                                       const uint8_t *seed,
     //                                                                       size_t seed_size);
-    size_t min_set_size = 2;
+    size_t min_set_size = 4;
     VerifierSetGeneratorResults *verifier_set_generator_results = generate_committed_set_and_challenge_wrapper(*private_unique_identifiers,
         private_unique_identifiers_size, &min_set_size, seed, seed_size);
 

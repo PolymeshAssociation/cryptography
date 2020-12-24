@@ -23,6 +23,7 @@ impl ChallengeGenerator for VerifierSetGenerator {
         } else {
             SET_SIZE_ANONYMITY_PARAM
         };
+
         let padded_vec = if private_unique_identifiers.len() >= min_size {
             private_unique_identifiers
         } else {
@@ -97,11 +98,9 @@ impl ProofVerifier for Verifier {
         );
 
         let looking_for = uid_commitment * verifier_secrets.rand;
-        println!("looking for: {:?}", looking_for);
 
         ensure!(
             re_committed_uids.into_iter().any(|element| {
-                println!("element: {:?}", *element);
                 *element == looking_for
             }),
             ErrorKind::MembershipProofError
