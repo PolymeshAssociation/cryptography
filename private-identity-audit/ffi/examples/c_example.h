@@ -107,8 +107,8 @@ VerifierSetGeneratorResults *generate_committed_set_and_challenge_wrapper(Scalar
                                                                           const uint8_t *seed,
                                                                           size_t seed_size);
 
-FinalProverResults *generate_challenge_response_wrapper(ProverSecrets *secrets,
-                                                        CommittedUids *committed_uids,
+FinalProverResults *generate_challenge_response_wrapper(const ProverSecrets *secrets,
+                                                        const CommittedUids *committed_uids,
                                                         size_t committed_uids_size,
                                                         Challenge *challenge,
                                                         const uint8_t *seed,

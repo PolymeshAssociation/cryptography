@@ -55,6 +55,15 @@ fn box_alloc<T>(x: T) -> *mut T {
     Box::into_raw(Box::new(x))
 }
 
+
+/// Create a scalar from a slice of data.
+fn slice_to_scalar(data: &[u8]) -> Scalar {
+    use blake2::{Blake2b, Digest};
+    let mut hash = [0u8; 64];
+    hash.copy_from_slice(Blake2b::digest(data).as_slice());
+    Scalar::from_bytes_mod_order_wide(&hash)
+}
+
 // ------------------------------------------------------------------------
 // Data Structures
 // ------------------------------------------------------------------------
@@ -97,10 +106,10 @@ pub unsafe extern "C" fn cdd_claim_data_new(
     let investor_unique_id = *investor_unique_id;
     // slice::from_raw_parts(investor_unique_id, investor_unique_id_size as usize);
 
-    box_alloc(CddClaimData::new(
-        investor_did,
-        investor_unique_id.as_bytes(),
-    ))
+    box_alloc(CddClaimData {
+        investor_did: slice_to_scalar(investor_did),
+        investor_unique_id: investor_unique_id,
+    })
 }
 
 /// Deallocates a `CddClaimData` object's memory.
@@ -238,8 +247,8 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
 // ) -> Fallible<(ProverFinalResponse, CommittedUids)>;
 #[no_mangle]
 pub unsafe extern "C" fn generate_challenge_response_wrapper(
-    secrets: *mut ProverSecrets,
-    committed_uids: *mut CommittedUids,
+    secrets: *const ProverSecrets,
+    committed_uids: *const CommittedUids,
     committed_uids_size: size_t,
     challenge: *mut Challenge,
     seed: *const u8,
