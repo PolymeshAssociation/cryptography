@@ -108,7 +108,7 @@ pub trait ChallengeGenerator {
     ///
     /// # Arguments
     /// * `private_unique_identifiers`: A list of Scalars that represent the private set of
-    ///   unique identifiers. Call `uuid_to_scalar` to convert uIDs to Scalar properly.
+    ///   unique identifiers. Call `uuid_to_scalar` to convert uIDs to Scalar properly. todo PA
     /// * `min_set_size`: An optional parameter to override the default value of
     ///   `SET_SIZE_ANONYMITY_PARAM`.
     /// * `rng`: Cryptographically secure random number generator.

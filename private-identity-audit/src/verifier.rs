@@ -100,9 +100,9 @@ impl ProofVerifier for Verifier {
         let looking_for = uid_commitment * verifier_secrets.rand;
 
         ensure!(
-            re_committed_uids.into_iter().any(|element| {
-                *element == looking_for
-            }),
+            re_committed_uids
+                .into_iter()
+                .any(|element| { *element == looking_for }),
             ErrorKind::MembershipProofError
         );
         Ok(())
