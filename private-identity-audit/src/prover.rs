@@ -11,37 +11,23 @@ use crate::{
     ChallengeResponder, CommittedUids, FinalProver, InitialProver, ProofGenerator, Proofs,
     ProverFinalResponse, ProverSecrets,
 };
-use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
+use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
+use cryptography_core::cdd_claim::{compute_cdd_id, get_blinding_factor, CddClaimData};
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
-use sha3::{Digest, Sha3_512};
-
-/// Modified version of `generate_pedersen_commit` function of Confidential Identity Library.
-pub fn generate_blinding_factor(uid: Scalar, did: Scalar) -> Scalar {
-    let hash = Sha3_512::default()
-        .chain(uid.as_bytes())
-        .chain(did.as_bytes());
-    Scalar::from_hash(hash)
-}
 
 impl ProofGenerator for InitialProver {
     fn generate_initial_proofs<T: RngCore + CryptoRng>(
         claim: CddClaimData,
         rng: &mut T,
     ) -> Fallible<(ProverSecrets, Proofs)> {
-        let pg = PedersenGenerators::default();
-        let blinding_factor =
-            generate_blinding_factor(claim.investor_did, claim.investor_unique_id);
-        let secrets = [
-            claim.investor_did,
-            claim.investor_unique_id,
-            blinding_factor,
-        ];
-
-        let cdd_id = pg.commit(&secrets);
+        let blinding_factor = get_blinding_factor(&claim);
+        let cdd_id = compute_cdd_id(&claim);
 
         let r = Scalar::random(rng);
+
+        let pg = PedersenGenerators::default();
 
         // Corresponds to proving a = C^r, where C is cdd_id.
         let (cdd_id_proof_secrets, cdd_id_proof) =
@@ -121,37 +107,36 @@ impl ChallengeResponder for FinalProver {
 #[cfg(test)]
 mod tests {
     use crate::{
-        prover::generate_blinding_factor, uuid_to_scalar, verifier::gen_random_uuids,
-        ChallengeGenerator, ChallengeResponder, FinalProver, InitialProver, ProofGenerator,
-        ProofVerifier, Verifier, VerifierSetGenerator,
+        uuid_to_scalar, verifier::gen_random_uuids, ChallengeGenerator, ChallengeResponder,
+        FinalProver, InitialProver, ProofGenerator, ProofVerifier, Verifier, VerifierSetGenerator,
     };
-    use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
+    use cryptography_core::cdd_claim::{compute_cdd_id, CddClaimData};
     use cryptography_core::curve25519_dalek::scalar::Scalar;
     use rand::{rngs::StdRng, SeedableRng};
+    use rand_core::RngCore;
+    use uuid::Uuid;
 
     #[test]
     fn test_success_end_to_end() {
         let mut rng = StdRng::from_seed([10u8; 32]);
-        let pg = PedersenGenerators::default();
 
         // Private input of the Verifier.
-        let private_uid_set: Vec<Scalar> = gen_random_uuids(100, &mut rng)
+        let private_uid_set: Vec<Uuid> = gen_random_uuids(100, &mut rng);
+
+        // Make a random did for the investor.
+        let mut investor_did = [0u8; 32];
+        rng.fill_bytes(&mut investor_did);
+
+        // Verifier shares one of its uids with the Prover.
+        let claim = CddClaimData::new(&investor_did, private_uid_set[0].as_bytes());
+
+        // Prover generates cdd_id and places it on the chain.
+        let cdd_id = compute_cdd_id(&claim);
+
+        let private_uid_scalar_set: Vec<Scalar> = private_uid_set
             .into_iter()
             .map(|uuid| uuid_to_scalar(uuid))
             .collect();
-
-        // Verifier shares one of its uids with the Prover.
-        let claim = CddClaimData {
-            investor_unique_id: private_uid_set[0],
-            investor_did: Scalar::random(&mut rng),
-        };
-
-        // Prover generates cdd_id and places it on the chain.
-        let cdd_id = pg.commit(&[
-            claim.investor_did,
-            claim.investor_unique_id,
-            generate_blinding_factor(claim.investor_did, claim.investor_unique_id),
-        ]);
 
         // P -> V: Prover generates and sends the initial message.
         let (prover_secrets, proofs) =
@@ -160,7 +145,7 @@ mod tests {
         // V -> P: Prover sends `proofs` and Verifier returns a list of 10 uids and the challenge.
         let (verifier_secrets, committed_uids, challenge) =
             VerifierSetGenerator::generate_committed_set_and_challenge(
-                private_uid_set,
+                private_uid_scalar_set,
                 Some(100),
                 &mut rng,
             )

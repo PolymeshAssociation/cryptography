@@ -5,7 +5,7 @@ use crate::{
     Proofs, ProverFinalResponse, Verifier, VerifierSecrets, VerifierSetGenerator,
     SET_SIZE_ANONYMITY_PARAM,
 };
-use confidential_identity::pedersen_commitments::PedersenGenerators;
+use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
@@ -100,9 +100,9 @@ impl ProofVerifier for Verifier {
         let looking_for = uid_commitment * verifier_secrets.rand;
 
         ensure!(
-            re_committed_uids.into_iter().any(|element| {
-                *element == looking_for
-            }),
+            re_committed_uids
+                .into_iter()
+                .any(|element| { *element == looking_for }),
             ErrorKind::MembershipProofError
         );
         Ok(())
@@ -141,7 +141,7 @@ mod tests {
         let mut rng = StdRng::from_seed([10u8; 32]);
         let input_len = 10;
 
-        // Test original anonoymity param.
+        // Test original anonymity param.
         let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
             gen_random_uuids(input_len, &mut rng)
                 .into_iter()
@@ -154,28 +154,28 @@ mod tests {
 
         assert_eq!(committed_uids.len(), SET_SIZE_ANONYMITY_PARAM);
 
-        // Test overridden anonoymity param.
-        let different_annonymity_size = 20;
+        // Test overridden anonymity param.
+        let different_anonymity_size = 20;
         let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
             gen_random_uuids(input_len, &mut rng)
                 .into_iter()
                 .map(|uuid| uuid_to_scalar(uuid))
                 .collect(),
-            Some(different_annonymity_size),
+            Some(different_anonymity_size),
             &mut rng,
         )
         .expect("Success");
 
-        assert_eq!(committed_uids.len(), different_annonymity_size);
+        assert_eq!(committed_uids.len(), different_anonymity_size);
 
         // Test no padding.
-        let different_annonymity_size = 5;
+        let different_anonymity_size = 5;
         let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
             gen_random_uuids(input_len, &mut rng)
                 .into_iter()
                 .map(|uuid| uuid_to_scalar(uuid))
                 .collect(),
-            Some(different_annonymity_size),
+            Some(different_anonymity_size),
             &mut rng,
         )
         .expect("Success");

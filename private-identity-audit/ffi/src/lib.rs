@@ -9,7 +9,6 @@ use rand::{rngs::StdRng, SeedableRng};
 use std::slice;
 use uuid::{Builder, Variant, Version};
 
-// use confidential_identity::{build_scope_claim_proof_data, compute_cdd_id, compute_scope_id};
 use private_identity_audit::{
     uuid_to_scalar, ChallengeGenerator, ChallengeResponder, ProofGenerator, ProofVerifier,
     Verifier, VerifierSetGenerator,
@@ -26,7 +25,7 @@ pub type VerifierSecrets = private_identity_audit::VerifierSecrets;
 pub type InitialProver = private_identity_audit::InitialProver;
 pub type FinalProver = private_identity_audit::FinalProver;
 
-pub type CddClaimData = confidential_identity::CddClaimData;
+pub type CddClaimData = cryptography_core::cdd_claim::CddClaimData;
 
 pub type RistrettoPoint = cryptography_core::curve25519_dalek::ristretto::RistrettoPoint;
 pub type Scalar = cryptography_core::curve25519_dalek::scalar::Scalar;
@@ -54,7 +53,6 @@ pub struct FinalProverResults {
 fn box_alloc<T>(x: T) -> *mut T {
     Box::into_raw(Box::new(x))
 }
-
 
 /// Create a scalar from a slice of data.
 fn slice_to_scalar(data: &[u8]) -> Scalar {

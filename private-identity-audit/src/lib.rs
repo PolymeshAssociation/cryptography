@@ -12,7 +12,7 @@ mod proofs;
 mod prover;
 mod verifier;
 use blake2::{Blake2b, Digest};
-use confidential_identity::CddClaimData;
+use cryptography_core::cdd_claim::CddClaimData;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use errors::Fallible;
 use proofs::{FinalResponse, InitialMessage, Secrets};
@@ -108,9 +108,9 @@ pub trait ChallengeGenerator {
     ///
     /// # Arguments
     /// * `private_unique_identifiers`: A list of Scalars that represent the private set of
-    ///   unique identifiers. Call `uuid_to_scalar` to convert uIDs to Scalar properly.
+    ///   unique identifiers. Call `uuid_to_scalar` to convert uIDs to Scalar properly. todo PA
     /// * `min_set_size`: An optional parameter to override the default value of
-    /// `SET_SIZE_ANONYMITY_PARAM`.
+    ///   `SET_SIZE_ANONYMITY_PARAM`.
     /// * `rng`: Cryptographically secure random number generator.
     ///
     /// # Outputs

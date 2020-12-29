@@ -88,10 +88,10 @@ pub fn verify(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prover::generate_blinding_factor;
-    use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
+    use cryptography_core::cdd_claim::{compute_cdd_id, CddClaimData};
     use cryptography_core::curve25519_dalek::traits::MultiscalarMul;
     use rand::{rngs::StdRng, SeedableRng};
+    use rand_core::RngCore;
 
     #[test]
     fn test_zkp_multiple_base_proof() {
@@ -126,19 +126,21 @@ mod tests {
     #[test]
     fn test_zkp_cdd_id() {
         let mut rng = StdRng::from_seed([42u8; 32]);
-        let pg = PedersenGenerators::default();
-        let claim = CddClaimData {
-            investor_unique_id: Scalar::random(&mut rng),
-            investor_did: Scalar::random(&mut rng),
-        };
-        let blinding_factor =
-            generate_blinding_factor(claim.investor_did, claim.investor_unique_id);
-        let secrets = [
-            claim.investor_did,
-            claim.investor_unique_id,
-            blinding_factor,
-        ];
-        let cdd_id = pg.commit(&secrets);
+
+        // Make a random did for the investor.
+        let mut investor_did = [0u8; 32];
+        rng.fill_bytes(&mut investor_did);
+
+        // Make a random unique id for the investor.
+        let mut investor_unique_id = [0u8; 32];
+        rng.fill_bytes(&mut investor_unique_id);
+
+        // Verifier shares one of its uids with the Prover.
+        let claim = CddClaimData::new(&investor_did, &investor_unique_id);
+
+        // Prover generates cdd_id and places it on the chain.
+        let cdd_id = compute_cdd_id(&claim);
+
         let r = Scalar::random(&mut rng);
         let statement = cdd_id * r;
         let (cdd_id_proof_secrets, cdd_id_proof) =
