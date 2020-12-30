@@ -11,8 +11,9 @@ use crate::{
     ChallengeResponder, CommittedUids, FinalProver, InitialProver, ProofGenerator, Proofs,
     ProverFinalResponse, ProverSecrets,
 };
-use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
-use cryptography_core::cdd_claim::{compute_cdd_id, get_blinding_factor, CddClaimData};
+use cryptography_core::cdd_claim::{
+    compute_cdd_id, get_blinding_factor, pedersen_commitments::PedersenGenerators, CddClaimData,
+};
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
