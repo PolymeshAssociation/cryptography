@@ -6,7 +6,7 @@
 extern crate libc;
 use libc::size_t;
 use rand::{rngs::StdRng, SeedableRng};
-use std::slice;
+use std::{ptr::null_mut, slice};
 use uuid::{Builder, Variant, Version};
 
 use private_identity_audit::{
@@ -21,32 +21,30 @@ pub type Proofs = private_identity_audit::Proofs;
 pub type ProverFinalResponse = private_identity_audit::ProverFinalResponse;
 pub type ProverSecrets = private_identity_audit::ProverSecrets;
 pub type VerifierSecrets = private_identity_audit::VerifierSecrets;
-
 pub type InitialProver = private_identity_audit::InitialProver;
 pub type FinalProver = private_identity_audit::FinalProver;
-
 pub type CddClaimData = cryptography_core::cdd_claim::CddClaimData;
-
 pub type RistrettoPoint = cryptography_core::curve25519_dalek::ristretto::RistrettoPoint;
 pub type Scalar = cryptography_core::curve25519_dalek::scalar::Scalar;
 
+#[repr(C)]
 pub struct InitialProverResults {
     pub prover_secrets: *mut ProverSecrets,
     pub proofs: *mut Proofs,
-    // todo maybe add the error code.
 }
 
+#[repr(C)]
 pub struct VerifierSetGeneratorResults {
     pub verifier_secrets: *mut VerifierSecrets,
     pub committed_uids: *mut CommittedUids,
-    pub committed_uids_size: *mut usize,
+    pub committed_uids_size: usize,
     pub challenge: *mut Challenge,
 }
 
+#[repr(C)]
 pub struct FinalProverResults {
     pub prover_final_response: *mut ProverFinalResponse,
     pub committed_uids: *mut CommittedUids,
-    // todo maybe add error code.
 }
 
 fn box_alloc<T>(x: T) -> *mut T {
@@ -57,7 +55,6 @@ fn box_alloc<T>(x: T) -> *mut T {
 // Data Structures
 // ------------------------------------------------------------------------
 
-// todo can we get rid of this?
 #[no_mangle]
 pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) -> *mut Scalar {
     assert!(!unique_id.is_null());
@@ -157,7 +154,11 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
 
     let result = InitialProver::generate_initial_proofs(cdd_claim, &mut rng);
 
-    println!("1) P->V err: {:?}", result.is_err());
+    // Log the error and return.
+    if result.is_err() {
+        println!("Step 1) P->V error: {:?}", result.is_err());
+        return null_mut();
+    }
 
     let (prover_secrets, proofs) = result.unwrap();
 
@@ -166,13 +167,6 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
         proofs: box_alloc(proofs),
     })
 }
-
-// fn generate_committed_set_and_challenge<T: RngCore + CryptoRng>(
-//     &self,
-//     private_unique_identifiers: PrivateUids,
-//     min_set_size: Option<usize>,
-//     rng: &mut T,
-// ) -> Fallible<(VerifierSecrets, CommittedUids, Challenge)>;
 
 #[no_mangle]
 pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
@@ -190,10 +184,6 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     let unique_identifiers_vec: PrivateUids =
         slice::from_raw_parts_mut(private_unique_identifiers, private_unique_identifiers_size)
             .into();
-    // Vec::with_capacity(private_unique_identifiers_size);
-    // for i in 0..private_unique_identifiers_size as usize {
-    //     unique_identifiers_vec.push(private_unique_identifiers[i]);
-    // }
 
     let min_set_size: Option<usize> = match min_set_size.is_null() {
         true => None,
@@ -210,7 +200,11 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
         &mut rng,
     );
 
-    println!("2) V->P err: {:?}", result.is_err());
+    // Log the error and return.
+    if result.is_err() {
+        println!("Step 2) V->P error: {:?}", result.is_err());
+        return null_mut();
+    }
 
     let (verifier_secrets, committed_uids, challenge) = result.unwrap();
 
@@ -219,17 +213,11 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     box_alloc(VerifierSetGeneratorResults {
         verifier_secrets: box_alloc(verifier_secrets),
         committed_uids: box_alloc(committed_uids),
-        committed_uids_size: box_alloc(committed_uids_size),
+        committed_uids_size: committed_uids_size,
         challenge: box_alloc(challenge),
     })
 }
 
-// fn generate_challenge_response<T: RngCore + CryptoRng>(
-//     secrets: ProverSecrets,
-//     committed_uids: CommittedUids,
-//     challenge: Scalar,
-//     rng: &mut T,
-// ) -> Fallible<(ProverFinalResponse, CommittedUids)>;
 #[no_mangle]
 pub unsafe extern "C" fn generate_challenge_response_wrapper(
     secrets: *const ProverSecrets,
@@ -240,7 +228,7 @@ pub unsafe extern "C" fn generate_challenge_response_wrapper(
     seed_size: size_t,
 ) -> *mut FinalProverResults {
     assert!(!secrets.is_null());
-    // assert!(!committed_uids.is_null());
+    assert!(!committed_uids.is_null());
     assert!(committed_uids_size != 0);
     assert!(!seed.is_null());
     assert!(seed_size == 32);
@@ -261,7 +249,12 @@ pub unsafe extern "C" fn generate_challenge_response_wrapper(
         challenge,
         &mut rng,
     );
-    println!("3) P->V err: {:?}", result.is_err());
+
+    // Log the error and return.
+    if result.is_err() {
+        println!("Step 3) P->V error: {:?}", result.is_err());
+        return null_mut();
+    }
 
     let (prover_final_response, re_committed_uids) = result.unwrap();
     box_alloc(FinalProverResults {
@@ -269,15 +262,6 @@ pub unsafe extern "C" fn generate_challenge_response_wrapper(
         committed_uids: box_alloc(re_committed_uids),
     })
 }
-
-// fn verify_proofs(
-//     initial_message: Proofs,
-//     final_response: ProverFinalResponse,
-//     challenge: Scalar,
-//     cdd_id: RistrettoPoint,
-//     verifier_secrets: VerifierSecrets,
-//     re_committed_uids: CommittedUids,
-// ) -> Fallible<()>;
 
 #[no_mangle]
 pub unsafe extern "C" fn verify_proofs(
@@ -288,7 +272,6 @@ pub unsafe extern "C" fn verify_proofs(
     verifier_secrets: *const VerifierSecrets,
     re_committed_uids: *const CommittedUids,
 ) -> bool {
-    // todo maybe turn this into an error code.
     assert!(!initial_message.is_null());
     assert!(!final_response.is_null());
     assert!(!challenge.is_null());
@@ -312,7 +295,10 @@ pub unsafe extern "C" fn verify_proofs(
         re_committed_uids,
     );
 
-    println!("err: {:?}", result);
+    // Log the error.
+    if result.is_err() {
+        println!("Step 4) Verifier error: {:?}", result.is_err());
+    }
 
     result.is_ok()
 }
