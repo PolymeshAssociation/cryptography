@@ -37,7 +37,6 @@ pub struct InitialProverResults {
 }
 
 pub struct VerifierSetGeneratorResults {
-    // (VerifierSecrets, CommittedUids, Challenge)
     pub verifier_secrets: *mut VerifierSecrets,
     pub committed_uids: *mut CommittedUids,
     pub committed_uids_size: *mut usize,
@@ -54,19 +53,11 @@ fn box_alloc<T>(x: T) -> *mut T {
     Box::into_raw(Box::new(x))
 }
 
-/// Create a scalar from a slice of data.
-fn slice_to_scalar(data: &[u8]) -> Scalar {
-    use blake2::{Blake2b, Digest};
-    let mut hash = [0u8; 64];
-    hash.copy_from_slice(Blake2b::digest(data).as_slice());
-    Scalar::from_bytes_mod_order_wide(&hash)
-}
-
 // ------------------------------------------------------------------------
 // Data Structures
 // ------------------------------------------------------------------------
 
-// pub fn uuid_to_scalar(uuid: Uuid) -> Scalar {
+// todo can we get rid of this?
 #[no_mangle]
 pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) -> *mut Scalar {
     assert!(!unique_id.is_null());
@@ -93,21 +84,17 @@ pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) 
 pub unsafe extern "C" fn cdd_claim_data_new(
     investor_did: *const u8,
     investor_did_size: size_t,
-    investor_unique_id: *const Scalar,
-    // investor_unique_id: *const u8,
-    // investor_unique_id_size: size_t,
+    investor_unique_id: *const u8,
+    investor_unique_id_size: size_t,
 ) -> *mut CddClaimData {
     assert!(!investor_did.is_null());
     assert!(!investor_unique_id.is_null());
     let investor_did = slice::from_raw_parts(investor_did, investor_did_size as usize);
 
-    let investor_unique_id = *investor_unique_id;
-    // slice::from_raw_parts(investor_unique_id, investor_unique_id_size as usize);
+    let investor_unique_id =
+        slice::from_raw_parts(investor_unique_id, investor_unique_id_size as usize);
 
-    box_alloc(CddClaimData {
-        investor_did: slice_to_scalar(investor_did),
-        investor_unique_id: investor_unique_id,
-    })
+    box_alloc(CddClaimData::new(investor_did, investor_unique_id))
 }
 
 /// Deallocates a `CddClaimData` object's memory.

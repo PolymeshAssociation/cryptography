@@ -41,7 +41,7 @@
 //! ```
 //!
 
-use super::pedersen_commitments::PedersenGenerators;
+use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use lazy_static::lazy_static;
 use schnorrkel::{context::SigningContext, signing_context, Keypair, PublicKey, Signature};
@@ -65,22 +65,7 @@ fn slice_to_scalar(data: &[u8]) -> Scalar {
 }
 
 /// The data needed to generate a CDD ID.
-#[derive(Debug, Copy, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct CddClaimData {
-    pub investor_did: Scalar,
-    pub investor_unique_id: Scalar,
-}
-
-impl CddClaimData {
-    /// Create a CDD Claim Data object from slices of data.
-    pub fn new(investor_did: &[u8], investor_unique_id: &[u8]) -> Self {
-        CddClaimData {
-            investor_did: slice_to_scalar(investor_did),
-            investor_unique_id: slice_to_scalar(investor_unique_id),
-        }
-    }
-}
+pub type CddClaimData = cryptography_core::cdd_claim::CddClaimData;
 
 /// The data needed to generate a SCOPE ID.
 #[derive(Debug, Copy, Clone)]
@@ -145,7 +130,7 @@ fn generate_pedersen_commit(a: Scalar, b: Scalar) -> RistrettoPoint {
 /// # Output
 /// The Pedersen commitment result.
 pub fn compute_cdd_id(cdd_claim: &CddClaimData) -> RistrettoPoint {
-    generate_pedersen_commit(cdd_claim.investor_did, cdd_claim.investor_unique_id)
+    cryptography_core::cdd_claim::compute_cdd_id(cdd_claim)
 }
 
 /// Compute the SCOPE_ID \
