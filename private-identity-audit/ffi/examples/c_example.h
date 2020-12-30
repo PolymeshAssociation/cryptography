@@ -81,7 +81,8 @@ Scalar *uuid_new(const uint8_t *unique_id, size_t unique_id_size);
  */
 CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
                                  size_t investor_did_size,
-                                 const Scalar *investor_unique_id);
+                                 const uint8_t *investor_unique_id,
+                                 size_t investor_unique_id_size);
 
 /**
  * Deallocates a `CddClaimData` object's memory.

@@ -24,6 +24,7 @@ byteorder = { version = "^1.2.3", default-features = false, features = ["i128"] 
 criterion = { version = "0.3", optional = true }
 
 # Crypto
+cryptography_core = { path = "../cryptography-core/", default_features = false }
 sha3 = { version = "0.8", default-features = false }
 blake2 = { version = "0.9.0", default-features = false }
 
@@ -46,14 +47,17 @@ default = ["std", "u64_backend"]
 u32_backend = [
 	"curve25519-dalek/u32_backend",
 	"schnorrkel/u32_backend",
+	"cryptography_core/u32_backend",
 ]
 u64_backend = [
 	"curve25519-dalek/u64_backend",
 	"schnorrkel/u64_backend",
+	"cryptography_core/u64_backend",
 ]
 avx2_backend = [
 	"curve25519-dalek/avx2_backend",
 	"schnorrkel/avx2_backend",
+	"cryptography_core/avx2_backend",
 ]
 
 serde_all = [
@@ -61,13 +65,18 @@ serde_all = [
 	"serde_json",
 	"curve25519-dalek/serde",
 	"schnorrkel/serde",
+	"cryptography_core/serde_all",
 ]
 
-no_std = [ ]
+no_std = [
+    "cryptography_core/no_std",
+]
+
 std = [
 	# General and optional
 	"serde_all",
 	# Crypto
+	"cryptography_core/std",
 	"schnorrkel/std",
 	"rand_core/std",
 	"rand/std",
