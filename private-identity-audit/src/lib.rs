@@ -37,7 +37,7 @@ pub type Challenge = Scalar;
 pub struct InitialProver;
 pub struct FinalProver;
 
-pub struct VerifierSetGenerator; // todo fix this name
+pub struct VerifierSetGenerator;
 pub struct Verifier;
 
 /// Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.
@@ -108,7 +108,7 @@ pub trait ChallengeGenerator {
     ///
     /// # Arguments
     /// * `private_unique_identifiers`: A list of Scalars that represent the private set of
-    ///   unique identifiers. Call `uuid_to_scalar` to convert uIDs to Scalar properly. todo PA
+    ///   unique identifiers. Call `uuid_to_scalar` to convert uIDs to Scalar properly.
     /// * `min_set_size`: An optional parameter to override the default value of
     ///   `SET_SIZE_ANONYMITY_PARAM`.
     /// * `rng`: Cryptographically secure random number generator.
