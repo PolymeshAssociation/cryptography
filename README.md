@@ -41,7 +41,7 @@ exposes a wasm api, an FFI wrapper, and a CLI.
 
 ## Documentation
 
-To produce the documenation, run:
+To produce the documentation, run:
 
 ```bash
 cargo +nightly doc --open
@@ -60,11 +60,11 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 rustup target add wasm32-unknown-unknown --toolchain nightly
 cargo install cbindgen
 
+
 # Build and test the rust code
 cargo +nightly build --release
 cargo +nightly test --release -- --nocapture
 cargo +nightly bench
-
 
 # Build WASM bindings
 cd ./cryptography-core
@@ -86,6 +86,9 @@ cbindgen --config cbindgen.toml --crate confidential-identity-ffi --output examp
 # Manually replace `typedef` with `typedef struct` in the generated file
 gcc examples/c_example.c -L../../target/release/ -l confidential_identity_ffi -o example.out
 cd -
+
+# Generate and open the documentation
+cargo doc --open
 ```
 
 More detailed steps:
@@ -172,6 +175,8 @@ Build and run the benchmarks with:
 ```bash
 cargo +nightly bench
 ```
+
+Generate and open the documentation with `cargo doc --open`.
 
 ### Verify WASM support
 
