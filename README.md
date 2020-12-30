@@ -33,7 +33,6 @@ of this repository. For more details see section 5 of the MERCAT whitepaper.
 This library implements the necessary API to handle account creation, confidential asset
 issuance, and confidential asset transfer, as outlined in section 6 of the MERCAT whitepaper.
 
-
 ## APIs and CLIs
 
 Each library exposes various APIs and CLIs, which can be found inside
@@ -50,35 +49,125 @@ cargo +nightly doc --open
 
 ## Build Instructions
 
-Install rust!
-
-Install the nightly version of rust and WASM toolchain.
+TL;DR: run the following to download the toolchain, compile the code,
+and run tests and benchmarks.
 
 ```bash
-# In the root directory
+# Install prereqs
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup toolchain install nightly
-
-# Install wasm pack from https://rustwasm.github.io/wasm-pack/installer/
-# then, inside the cryptography sub-directory, add the nightly version as target.
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 rustup target add wasm32-unknown-unknown --toolchain nightly
+cargo install cbindgen
+
+# Build and test the rust code
+cargo +nightly build --release
+cargo +nightly test --release -- --nocapture
+cargo +nightly bench
+
+
+# Build WASM bindings
+cd ./cryptography-core
+rustup run nightly wasm-pack test --node
+cd -
+
+cd ./confidential-identity/wasm/
+rustup run nightly wasm-pack build --release
+cd -
+
+cd ./mercat/wasm/
+rustup run nightly wasm-pack build --release
+cd -
+
+
+# Build C bindings
+cd ./confidential-identity/ffi/
+cbindgen --config cbindgen.toml --crate confidential-identity-ffi --output examples/c_example.h
+# Manually replace `typedef` with `typedef struct` in the generated file
+gcc examples/c_example.c -L../../target/release/ -l confidential_identity_ffi -o example.out
+cd -
+```
+
+More detailed steps:
+
+Install rust from https://www.rust-lang.org/tools/install
+On linux-based systems, you can run
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+This will install the `stable` version of rust, but this repository
+requires the `nightly` version. To install the nightly version, run
+
+```bash
+rustup toolchain install nightly
+```
+
+Running `rustup show` should show both a stable and a nightly version.
+Note that if the nightly version is not the active toolchain, you will
+need to add `+nightly` to the commands. The rest of the commands in the
+readme assume that your active toolchain is `stable` and therefore, you
+will see `+nightly` in the commands.
+
+Next, install WASM support so that the code can be run on the browser.
+Install wasm-pack from https://rustwasm.github.io/wasm-pack/installer/
+
+On linux-based systems, you can run
+
+```bash
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+```
+
+By default, rust compiles for your Operating System, to enable the code
+to be compiled for wasm, you need to add a target for it.
+
+```bash
+rustup target add wasm32-unknown-unknown --toolchain nightly
+# View the list of installed targets
+rustup +nightly target list | grep installed
 ```
 
 If you use a different command to install a specific nightly version, use the same format for
 adding WASM.
 
-To build the library and examples, run:
+To build the library and all the projects, run from the root directory
+of the repository.
 
 ```bash
 cargo +nightly build --release
 ```
 
-To run the unit tests:
+To build the wasm versions, change to a `wasm` directory and run
+
+```bash
+cd ./confidential-identity/wasm/
+rustup run nightly wasm-pack build --release
+```
+
+To generate C bindings, first install the `cbindgen` tool.
+
+```bash
+cargo install cbindgen
+```
+
+Next, generate the bindings by going to an `ffi` directory and running
+the following command.
+
+```bash
+cbindgen --config cbindgen.toml --crate confidential-identity-ffi --output examples/c_example.h
+# Note that unfortunately `cbindgen` doesn't map the typedefs properly, so manually replace `typedef` with `typedef struct`.
+# Then, build the bindings using the following command.
+gcc examples/c_example.c -L../../target/release/ -l confidential_identity_ffi -o example.out
+```
+
+Run the unit tests with:
 
 ```bash
 cargo +nightly test --release -- --nocapture
 ```
 
-To build and run benchmarks:
+Build and run the benchmarks with:
 
 ```bash
 cargo +nightly bench
@@ -91,7 +180,7 @@ built in WASM, you have to enable `no_std` feature.
 
 ```bash
 $ cd cryptography-core
-cryptography-core $ cargo build --target wasm32-unknown-unknown --no-default-features --features no_std
+cryptography-core $ cargo build +nightly --target wasm32-unknown-unknown --no-default-features --features no_std
 ```
 
 To run tests on WASM, follow [wasm-bindgen-test][wasm-bindgen-test].
@@ -103,7 +192,7 @@ tested for WASM support.
 You can run the WASM tests with
 
 ```bash
-wasm-pack test --node
+rustup run nightly wasm-pack test --node
 ```
 
 [wasm-bindgen-test]: https://rustwasm.github.io/docs/wasm-bindgen/wasm-bindgen-test/usage.html
