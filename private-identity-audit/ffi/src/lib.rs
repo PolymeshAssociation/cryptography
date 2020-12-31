@@ -55,6 +55,12 @@ fn box_alloc<T>(x: T) -> *mut T {
 // Data Structures
 // ------------------------------------------------------------------------
 
+/// Convert a Uuid byte array into a scalar object.
+///
+/// Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
+/// SAFETY: Caller is also responsible for making sure `investor_did` and
+///         `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
+///         and `investor_unique_id_size` bytes respectively.
 #[no_mangle]
 pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) -> *mut Scalar {
     assert!(!unique_id.is_null());
@@ -69,6 +75,18 @@ pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) 
         .build();
 
     box_alloc(uuid_to_scalar(uuid))
+}
+
+/// Deallocates a `Scalar` object's memory.
+///
+/// Should only be called on a still-valid pointer to an object returned by
+/// `uuid_new()`.
+#[no_mangle]
+pub unsafe extern "C" fn scalar_free(ptr: *mut Scalar) {
+    if ptr.is_null() {
+        return;
+    }
+    Box::from_raw(ptr);
 }
 
 /// Create a new `CddClaimData` object.
@@ -106,6 +124,10 @@ pub unsafe extern "C" fn cdd_claim_data_free(ptr: *mut CddClaimData) {
     Box::from_raw(ptr);
 }
 
+/// Deallocates a `InitialProverResults` object's memory.
+///
+/// Should only be called on a still-valid pointer to an object returned by
+/// `generate_initial_proofs_wrapper()`.
 #[no_mangle]
 pub unsafe extern "C" fn initial_prover_results_free(ptr: *mut InitialProverResults) {
     if ptr.is_null() {
@@ -114,6 +136,10 @@ pub unsafe extern "C" fn initial_prover_results_free(ptr: *mut InitialProverResu
     Box::from_raw(ptr);
 }
 
+/// Deallocates a `VerifierSetGeneratorResults` object's memory.
+///
+/// Should only be called on a still-valid pointer to an object returned by
+/// `generate_committed_set_and_challenge_wrapper()`.
 #[no_mangle]
 pub unsafe extern "C" fn verifier_set_generator_results_free(
     ptr: *mut VerifierSetGeneratorResults,
@@ -124,6 +150,10 @@ pub unsafe extern "C" fn verifier_set_generator_results_free(
     Box::from_raw(ptr);
 }
 
+/// Deallocates a `FinalProverResults` object's memory.
+///
+/// Should only be called on a still-valid pointer to an object returned by
+/// `generate_challenge_response_wrapper()`.
 #[no_mangle]
 pub unsafe extern "C" fn final_prover_results_free(ptr: *mut FinalProverResults) {
     if ptr.is_null() {
@@ -133,9 +163,15 @@ pub unsafe extern "C" fn final_prover_results_free(ptr: *mut FinalProverResults)
 }
 
 // ------------------------------------------------------------------------
-// Prover API
+// InitialProver API
 // ------------------------------------------------------------------------
 
+/// Creates a `InitialProverResults` object from a CDD claim and a seed.
+///
+/// SAFETY: Caller is responsible to make sure `cdd_claim` is a valid
+///         pointer to a `CddClaimData` object, and `seed` is a random
+///         32-byte array.
+/// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn generate_initial_proofs_wrapper(
     cdd_claim: *const CddClaimData,
@@ -168,11 +204,22 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
     })
 }
 
+// ------------------------------------------------------------------------
+// VerifierSetGenerator API
+// ------------------------------------------------------------------------
+
+/// Creates a `VerifierSetGeneratorResults` object from a private Uuid (as
+/// a Scalar object), a minimum set size, and a seed.
+///
+/// SAFETY: Caller is responsible to make sure `private_unique_identifiers`
+///         is a valid pointer to a `Scalar` object, and `seed` is a random
+///         32-byte array.
+/// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     private_unique_identifiers: *mut Scalar,
     private_unique_identifiers_size: size_t,
-    min_set_size: *const size_t, // this is optional
+    min_set_size: *const size_t,
     seed: *const u8,
     seed_size: size_t,
 ) -> *mut VerifierSetGeneratorResults {
@@ -218,6 +265,18 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     })
 }
 
+// ------------------------------------------------------------------------
+// FinalProver API
+// ------------------------------------------------------------------------
+
+/// Creates a `FinalProverResults` object from a prover's secret, a
+/// committed set of Uids, a challenge, and a seed.
+///
+/// SAFETY: Caller is responsible to make sure `secrets`
+///         is a valid pointer to a `ProverSecrets` object, `challenge` is
+///         a valid pointer to a `Challenge` object, and `seed` is a random
+///         32-byte array.
+/// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn generate_challenge_response_wrapper(
     secrets: *const ProverSecrets,
@@ -263,6 +322,17 @@ pub unsafe extern "C" fn generate_challenge_response_wrapper(
     })
 }
 
+// ------------------------------------------------------------------------
+// Verifier API
+// ------------------------------------------------------------------------
+
+/// Verifies the proof of a Uuid's membership in a set of Uuids.
+///
+/// SAFETY: Caller is responsible to make sure `initial_message`,
+///         `final_response`, `challenge`, `cdd_id`, `verifier_secrets`,
+///         and `re_committed_uids` pointers are valid objects, created by
+///         this API.
+/// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn verify_proofs(
     initial_message: *const Proofs,
