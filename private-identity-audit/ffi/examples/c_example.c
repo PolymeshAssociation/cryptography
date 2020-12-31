@@ -4,6 +4,17 @@
 #include <string.h>
 #include "c_example.h"
 
+/**
+ * Creates a CDD ID from a CDD claim.
+ * (copy/pasted here from confidential-identity/ffi/examples/c_example.h
+ *  for convenience.)
+ *
+ * SAFETY: Caller is responsible to make sure `cdd_claim` pointer is a valid
+ *         `CddClaimData` object, created by this API.
+ * Caller is responsible for deallocating memory after use.
+ */
+extern RistrettoPoint *compute_cdd_id_wrapper(const CddClaimData *cdd_claim);
+
 int main(void) {
     uint8_t investor_did[32] = {0x49, 0x99, 0x52, 0x43, 0x74, 0x8c, 0x4a, 0xe7,
         0x11, 0x8, 0x3c, 0x97, 0x56, 0x5f, 0xfd, 0xfd, 0x60, 0xdb, 0x1d, 0x8c, 0xc5,
@@ -66,6 +77,8 @@ int main(void) {
     // Investor's unique id is sensitive data, it's a good practice to zeroize it at cleanup.
     memset_s(investor_unique_id1, investor_unique_id_size1, 0, investor_unique_id_size1);
     memset_s(investor_unique_id2, investor_unique_id_size2, 0, investor_unique_id_size2);
+    scalar_free(uuid1);
+    scalar_free(uuid2);
     cdd_claim_data_free(cdd_claim);
     initial_prover_results_free(initial_prover_results);
     verifier_set_generator_results_free(verifier_set_generator_results);
