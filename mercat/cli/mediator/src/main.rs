@@ -10,7 +10,6 @@ use mercat_common::{
     justify::{justify_asset_transfer_transaction, process_create_mediator},
 };
 
-use env_logger;
 use input::{parse_input, CLI};
 use log::info;
 use metrics::timing;

@@ -10,7 +10,6 @@ exclude = [".gitignore"]
 
 [dependencies]
 cryptography_core = { path = "../cryptography-core/", default_features = false }
-confidential_identity = { path = "../confidential-identity", default_features = false }
 rand_core = { version = "0.5", default-features = false}
 rand = { version = "0.7", default-features = false }
 serde = { version = "1.0.105", default-features = false, features = ["derive"], optional = true }
@@ -20,7 +19,7 @@ blake2 = { version = "0.9.0", default-features = false }
 sha3 = { version = "0.8", default-features = false }
 
 [features]
-default = ["std"]
+default = ["std", "u64_backend"]
 
 serde_all = [
     "serde",
@@ -31,10 +30,11 @@ no_std = [
     "cryptography_core/no_std",
 ]
 
+u64_backend = ["cryptography_core/u64_backend"]
+
 std = [
     "serde_all",
     "cryptography_core/std",
-    "confidential_identity/std",
     "rand_core/std",
     "rand/std",
     "failure/std",

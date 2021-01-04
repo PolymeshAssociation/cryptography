@@ -31,6 +31,7 @@ pub struct FinalResponse {
     s: Vec<Scalar>,
 }
 
+#[derive(Clone)]
 pub struct Secrets {
     rands: Vec<Scalar>,
     secrets: Vec<Scalar>,
@@ -55,7 +56,7 @@ pub fn generate_initial_message<T: RngCore + CryptoRng>(
     Ok((Secrets { rands, secrets }, InitialMessage { a, generators }))
 }
 
-pub fn apply_challenge(prover_secrets: Secrets, c: Challenge) -> FinalResponse {
+pub fn apply_challenge(prover_secrets: &Secrets, c: Challenge) -> FinalResponse {
     let s = (&prover_secrets.rands)
         .iter()
         .zip(&prover_secrets.secrets)
@@ -67,14 +68,14 @@ pub fn apply_challenge(prover_secrets: Secrets, c: Challenge) -> FinalResponse {
 
 pub fn verify(
     initial_message: InitialMessage,
-    final_response: FinalResponse,
-    statement: RistrettoPoint,
-    c: Challenge,
+    final_response: &FinalResponse,
+    statement: &RistrettoPoint,
+    c: &Challenge,
 ) -> bool {
     if let Some(lhs) = initial_message
         .generators
         .into_iter()
-        .zip(final_response.s)
+        .zip(&final_response.s)
         .map(|(gen, s)| gen * s)
         .fold_first(|v1, v2| v1 + v2)
     {
@@ -87,10 +88,10 @@ pub fn verify(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prover::generate_blinding_factor;
-    use confidential_identity::{pedersen_commitments::PedersenGenerators, CddClaimData};
+    use cryptography_core::cdd_claim::{compute_cdd_id, CddClaimData};
     use cryptography_core::curve25519_dalek::traits::MultiscalarMul;
     use rand::{rngs::StdRng, SeedableRng};
+    use rand_core::RngCore;
 
     #[test]
     fn test_zkp_multiple_base_proof() {
@@ -106,50 +107,52 @@ mod tests {
             generate_initial_message(secrets, generators, &mut rng).unwrap();
 
         let c = Scalar::random(&mut rng);
-        let final_response = apply_challenge(prover_secrets, c);
+        let final_response = apply_challenge(&prover_secrets, c);
 
         // Positive test
         assert!(verify(
             initial_message.clone(),
-            final_response.clone(),
-            statement,
-            c
+            &final_response,
+            &statement,
+            &c
         ));
 
         // Negative test
         let statement = RistrettoPoint::random(&mut rng) * Scalar::random(&mut rng);
-        let is_valid = verify(initial_message, final_response, statement, c);
+        let is_valid = verify(initial_message, &final_response, &statement, &c);
         assert!(!is_valid);
     }
 
     #[test]
     fn test_zkp_cdd_id() {
         let mut rng = StdRng::from_seed([42u8; 32]);
-        let pg = PedersenGenerators::default();
-        let claim = CddClaimData {
-            investor_unique_id: Scalar::random(&mut rng),
-            investor_did: Scalar::random(&mut rng),
-        };
-        let blinding_factor =
-            generate_blinding_factor(claim.investor_did, claim.investor_unique_id);
-        let secrets = [
-            claim.investor_did,
-            claim.investor_unique_id,
-            blinding_factor,
-        ];
-        let cdd_id = pg.commit(&secrets);
+
+        // Make a random did for the investor.
+        let mut investor_did = [0u8; 32];
+        rng.fill_bytes(&mut investor_did);
+
+        // Make a random unique id for the investor.
+        let mut investor_unique_id = [0u8; 32];
+        rng.fill_bytes(&mut investor_unique_id);
+
+        // Verifier shares one of its uids with the Prover.
+        let claim = CddClaimData::new(&investor_did, &investor_unique_id);
+
+        // Prover generates cdd_id and places it on the chain.
+        let cdd_id = compute_cdd_id(&claim);
+
         let r = Scalar::random(&mut rng);
         let statement = cdd_id * r;
         let (cdd_id_proof_secrets, cdd_id_proof) =
             generate_initial_message(vec![r], vec![cdd_id], &mut rng).unwrap();
 
         let challenge = Scalar::random(&mut rng);
-        let cdd_id_proof_response = apply_challenge(cdd_id_proof_secrets, challenge);
+        let cdd_id_proof_response = apply_challenge(&cdd_id_proof_secrets, challenge);
         assert!(verify(
             cdd_id_proof,
-            cdd_id_proof_response,
-            statement,
-            challenge,
+            &cdd_id_proof_response,
+            &statement,
+            &challenge,
         ));
     }
 }

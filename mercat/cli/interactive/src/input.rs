@@ -350,10 +350,10 @@ pub fn parse_input() -> CLI {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
-            return CLI::CreateUserAccount(cfg);
+            CLI::CreateUserAccount(cfg)
         }
 
         CLI::CreateMediatorAccount(cfg) => {
@@ -366,7 +366,7 @@ pub fn parse_input() -> CLI {
             let cfg = CreateMediatorAccountInfo {
                 seed,
                 db_dir,
-                user: cfg.user.clone(),
+                user: cfg.user,
             };
 
             info!(
@@ -374,7 +374,7 @@ pub fn parse_input() -> CLI {
                 cfg
             );
 
-            return CLI::CreateMediatorAccount(cfg);
+            CLI::CreateMediatorAccount(cfg)
         }
 
         CLI::Mint(cfg) => {
@@ -396,7 +396,7 @@ pub fn parse_input() -> CLI {
                 cfg
             );
 
-            return CLI::Mint(cfg);
+            CLI::Mint(cfg)
         }
         CLI::CreateTransaction(cfg) => {
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
@@ -417,10 +417,10 @@ pub fn parse_input() -> CLI {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
-            return CLI::CreateTransaction(cfg);
+            CLI::CreateTransaction(cfg)
         }
         CLI::FinalizeTransaction(cfg) => {
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
@@ -439,10 +439,10 @@ pub fn parse_input() -> CLI {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
-            return CLI::FinalizeTransaction(cfg);
+            CLI::FinalizeTransaction(cfg)
         }
         CLI::JustifyTransaction(cfg) => {
             // Set the default seed and db_dir if needed.
@@ -463,10 +463,10 @@ pub fn parse_input() -> CLI {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
-            return CLI::JustifyTransaction(cfg);
+            CLI::JustifyTransaction(cfg)
         }
         CLI::Decrypt(cfg) => {
             let db_dir = cfg.db_dir.clone().or_else(|| std::env::current_dir().ok());
@@ -480,16 +480,12 @@ pub fn parse_input() -> CLI {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
-            return CLI::Decrypt(cfg);
+            CLI::Decrypt(cfg)
         }
-        CLI::Add(cfg) => {
-            return CLI::Add(cfg);
-        }
-        CLI::Subtract(cfg) => {
-            return CLI::Subtract(cfg);
-        }
+        CLI::Add(cfg) => CLI::Add(cfg),
+        CLI::Subtract(cfg) => CLI::Subtract(cfg),
     }
 }

@@ -2,7 +2,7 @@
 //! Use `mercat_validator --help` to see the usage.
 
 mod input;
-use env_logger;
+
 use input::parse_input;
 use log::info;
 use mercat_common::{errors::Error, init_print_logger, validate::validate_all_pending};

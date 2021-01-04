@@ -3,7 +3,6 @@
 
 mod input;
 
-use env_logger;
 use input::{parse_input, CLI};
 use log::info;
 use mercat_common::{

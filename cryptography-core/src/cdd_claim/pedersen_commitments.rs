@@ -12,7 +12,7 @@
 //! In this setup the entire system is using the same set of
 //! 3 Pedersen generators: G0, G1, and G2. To create these generators:
 //! ```
-//! use confidential_identity::pedersen_commitments::PedersenGenerators;
+//! use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
 //!
 //! let pg = PedersenGenerators::default();
 //! ```
@@ -25,7 +25,7 @@
 //! ```
 //! use curve25519_dalek::scalar::Scalar;
 //! use curve25519_dalek::ristretto::RistrettoPoint;
-//! use confidential_identity::pedersen_commitments::PedersenGenerators;
+//! use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
 //!
 //! let pg = PedersenGenerators::default();
 //! let values: [Scalar; 3] =
@@ -38,7 +38,7 @@
 //! use curve25519_dalek::scalar::Scalar;
 //! use curve25519_dalek::ristretto::RistrettoPoint;
 //! use curve25519_dalek::ristretto::CompressedRistretto;
-//! use confidential_identity::pedersen_commitments::PedersenGenerators;
+//! use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
 //!
 //! let pg = PedersenGenerators::default();
 //! let id_bytes: [u8; 32] = [
@@ -134,6 +134,21 @@ impl PedersenGenerators {
     pub fn label_prime(&self, label: RistrettoPoint, id: Scalar) -> RistrettoPoint {
         label - RistrettoPoint::multiscalar_mul(&[id], &[self.generators[0]])
     }
+}
+
+pub fn generate_blinding_factor(a: Scalar, b: Scalar) -> Scalar {
+    use sha3::Digest;
+    let hash = Sha3_512::default().chain(a.as_bytes()).chain(b.as_bytes());
+
+    Scalar::from_hash(hash)
+}
+
+pub fn generate_pedersen_commit(a: Scalar, b: Scalar) -> RistrettoPoint {
+    let blind = generate_blinding_factor(a, b);
+
+    // Calculate the output commit.
+    let pg = PedersenGenerators::default();
+    pg.commit(&[a, b, blind])
 }
 
 // ------------------------------------------------------------------------

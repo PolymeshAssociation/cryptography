@@ -1008,7 +1008,7 @@ fn run_from(mode: &str) {
 mod tests {
     use super::*;
     use crate::init_print_logger;
-    use env_logger;
+
     use log::debug;
     use std::sync::Once;
     use wasm_bindgen_test::*;

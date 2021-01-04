@@ -1,4 +1,4 @@
-//! pial is the library that implements the private identity audit protocol
+//! PIAL is the library that implements the private identity audit protocol
 //! of the PIAL, as defined in the section TODO of the whitepaper TODO.
 //!
 
@@ -12,7 +12,7 @@ mod proofs;
 mod prover;
 mod verifier;
 use blake2::{Blake2b, Digest};
-use confidential_identity::CddClaimData;
+use cryptography_core::cdd_claim::CddClaimData;
 use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use errors::Fallible;
 use proofs::{FinalResponse, InitialMessage, Secrets};
@@ -34,6 +34,12 @@ pub type CommittedUids = Vec<RistrettoPoint>;
 /// The Zero-Knowledge challenge.
 pub type Challenge = Scalar;
 
+pub struct InitialProver;
+pub struct FinalProver;
+
+pub struct VerifierSetGenerator;
+pub struct Verifier;
+
 /// Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.
 pub struct Proofs {
     cdd_id_proof: InitialMessage,
@@ -41,7 +47,7 @@ pub struct Proofs {
     uid_commitment_proof: InitialMessage,
     /// Committed CDD ID. Corresponding to g^uID * h^DID * f^{hash(uID, DID)}`.
     a: RistrettoPoint,
-    /// Committed version of the second half CDD ID. Corresponding to (h^DID*f^{hash(uID, DID)})^r
+    /// Committed version of the second half CDD ID. Corresponding to (h^DID*f^{hash(uID, DID)})^r.
     b: RistrettoPoint,
 }
 
@@ -53,6 +59,7 @@ pub struct ProverFinalResponse {
 }
 
 /// Holds CDD Provider secret data.
+#[derive(Clone)]
 pub struct ProverSecrets {
     cdd_id_proof_secrets: Secrets,
     cdd_id_second_half_proof_secrets: Secrets,
@@ -103,7 +110,7 @@ pub trait ChallengeGenerator {
     /// * `private_unique_identifiers`: A list of Scalars that represent the private set of
     ///   unique identifiers. Call `uuid_to_scalar` to convert uIDs to Scalar properly.
     /// * `min_set_size`: An optional parameter to override the default value of
-    /// `SET_SIZE_ANONYMITY_PARAM`.
+    ///   `SET_SIZE_ANONYMITY_PARAM`.
     /// * `rng`: Cryptographically secure random number generator.
     ///
     /// # Outputs
@@ -113,7 +120,6 @@ pub trait ChallengeGenerator {
     ///    be sent to CDD Provider.
     /// * `Challenge`: the ZKP random challenge.
     fn generate_committed_set_and_challenge<T: RngCore + CryptoRng>(
-        &self,
         private_unique_identifiers: PrivateUids,
         min_set_size: Option<usize>,
         rng: &mut T,
@@ -135,7 +141,7 @@ pub trait ChallengeResponder {
     /// * `ProverFinalResponse`: The ZKP response.
     /// * `CommittedUids`: These re-committed uIDs form part of the proof of membership.
     fn generate_challenge_response<T: RngCore + CryptoRng>(
-        secrets: ProverSecrets,
+        secrets: &ProverSecrets,
         committed_uids: CommittedUids,
         challenge: Scalar,
         rng: &mut T,
@@ -154,11 +160,11 @@ pub trait ProofVerifier {
     /// * `verifier_secrets`: The PUIS secrets generated in the second step of the protocol.
     /// * `rng`: Cryptographically secure random number generator.
     fn verify_proofs(
-        initial_message: Proofs,
-        final_response: ProverFinalResponse,
+        initial_message: &Proofs,
+        final_response: &ProverFinalResponse,
         challenge: Scalar,
         cdd_id: RistrettoPoint,
-        verifier_secrets: VerifierSecrets,
-        re_committed_uids: CommittedUids,
+        verifier_secrets: &VerifierSecrets,
+        re_committed_uids: &CommittedUids,
     ) -> Fallible<()>;
 }

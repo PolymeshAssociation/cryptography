@@ -13,7 +13,6 @@ pub use claim_proofs::{
     ProofPublicKey, ScopeClaimData, ScopeClaimProofData,
 };
 pub use curve25519_dalek::{self, ristretto::CompressedRistretto, scalar::Scalar};
-pub use pedersen_commitments::PedersenGenerators;
 use rand_core::{CryptoRng, RngCore};
 pub use schnorrkel;
 
@@ -51,5 +50,4 @@ macro_rules! assert_err {
 
 mod claim_proofs;
 pub mod mocked;
-pub mod pedersen_commitments;
 pub mod uuid;

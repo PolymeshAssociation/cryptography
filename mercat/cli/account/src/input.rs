@@ -344,27 +344,26 @@ pub fn parse_input() -> CLI {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return CLI::Create(cfg);
+            CLI::Create(cfg)
         }
 
         CLI::CreateFrom { config } => {
-            let json_file_content = std::fs::read_to_string(&config).expect(&format!(
-                "Failed to read the account config from file: {:?}.",
-                config
-            ));
+            let json_file_content = std::fs::read_to_string(&config).unwrap_or_else(|_| {
+                panic!("Failed to read the account config from file: {:?}.", config)
+            });
 
             let cfg = serde_json::from_str(&json_file_content).unwrap_or_else(|error| {
                 panic!("Failed to deserialize the account config: {}", error)
             });
 
             info!("Read the following config from {:?}:\n{:#?}", &config, &cfg);
-            return CLI::Create(cfg);
+            CLI::Create(cfg)
         }
 
         CLI::Decrypt(cfg) => {
@@ -373,15 +372,15 @@ pub fn parse_input() -> CLI {
             let cfg = DecryptAccountInfo {
                 ticker: cfg.ticker,
                 db_dir,
-                user: cfg.user.clone(),
+                user: cfg.user,
             };
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
-            return CLI::Decrypt(cfg);
+            CLI::Decrypt(cfg)
         }
 
         CLI::Issue(cfg) => {
@@ -410,7 +409,7 @@ pub fn parse_input() -> CLI {
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return CLI::Issue(cfg);
+            CLI::Issue(cfg)
         }
 
         CLI::CreateTransaction(cfg) => {
@@ -435,13 +434,13 @@ pub fn parse_input() -> CLI {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return CLI::CreateTransaction(cfg);
+            CLI::CreateTransaction(cfg)
         }
 
         CLI::FinalizeTransaction(cfg) => {
@@ -465,13 +464,13 @@ pub fn parse_input() -> CLI {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return CLI::FinalizeTransaction(cfg);
+            CLI::FinalizeTransaction(cfg)
         }
     }
 }

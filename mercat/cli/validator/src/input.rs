@@ -1,4 +1,3 @@
-use confy;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -22,5 +21,5 @@ pub struct CLI {
 pub fn parse_input() -> Result<CLI, confy::ConfyError> {
     info!("Parsing input configuration.");
     let args: CLI = CLI::from_args();
-    return Ok(args);
+    Ok(args)
 }

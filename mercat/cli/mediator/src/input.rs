@@ -1,4 +1,3 @@
-use confy;
 use log::info;
 use mercat_common::{gen_seed, save_config};
 use serde::{Deserialize, Serialize};
@@ -219,7 +218,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 save_config: cfg.save_config.clone(),
                 seed,
                 db_dir,
-                user: cfg.user.clone(),
+                user: cfg.user,
             };
 
             info!(
@@ -230,7 +229,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return Ok(CLI::Create(cfg));
+            Ok(CLI::Create(cfg))
         }
 
         CLI::JustifyTransferTransaction(cfg) => {
@@ -255,13 +254,13 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
 
             info!(
                 "Parsed the following config from the command line:\n{:#?}",
-                cfg.clone()
+                cfg
             );
 
             // Save the config if the argument is passed.
             save_config(cfg.save_config.clone(), &cfg);
 
-            return Ok(CLI::JustifyTransferTransaction(cfg));
+            Ok(CLI::JustifyTransferTransaction(cfg))
         }
     }
 }
