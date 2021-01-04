@@ -59,9 +59,11 @@ typedef struct RistrettoPoint RistrettoPoint;
  * Convert a Uuid byte array into a scalar object.
  *
  * Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
- * SAFETY: Caller is also responsible for making sure `investor_did` and
- *         `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
- *         and `investor_unique_id_size` bytes respectively.
+ *
+ * # Safety
+ * Caller is also responsible for making sure `investor_did` and
+ * `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
+ * and `investor_unique_id_size` bytes respectively.
  */
 Scalar *uuid_new(const uint8_t *unique_id, size_t unique_id_size);
 
@@ -77,9 +79,11 @@ void scalar_free(Scalar *ptr);
  * Create a new `CddClaimData` object.
  *
  * Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
- * SAFETY: Caller is also responsible for making sure `investor_did` and
- *         `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
- *         and `investor_unique_id_size` bytes respectively.
+ *
+ * # Safety
+ * Caller is also responsible for making sure `investor_did` and
+ * `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
+ * and `investor_unique_id_size` bytes respectively.
  */
 CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
                                  size_t investor_did_size,
@@ -121,9 +125,11 @@ void final_prover_results_free(FinalProverResults *ptr);
 /**
  * Creates a `InitialProverResults` object from a CDD claim and a seed.
  *
- * SAFETY: Caller is responsible to make sure `cdd_claim` is a valid
- *         pointer to a `CddClaimData` object, and `seed` is a random
- *         32-byte array.
+ *
+ * # Safety
+ * Caller is responsible to make sure `cdd_claim` is a valid
+ * pointer to a `CddClaimData` object, and `seed` is a random
+ * 32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
 InitialProverResults *generate_initial_proofs_wrapper(const CddClaimData *cdd_claim,
@@ -134,9 +140,10 @@ InitialProverResults *generate_initial_proofs_wrapper(const CddClaimData *cdd_cl
  * Creates a `VerifierSetGeneratorResults` object from a private Uuid (as
  * a Scalar object), a minimum set size, and a seed.
  *
- * SAFETY: Caller is responsible to make sure `private_unique_identifiers`
- *         is a valid pointer to a `Scalar` object, and `seed` is a random
- *         32-byte array.
+ * # Safety
+ * Caller is responsible to make sure `private_unique_identifiers`
+ * is a valid pointer to a `Scalar` object, and `seed` is a random
+ * 32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
 VerifierSetGeneratorResults *generate_committed_set_and_challenge_wrapper(Scalar *private_unique_identifiers,
@@ -149,10 +156,11 @@ VerifierSetGeneratorResults *generate_committed_set_and_challenge_wrapper(Scalar
  * Creates a `FinalProverResults` object from a prover's secret, a
  * committed set of Uids, a challenge, and a seed.
  *
- * SAFETY: Caller is responsible to make sure `secrets`
- *         is a valid pointer to a `ProverSecrets` object, `challenge` is
- *         a valid pointer to a `Challenge` object, and `seed` is a random
- *         32-byte array.
+ * # Safety
+ * Caller is responsible to make sure `secrets`
+ * is a valid pointer to a `ProverSecrets` object, `challenge` is
+ * a valid pointer to a `Challenge` object, and `seed` is a random
+ * 32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
 FinalProverResults *generate_challenge_response_wrapper(const ProverSecrets *secrets,
@@ -165,10 +173,11 @@ FinalProverResults *generate_challenge_response_wrapper(const ProverSecrets *sec
 /**
  * Verifies the proof of a Uuid's membership in a set of Uuids.
  *
- * SAFETY: Caller is responsible to make sure `initial_message`,
- *         `final_response`, `challenge`, `cdd_id`, `verifier_secrets`,
- *         and `re_committed_uids` pointers are valid objects, created by
- *         this API.
+ * # Safety
+ * Caller is responsible to make sure `initial_message`,
+ * `final_response`, `challenge`, `cdd_id`, `verifier_secrets`,
+ * and `re_committed_uids` pointers are valid objects, created by
+ * this API.
  * Caller is responsible for deallocating memory after use.
  */
 bool verify_proofs(const Proofs *initial_message,

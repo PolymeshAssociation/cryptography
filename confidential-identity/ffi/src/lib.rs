@@ -217,7 +217,7 @@ pub unsafe extern "C" fn compute_cdd_id_wrapper(
 
 /// Creates a scope ID from a scope claim.
 ///
-/// # Saftey
+/// # Safety
 ///
 /// Caller is responsible to make sure the `scope_claim` pointer is a valid
 /// `ScopeClaimData` object, created by this API.
@@ -234,7 +234,7 @@ pub unsafe extern "C" fn compute_scope_id_wrapper(
 
 /// Creates a `Signature` from a scope claim proof data and a message.
 ///
-/// # Saftey
+/// # Safety
 ///
 /// Caller is responsible to make sure `scope_claim_proof_data` and `message`
 /// pointers are valid objects, created by this API, and `message` points to
