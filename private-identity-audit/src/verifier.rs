@@ -181,16 +181,15 @@ mod tests {
         .expect("Success");
 
         let different_annonymity_size = 5;
-        let (_, committed_uids, _) = VerifierSetGenerator
-            ::generate_committed_set_and_challenge(
-                gen_random_uuids(input_len, &mut rng)
-                    .into_iter()
-                    .map(|uuid| uuid_to_scalar(uuid))
-                    .collect(),
-                Some(different_annonymity_size),
-                &mut rng,
-            )
-            .expect("Success");
+        let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
+            gen_random_uuids(input_len, &mut rng)
+                .into_iter()
+                .map(|uuid| uuid_to_scalar(uuid))
+                .collect(),
+            Some(different_annonymity_size),
+            &mut rng,
+        )
+        .expect("Success");
 
         assert_eq!(committed_uids.len(), input_len);
     }
