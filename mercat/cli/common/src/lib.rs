@@ -545,10 +545,7 @@ where
                 panic!("Failed to serialize configuration file: {}", error)
             }),
         )
-        .expect(&format!(
-            "Failed to write the configuration to the file {:?}.",
-            path
-        ));
+        .unwrap_or_else(|_| panic!("Failed to write the configuration to the file {:?}.", path));
     }
 }
 

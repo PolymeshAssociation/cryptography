@@ -260,7 +260,7 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     box_alloc(VerifierSetGeneratorResults {
         verifier_secrets: box_alloc(verifier_secrets),
         committed_uids: box_alloc(committed_uids),
-        committed_uids_size: committed_uids_size,
+        committed_uids_size,
         challenge: box_alloc(challenge),
     })
 }

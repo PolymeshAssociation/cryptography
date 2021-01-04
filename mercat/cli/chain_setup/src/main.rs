@@ -1,6 +1,5 @@
 mod input;
 
-use env_logger;
 use input::parse_input;
 use log::info;
 use mercat_common::{chain_setup::process_asset_id_creation, errors::Error, init_print_logger};

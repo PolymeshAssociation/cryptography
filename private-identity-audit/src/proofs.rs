@@ -112,7 +112,7 @@ mod tests {
         // Positive test
         assert!(verify(
             initial_message.clone(),
-            &final_response.clone(),
+            &final_response,
             &statement,
             &c
         ));

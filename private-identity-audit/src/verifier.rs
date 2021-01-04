@@ -101,7 +101,7 @@ impl ProofVerifier for Verifier {
 
         ensure!(
             re_committed_uids
-                .into_iter()
+                .iter()
                 .any(|element| { *element == looking_for }),
             ErrorKind::MembershipProofError
         );
@@ -145,7 +145,7 @@ mod tests {
         let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
             gen_random_uuids(input_len, &mut rng)
                 .into_iter()
-                .map(|uuid| uuid_to_scalar(uuid))
+                .map(uuid_to_scalar)
                 .collect(),
             None,
             &mut rng,
@@ -159,7 +159,7 @@ mod tests {
         let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
             gen_random_uuids(input_len, &mut rng)
                 .into_iter()
-                .map(|uuid| uuid_to_scalar(uuid))
+                .map(uuid_to_scalar)
                 .collect(),
             Some(different_anonymity_size),
             &mut rng,
@@ -173,7 +173,7 @@ mod tests {
         let (_, _committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
             gen_random_uuids(input_len, &mut rng)
                 .into_iter()
-                .map(|uuid| uuid_to_scalar(uuid))
+                .map(uuid_to_scalar)
                 .collect(),
             Some(different_anonymity_size),
             &mut rng,
@@ -184,7 +184,7 @@ mod tests {
         let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
             gen_random_uuids(input_len, &mut rng)
                 .into_iter()
-                .map(|uuid| uuid_to_scalar(uuid))
+                .map(uuid_to_scalar)
                 .collect(),
             Some(different_annonymity_size),
             &mut rng,

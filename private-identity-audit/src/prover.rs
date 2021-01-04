@@ -134,10 +134,8 @@ mod tests {
         // Prover generates cdd_id and places it on the chain.
         let cdd_id = compute_cdd_id(&claim);
 
-        let private_uid_scalar_set: Vec<Scalar> = private_uid_set
-            .into_iter()
-            .map(|uuid| uuid_to_scalar(uuid))
-            .collect();
+        let private_uid_scalar_set: Vec<Scalar> =
+            private_uid_set.into_iter().map(uuid_to_scalar).collect();
 
         // P -> V: Prover generates and sends the initial message.
         let (prover_secrets, proofs) =

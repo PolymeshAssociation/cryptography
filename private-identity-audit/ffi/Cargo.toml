@@ -16,10 +16,8 @@ no_std = []
 std = [
     # "serde_all",
     "cryptography_core/std",
-    # "confidential_identity/std",
     "rand_core/std",
     "rand/std",
-    # "failure/std",
     "uuid/std",
 ]
 

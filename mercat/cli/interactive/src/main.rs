@@ -3,14 +3,13 @@
 
 mod input;
 
-use base64;
 use codec::{Decode, Encode};
 use cryptography_core::{
     asset_proofs::{CommitmentWitness, ElgamalSecretKey},
     AssetId,
 };
 use curve25519_dalek::scalar::Scalar;
-use env_logger;
+
 use input::{parse_input, CLI};
 use log::info;
 use mercat::{
@@ -159,7 +158,7 @@ fn process_create_account(
         &secret_account,
     )?;
 
-    let account_id = account_tx.pub_account.enc_asset_id.clone();
+    let account_id = account_tx.pub_account.enc_asset_id;
 
     info!(
         "CLI log: tx-{}:\n\nAccount ID as base64:\n{}\n\nAccount Transaction as base64:\n{}\n",
@@ -173,7 +172,7 @@ fn process_create_account(
         last_processed_tx_counter: Some(TX_ID),
     };
     save_object(
-        db_dir.clone(),
+        db_dir,
         ON_CHAIN_DIR,
         &user,
         &user_public_account_file(&ticker),
@@ -190,8 +189,8 @@ fn create_secret_account<R: RngCore + CryptoRng>(
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
-        public: elg_pub.into(),
-        secret: elg_secret.into(),
+        public: elg_pub,
+        secret: elg_secret,
     };
 
     let mut asset_id = [0u8; 12];
@@ -199,7 +198,7 @@ fn create_secret_account<R: RngCore + CryptoRng>(
     asset_id[..decoded.len()].copy_from_slice(&decoded);
 
     let asset_id = AssetId { id: asset_id };
-    let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));
+    let asset_id_witness = CommitmentWitness::new(asset_id.into(), Scalar::random(rng));
 
     Ok(SecAccount {
         enc_keys,
@@ -227,7 +226,7 @@ pub fn process_create_tx(
     )?;
     let sender_account = Account {
         secret: load_object(
-            db_dir.clone(),
+            db_dir,
             OFF_CHAIN_DIR,
             &sender,
             &user_secret_account_file(&ticker),
@@ -297,7 +296,7 @@ pub fn process_finalize_tx(
 
     let receiver_account = Account {
         secret: load_object(
-            db_dir.clone(),
+            db_dir,
             OFF_CHAIN_DIR,
             &receiver,
             &user_secret_account_file(&ticker),
@@ -311,7 +310,7 @@ pub fn process_finalize_tx(
     // Finalize the transaction.
     let receiver = CtxReceiver {};
     let asset_tx = receiver
-        .finalize_transaction(tx, receiver_account.clone(), amount, &mut rng)
+        .finalize_transaction(tx, receiver_account, amount, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     // Save the artifacts to file.
@@ -339,12 +338,8 @@ pub fn justify_asset_transfer_transaction(
     let mut data: &[u8] = &base64::decode(&finalized_tx).unwrap();
     let asset_tx = FinalizedTransferTx::decode(&mut data).unwrap();
 
-    let mediator_account: MediatorAccount = load_object(
-        db_dir.clone(),
-        OFF_CHAIN_DIR,
-        &mediator,
-        SECRET_ACCOUNT_FILE,
-    )?;
+    let mediator_account: MediatorAccount =
+        load_object(db_dir, OFF_CHAIN_DIR, &mediator, SECRET_ACCOUNT_FILE)?;
 
     let mut data0: &[u8] = &base64::decode(&sender[0]).unwrap();
     let mut data1: &[u8] = &base64::decode(&sender[1]).unwrap();
@@ -372,7 +367,7 @@ pub fn justify_asset_transfer_transaction(
 
     let justified_tx = CtxMediator {}
         .justify_transaction(
-            asset_tx.clone(),
+            asset_tx,
             &mediator_account.encryption_key,
             &sender_pub_account,
             &sender_balance,
