@@ -1,0 +1,94 @@
+[package]
+name = "confidential_identity"
+version = "1.0.0"
+authors = [ "Polymath Inc" ]
+readme = "README.md"
+repository = "https://github.com/PolymathNetwork/cryptography"
+description = "Confidential Identity Library"
+edition = "2018"
+exclude = [".gitignore"]
+
+[dependencies]
+# Substrate
+sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, tag = "v2.0.0" }
+sp-io = { git = "https://github.com/paritytech/substrate", default-features = false, tag = "v2.0.0" }
+
+# Common
+serde = { version = "1.0.105", default-features = false, features = ["derive"], optional = true }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
+serde_bytes = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
+zeroize = { version = "1.1", default-features = false }
+lazy_static = { version = "1.4.0", default-features = false, features = ["spin_no_std"] }
+failure = { version = "0.1.7", default-features = false, features = ["derive"] }
+byteorder = { version = "^1.2.3", default-features = false, features = ["i128"] }
+criterion = { version = "0.3", optional = true }
+
+# Crypto
+cryptography_core = { path = "../cryptography-core/", default_features = false }
+sha3 = { version = "0.8", default-features = false }
+blake2 = { version = "0.9.0", default-features = false }
+
+rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
+rand = { version = "0.7", default-features = false, features = ["alloc"] }
+getrandom = { version = "0.1.14", default-features = false, optional = true }
+
+curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly", "alloc"] }
+schnorrkel = { git = "https://github.com/PolymathNetwork/schnorrkel.git", branch = "fix-simd-issue", default-features = false }
+
+merlin = { version = "2.0.0", default-features = false }
+
+[dev-dependencies]
+wasm-bindgen-test = { version = "0.3.10" }
+
+[features]
+default = ["std", "u64_backend"]
+
+# Backends
+u32_backend = [
+	"curve25519-dalek/u32_backend",
+	"schnorrkel/u32_backend",
+	"cryptography_core/u32_backend",
+]
+u64_backend = [
+	"curve25519-dalek/u64_backend",
+	"schnorrkel/u64_backend",
+	"cryptography_core/u64_backend",
+]
+avx2_backend = [
+	"curve25519-dalek/avx2_backend",
+	"schnorrkel/avx2_backend",
+	"cryptography_core/avx2_backend",
+]
+
+serde_all = [
+	"serde",
+	"serde_json",
+	"curve25519-dalek/serde",
+	"schnorrkel/serde",
+	"cryptography_core/serde_all",
+]
+
+no_std = [
+    "cryptography_core/no_std",
+]
+
+std = [
+	# General and optional
+	"serde_all",
+	# Crypto
+	"cryptography_core/std",
+	"schnorrkel/std",
+	"rand_core/std",
+	"rand/std",
+	"blake2/std",
+	"blake2/simd",
+	# Other
+	"sp-std/std",
+	"sp-io/std",
+	"failure/std",
+	"criterion",
+]
+
+[[bench]]
+name = "scalar_from_hash"
+harness = false
