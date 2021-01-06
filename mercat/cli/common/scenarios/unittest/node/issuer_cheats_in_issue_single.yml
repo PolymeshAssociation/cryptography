@@ -1,0 +1,19 @@
+--- 
+title: "Cheat in issuing tokens to a single account"
+
+tickers: 
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+
+transactions:
+  - sequence:
+    - validate
+    - issue Alice(cheat) 10 ACME
+    - validate
+
+outcome: 
+  - alice:
+    - ACME: 0

@@ -1,0 +1,91 @@
+[package]
+name = "cryptography_core"
+version = "1.0.0"
+authors = [ "Polymath Inc" ]
+readme = "README.md"
+repository = "https://github.com/PolymathNetwork/cryptography"
+description = "The Repository for core cryptographic libraries used in Polymesh"
+edition = "2018"
+exclude = [".gitignore"]
+
+[dependencies]
+# Substrate
+sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, tag = "v2.0.0" }
+codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
+
+# Common
+serde = { version = "1.0.105", default-features = false, features = ["derive"], optional = true }
+serde_bytes = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
+zeroize = { version = "1.1", default-features = false }
+failure = { version = "0.1.7", default-features = false, features = ["derive"] }
+byteorder = { version = "^1.2.3", default-features = false, features = ["i128"] }
+criterion = { version = "0.3", optional = true }
+
+# Crypto
+sha3 = { version = "0.8", default-features = false }
+blake2 = { version = "0.9.0", default-features = false }
+
+rand_core = { version = "0.5", default-features = false}
+rand = { version = "0.7", default-features = false }
+getrandom = { version = "0.1.14", default-features = false, optional = true}
+
+curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly"] }
+bulletproofs = { git = "https://github.com/PolymathNetwork/bulletproofs.git", branch = "v2-packed-simd", default-features = false, features = ["zeroize"] }
+
+merlin = { version = "2.0.0", default-features = false }
+
+[dev-dependencies]
+wasm-bindgen-test = { version = "0.3.10"}
+
+[features]
+default = ["std", "u64_backend"]
+
+# Backends
+u32_backend = [
+	"curve25519-dalek/u32_backend",
+	"bulletproofs/u32_backend"
+]
+u64_backend = [
+	"curve25519-dalek/u64_backend",
+	"bulletproofs/u64_backend"
+]
+avx2_backend = [
+	"curve25519-dalek/avx2_backend",
+	"bulletproofs/avx2_backend"
+]
+
+serde_all = [
+	"serde",
+	"curve25519-dalek/serde",
+	"bulletproofs/serde",
+]
+
+alloc = [
+	"rand_core/alloc",
+	"rand/alloc",
+	"curve25519-dalek/alloc",
+]
+
+no_std = [ "u64_backend" ]
+std = [
+	# General and optional
+	"serde_all",
+	# Crypto
+	"rand_core/std",
+	"rand/std",
+	"bulletproofs/std",
+	# Other
+	"codec/std",
+	"sp-std/std",
+	"failure/std",
+	"criterion",
+]
+
+[[bench]]
+name = "elgamal_decryption"
+harness = false
+
+[[bench]]
+name = "membership_verification"
+harness = false
+

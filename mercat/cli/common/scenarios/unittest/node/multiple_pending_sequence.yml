@@ -1,0 +1,30 @@
+--- 
+title: "An issue, followed by multiple pending transactions at the same time."
+
+tickers: 
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+  - bob:
+    - ACME
+
+mediators:
+  - Mike
+    
+transactions:
+  - sequence:
+    - validate # This validates the account creations. Can be done automatically without needing to write it here explicitly.
+    - issue Alice 100 ACME
+    - validate # without this, the account is not deposited at the time of the next transaction
+    - transfer Alice 10 ACME Bob approve Mike approve
+    - transfer Alice 20 ACME Bob approve Mike approve
+    - transfer Alice 30 ACME Bob approve Mike approve
+    - validate
+
+outcome: 
+  - alice: 
+      - ACME: 40
+  - bob: 
+      - ACME: 60
