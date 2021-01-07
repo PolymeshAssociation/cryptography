@@ -311,11 +311,11 @@ pub fn create_account(
 /// # Arguments
 ///
 /// # Outputs
-/// * `CreatMediatorAccountOutput`: Contains the public and secret mediator account.
+/// * `CreateMediatorAccountOutput`: Contains the public and secret mediator account.
 ///
 /// # Errors
 #[wasm_bindgen]
-pub fn create_mediator_account() -> CreatMediatorAccountOutput {
+pub fn create_mediator_account() -> CreateMediatorAccountOutput {
     let mut rng = OsRng;
 
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
@@ -324,7 +324,7 @@ pub fn create_mediator_account() -> CreatMediatorAccountOutput {
         secret: mediator_elg_secret_key,
     };
 
-    CreatMediatorAccountOutput {
+    CreateMediatorAccountOutput {
         public_key: base64::encode(mediator_enc_key.public.encode()),
         secret_account: MediatorAccount {
             secret: base64::encode(
@@ -453,7 +453,7 @@ pub fn finalize_transaction(
 /// # Arguments
 /// * `finalized_tx`: The finalized transaction proof. Can be obtained from the chain.
 /// * `mediator_account`: The secret portion of the mediator's account. Can be obtained from
-///                       `CreatMediatorAccountOutput.secret_account`.
+///                       `CreateMediatorAccountOutput.secret_account`.
 /// * `sender_public_account`: Sender's public account. Can be obtained from the chain.
 /// * `sender_encrypted_pending_balance`: Sender's encrypted pending balance.
 ///                                       Can be obtained from the chain.
