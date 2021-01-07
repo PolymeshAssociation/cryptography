@@ -25,15 +25,12 @@ use wasm_bindgen::JsValue;
 // -                                  Type Definitions                                -
 // ------------------------------------------------------------------------------------
 
-/// A hex string without the "0x". Values of this type are plain values (i.e., not encrypted).
-pub type PlainHex = String;
-
 /// A base64 encoded string.
 pub type Base64 = String;
 
 /// Contains the secret and public account information of a party.
 #[wasm_bindgen]
-pub struct CreatAccountOutput {
+pub struct CreateAccountOutput {
     secret_account: Base64,
     public_key: Base64,
     account_id: Base64,
@@ -41,7 +38,7 @@ pub struct CreatAccountOutput {
 }
 
 #[wasm_bindgen]
-impl CreatAccountOutput {
+impl CreateAccountOutput {
     /// The secret account must be kept confidential and not shared with anyone else.
     #[wasm_bindgen(getter)]
     pub fn secret_account(&self) -> Base64 {
@@ -76,13 +73,13 @@ impl CreatAccountOutput {
 
 /// Contains the secret and public account information of a mediator.
 #[wasm_bindgen]
-pub struct CreatMediatorAccountOutput {
+pub struct CreateMediatorAccountOutput {
     secret_account: MediatorAccount,
     public_key: Base64,
 }
 
 #[wasm_bindgen]
-impl CreatMediatorAccountOutput {
+impl CreateMediatorAccountOutput {
     /// The secret account must be kept confidential and not shared with anyone else.
     #[wasm_bindgen(getter)]
     pub fn secret_account(&self) -> MediatorAccount {
@@ -246,7 +243,7 @@ pub enum WasmError {
 }
 
 impl From<WasmError> for JsValue {
-    fn from(e: WasmError) -> JsValue {
+    fn from(e: WasmError) -> Self {
         if let Ok(msg) = serde_json::to_string(&e) {
             msg.into()
         } else {
@@ -267,22 +264,23 @@ type Fallible<T> = Result<T, JsValue>;
 /// # Arguments
 /// * `valid_ticker_ids`: The list of all valid confidential ticker ids. These values can be
 ///                       obtained from the chain. The values are expected to be a list of
-///                       `PlainHex` strings.
+///                       hex strings (without the 0x).
 ///
 /// * `ticker_id`: The ticker id of this account.
 ///
 /// # Outputs
-/// * `CreatAccountOutput`: Contains both the public and secret account information.
+/// * `CreateAccountOutput`: Contains both the public and secret account information.
 ///
 /// # Errors
-/// * `PlainTickerIdsError`: If the `valid_ticker_ids` is not a list of `PlainHex`s.
+/// * `PlainTickerIdsError`: If the `valid_ticker_ids` is not a list of hex strings (without the
+/// 0x)
 /// * `HexDecodingError`: If `ticker_id` or `valid_ticker_ids`s are not a proper Hex values.
 /// * `AccountCreationError`: If mercat library throws an error while creating the account.
 #[wasm_bindgen]
 pub fn create_account(
     valid_ticker_ids: JsValue,
-    ticker_id: PlainHex,
-) -> Fallible<CreatAccountOutput> {
+    ticker_id: String,
+) -> Fallible<CreateAccountOutput> {
     let mut rng = OsRng;
     let valid_ticker_ids: Vec<String> = valid_ticker_ids
         .into_serde()
@@ -299,7 +297,7 @@ pub fn create_account(
         .map_err(|_| WasmError::AccountCreationError)?;
     let account_id = account_tx.pub_account.enc_asset_id;
 
-    Ok(CreatAccountOutput {
+    Ok(CreateAccountOutput {
         secret_account: base64::encode(secret_account.encode()),
         public_key: base64::encode(secret_account.enc_keys.public.encode()),
         account_id: base64::encode(account_id.encode()),
@@ -343,7 +341,7 @@ pub fn create_mediator_account() -> CreatMediatorAccountOutput {
 ///
 /// # Arguments
 /// * `amount`: An integer with a max value of `2^32` representing the mint amount.
-/// * `issuer_account`: The mercat account. Can be obtained from `CreatAccountOutput.account`.
+/// * `issuer_account`: The mercat account. Can be obtained from `CreateAccountOutput.account`.
 ///
 /// # Outputs
 /// * `MintAssetOutput`: The ZKP of minting the asset.
@@ -369,7 +367,7 @@ pub fn mint_asset(amount: u32, issuer_account: Account) -> Fallible<MintAssetOut
 ///
 /// # Arguments
 /// * `amount`: An integer with a max value of `2^32` representing the mint amount.
-/// * `sender_account`: The mercat account. Can be obtained from `CreatAccountOutput.account`.
+/// * `sender_account`: The mercat account. Can be obtained from `CreateAccountOutput.account`.
 /// * `encrypted_pending_balance`: Sender's encrypted pending balance. Can be obtained from the
 ///                                chain.
 /// * `receiver_public_account`: Receiver's public account. Can be obtained from the chain.
@@ -416,7 +414,7 @@ pub fn create_transaction(
 /// # Arguments
 /// * `amount`: An integer with a max value of `2^32` representing the mint amount.
 /// * `init_tx`: The initialized transaction proof. Can be obtained from the chain.
-/// * `receiver_account`: The mercat account. Can be obtained from `CreatAccountOutput.account`.
+/// * `receiver_account`: The mercat account. Can be obtained from `CreateAccountOutput.account`.
 ///
 /// # Outputs
 /// * `FinalizedTransactionOutput`: The ZKP of the finalized transaction.
@@ -476,7 +474,7 @@ pub fn justify_transaction(
     sender_public_account: PubAccount,
     sender_encrypted_pending_balance: Base64,
     receiver_public_account: PubAccount,
-    ticker_id: PlainHex,
+    ticker_id: String,
 ) -> Fallible<JustifiedTransactionOutput> {
     let mut rng = OsRng;
 
@@ -502,7 +500,7 @@ pub fn justify_transaction(
 ///
 /// # Arguments
 /// * `encrypted_value`: The encrypted value.
-/// * `account`: The mercat account. Can be obtained from `CreatAccountOutput.account`.
+/// * `account`: The mercat account. Can be obtained from `CreateAccountOutput.account`.
 ///
 /// # Outputs
 /// * `u32`: The decrypted value.
@@ -541,7 +539,7 @@ fn decode<T: Decode>(data: Base64) -> Fallible<T> {
     Err(WasmError::Base64DecodingError.into())
 }
 
-fn ticker_id_to_asset_id(ticker_id: PlainHex) -> Fallible<AssetId> {
+fn ticker_id_to_asset_id(ticker_id: String) -> Fallible<AssetId> {
     let mut asset_id = [0u8; 12];
     let decoded = hex::decode(ticker_id).map_err(|_| WasmError::HexDecodingError)?;
     asset_id[..decoded.len()].copy_from_slice(&decoded);
