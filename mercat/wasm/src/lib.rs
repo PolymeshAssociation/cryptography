@@ -244,11 +244,9 @@ pub enum WasmError {
 
 impl From<WasmError> for JsValue {
     fn from(e: WasmError) -> Self {
-        if let Ok(msg) = serde_json::to_string(&e) {
-            msg.into()
-        } else {
-            "Failed to serialized the error to string!".into()
-        }
+        serde_json::to_string(&e)
+            .map(|msg| msg.into())
+            .unwrap_or_else(|_| "Failed to serialized the error to string!".into())
     }
 }
 
@@ -529,14 +527,8 @@ pub fn decrypt(encrypted_value: Base64, account: Account) -> Fallible<u32> {
 // ------------------------------------------------------------------------------------
 
 fn decode<T: Decode>(data: Base64) -> Fallible<T> {
-    if let Ok(decoded) = base64::decode(data) {
-        if let Ok(ret) = T::decode(&mut &decoded[..]) {
-            return Ok(ret);
-        }
-        return Err(WasmError::DeserializationError.into());
-    }
-
-    Err(WasmError::Base64DecodingError.into())
+    let decoded = base64::decode(data).map_err(|_| WasmError::Base64DecodingError)?;
+    T::decode(&mut &decoded[..]).map_err(|_| WasmError::DeserializationError.into())
 }
 
 fn ticker_id_to_asset_id(ticker_id: String) -> Fallible<AssetId> {
