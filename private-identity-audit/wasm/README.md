@@ -1,7 +1,7 @@
-# WASM bindings for Confidential Identity Library
+# WASM bindings for Private Identity Audit Library (PIAL)
 
 
-This library provides WASM binding for confidential library.
+This library provides WASM binding for the PIAL library.
 
 For comprehensive build instructions, refer to the README.md file in the
 root of this repository. If you have all the necessary tools installed,
@@ -20,20 +20,16 @@ these into any javascript-based project using a wasm-loader.
 
 
 ## CDD Provider Usage
-
+todo
 After importing the content of `./pkg/` in your javascript project, you
 can call the `process_create_cdd_id` function to create the CDD ID. The
 documentation for this function can be found by running `cargo doc --open`
 
 
-## Investors' Usage
-
+## PUIS Usage
+todo
 After importing the content of `./pkg/` in your javascript project, you
 can call the `process_create_claim_proof` function to create a
 confidential proof for their claim. The documentation for this function
 can be found by running `cargo doc --open`
 
-
-## Simple Claim Verifier
-
-This is not supported since the verification is handled by PolyMesh.

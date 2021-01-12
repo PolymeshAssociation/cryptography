@@ -19,3 +19,6 @@ Cargo.lock
 
 # Ignore the `crypto-framework` submodule
 crypto-framework/
+
+# Ignore the JS app I used to test the wasm API
+private-identity-audit/wasm/app

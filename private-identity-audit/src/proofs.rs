@@ -17,24 +17,148 @@
 
 use crate::errors::{ErrorKind, Fallible};
 use crate::Challenge;
-use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use cryptography_core::curve25519_dalek::{
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
+};
 use rand_core::{CryptoRng, RngCore};
 
-#[derive(Clone)]
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+use sp_std::vec::Vec;
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct InitialMessage {
     a: RistrettoPoint,
     pub generators: Vec<RistrettoPoint>,
 }
 
-#[derive(Clone)]
-pub struct FinalResponse {
-    s: Vec<Scalar>,
+impl Encode for InitialMessage {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        32 + self.generators.len() * 32
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let a = self.a.compress();
+        let generators: Vec<[u8; 32]> = self
+            .generators
+            .clone()
+            .into_iter()
+            .map(|g| *g.compress().as_bytes())
+            .collect::<Vec<_>>();
+
+        a.as_bytes().encode_to(dest);
+        generators.encode_to(dest);
+    }
 }
 
-#[derive(Clone)]
+impl Decode for InitialMessage {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (a, generators) = <([u8; 32], Vec<[u8; 32]>)>::decode(input)?;
+        let a = CompressedRistretto(a)
+            .decompress()
+            .ok_or_else(|| CodecError::from("InitialMessage `a` point is invalid"))?;
+
+        let generators: Vec<RistrettoPoint> = generators
+            .into_iter()
+            .map(|g| {
+                CompressedRistretto(g)
+                    .decompress()
+                    .unwrap_or_else(RistrettoPoint::default)
+            })
+            .collect::<Vec<_>>();
+
+        Ok(InitialMessage { a, generators })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct FinalResponse {
+    s: Vec<Scalar>, // todo rename
+}
+
+impl Encode for FinalResponse {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.s.len() * 32
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let response: Vec<[u8; 32]> = self
+            .s
+            .clone()
+            .into_iter()
+            .map(|g| *g.as_bytes())
+            .collect::<Vec<_>>();
+
+        response.encode_to(dest);
+    }
+}
+
+impl Decode for FinalResponse {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let response = <Vec<[u8; 32]>>::decode(input)?;
+
+        let s: Vec<Scalar> = response
+            .into_iter()
+            .map(Scalar::from_bits)
+            .collect::<Vec<_>>();
+
+        Ok(FinalResponse { s })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Secrets {
     rands: Vec<Scalar>,
     secrets: Vec<Scalar>,
+}
+
+impl Encode for Secrets {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.rands.len() * 32 + self.secrets.len() * 32
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        let rands: Vec<[u8; 32]> = self
+            .rands
+            .clone()
+            .into_iter()
+            .map(|g| *g.as_bytes())
+            .collect::<Vec<_>>();
+
+        rands.encode_to(dest);
+
+        let secrets: Vec<[u8; 32]> = self
+            .secrets
+            .clone()
+            .into_iter()
+            .map(|g| *g.as_bytes())
+            .collect::<Vec<_>>();
+
+        secrets.encode_to(dest);
+    }
+}
+
+impl Decode for Secrets {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let (rands, secrets) = <(Vec<[u8; 32]>, Vec<[u8; 32]>)>::decode(input)?;
+
+        let rands: Vec<Scalar> = rands.into_iter().map(Scalar::from_bits).collect::<Vec<_>>();
+
+        let secrets: Vec<Scalar> = secrets
+            .into_iter()
+            .map(Scalar::from_bits)
+            .collect::<Vec<_>>();
+
+        Ok(Secrets { rands, secrets })
+    }
 }
 
 pub fn generate_initial_message<T: RngCore + CryptoRng>(
@@ -56,11 +180,11 @@ pub fn generate_initial_message<T: RngCore + CryptoRng>(
     Ok((Secrets { rands, secrets }, InitialMessage { a, generators }))
 }
 
-pub fn apply_challenge(prover_secrets: &Secrets, c: Challenge) -> FinalResponse {
+pub fn apply_challenge(prover_secrets: &Secrets, c: &Challenge) -> FinalResponse {
     let s = (&prover_secrets.rands)
         .iter()
         .zip(&prover_secrets.secrets)
-        .map(|(rand, secret)| rand + c * secret)
+        .map(|(rand, secret)| rand + c.0 * secret)
         .collect();
 
     FinalResponse { s }
@@ -79,7 +203,7 @@ pub fn verify(
         .map(|(gen, s)| gen * s)
         .fold_first(|v1, v2| v1 + v2)
     {
-        return lhs == initial_message.a + statement * c;
+        return lhs == initial_message.a + statement * c.0;
     }
 
     false
@@ -106,8 +230,8 @@ mod tests {
         let (prover_secrets, initial_message) =
             generate_initial_message(secrets, generators, &mut rng).unwrap();
 
-        let c = Scalar::random(&mut rng);
-        let final_response = apply_challenge(&prover_secrets, c);
+        let c = Challenge(Scalar::random(&mut rng));
+        let final_response = apply_challenge(&prover_secrets, &c);
 
         // Positive test
         assert!(verify(
@@ -142,12 +266,12 @@ mod tests {
         let cdd_id = compute_cdd_id(&claim);
 
         let r = Scalar::random(&mut rng);
-        let statement = cdd_id * r;
+        let statement = cdd_id.0 * r;
         let (cdd_id_proof_secrets, cdd_id_proof) =
-            generate_initial_message(vec![r], vec![cdd_id], &mut rng).unwrap();
+            generate_initial_message(vec![r], vec![cdd_id.0], &mut rng).unwrap();
 
-        let challenge = Scalar::random(&mut rng);
-        let cdd_id_proof_response = apply_challenge(&cdd_id_proof_secrets, challenge);
+        let challenge = Challenge(Scalar::random(&mut rng));
+        let cdd_id_proof_response = apply_challenge(&cdd_id_proof_secrets, &challenge);
         assert!(verify(
             cdd_id_proof,
             &cdd_id_proof_response,
