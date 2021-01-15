@@ -112,7 +112,6 @@ mod tests {
         FinalProver, InitialProver, PrivateUids, ProofGenerator, ProofVerifier, Verifier,
         VerifierSetGenerator,
     };
-    use codec::Encode;
     use cryptography_core::cdd_claim::{compute_cdd_id, CddClaimData};
     use cryptography_core::curve25519_dalek::scalar::Scalar;
     use rand::{rngs::StdRng, SeedableRng};
@@ -133,11 +132,8 @@ mod tests {
         // Verifier shares one of its uids with the Prover.
         let claim = CddClaimData::new(&investor_did, private_uid_set[0].as_bytes());
 
-        println!("claim: {:?}", base64::encode(claim.encode()));
-
         // Prover generates cdd_id and places it on the chain.
         let cdd_id = compute_cdd_id(&claim);
-        println!("cdd_id: {:?}", base64::encode(cdd_id.encode()));
 
         let private_uid_scalar_set: Vec<Scalar> =
             private_uid_set.into_iter().map(uuid_to_scalar).collect();
@@ -145,11 +141,6 @@ mod tests {
         // P -> V: Prover generates and sends the initial message.
         let (prover_secrets, proofs) =
             InitialProver::generate_initial_proofs(claim, &mut rng).unwrap();
-
-        println!(
-            "uuids: {:?}",
-            base64::encode(PrivateUids(private_uid_scalar_set.clone()).encode())
-        );
 
         // V -> P: Prover sends `proofs` and Verifier returns a list of 10 uids and the challenge.
         let (verifier_secrets, committed_uids, challenge) =

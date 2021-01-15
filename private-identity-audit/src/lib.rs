@@ -37,6 +37,12 @@ use uuid::Uuid;
 /// element of a set, PUIS can guess that element with probability 1/the_size_of_the_padded_set.
 pub const SET_SIZE_ANONYMITY_PARAM: usize = 100_000;
 
+pub struct InitialProver;
+pub struct FinalProver;
+
+pub struct VerifierSetGenerator;
+pub struct Verifier;
+
 /// The initial private set of PUIS.
 pub struct PrivateUids(pub Vec<Scalar>);
 
@@ -128,12 +134,6 @@ impl Decode for Challenge {
         Ok(Challenge(c))
     }
 }
-
-pub struct InitialProver;
-pub struct FinalProver;
-
-pub struct VerifierSetGenerator;
-pub struct Verifier;
 
 /// Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.
 #[derive(Clone, Debug, PartialEq)]

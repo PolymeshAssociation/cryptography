@@ -20,16 +20,15 @@ these into any javascript-based project using a wasm-loader.
 
 
 ## CDD Provider Usage
-todo
 After importing the content of `./pkg/` in your javascript project, you
-can call the `process_create_cdd_id` function to create the CDD ID. The
-documentation for this function can be found by running `cargo doc --open`
+can use `generate_initial_proofs()` and `generate_challenge_response()` functions
+to generate UID membership proofs. The documentation for these functions can be found
+by running `cargo doc --open`
 
 
 ## PUIS Usage
-todo
 After importing the content of `./pkg/` in your javascript project, you
-can call the `process_create_claim_proof` function to create a
-confidential proof for their claim. The documentation for this function
-can be found by running `cargo doc --open`
+can call the `generate_committed_set_and_challenge()` function to generate a
+challenge, and `verify_proofs()` to verify CDD provider's membership proof.
+The documentation for this function can be found by running `cargo doc --open`
 
