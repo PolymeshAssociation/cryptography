@@ -78,18 +78,18 @@ impl Decode for InitialMessage {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FinalResponse {
-    s: Vec<Scalar>, // todo rename
+    response: Vec<Scalar>,
 }
 
 impl Encode for FinalResponse {
     #[inline]
     fn size_hint(&self) -> usize {
-        self.s.len() * 32
+        self.response.len() * 32
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
         let response: Vec<[u8; 32]> = self
-            .s
+            .response
             .clone()
             .into_iter()
             .map(|g| *g.as_bytes())
@@ -108,7 +108,7 @@ impl Decode for FinalResponse {
             .map(Scalar::from_bits)
             .collect::<Vec<_>>();
 
-        Ok(FinalResponse { s })
+        Ok(FinalResponse { response: s })
     }
 }
 
@@ -187,7 +187,7 @@ pub fn apply_challenge(prover_secrets: &Secrets, c: &Challenge) -> FinalResponse
         .map(|(rand, secret)| rand + c.0 * secret)
         .collect();
 
-    FinalResponse { s }
+    FinalResponse { response: s }
 }
 
 pub fn verify(
@@ -199,7 +199,7 @@ pub fn verify(
     if let Some(lhs) = initial_message
         .generators
         .into_iter()
-        .zip(&final_response.s)
+        .zip(&final_response.response)
         .map(|(gen, s)| gen * s)
         .fold_first(|v1, v2| v1 + v2)
     {
