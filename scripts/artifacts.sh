@@ -40,6 +40,12 @@ find . -type f -not -path "./target/*" -not -path "./artifacts/*" -not -path "./
 # TODO: Having issue with versions...
 
 # ====== WASM npm package
+mkdir -p "$ARTIFACT_DIR/npm"
+cd $ROOT/mercat/wasm
+wasm-pack build --release
+cp -r pkg/* "$ROOT/mercat/$ARTIFACT_DIR/npm/"
+cd -
+# TODO: publish to npm if run by CI
 
 # ====== C Libraries
 
@@ -71,6 +77,12 @@ find . -type f -not -path "./target/*" -not -path "./artifacts/*" -not -path "./
 # TODO: Having issue with versions...
 
 # ====== WASM npm package
+mkdir -p "$ARTIFACT_DIR/npm"
+cd $ROOT/confidential-identity/wasm
+wasm-pack build --release
+cp -r pkg/* "$ROOT/confidential-identity/$ARTIFACT_DIR/npm/"
+cd -
+# TODO: publish to npm if run by CI
 
 # ====== C Libraries
 
