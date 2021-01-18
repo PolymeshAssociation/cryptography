@@ -19,3 +19,6 @@ Cargo.lock
 
 # Ignore the `crypto-framework` submodule
 crypto-framework/
+
+# Ignore the artifact directory
+artifacts/
