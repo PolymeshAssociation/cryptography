@@ -44,6 +44,13 @@ find . -type f -not -path "./target/*" -not -path "./artifacts/*" -not -path "./
 # ====== C Libraries
 
 # ====== CLI Executables
+# Copying to linux-x64 since the CI will be an x64 Ubuntu
+mkdir -p "$ARTIFACT_DIR/bin/linux-x64"
+cp "$ROOT/target/release/mercat-interactive" "$ARTIFACT_DIR/bin/linux-x64/"
+cp "$ROOT/target/release/mercat-chain-setup" "$ARTIFACT_DIR/bin/linux-x64/"
+cp "$ROOT/target/release/mercat-mediator"    "$ARTIFACT_DIR/bin/linux-x64/"
+cp "$ROOT/target/release/mercat-account"     "$ARTIFACT_DIR/bin/linux-x64/"
+cp "$ROOT/target/release/mercat-validator"   "$ARTIFACT_DIR/bin/linux-x64/"
 
 
 # ---------------------------------------------------------------------------------
@@ -68,4 +75,8 @@ find . -type f -not -path "./target/*" -not -path "./artifacts/*" -not -path "./
 # ====== C Libraries
 
 # ====== CLI Executables
+# Copying to linux-x64 since the CI will be an x64 Ubuntu
+mkdir -p "$ARTIFACT_DIR/bin/linux-x64"
+cp "$ROOT/target/release/polymath-scp" "$ARTIFACT_DIR/bin/linux-x64/"
+cp "$ROOT/target/release/polymath-scv" "$ARTIFACT_DIR/bin/linux-x64/"
 
