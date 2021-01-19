@@ -32,3 +32,14 @@ can call the `generate_committed_set_and_challenge()` function to generate a
 challenge, and `verify_proofs()` to verify CDD provider's membership proof.
 The documentation for this function can be found by running `cargo doc --open`
 
+## JavaScript test app
+The contents of the `app` folder is a minimal JavaScript application to test the
+WASM wrapper.
+
+```bash
+# If you change the WASM wrapper run this command to update the loaded package:
+yarn add ../pkg
+
+# To start the JavaScript app:
+npm run start
+```
