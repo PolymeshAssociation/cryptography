@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
-#include "c_example.h"
+#include "../confidential_identity.h"
 
 int main(void) {
     uint8_t investor_did[32] = {0x49, 0x99, 0x52, 0x43, 0x74, 0x8c, 0x4a, 0xe7,

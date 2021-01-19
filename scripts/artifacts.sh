@@ -34,7 +34,7 @@ cd     "$MERCAT_ROOT"
 mkdir -p "$ARTIFACT_DIR/sources/cryptography-core"
 mkdir -p "$ARTIFACT_DIR/sources/mercat"
 find ../cryptography-core -type f -not -path "../cryptography-core/target/*" -not -path "../cryptography-core/artifacts/*" -exec cp --parents {} "$ARTIFACT_DIR/sources/cryptography-core" \;
-find . -type f -not -path "./target/*" -not -path "./artifacts/*" -not -path "./wasm/*" -not -path "./cli/*" -not -path "./ffi/*" -exec cp --parents {} "$ARTIFACT_DIR/sources/mercat" \;
+find . -type f -not -path "./target/*" -not -path "./artifacts/*" -not -path "./wasm/*" -not -path "./cli/*" -exec cp --parents {} "$ARTIFACT_DIR/sources/mercat" \;
 
 # ====== Rust Library Crate
 # TODO: Having issue with versions...
@@ -46,8 +46,6 @@ wasm-pack build --release
 cp -r pkg/* "$ROOT/mercat/$ARTIFACT_DIR/npm/"
 cd -
 # TODO: publish to npm if run by CI
-
-# ====== C Libraries
 
 # ====== CLI Executables
 # Copying to linux-x64 since the CI will be an x64 Ubuntu
@@ -85,6 +83,10 @@ cd -
 # TODO: publish to npm if run by CI
 
 # ====== C Libraries
+mkdir -p "$ARTIFACT_DIR/ffi"
+cp "$ROOT/target/release/libconfidential_identity_ffi.so" "$ARTIFACT_DIR/ffi"
+cp "$CONFIDENTIAL_IDENTITY_ROOT/ffi/confidential_identity.h" "$ARTIFACT_DIR/ffi"
+
 
 # ====== CLI Executables
 # Copying to linux-x64 since the CI will be an x64 Ubuntu

@@ -17,7 +17,7 @@ cargo install cbindgen
 Second:
 
 ```bash
-cbindgen --config cbindgen.toml --crate confidential-identity-ffi --output examples/c_example.h
+cbindgen --config cbindgen.toml --crate confidential-identity-ffi --output confidential_identity.h
 ```
 
 Note that unfortunately `cbindgen` doesn't map the typedefs properly, so manually replace `typedef`
