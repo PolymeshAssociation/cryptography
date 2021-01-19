@@ -1,5 +1,22 @@
 #! /bin/bash
 
+# This script is written with the intention of being run by CI/CD pipelines.
+
+# The general flow of this script is as follows. Each project has a temporary artifact directory
+# which is used to gather and compress various artifacts. Once the artifacts are created, they
+# are moved the the artifact directory in the root of the repository. The CI will then upload
+# everything in the root artifact directory to the github release.
+
+# At the moment we publish the following artifacts.
+# 1. Rust source code
+# 2. WASM binding as an npm package
+# 3. CLI executables (for linux x64)
+# 4. FFI binding (a *.so file + a *.h header file)
+
+# TODO
+# 1. Publishing the npm package to npmjs.com
+# 2. Publishing the Rust library to crates.io
+
 ROOT=$( cd `dirname $0`/..;  pwd )
 ARTIFACT_DIR="artifacts"
 mkdir $ARTIFACT_DIR
@@ -21,7 +38,7 @@ echo "Packing core source files..."
 mkdir -p "$ARTIFACT_DIR/src/cryptography-core"
 find . -type f -not -path "./target/*" -not -path "./artifacts/*" -exec cp --parents {} "$ARTIFACT_DIR/src/cryptography-core" \;
 tar -czvf cryptography-core-src.tar.gz "$ARTIFACT_DIR/src"
-mv cryptography-core-src.tar.gz "$ROOT/$ARTIFACT_DIR"
+mv        cryptography-core-src.tar.gz "$ROOT/$ARTIFACT_DIR"
 rm -rf "$ARTIFACT_DIR/src"
 
 # ====== Rust Library Crate
@@ -44,7 +61,7 @@ mkdir -p "$ARTIFACT_DIR/src/mercat"
 find ../cryptography-core -type f -not -path "../cryptography-core/target/*" -not -path "../cryptography-core/artifacts/*" -exec cp --parents {} "$ARTIFACT_DIR/src/cryptography-core" \;
 find . -type f -not -path "./target/*" -not -path "./artifacts/*" -not -path "./wasm/*" -not -path "./cli/*" -exec cp --parents {} "$ARTIFACT_DIR/src/mercat" \;
 tar -czvf mercat-src.tar.gz "$ARTIFACT_DIR/src"
-mv mercat-src.tar.gz "$ROOT/$ARTIFACT_DIR"
+mv        mercat-src.tar.gz "$ROOT/$ARTIFACT_DIR"
 rm -rf "$ARTIFACT_DIR/src"
 
 # ====== Rust Library Crate
@@ -59,7 +76,7 @@ wasm-pack build --release
 cp -r pkg/* "$ROOT/mercat/$ARTIFACT_DIR/npm/"
 cd -
 tar -czvf mercat-npm.tar.gz "$ARTIFACT_DIR/npm"
-mv mercat-npm.tar.gz "$ROOT/$ARTIFACT_DIR"
+mv        mercat-npm.tar.gz "$ROOT/$ARTIFACT_DIR"
 rm -rf "$ARTIFACT_DIR/npm"
 # TODO: publish to npm if run by CI
 
@@ -73,7 +90,7 @@ cp "$ROOT/target/release/mercat-mediator"    "$ARTIFACT_DIR/bin/linux-x64/"
 cp "$ROOT/target/release/mercat-account"     "$ARTIFACT_DIR/bin/linux-x64/"
 cp "$ROOT/target/release/mercat-validator"   "$ARTIFACT_DIR/bin/linux-x64/"
 tar -czvf mercat-bin.tar.gz "$ARTIFACT_DIR/bin"
-mv mercat-bin.tar.gz "$ROOT/$ARTIFACT_DIR"
+mv        mercat-bin.tar.gz "$ROOT/$ARTIFACT_DIR"
 rm -rf "$ARTIFACT_DIR/bin"
 
 
@@ -92,7 +109,7 @@ mkdir -p "$ARTIFACT_DIR/src/confidential-identity"
 find ../cryptography-core -type f -not -path "../cryptography-core/target/*" -not -path "../cryptography-core/artifacts/*" -exec cp --parents {} "$ARTIFACT_DIR/src/cryptography-core" \;
 find . -type f -not -path "./target/*" -not -path "./artifacts/*" -not -path "./wasm/*" -not -path "./cli/*" -not -path "./ffi/*" -exec cp --parents {} "$ARTIFACT_DIR/src/confidential-identity" \;
 tar -czvf confidential-identity-src.tar.gz "$ARTIFACT_DIR/src"
-mv confidential-identity-src.tar.gz "$ROOT/$ARTIFACT_DIR"
+mv        confidential-identity-src.tar.gz "$ROOT/$ARTIFACT_DIR"
 rm -rf "$ARTIFACT_DIR/src"
 
 # ====== Rust Library Crate
@@ -107,7 +124,7 @@ wasm-pack build --release
 cp -r pkg/* "$ROOT/confidential-identity/$ARTIFACT_DIR/npm/"
 cd -
 tar -czvf confidential-identity-npm.tar.gz "$ARTIFACT_DIR/npm"
-mv confidential-identity-npm.tar.gz "$ROOT/$ARTIFACT_DIR"
+mv        confidential-identity-npm.tar.gz "$ROOT/$ARTIFACT_DIR"
 rm -rf "$ARTIFACT_DIR/npm"
 # TODO: publish to npm if run by CI
 
@@ -117,7 +134,7 @@ mkdir -p "$ARTIFACT_DIR/ffi"
 cp "$ROOT/target/release/libconfidential_identity_ffi.so" "$ARTIFACT_DIR/ffi"
 cp "$CONFIDENTIAL_IDENTITY_ROOT/ffi/confidential_identity.h" "$ARTIFACT_DIR/ffi"
 tar -czvf confidential-identity-ffi.tar.gz "$ARTIFACT_DIR/ffi"
-mv confidential-identity-ffi.tar.gz "$ROOT/$ARTIFACT_DIR"
+mv        confidential-identity-ffi.tar.gz "$ROOT/$ARTIFACT_DIR"
 rm -rf "$ARTIFACT_DIR/ffi"
 
 
@@ -128,6 +145,6 @@ mkdir -p "$ARTIFACT_DIR/bin/linux-x64"
 cp "$ROOT/target/release/polymath-scp" "$ARTIFACT_DIR/bin/linux-x64/"
 cp "$ROOT/target/release/polymath-scv" "$ARTIFACT_DIR/bin/linux-x64/"
 tar -czvf confidential-identity-bin.tar.gz "$ARTIFACT_DIR/bin"
-mv confidential-identity-bin.tar.gz "$ROOT/$ARTIFACT_DIR"
+mv        confidential-identity-bin.tar.gz "$ROOT/$ARTIFACT_DIR"
 rm -rf "$ARTIFACT_DIR/bin"
 
