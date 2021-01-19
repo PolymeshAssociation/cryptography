@@ -13,8 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Build project
-        run: |
-          bash ./scripts/artifacts.sh
+        run: bash ./scripts/artifacts.sh
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -105,4 +104,3 @@ jobs:
           asset_path: artifacts/mercat-npm.tar.gz
           asset_name: mercat-npm.tar.gz
           asset_content_type: application/zip
-
