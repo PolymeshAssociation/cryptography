@@ -20,7 +20,7 @@ mod proofs;
 mod prover;
 mod verifier;
 use blake2::{Blake2b, Digest};
-use cryptography_core::cdd_claim::{CddClaimData, CddId};
+use cryptography_core::cdd_claim::{CddClaimData, CddId, RISTRETTO_POINT_SIZE, SCALAR_SIZE};
 use cryptography_core::curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
@@ -49,16 +49,11 @@ pub struct PrivateUids(pub Vec<Scalar>);
 impl Encode for PrivateUids {
     #[inline]
     fn size_hint(&self) -> usize {
-        32 * self.0.len()
+        SCALAR_SIZE * self.0.len()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let uuids: Vec<[u8; 32]> = self
-            .0
-            .clone()
-            .into_iter()
-            .map(|u| *u.as_bytes())
-            .collect::<Vec<_>>();
+        let uuids: Vec<[u8; SCALAR_SIZE]> = self.0.iter().map(|u| u.to_bytes()).collect();
 
         uuids.encode_to(dest);
     }
@@ -66,9 +61,9 @@ impl Encode for PrivateUids {
 
 impl Decode for PrivateUids {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let uuids = <Vec<[u8; 32]>>::decode(input)?;
+        let uuids = <Vec<[u8; SCALAR_SIZE]>>::decode(input)?;
 
-        let uuids: Vec<Scalar> = uuids.into_iter().map(Scalar::from_bits).collect::<Vec<_>>();
+        let uuids: Vec<Scalar> = uuids.into_iter().map(Scalar::from_bits).collect();
 
         Ok(PrivateUids(uuids))
     }
@@ -81,16 +76,12 @@ pub struct CommittedUids(pub Vec<RistrettoPoint>);
 impl Encode for CommittedUids {
     #[inline]
     fn size_hint(&self) -> usize {
-        32 * self.0.len()
+        RISTRETTO_POINT_SIZE * self.0.len()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let committed_uuids: Vec<[u8; 32]> = self
-            .0
-            .clone()
-            .into_iter()
-            .map(|u| *u.compress().as_bytes())
-            .collect::<Vec<_>>();
+        let committed_uuids: Vec<[u8; RISTRETTO_POINT_SIZE]> =
+            self.0.iter().map(|u| u.compress().to_bytes()).collect();
 
         committed_uuids.encode_to(dest);
     }
@@ -98,7 +89,7 @@ impl Encode for CommittedUids {
 
 impl Decode for CommittedUids {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let committed_uuids = <Vec<[u8; 32]>>::decode(input)?;
+        let committed_uuids = <Vec<[u8; RISTRETTO_POINT_SIZE]>>::decode(input)?;
         let committed_uuids: Vec<RistrettoPoint> = committed_uuids
             .into_iter()
             .map(|u| {
@@ -106,7 +97,7 @@ impl Decode for CommittedUids {
                     .decompress()
                     .unwrap_or_else(RistrettoPoint::default)
             })
-            .collect::<Vec<_>>();
+            .collect();
 
         Ok(CommittedUids(committed_uuids))
     }
@@ -118,17 +109,17 @@ pub struct Challenge(pub Scalar);
 impl Encode for Challenge {
     #[inline]
     fn size_hint(&self) -> usize {
-        32
+        SCALAR_SIZE
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.0.as_bytes().encode_to(dest);
+        self.0.to_bytes().encode_to(dest);
     }
 }
 
 impl Decode for Challenge {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let c = <[u8; 32]>::decode(input)?;
+        let c = <[u8; SCALAR_SIZE]>::decode(input)?;
         let c = Scalar::from_bits(c);
 
         Ok(Challenge(c))
@@ -154,8 +145,8 @@ impl Encode for Proofs {
         self.cdd_id_proof.size_hint()
             + self.cdd_id_second_half_proof.size_hint()
             + self.uid_commitment_proof.size_hint()
-            + 32
-            + 32
+            + RISTRETTO_POINT_SIZE
+            + RISTRETTO_POINT_SIZE
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -164,10 +155,10 @@ impl Encode for Proofs {
         self.uid_commitment_proof.encode_to(dest);
 
         let a = self.a.compress();
-        a.as_bytes().encode_to(dest);
+        a.to_bytes().encode_to(dest);
 
         let b = self.b.compress();
-        b.as_bytes().encode_to(dest);
+        b.to_bytes().encode_to(dest);
     }
 }
 
@@ -178,8 +169,8 @@ impl Decode for Proofs {
                 InitialMessage,
                 InitialMessage,
                 InitialMessage,
-                [u8; 32],
-                [u8; 32],
+                [u8; RISTRETTO_POINT_SIZE],
+                [u8; RISTRETTO_POINT_SIZE],
             )>::decode(input)?;
         let a = CompressedRistretto(a)
             .decompress()
@@ -221,7 +212,7 @@ impl Encode for ProverSecrets {
         self.cdd_id_proof_secrets.size_hint()
             + self.cdd_id_second_half_proof_secrets.size_hint()
             + self.uid_commitment_proof_secrets.size_hint()
-            + 32
+            + SCALAR_SIZE
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -229,7 +220,7 @@ impl Encode for ProverSecrets {
         self.cdd_id_second_half_proof_secrets.encode_to(dest);
         self.uid_commitment_proof_secrets.encode_to(dest);
 
-        self.rand.as_bytes().encode_to(dest);
+        self.rand.to_bytes().encode_to(dest);
     }
 }
 
@@ -240,7 +231,7 @@ impl Decode for ProverSecrets {
             cdd_id_second_half_proof_secrets,
             uid_commitment_proof_secrets,
             rand,
-        ) = <(Secrets, Secrets, Secrets, [u8; 32])>::decode(input)?;
+        ) = <(Secrets, Secrets, Secrets, [u8; SCALAR_SIZE])>::decode(input)?;
         let rand = Scalar::from_bits(rand);
 
         Ok(ProverSecrets {
@@ -260,17 +251,17 @@ pub struct VerifierSecrets {
 impl Encode for VerifierSecrets {
     #[inline]
     fn size_hint(&self) -> usize {
-        32
+        SCALAR_SIZE
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.rand.as_bytes().encode_to(dest);
+        self.rand.to_bytes().encode_to(dest);
     }
 }
 
 impl Decode for VerifierSecrets {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let rand = <[u8; 32]>::decode(input)?;
+        let rand = <[u8; SCALAR_SIZE]>::decode(input)?;
         let rand = Scalar::from_bits(rand);
 
         Ok(VerifierSecrets { rand })
@@ -306,7 +297,7 @@ pub trait ProofGenerator {
     ) -> Fallible<(ProverSecrets, Proofs)>;
 }
 
-/// Represents the second leg of protocol from PUIS to CDD Provider.
+/// Represents the second leg of the protocol from PUIS to CDD Provider.
 pub trait ChallengeGenerator {
     /// This is called by PUIS to create an committed version of the set of all unique
     /// identity IDs (uID). Moreover, it generates the random ZKP challenge.
@@ -353,7 +344,7 @@ pub trait ChallengeResponder {
     ) -> Fallible<(ProverFinalResponse, CommittedUids)>;
 }
 
-/// Represents the last step of the protocol were PUIS verifies the proofs.
+/// Represents the last step of the protocol in which PUIS verifies the proofs.
 pub trait ProofVerifier {
     /// PUIS verifies both the ZKP proofs around CDD ID and the proof of membership.
     ///

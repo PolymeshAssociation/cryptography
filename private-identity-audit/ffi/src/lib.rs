@@ -38,7 +38,6 @@ pub struct InitialProverResults {
 pub struct VerifierSetGeneratorResults {
     pub verifier_secrets: *mut VerifierSecrets,
     pub committed_uids: *mut CommittedUids,
-    // pub committed_uids_size: usize,
     pub challenge: *mut Challenge,
 }
 
@@ -236,9 +235,10 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     assert!(!seed.is_null());
     assert!(seed_size == 32);
 
-    let unique_identifiers_vec: Vec<Scalar> =
+    let unique_identifiers = private_identity_audit::PrivateUids(
         slice::from_raw_parts_mut(private_unique_identifiers, private_unique_identifiers_size)
-            .into();
+            .into(),
+    );
 
     let min_set_size: Option<usize> = match min_set_size.is_null() {
         true => None,
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
     let mut rng = StdRng::from_seed(rng_seed);
 
     let result = VerifierSetGenerator::generate_committed_set_and_challenge(
-        private_identity_audit::PrivateUids(unique_identifiers_vec),
+        unique_identifiers,
         min_set_size,
         &mut rng,
     );

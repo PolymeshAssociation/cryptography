@@ -1,4 +1,5 @@
 use super::pedersen_commitments::{generate_blinding_factor, generate_pedersen_commit};
+use super::{RISTRETTO_POINT_SIZE, SCALAR_SIZE};
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
@@ -36,7 +37,7 @@ impl CddClaimData {
 impl Encode for CddClaimData {
     #[inline]
     fn size_hint(&self) -> usize {
-        32 + 32
+        SCALAR_SIZE + SCALAR_SIZE
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -47,10 +48,10 @@ impl Encode for CddClaimData {
 
 impl Decode for CddClaimData {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let investor_did = <[u8; 32]>::decode(input)?;
+        let investor_did = <[u8; SCALAR_SIZE]>::decode(input)?;
         let investor_did = Scalar::from_bits(investor_did);
 
-        let investor_unique_id = <[u8; 32]>::decode(input)?;
+        let investor_unique_id = <[u8; SCALAR_SIZE]>::decode(input)?;
         let investor_unique_id = Scalar::from_bits(investor_unique_id);
 
         Ok(CddClaimData {
@@ -67,7 +68,7 @@ pub struct CddId(pub RistrettoPoint);
 impl Encode for CddId {
     #[inline]
     fn size_hint(&self) -> usize {
-        32
+        RISTRETTO_POINT_SIZE
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -77,12 +78,12 @@ impl Encode for CddId {
 
 impl Decode for CddId {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let id = <[u8; 32]>::decode(input)?;
-        let id = CompressedRistretto(id)
-            .decompress()
-            .unwrap_or_else(RistrettoPoint::default);
+        let id = <[u8; RISTRETTO_POINT_SIZE]>::decode(input)?;
+        if let Some(id) = CompressedRistretto(id).decompress() {
+            return Ok(CddId(id));
+        };
 
-        Ok(CddId(id))
+        Err(CodecError::from("Invalid CddId."))
     }
 }
 

@@ -17,6 +17,7 @@
 
 use crate::errors::{ErrorKind, Fallible};
 use crate::Challenge;
+use cryptography_core::cdd_claim::{RISTRETTO_POINT_SIZE, SCALAR_SIZE};
 use cryptography_core::curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
@@ -38,17 +39,16 @@ pub struct InitialMessage {
 impl Encode for InitialMessage {
     #[inline]
     fn size_hint(&self) -> usize {
-        32 + self.generators.len() * 32
+        RISTRETTO_POINT_SIZE + self.generators.len() * RISTRETTO_POINT_SIZE
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
         let a = self.a.compress();
-        let generators: Vec<[u8; 32]> = self
+        let generators: Vec<[u8; RISTRETTO_POINT_SIZE]> = self
             .generators
-            .clone()
-            .into_iter()
-            .map(|g| *g.compress().as_bytes())
-            .collect::<Vec<_>>();
+            .iter()
+            .map(|g| g.compress().to_bytes())
+            .collect();
 
         a.as_bytes().encode_to(dest);
         generators.encode_to(dest);
@@ -57,7 +57,8 @@ impl Encode for InitialMessage {
 
 impl Decode for InitialMessage {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (a, generators) = <([u8; 32], Vec<[u8; 32]>)>::decode(input)?;
+        let (a, generators) =
+            <([u8; RISTRETTO_POINT_SIZE], Vec<[u8; RISTRETTO_POINT_SIZE]>)>::decode(input)?;
         let a = CompressedRistretto(a)
             .decompress()
             .ok_or_else(|| CodecError::from("InitialMessage `a` point is invalid"))?;
@@ -69,7 +70,7 @@ impl Decode for InitialMessage {
                     .decompress()
                     .unwrap_or_else(RistrettoPoint::default)
             })
-            .collect::<Vec<_>>();
+            .collect();
 
         Ok(InitialMessage { a, generators })
     }
@@ -84,16 +85,11 @@ pub struct FinalResponse {
 impl Encode for FinalResponse {
     #[inline]
     fn size_hint(&self) -> usize {
-        self.response.len() * 32
+        self.response.len() * SCALAR_SIZE
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let response: Vec<[u8; 32]> = self
-            .response
-            .clone()
-            .into_iter()
-            .map(|g| *g.as_bytes())
-            .collect::<Vec<_>>();
+        let response: Vec<[u8; SCALAR_SIZE]> = self.response.iter().map(|g| g.to_bytes()).collect();
 
         response.encode_to(dest);
     }
@@ -101,12 +97,9 @@ impl Encode for FinalResponse {
 
 impl Decode for FinalResponse {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let response = <Vec<[u8; 32]>>::decode(input)?;
+        let response = <Vec<[u8; SCALAR_SIZE]>>::decode(input)?;
 
-        let s: Vec<Scalar> = response
-            .into_iter()
-            .map(Scalar::from_bits)
-            .collect::<Vec<_>>();
+        let s: Vec<Scalar> = response.into_iter().map(Scalar::from_bits).collect();
 
         Ok(FinalResponse { response: s })
     }
@@ -122,25 +115,15 @@ pub struct Secrets {
 impl Encode for Secrets {
     #[inline]
     fn size_hint(&self) -> usize {
-        self.rands.len() * 32 + self.secrets.len() * 32
+        self.rands.len() * SCALAR_SIZE + self.secrets.len() * SCALAR_SIZE
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let rands: Vec<[u8; 32]> = self
-            .rands
-            .clone()
-            .into_iter()
-            .map(|g| *g.as_bytes())
-            .collect::<Vec<_>>();
+        let rands: Vec<[u8; SCALAR_SIZE]> = self.rands.iter().map(|g| g.to_bytes()).collect();
 
         rands.encode_to(dest);
 
-        let secrets: Vec<[u8; 32]> = self
-            .secrets
-            .clone()
-            .into_iter()
-            .map(|g| *g.as_bytes())
-            .collect::<Vec<_>>();
+        let secrets: Vec<[u8; SCALAR_SIZE]> = self.secrets.iter().map(|g| g.to_bytes()).collect();
 
         secrets.encode_to(dest);
     }
@@ -148,14 +131,11 @@ impl Encode for Secrets {
 
 impl Decode for Secrets {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (rands, secrets) = <(Vec<[u8; 32]>, Vec<[u8; 32]>)>::decode(input)?;
+        let (rands, secrets) = <(Vec<[u8; SCALAR_SIZE]>, Vec<[u8; SCALAR_SIZE]>)>::decode(input)?;
 
-        let rands: Vec<Scalar> = rands.into_iter().map(Scalar::from_bits).collect::<Vec<_>>();
+        let rands: Vec<Scalar> = rands.into_iter().map(Scalar::from_bits).collect();
 
-        let secrets: Vec<Scalar> = secrets
-            .into_iter()
-            .map(Scalar::from_bits)
-            .collect::<Vec<_>>();
+        let secrets: Vec<Scalar> = secrets.into_iter().map(Scalar::from_bits).collect();
 
         Ok(Secrets { rands, secrets })
     }
@@ -171,8 +151,7 @@ pub fn generate_initial_message<T: RngCore + CryptoRng>(
         .map(|_| Scalar::random(rng))
         .collect();
     let a = generators
-        .clone()
-        .into_iter()
+        .iter()
         .zip(&rands)
         .map(|(gen, rand)| gen * rand)
         .fold_first(|v1, v2| v1 + v2)
@@ -191,14 +170,14 @@ pub fn apply_challenge(prover_secrets: &Secrets, c: &Challenge) -> FinalResponse
 }
 
 pub fn verify(
-    initial_message: InitialMessage,
+    initial_message: &InitialMessage,
     final_response: &FinalResponse,
     statement: &RistrettoPoint,
     c: &Challenge,
 ) -> bool {
     if let Some(lhs) = initial_message
         .generators
-        .into_iter()
+        .iter()
         .zip(&final_response.response)
         .map(|(gen, s)| gen * s)
         .fold_first(|v1, v2| v1 + v2)
@@ -234,16 +213,11 @@ mod tests {
         let final_response = apply_challenge(&prover_secrets, &c);
 
         // Positive test
-        assert!(verify(
-            initial_message.clone(),
-            &final_response,
-            &statement,
-            &c
-        ));
+        assert!(verify(&initial_message, &final_response, &statement, &c));
 
         // Negative test
         let statement = RistrettoPoint::random(&mut rng) * Scalar::random(&mut rng);
-        let is_valid = verify(initial_message, &final_response, &statement, &c);
+        let is_valid = verify(&initial_message, &final_response, &statement, &c);
         assert!(!is_valid);
     }
 
@@ -273,7 +247,7 @@ mod tests {
         let challenge = Challenge(Scalar::random(&mut rng));
         let cdd_id_proof_response = apply_challenge(&cdd_id_proof_secrets, &challenge);
         assert!(verify(
-            cdd_id_proof,
+            &cdd_id_proof,
             &cdd_id_proof_response,
             &statement,
             &challenge,

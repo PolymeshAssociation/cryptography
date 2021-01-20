@@ -71,7 +71,7 @@ impl ProofVerifier for Verifier {
 
         ensure!(
             verify(
-                initial_message.cdd_id_proof.clone(),
+                &initial_message.cdd_id_proof,
                 &final_response.cdd_id_proof_response,
                 &initial_message.a,
                 &challenge,
@@ -82,7 +82,7 @@ impl ProofVerifier for Verifier {
         );
         ensure!(
             verify(
-                initial_message.cdd_id_second_half_proof.clone(),
+                &initial_message.cdd_id_second_half_proof,
                 &final_response.cdd_id_second_half_proof_response,
                 &initial_message.b,
                 &challenge,
@@ -93,7 +93,7 @@ impl ProofVerifier for Verifier {
         );
         ensure!(
             verify(
-                initial_message.uid_commitment_proof.clone(),
+                &initial_message.uid_commitment_proof,
                 &final_response.uid_commitment_proof_response,
                 &uid_commitment,
                 &challenge,
@@ -140,6 +140,16 @@ mod tests {
         VerifierSetGenerator, SET_SIZE_ANONYMITY_PARAM,
     };
     use rand::{rngs::StdRng, SeedableRng};
+    use rand_core::{CryptoRng, RngCore};
+
+    fn make_random_uuids<T: RngCore + CryptoRng>(count: usize, rng: &mut T) -> PrivateUids {
+        PrivateUids(
+            gen_random_uuids(count, rng)
+                .into_iter()
+                .map(uuid_to_scalar)
+                .collect(),
+        )
+    }
 
     #[test]
     fn test_verifier_set_gen_length() {
@@ -148,12 +158,7 @@ mod tests {
 
         // Test original anonymity param.
         let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
-            PrivateUids(
-                gen_random_uuids(input_len, &mut rng)
-                    .into_iter()
-                    .map(uuid_to_scalar)
-                    .collect(),
-            ),
+            make_random_uuids(input_len, &mut rng),
             None,
             &mut rng,
         )
@@ -164,12 +169,7 @@ mod tests {
         // Test overridden anonymity param.
         let different_anonymity_size = 20;
         let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
-            PrivateUids(
-                gen_random_uuids(input_len, &mut rng)
-                    .into_iter()
-                    .map(uuid_to_scalar)
-                    .collect(),
-            ),
+            make_random_uuids(input_len, &mut rng),
             Some(different_anonymity_size),
             &mut rng,
         )
@@ -180,12 +180,7 @@ mod tests {
         // Test no padding.
         let different_anonymity_size = 5;
         let (_, committed_uids, _) = VerifierSetGenerator::generate_committed_set_and_challenge(
-            PrivateUids(
-                gen_random_uuids(input_len, &mut rng)
-                    .into_iter()
-                    .map(uuid_to_scalar)
-                    .collect(),
-            ),
+            make_random_uuids(input_len, &mut rng),
             Some(different_anonymity_size),
             &mut rng,
         )

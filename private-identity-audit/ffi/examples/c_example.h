@@ -8,8 +8,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-typedef struct CddId CddId;
-
 /**
  * The Zero-Knowledge challenge.
  */
@@ -59,6 +57,8 @@ typedef struct {
   ProverFinalResponse *prover_final_response;
   CommittedUids *committed_uids;
 } FinalProverResults;
+
+typedef struct CddId CddId;
 
 /**
  * Convert a Uuid byte array into a scalar object.

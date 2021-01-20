@@ -101,6 +101,7 @@ impl ChallengeResponseOutput {
 // ------------------------------------------------------------------------------------
 // -                                     Error Types                                  -
 // ------------------------------------------------------------------------------------
+
 #[wasm_bindgen]
 #[derive(Serialize)]
 pub enum WasmError {
@@ -144,7 +145,7 @@ pub fn convert_uuid_to_scalar(uuid: Base64) -> Fallible<Base64> {
     }
 }
 
-/// CDD provider's step #1:
+/// The first leg of the protocol from CDD Provider to PUIS.
 #[wasm_bindgen]
 pub fn generate_initial_proofs(cdd_claim: Base64) -> Fallible<InitialProofsOutput> {
     let cdd_claim = decode::<CddClaimData>(cdd_claim)?;
@@ -159,13 +160,13 @@ pub fn generate_initial_proofs(cdd_claim: Base64) -> Fallible<InitialProofsOutpu
     })
 }
 
-/// PUIS's step #1:
+/// The second leg of the protocol from PUIS to CDD Provider.
 #[wasm_bindgen]
 pub fn generate_committed_set_and_challenge(
     private_uuids: Base64,
     min_set_size: Option<usize>,
 ) -> Fallible<CommittedSetOutput> {
-    let uuids: PrivateUids = decode::<PrivateUids>(private_uuids)?;
+    let uuids: PrivateUids = decode(private_uuids)?;
 
     let mut rng = OsRng;
     let results =
@@ -179,16 +180,16 @@ pub fn generate_committed_set_and_challenge(
     })
 }
 
-/// CDD provider's step #2:
+/// The third leg of the protocol from CDD Provider to PUIS.
 #[wasm_bindgen]
 pub fn generate_challenge_response(
     secrets: Base64,
     committed_uids: Base64,
     challenge: Base64,
 ) -> Fallible<ChallengeResponseOutput> {
-    let secrets: ProverSecrets = decode::<ProverSecrets>(secrets)?;
-    let committed_uids: CommittedUids = decode::<CommittedUids>(committed_uids)?;
-    let challenge: Challenge = decode::<Challenge>(challenge)?;
+    let secrets: ProverSecrets = decode(secrets)?;
+    let committed_uids: CommittedUids = decode(committed_uids)?;
+    let challenge: Challenge = decode(challenge)?;
 
     let mut rng = OsRng;
     let results =
@@ -201,7 +202,7 @@ pub fn generate_challenge_response(
     })
 }
 
-/// PUIS's step #2 (verification):
+/// The last step of the protocol in which PUIS verifies the proofs.
 #[wasm_bindgen]
 pub fn verify_proofs(
     initial_message: Base64,
@@ -211,12 +212,12 @@ pub fn verify_proofs(
     verifier_secrets: Base64,
     re_committed_uids: Base64,
 ) -> Fallible<()> {
-    let initial_message: Proofs = decode::<Proofs>(initial_message)?;
-    let final_response: ProverFinalResponse = decode::<ProverFinalResponse>(final_response)?;
-    let challenge: Challenge = decode::<Challenge>(challenge)?;
-    let cdd_id: CddId = decode::<CddId>(cdd_id)?;
-    let verifier_secrets: VerifierSecrets = decode::<VerifierSecrets>(verifier_secrets)?;
-    let re_committed_uids: CommittedUids = decode::<CommittedUids>(re_committed_uids)?;
+    let initial_message: Proofs = decode(initial_message)?;
+    let final_response: ProverFinalResponse = decode(final_response)?;
+    let challenge: Challenge = decode(challenge)?;
+    let cdd_id: CddId = decode(cdd_id)?;
+    let verifier_secrets: VerifierSecrets = decode(verifier_secrets)?;
+    let re_committed_uids: CommittedUids = decode(re_committed_uids)?;
 
     Verifier::verify_proofs(
         &initial_message,
@@ -236,14 +237,8 @@ pub fn verify_proofs(
 // ------------------------------------------------------------------------------------
 
 fn decode<T: Decode>(data: Base64) -> Fallible<T> {
-    if let Ok(decoded) = base64::decode(data) {
-        if let Ok(ret) = T::decode(&mut &decoded[..]) {
-            return Ok(ret);
-        }
-        return Err(WasmError::DeserializationError.into());
-    }
-
-    Err(WasmError::Base64DecodingError.into())
+    let decoded = base64::decode(data).map_err(|_| WasmError::Base64DecodingError)?;
+    T::decode(&mut &decoded[..]).map_err(|_| WasmError::DeserializationError.into())
 }
 
 // ------------------------------------------------------------------------------------
@@ -292,7 +287,7 @@ pub fn test_pial_wrapper() {
     .is_ok();
 
     if result {
-        alert("CDD provider's proof of identity membership has successfully been verified!");
+        alert("CDD provider's proof of identity membership has been successfully verified!");
     } else {
         alert("Failed to verify CDD provider's proof of identity membership!");
     }
