@@ -90,16 +90,16 @@ impl Encode for CommittedUids {
 impl Decode for CommittedUids {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let committed_uuids = <Vec<[u8; RISTRETTO_POINT_SIZE]>>::decode(input)?;
-        let committed_uuids: Vec<RistrettoPoint> = committed_uuids
+
+        committed_uuids
             .into_iter()
             .map(|u| {
                 CompressedRistretto(u)
                     .decompress()
-                    .unwrap_or_else(RistrettoPoint::default)
+                    .ok_or_else(|| CodecError::from("Invalid UUID."))
             })
-            .collect();
-
-        Ok(CommittedUids(committed_uuids))
+            .collect::<Result<Vec<_>, _>>()
+            .map(CommittedUids)
     }
 }
 

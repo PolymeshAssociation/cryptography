@@ -68,9 +68,9 @@ impl Decode for InitialMessage {
             .map(|g| {
                 CompressedRistretto(g)
                     .decompress()
-                    .unwrap_or_else(RistrettoPoint::default)
+                    .ok_or_else(|| CodecError::from("InitialMessage `generators` are invalid"))
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(InitialMessage { a, generators })
     }

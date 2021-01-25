@@ -148,7 +148,7 @@ pub fn convert_uuid_to_scalar(uuid: Base64) -> Fallible<Base64> {
 /// The first leg of the protocol from CDD Provider to PUIS.
 #[wasm_bindgen]
 pub fn generate_initial_proofs(cdd_claim: Base64) -> Fallible<InitialProofsOutput> {
-    let cdd_claim = decode::<CddClaimData>(cdd_claim)?;
+    let cdd_claim = decode_base64::<CddClaimData>(cdd_claim)?;
 
     let mut rng = OsRng;
     let results = InitialProver::generate_initial_proofs(cdd_claim, &mut rng)
@@ -166,7 +166,7 @@ pub fn generate_committed_set_and_challenge(
     private_uuids: Base64,
     min_set_size: Option<usize>,
 ) -> Fallible<CommittedSetOutput> {
-    let uuids: PrivateUids = decode(private_uuids)?;
+    let uuids: PrivateUids = decode_base64(private_uuids)?;
 
     let mut rng = OsRng;
     let results =
@@ -187,9 +187,9 @@ pub fn generate_challenge_response(
     committed_uids: Base64,
     challenge: Base64,
 ) -> Fallible<ChallengeResponseOutput> {
-    let secrets: ProverSecrets = decode(secrets)?;
-    let committed_uids: CommittedUids = decode(committed_uids)?;
-    let challenge: Challenge = decode(challenge)?;
+    let secrets: ProverSecrets = decode_base64(secrets)?;
+    let committed_uids: CommittedUids = decode_base64(committed_uids)?;
+    let challenge: Challenge = decode_base64(challenge)?;
 
     let mut rng = OsRng;
     let results =
@@ -212,12 +212,12 @@ pub fn verify_proofs(
     verifier_secrets: Base64,
     re_committed_uids: Base64,
 ) -> Fallible<()> {
-    let initial_message: Proofs = decode(initial_message)?;
-    let final_response: ProverFinalResponse = decode(final_response)?;
-    let challenge: Challenge = decode(challenge)?;
-    let cdd_id: CddId = decode(cdd_id)?;
-    let verifier_secrets: VerifierSecrets = decode(verifier_secrets)?;
-    let re_committed_uids: CommittedUids = decode(re_committed_uids)?;
+    let initial_message: Proofs = decode_base64(initial_message)?;
+    let final_response: ProverFinalResponse = decode_base64(final_response)?;
+    let challenge: Challenge = decode_base64(challenge)?;
+    let cdd_id: CddId = decode_base64(cdd_id)?;
+    let verifier_secrets: VerifierSecrets = decode_base64(verifier_secrets)?;
+    let re_committed_uids: CommittedUids = decode_base64(re_committed_uids)?;
 
     Verifier::verify_proofs(
         &initial_message,
@@ -236,7 +236,7 @@ pub fn verify_proofs(
 // -                               Internal Functions                                 -
 // ------------------------------------------------------------------------------------
 
-fn decode<T: Decode>(data: Base64) -> Fallible<T> {
+fn decode_base64<T: Decode>(data: Base64) -> Fallible<T> {
     let decoded = base64::decode(data).map_err(|_| WasmError::Base64DecodingError)?;
     T::decode(&mut &decoded[..]).map_err(|_| WasmError::DeserializationError.into())
 }

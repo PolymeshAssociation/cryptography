@@ -79,11 +79,10 @@ impl Encode for CddId {
 impl Decode for CddId {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let id = <[u8; RISTRETTO_POINT_SIZE]>::decode(input)?;
-        if let Some(id) = CompressedRistretto(id).decompress() {
-            return Ok(CddId(id));
-        };
-
-        Err(CodecError::from("Invalid CddId."))
+        CompressedRistretto(id)
+            .decompress()
+            .ok_or_else(|| CodecError::from("Invalid CddId."))
+            .map(CddId)
     }
 }
 
