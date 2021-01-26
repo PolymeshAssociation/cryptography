@@ -1,7 +1,7 @@
 on:
   push:
     tags:
-    - 'v*'
+    - 'confidential-identity-v*'
 
 name: Upload Release Asset
 
@@ -13,7 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Build project
-        run: bash ./scripts/artifacts.sh
+        run: bash ./scripts/confidential-identity-artifacts.sh
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -24,16 +24,7 @@ jobs:
           release_name: Release ${{ github.ref }}
           draft: false
           prerelease: false
-      - name: Upload Cryptography Core Source
-        id: upload-release-asset-core-src
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/cryptography-core-src.tar.gz
-          asset_name: cryptography-core-src.tar.gz
-          asset_content_type: application/zip
+
       - name: Upload Confidential Identity Source
         id: upload-release-asset-confidential-identity-src
         uses: actions/upload-release-asset@v1
@@ -42,8 +33,19 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./artifacts/confidential-identity-src.tar.gz
-          asset_name: confidential-identity-src.tar.gz
+          asset_name: ${GITHUB_REF/refs\/tags\//}-src.tar.gz
           asset_content_type: application/zip
+      - name: Upload Confidential Identity Source Checksum
+        id: upload-release-asset-confidential-identity-src-checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-src.sha256sum
+          asset_name: ${GITHUB_REF/refs\/tags\//}-src.sha256sum
+          asset_content_type: text/plain
+
       - name: Upload Confidential Identity CLI
         id: upload-release-asset-confidential-identity-cli
         uses: actions/upload-release-asset@v1
@@ -51,9 +53,20 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/confidential-identity-bin.tar.gz
-          asset_name: confidential-identity-bin.tar.gz
+          asset_path: ./artifacts/confidential-identity-linux-x64.tar.gz
+          asset_name: ${GITHUB_REF/refs\/tags\//}-linux-x64.tar.gz
           asset_content_type: application/zip
+      - name: Upload Confidential Identity CLI Checksum
+        id: upload-release-asset-confidential-identity-cli-checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-linux-x64.sha256sum
+          asset_name: ${GITHUB_REF/refs\/tags\//}-linux-x64.sha256sum
+          asset_content_type: text/plain
+
       - name: Upload Confidential Identity NPM
         id: upload-release-asset-confidential-identity-npm
         uses: actions/upload-release-asset@v1
@@ -62,8 +75,19 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./artifacts/confidential-identity-npm.tar.gz
-          asset_name: confidential-identity-npm.tar.gz
+          asset_name: ${GITHUB_REF/refs\/tags\//}-npm.tar.gz
           asset_content_type: application/zip
+      - name: Upload Confidential Identity NPM Checksum
+        id: upload-release-asset-confidential-identity-npm-checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-npm.sha256sum
+          asset_name: ${GITHUB_REF/refs\/tags\//}-npm.sha256sum
+          asset_content_type: text/plain
+
       - name: Upload Confidential Identity FFI
         id: upload-release-asset-confidential-identity-ffi
         uses: actions/upload-release-asset@v1
@@ -72,35 +96,16 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./artifacts/confidential-identity-ffi.tar.gz
-          asset_name: confidential-identity-ffi.tar.gz
+          asset_name: ${GITHUB_REF/refs\/tags\//}-ffi.tar.gz
           asset_content_type: application/zip
-      - name: Upload MERCAT Source
-        id: upload-release-asset-mercat-src
+      - name: Upload Confidential Identity FFI Checksum
+        id: upload-release-asset-confidential-identity-ffi-checksum
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/
-          asset_name: mercat-src.tar.gz
-          asset_content_type: application/zip
-      - name: Upload MERCAT CLI
-        id: upload-release-asset-mercat-cli
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/mercat-bin.tar.gz
-          asset_name: mercat-bin.tar.gz
-          asset_content_type: application/zip
-      - name: Upload MERCAT NPM
-        id: upload-release-asset-mercat-npm
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/mercat-npm.tar.gz
-          asset_name: mercat-npm.tar.gz
-          asset_content_type: application/zip
+          asset_path: ./artifacts/confidential-identity-ffi.sha256sum
+          asset_name: ${GITHUB_REF/refs\/tags\//}-ffi.sha256sum
+          asset_content_type: text/plain
+
