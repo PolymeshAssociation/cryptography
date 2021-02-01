@@ -1,19 +1,25 @@
+name: Upload Mercat Release Asset
+
 on:
   push:
     tags:
     - 'mercat-v*'
- 
-name: Upload Mercat Release Asset
 
 jobs:
   build:
-    name: Upload Release Asset
+    name: Upload Mercat Release Asset
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Build project
         run: bash ./scripts/mercat-artifacts.sh
+      - name: Get tag name
+        id: get-tag-name
+        run: |
+            echo "TAG_NAME=${GIT_REF/refs\/tags\//}" >> $GITHUB_ENV
+        env:
+          GIT_REF: ${{ github.ref }}
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -33,7 +39,7 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./artifacts/mercat-src.tar.gz
-          asset_name: ${GITHUB_REF/refs\/tags\//}-src.tar.gz
+          asset_name: ${{ env.TAG_NAME }}-src.tar.gz
           asset_content_type: application/zip
       - name: Upload MERCAT Source Checksum
         id: upload-release-asset-mercat-src-checksum
@@ -43,7 +49,7 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./artifacts/mercat-src.sha256sum
-          asset_name: ${GITHUB_REF/refs\/tags\//}-src.sha256sum
+          asset_name: ${{ env.TAG_NAME }}-src.sha256sum
           asset_content_type: text/plain
 
       - name: Upload MERCAT CLI
@@ -54,7 +60,7 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./artifacts/mercat-linux-x64.tar.gz 
-          asset_name: ${GITHUB_REF/refs\/tags\//}-linux-x64.tar.gz
+          asset_name: ${{ env.TAG_NAME }}-linux-x64.tar.gz
           asset_content_type: application/zip
       - name: Upload MERCAT CLI checksum
         id: upload-release-asset-mercat-cli-checksum
@@ -64,7 +70,7 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./artifacts/mercat-linux-x64.sha256sum
-          asset_name: ${GITHUB_REF/refs\/tags\//}-linux-x64.sha256sum
+          asset_name: ${{ env.TAG_NAME }}-linux-x64.sha256sum
           asset_content_type: text/plain
 
       - name: Upload MERCAT NPM
@@ -75,7 +81,7 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: artifacts/mercat-npm.tar.gz
-          asset_name: ${GITHUB_REF/refs\/tags\//}-npm.tar.gz
+          asset_name: ${{ env.TAG_NAME }}-npm.tar.gz
           asset_content_type: application/zip
       - name: Upload MERCAT NPM Checksum
         id: upload-release-asset-mercat-npm-checksum
@@ -85,6 +91,6 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: artifacts/mercat-npm.sha256sum
-          asset_name: ${GITHUB_REF/refs\/tags\//}-npm.sha256sum
+          asset_name: ${{ env.TAG_NAME }}-npm.sha256sum
           asset_content_type: text/plain
 
