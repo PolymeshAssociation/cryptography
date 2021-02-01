@@ -184,7 +184,7 @@ Signature *generate_id_match_proof_wrapper(ScopeClaimProofData *scope_claim_proo
  * of memory that has at least `message_size` bytes.
  * Caller is responsible for deallocating memory after use.
  */
-bool verify_id_match_proof_wrapper(const struct ProofPublicKey *proof_public_key,
+bool verify_id_match_proof_wrapper(const ProofPublicKey *proof_public_key,
                                    const uint8_t *message,
                                    size_t message_size,
                                    const Signature *signature);
