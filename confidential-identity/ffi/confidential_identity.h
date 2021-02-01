@@ -27,6 +27,8 @@ typedef struct ScopeClaimProofData ScopeClaimProofData;
 
 typedef struct CddClaimData CddClaimData;
 
+typedef struct CddId CddId;
+
 typedef struct RistrettoPoint RistrettoPoint;
 
 typedef struct Signature Signature;
@@ -100,12 +102,12 @@ void scope_claim_proof_data_free(struct ScopeClaimProofData *ptr);
  * for making sure the `cdd_id` and `scope_id` are valid pointers, created using
  * `compute_cdd_id_wrapper()` and `compute_scope_id_wrapper()` API.
  */
-struct ProofPublicKey *proof_public_key_new(RistrettoPoint *cdd_id,
-                                            const uint8_t *investor_did,
-                                            size_t investor_did_size,
-                                            RistrettoPoint *scope_id,
-                                            const uint8_t *scope_did,
-                                            size_t scope_did_size);
+ProofPublicKey *proof_public_key_new(CddId *cdd_id,
+                                     const uint8_t *investor_did,
+                                     size_t investor_did_size,
+                                     RistrettoPoint *scope_id,
+                                     const uint8_t *scope_did,
+                                     size_t scope_did_size);
 
 /**
  * Deallocates a `ProofPublicKey` object's memory.
@@ -145,7 +147,7 @@ struct ScopeClaimProofData *build_scope_claim_proof_data_wrapper(const CddClaimD
  * `CddClaimData` object, created by this API.
  * Caller is responsible for deallocating memory after use.
  */
-RistrettoPoint *compute_cdd_id_wrapper(const CddClaimData *cdd_claim);
+CddId *compute_cdd_id_wrapper(const CddClaimData *cdd_claim);
 
 /**
  * Creates a scope ID from a scope claim.
