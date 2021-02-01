@@ -68,10 +68,10 @@ void cdd_claim_data_free(CddClaimData *ptr);
  * `investor_unique_id` point to allocated blocks of memory of `scope_did_size`
  * and `investor_unique_id_size` bytes respectively.
  */
-struct ScopeClaimData *scope_claim_data_new(const uint8_t *scope_did,
-                                            size_t scope_did_size,
-                                            const uint8_t *investor_unique_id,
-                                            size_t investor_unique_id_size);
+ScopeClaimData *scope_claim_data_new(const uint8_t *scope_did,
+                                     size_t scope_did_size,
+                                     const uint8_t *investor_unique_id,
+                                     size_t investor_unique_id_size);
 
 /**
  * Deallocates a `ScopeClaimData` object's memory.
@@ -79,7 +79,7 @@ struct ScopeClaimData *scope_claim_data_new(const uint8_t *scope_did,
  * Should only be called on a still-valid pointer to an object returned by
  * `scope_claim_data_new()`.
  */
-void scope_claim_data_free(struct ScopeClaimData *ptr);
+void scope_claim_data_free(ScopeClaimData *ptr);
 
 /**
  * Deallocates a `ScopeClaimProofData` object's memory.
@@ -87,7 +87,7 @@ void scope_claim_data_free(struct ScopeClaimData *ptr);
  * Should only be called on a still-valid pointer to an object returned by
  * `build_scope_claim_proof_data_wrapper()`.
  */
-void scope_claim_proof_data_free(struct ScopeClaimProofData *ptr);
+void scope_claim_proof_data_free(ScopeClaimProofData *ptr);
 
 /**
  * Create a new `ProofPublicKey` object.
@@ -115,7 +115,7 @@ ProofPublicKey *proof_public_key_new(CddId *cdd_id,
  * Should only be called on a still-valid pointer to an object returned by
  * `proof_public_key_new()`.
  */
-void proof_public_key_free(struct ProofPublicKey *ptr);
+void proof_public_key_free(ProofPublicKey *ptr);
 
 /**
  * Deallocates a `Signature` object's memory.
@@ -135,8 +135,8 @@ void signature_free(Signature *ptr);
  * objects, created by this API.
  * Caller is responsible for deallocating memory after use.
  */
-struct ScopeClaimProofData *build_scope_claim_proof_data_wrapper(const CddClaimData *cdd_claim,
-                                                                 const struct ScopeClaimData *scope_claim);
+ScopeClaimProofData *build_scope_claim_proof_data_wrapper(const CddClaimData *cdd_claim,
+                                                          const ScopeClaimData *scope_claim);
 
 /**
  * Creates a CDD ID from a CDD claim.
@@ -158,7 +158,7 @@ CddId *compute_cdd_id_wrapper(const CddClaimData *cdd_claim);
  * `ScopeClaimData` object, created by this API.
  * Caller is responsible for deallocating memory after use.
  */
-RistrettoPoint *compute_scope_id_wrapper(const struct ScopeClaimData *scope_claim);
+RistrettoPoint *compute_scope_id_wrapper(const ScopeClaimData *scope_claim);
 
 /**
  * Creates a `Signature` from a scope claim proof data and a message.
@@ -170,7 +170,7 @@ RistrettoPoint *compute_scope_id_wrapper(const struct ScopeClaimData *scope_clai
  * a block of memory that has at least `message_size` bytes.
  * Caller is responsible for deallocating memory after use.
  */
-Signature *generate_id_match_proof_wrapper(struct ScopeClaimProofData *scope_claim_proof_data,
+Signature *generate_id_match_proof_wrapper(ScopeClaimProofData *scope_claim_proof_data,
                                            const uint8_t *message,
                                            size_t message_size);
 
