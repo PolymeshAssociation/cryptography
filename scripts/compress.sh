@@ -1,6 +1,6 @@
 #! /bin/bash
 
-set -e
+set -eo pipefail
 
 PROJECT_NAME=$1
 SRC_DIR=$2

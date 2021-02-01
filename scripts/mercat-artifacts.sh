@@ -12,7 +12,7 @@
 # 2. WASM bindings as an npm package. TODO: also publish the npm package to npmjs.com
 # 3. CLI executables (for linux x64).
 
-set -e
+set -eo pipefail
 
 ROOT=$( cd `dirname $0`/..;  pwd )
 PREFIX="$ROOT/mercat"

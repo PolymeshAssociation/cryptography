@@ -1,6 +1,6 @@
 #! /bin/bash
 
-set -e
+set -eo pipefail
 
 SRC_DIR="$1"
 DST_DIR="$2"

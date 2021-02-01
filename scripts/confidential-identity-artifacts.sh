@@ -13,7 +13,7 @@
 # 3. CLI executables (for linux x64).
 # 4. FFI binding (a *.so file + a *.h header file)
 
-set -e
+set -eo pipefail
 
 ROOT=$( cd `dirname $0`/..;  pwd )
 PREFIX="$ROOT/confidential-identity"
