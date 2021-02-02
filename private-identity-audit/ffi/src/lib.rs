@@ -4,6 +4,7 @@
 //! PIAL project.
 
 extern crate libc;
+use cryptography_core::dalek_wrapper::ScalarData;
 use libc::size_t;
 use rand::{rngs::StdRng, SeedableRng};
 use std::{ptr::null_mut, slice};
@@ -25,8 +26,7 @@ pub type VerifierSecrets = private_identity_audit::VerifierSecrets;
 pub type InitialProver = private_identity_audit::InitialProver;
 pub type FinalProver = private_identity_audit::FinalProver;
 pub type CddClaimData = cryptography_core::cdd_claim::CddClaimData;
-pub type RistrettoPoint = cryptography_core::curve25519_dalek::ristretto::RistrettoPoint;
-pub type Scalar = cryptography_core::curve25519_dalek::scalar::Scalar;
+// pub type Scalar = cryptography_core::curve25519_dalek::scalar::Scalar;
 
 #[repr(C)]
 pub struct InitialProverResults {
@@ -64,7 +64,7 @@ fn box_alloc<T>(x: T) -> *mut T {
 /// `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
 /// and `investor_unique_id_size` bytes respectively.
 #[no_mangle]
-pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) -> *mut Scalar {
+pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) -> *mut ScalarData {
     assert!(!unique_id.is_null());
     assert!(unique_id_size == 16);
 
@@ -84,7 +84,7 @@ pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) 
 /// Should only be called on a still-valid pointer to an object returned by
 /// `uuid_new()`.
 #[no_mangle]
-pub unsafe extern "C" fn scalar_free(ptr: *mut Scalar) {
+pub unsafe extern "C" fn scalar_free(ptr: *mut ScalarData) {
     if ptr.is_null() {
         return;
     }
@@ -224,7 +224,7 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
 /// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
-    private_unique_identifiers: *mut Scalar,
+    private_unique_identifiers: *mut ScalarData,
     private_unique_identifiers_size: size_t,
     min_set_size: *const size_t,
     seed: *const u8,

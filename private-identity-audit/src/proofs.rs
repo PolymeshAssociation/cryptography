@@ -163,7 +163,7 @@ pub fn apply_challenge(prover_secrets: &Secrets, c: &Challenge) -> FinalResponse
     let s = (&prover_secrets.rands)
         .iter()
         .zip(&prover_secrets.secrets)
-        .map(|(rand, secret)| rand + c.0 * secret)
+        .map(|(rand, &secret)| rand + (c.0).0 * secret)
         .collect();
 
     FinalResponse { response: s }
@@ -182,7 +182,7 @@ pub fn verify(
         .map(|(gen, s)| gen * s)
         .fold_first(|v1, v2| v1 + v2)
     {
-        return lhs == initial_message.a + statement * c.0;
+        return lhs == initial_message.a + statement * (c.0).0;
     }
 
     false
@@ -209,7 +209,7 @@ mod tests {
         let (prover_secrets, initial_message) =
             generate_initial_message(secrets, generators, &mut rng).unwrap();
 
-        let c = Challenge(Scalar::random(&mut rng));
+        let c = Challenge(Scalar::random(&mut rng).into());
         let final_response = apply_challenge(&prover_secrets, &c);
 
         // Positive test
@@ -244,7 +244,7 @@ mod tests {
         let (cdd_id_proof_secrets, cdd_id_proof) =
             generate_initial_message(vec![r], vec![cdd_id.0], &mut rng).unwrap();
 
-        let challenge = Challenge(Scalar::random(&mut rng));
+        let challenge = Challenge(Scalar::random(&mut rng).into());
         let cdd_id_proof_response = apply_challenge(&cdd_id_proof_secrets, &challenge);
         assert!(verify(
             &cdd_id_proof,

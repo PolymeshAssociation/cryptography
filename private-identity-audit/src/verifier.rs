@@ -5,8 +5,12 @@ use crate::{
     Proofs, ProverFinalResponse, Verifier, VerifierSecrets, VerifierSetGenerator,
     SET_SIZE_ANONYMITY_PARAM,
 };
-use cryptography_core::cdd_claim::{pedersen_commitments::PedersenGenerators, CddId};
 use cryptography_core::curve25519_dalek::scalar::Scalar;
+use cryptography_core::dalek_wrapper::{PointData, ScalarData};
+use cryptography_core::{
+    cdd_claim::{pedersen_commitments::PedersenGenerators, CddId},
+    RistrettoPoint,
+};
 use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
 use uuid::{Builder, Uuid, Variant, Version};
@@ -27,7 +31,7 @@ impl ChallengeGenerator for VerifierSetGenerator {
         let padded_vec = if private_unique_identifiers.0.len() >= min_size {
             private_unique_identifiers.0
         } else {
-            let padding: Vec<Scalar> =
+            let padding: Vec<ScalarData> =
                 gen_random_uuids(min_size - private_unique_identifiers.0.len(), rng)
                     .into_iter()
                     .map(uuid_to_scalar)
@@ -40,14 +44,15 @@ impl ChallengeGenerator for VerifierSetGenerator {
         let r = Scalar::random(rng);
         let mut commitments = padded_vec
             .into_iter()
-            .map(|scalar_uid| pg.generators[1] * scalar_uid * r)
+            .map(|scalar_uid| pg.generators[1] * scalar_uid.0 * r)
+            .map(PointData)
             .collect::<Vec<_>>();
         commitments.shuffle(rng);
 
-        let challenge = Challenge(Scalar::random(rng));
+        let challenge = Challenge(Scalar::random(rng).into());
 
         Ok((
-            VerifierSecrets { rand: r },
+            VerifierSecrets { rand: r.into() },
             CommittedUids(commitments),
             challenge,
         ))
@@ -63,7 +68,7 @@ impl ProofVerifier for Verifier {
         verifier_secrets: &VerifierSecrets,
         re_committed_uids: &CommittedUids,
     ) -> Fallible<()> {
-        let uid_commitment = initial_message.a - initial_message.b;
+        let uid_commitment: RistrettoPoint = initial_message.a.0 - initial_message.b.0;
         ensure!(
             initial_message.cdd_id_proof.generators[0] == cdd_id.0,
             ErrorKind::CDDIdMismatchError
@@ -73,7 +78,7 @@ impl ProofVerifier for Verifier {
             verify(
                 &initial_message.cdd_id_proof,
                 &final_response.cdd_id_proof_response,
-                &initial_message.a,
+                &initial_message.a.into(),
                 &challenge,
             ),
             ErrorKind::ZKPVerificationError {
@@ -84,7 +89,7 @@ impl ProofVerifier for Verifier {
             verify(
                 &initial_message.cdd_id_second_half_proof,
                 &final_response.cdd_id_second_half_proof_response,
-                &initial_message.b,
+                &initial_message.b.into(),
                 &challenge,
             ),
             ErrorKind::ZKPVerificationError {
@@ -101,13 +106,13 @@ impl ProofVerifier for Verifier {
             ErrorKind::ZKPVerificationError { kind: "UID".into() }
         );
 
-        let looking_for = uid_commitment * verifier_secrets.rand;
+        let looking_for = uid_commitment * verifier_secrets.rand.0;
 
         ensure!(
             re_committed_uids
                 .0
                 .iter()
-                .any(|element| { *element == looking_for }),
+                .any(|&element| { element.0 == looking_for }),
             ErrorKind::MembershipProofError
         );
         Ok(())

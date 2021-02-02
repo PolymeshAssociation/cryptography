@@ -9,7 +9,7 @@
 #[macro_use]
 extern crate alloc;
 
-use codec::{Decode, Encode, Error as CodecError, Input, Output};
+use codec::{Decode, Encode};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -20,11 +20,9 @@ mod proofs;
 mod prover;
 mod verifier;
 use blake2::{Blake2b, Digest};
-use cryptography_core::cdd_claim::{CddClaimData, CddId, RISTRETTO_POINT_SIZE, SCALAR_SIZE};
-use cryptography_core::curve25519_dalek::{
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
-};
+use cryptography_core::cdd_claim::{CddClaimData, CddId};
+use cryptography_core::curve25519_dalek::scalar::Scalar;
+use cryptography_core::dalek_wrapper::{PointData, ScalarData};
 use errors::Fallible;
 use proofs::{FinalResponse, InitialMessage, Secrets};
 use rand_core::{CryptoRng, RngCore};
@@ -44,148 +42,28 @@ pub struct VerifierSetGenerator;
 pub struct Verifier;
 
 /// The initial private set of PUIS.
-pub struct PrivateUids(pub Vec<Scalar>);
-
-impl Encode for PrivateUids {
-    #[inline]
-    fn size_hint(&self) -> usize {
-        SCALAR_SIZE * self.0.len()
-    }
-
-    fn encode_to<W: Output>(&self, dest: &mut W) {
-        let uuids: Vec<[u8; SCALAR_SIZE]> = self.0.iter().map(|u| u.to_bytes()).collect();
-
-        uuids.encode_to(dest);
-    }
-}
-
-impl Decode for PrivateUids {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let uuids = <Vec<[u8; SCALAR_SIZE]>>::decode(input)?;
-
-        let uuids: Vec<Scalar> = uuids.into_iter().map(Scalar::from_bits).collect();
-
-        Ok(PrivateUids(uuids))
-    }
-}
+#[derive(PartialEq, Encode, Decode)]
+pub struct PrivateUids(pub Vec<ScalarData>);
 
 /// The committed and padded version of the private set of PUIS.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CommittedUids(pub Vec<RistrettoPoint>);
-
-impl Encode for CommittedUids {
-    #[inline]
-    fn size_hint(&self) -> usize {
-        RISTRETTO_POINT_SIZE * self.0.len()
-    }
-
-    fn encode_to<W: Output>(&self, dest: &mut W) {
-        let committed_uuids: Vec<[u8; RISTRETTO_POINT_SIZE]> =
-            self.0.iter().map(|u| u.compress().to_bytes()).collect();
-
-        committed_uuids.encode_to(dest);
-    }
-}
-
-impl Decode for CommittedUids {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let committed_uuids = <Vec<[u8; RISTRETTO_POINT_SIZE]>>::decode(input)?;
-
-        committed_uuids
-            .into_iter()
-            .map(|u| {
-                CompressedRistretto(u)
-                    .decompress()
-                    .ok_or_else(|| CodecError::from("Invalid UUID."))
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map(CommittedUids)
-    }
-}
+#[derive(Clone, Debug, PartialEq, Encode, Decode)]
+pub struct CommittedUids(pub Vec<PointData>);
 
 /// The Zero-Knowledge challenge.
-pub struct Challenge(pub Scalar);
-
-impl Encode for Challenge {
-    #[inline]
-    fn size_hint(&self) -> usize {
-        SCALAR_SIZE
-    }
-
-    fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.0.to_bytes().encode_to(dest);
-    }
-}
-
-impl Decode for Challenge {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let c = <[u8; SCALAR_SIZE]>::decode(input)?;
-        let c = Scalar::from_bits(c);
-
-        Ok(Challenge(c))
-    }
-}
+#[derive(PartialEq, Encode, Decode)]
+pub struct Challenge(pub ScalarData);
 
 /// Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Proofs {
     cdd_id_proof: InitialMessage,
     cdd_id_second_half_proof: InitialMessage,
     uid_commitment_proof: InitialMessage,
     /// Committed CDD ID. Corresponding to g^uID * h^DID * f^{hash(uID, DID)}`.
-    a: RistrettoPoint,
+    a: PointData,
     /// Committed version of the second half CDD ID. Corresponding to (h^DID*f^{hash(uID, DID)})^r.
-    b: RistrettoPoint,
-}
-
-impl Encode for Proofs {
-    #[inline]
-    fn size_hint(&self) -> usize {
-        self.cdd_id_proof.size_hint()
-            + self.cdd_id_second_half_proof.size_hint()
-            + self.uid_commitment_proof.size_hint()
-            + RISTRETTO_POINT_SIZE
-            + RISTRETTO_POINT_SIZE
-    }
-
-    fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.cdd_id_proof.encode_to(dest);
-        self.cdd_id_second_half_proof.encode_to(dest);
-        self.uid_commitment_proof.encode_to(dest);
-
-        let a = self.a.compress();
-        a.to_bytes().encode_to(dest);
-
-        let b = self.b.compress();
-        b.to_bytes().encode_to(dest);
-    }
-}
-
-impl Decode for Proofs {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (cdd_id_proof, cdd_id_second_half_proof, uid_commitment_proof, a, b) =
-            <(
-                InitialMessage,
-                InitialMessage,
-                InitialMessage,
-                [u8; RISTRETTO_POINT_SIZE],
-                [u8; RISTRETTO_POINT_SIZE],
-            )>::decode(input)?;
-        let a = CompressedRistretto(a)
-            .decompress()
-            .ok_or_else(|| CodecError::from("InitialMessage `a` point is invalid"))?;
-        let b = CompressedRistretto(b)
-            .decompress()
-            .ok_or_else(|| CodecError::from("InitialMessage `b` point is invalid"))?;
-        Ok(Proofs {
-            cdd_id_proof,
-            cdd_id_second_half_proof,
-            uid_commitment_proof,
-            a,
-            b,
-        })
-    }
+    b: PointData,
 }
 
 /// Holds the CDD Provider's response to the PUIS challenge.
@@ -198,82 +76,26 @@ pub struct ProverFinalResponse {
 }
 
 /// Holds CDD Provider secret data.
-#[derive(Clone)]
+#[derive(Clone, Encode, Decode)]
 pub struct ProverSecrets {
     cdd_id_proof_secrets: Secrets,
     cdd_id_second_half_proof_secrets: Secrets,
     uid_commitment_proof_secrets: Secrets,
-    rand: Scalar,
-}
-
-impl Encode for ProverSecrets {
-    #[inline]
-    fn size_hint(&self) -> usize {
-        self.cdd_id_proof_secrets.size_hint()
-            + self.cdd_id_second_half_proof_secrets.size_hint()
-            + self.uid_commitment_proof_secrets.size_hint()
-            + SCALAR_SIZE
-    }
-
-    fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.cdd_id_proof_secrets.encode_to(dest);
-        self.cdd_id_second_half_proof_secrets.encode_to(dest);
-        self.uid_commitment_proof_secrets.encode_to(dest);
-
-        self.rand.to_bytes().encode_to(dest);
-    }
-}
-
-impl Decode for ProverSecrets {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (
-            cdd_id_proof_secrets,
-            cdd_id_second_half_proof_secrets,
-            uid_commitment_proof_secrets,
-            rand,
-        ) = <(Secrets, Secrets, Secrets, [u8; SCALAR_SIZE])>::decode(input)?;
-        let rand = Scalar::from_bits(rand);
-
-        Ok(ProverSecrets {
-            cdd_id_proof_secrets,
-            cdd_id_second_half_proof_secrets,
-            uid_commitment_proof_secrets,
-            rand,
-        })
-    }
+    rand: ScalarData,
 }
 
 /// Holds PUIS secret data.
+#[derive(Clone, Encode, Decode)]
 pub struct VerifierSecrets {
-    rand: Scalar,
-}
-
-impl Encode for VerifierSecrets {
-    #[inline]
-    fn size_hint(&self) -> usize {
-        SCALAR_SIZE
-    }
-
-    fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.rand.to_bytes().encode_to(dest);
-    }
-}
-
-impl Decode for VerifierSecrets {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let rand = <[u8; SCALAR_SIZE]>::decode(input)?;
-        let rand = Scalar::from_bits(rand);
-
-        Ok(VerifierSecrets { rand })
-    }
+    rand: ScalarData,
 }
 
 /// Modified version of `slice_to_scalar` of Confidential Identity Library.
 /// Creates a scalar from a UUID.
-pub fn uuid_to_scalar(uuid: Uuid) -> Scalar {
+pub fn uuid_to_scalar(uuid: Uuid) -> ScalarData {
     let mut hash = [0u8; 64];
     hash.copy_from_slice(Blake2b::digest(uuid.as_bytes()).as_slice());
-    Scalar::from_bytes_mod_order_wide(&hash)
+    Scalar::from_bytes_mod_order_wide(&hash).into()
 }
 
 /// Represents the first leg of the protocol from CDD Provider to PUIS.

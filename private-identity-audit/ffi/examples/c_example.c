@@ -2,11 +2,11 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
-#include "c_example.h"
+#include "private_identity_audit.h"
 
 /**
  * Creates a CDD ID from a CDD claim.
- * (copy/pasted here from confidential-identity/ffi/examples/c_example.h
+ * (copy/pasted here from confidential-identity/ffi/include/confidential_identity.h
  *  for convenience.)
  *
  * SAFETY: Caller is responsible to make sure `cdd_claim` pointer is a valid
@@ -47,9 +47,9 @@ int main(void) {
     size_t seed_size3 = sizeof(seed3);
 
     // Set up on PUIS/Verifier side:
-    Scalar *uuid1 = uuid_new(investor_unique_id1, investor_unique_id_size1);
-    Scalar *uuid2 = uuid_new(investor_unique_id2, investor_unique_id_size2);
-    Scalar *private_unique_identifiers[] = {uuid1, uuid2};
+    ScalarData *uuid1 = uuid_new(investor_unique_id1, investor_unique_id_size1);
+    ScalarData *uuid2 = uuid_new(investor_unique_id2, investor_unique_id_size2);
+    ScalarData *private_unique_identifiers[] = {uuid1, uuid2};
     size_t private_unique_identifiers_size = sizeof(private_unique_identifiers)/sizeof(private_unique_identifiers[0]);
 
     // Set up on Prover side:

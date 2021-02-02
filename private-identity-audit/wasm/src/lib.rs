@@ -138,7 +138,9 @@ pub fn convert_uuid_to_scalar(uuid: Base64) -> Fallible<Base64> {
             let mut uuid_slice = [0u8; 16];
             uuid_slice.copy_from_slice(uuid.as_slice());
             Ok(base64::encode(
-                private_identity_audit::uuid_to_scalar(Uuid::from_bytes(uuid_slice)).as_bytes(),
+                private_identity_audit::uuid_to_scalar(Uuid::from_bytes(uuid_slice))
+                    .0
+                    .as_bytes(),
             ))
         }
         Err(_) => return Err(WasmError::DeserializationError.into()),

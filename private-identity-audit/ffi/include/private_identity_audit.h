@@ -9,6 +9,13 @@
 #include <stdlib.h>
 
 /**
+ * The data needed to generate a CDD ID.
+ */
+typedef struct CddClaimData CddClaimData;
+
+typedef struct CddId CddId;
+
+/**
  * The Zero-Knowledge challenge.
  */
 typedef struct Challenge Challenge;
@@ -33,14 +40,12 @@ typedef struct ProverFinalResponse ProverFinalResponse;
  */
 typedef struct ProverSecrets ProverSecrets;
 
+typedef struct ScalarData ScalarData;
+
 /**
  * Holds PUIS secret data.
  */
 typedef struct VerifierSecrets VerifierSecrets;
-
-typedef struct Scalar Scalar;
-
-typedef struct CddClaimData CddClaimData;
 
 typedef struct {
   ProverSecrets *prover_secrets;
@@ -58,8 +63,6 @@ typedef struct {
   CommittedUids *committed_uids;
 } FinalProverResults;
 
-typedef struct CddId CddId;
-
 /**
  * Convert a Uuid byte array into a scalar object.
  *
@@ -70,7 +73,7 @@ typedef struct CddId CddId;
  * `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
  * and `investor_unique_id_size` bytes respectively.
  */
-Scalar *uuid_new(const uint8_t *unique_id, size_t unique_id_size);
+ScalarData *uuid_new(const uint8_t *unique_id, size_t unique_id_size);
 
 /**
  * Deallocates a `Scalar` object's memory.
@@ -78,7 +81,7 @@ Scalar *uuid_new(const uint8_t *unique_id, size_t unique_id_size);
  * Should only be called on a still-valid pointer to an object returned by
  * `uuid_new()`.
  */
-void scalar_free(Scalar *ptr);
+void scalar_free(ScalarData *ptr);
 
 /**
  * Create a new `CddClaimData` object.
@@ -151,7 +154,7 @@ InitialProverResults *generate_initial_proofs_wrapper(const CddClaimData *cdd_cl
  * 32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
-VerifierSetGeneratorResults *generate_committed_set_and_challenge_wrapper(Scalar *private_unique_identifiers,
+VerifierSetGeneratorResults *generate_committed_set_and_challenge_wrapper(ScalarData *private_unique_identifiers,
                                                                           size_t private_unique_identifiers_size,
                                                                           const size_t *min_set_size,
                                                                           const uint8_t *seed,

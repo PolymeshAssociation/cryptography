@@ -21,6 +21,8 @@ pub mod errors;
 
 pub mod cdd_claim;
 
+pub mod dalek_wrapper;
+
 /// That `ensure` does not transform into a string representation like `failure::ensure` is doing.
 #[allow(unused_macros)]
 macro_rules! ensure {
