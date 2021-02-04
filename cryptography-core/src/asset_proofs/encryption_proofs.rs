@@ -6,10 +6,8 @@ use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 use sp_std::convert::TryFrom;
 
-use crate::{
-    asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript},
-    errors::{Error, ErrorKind, Fallible},
-};
+use super::errors::{Error, ErrorKind, Fallible};
+use crate::asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript};
 
 /// The domain label for the encryption proofs.
 pub const ENCRYPTION_PROOFS_LABEL: &[u8] = b"PolymathEncryptionProofs";
@@ -198,16 +196,14 @@ pub fn single_property_verifier<Verifier: AssetProofVerifier>(
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::{
-        asset_proofs::{
-            correctness_proof::{
-                CorrectnessFinalResponse, CorrectnessInitialMessage,
-                CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
-            },
-            wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
-            CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
+    use crate::asset_proofs::{
+        correctness_proof::{
+            CorrectnessFinalResponse, CorrectnessInitialMessage,
+            CorrectnessProverAwaitingChallenge, CorrectnessVerifier,
         },
         errors::ErrorKind,
+        wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
+        CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     };
     use bulletproofs::PedersenGens;
     use rand::{rngs::StdRng, SeedableRng};

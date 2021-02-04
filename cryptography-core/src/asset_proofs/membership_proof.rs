@@ -4,6 +4,7 @@
 //! This implementation is based on one-out-of-many proof construction described in the following paper
 //! <https://eprint.iacr.org/2015/643.pdf>
 
+use super::errors::{ErrorKind, Fallible};
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
@@ -16,7 +17,6 @@ use crate::asset_proofs::{
     },
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
-use crate::errors::{ErrorKind, Fallible};
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,

@@ -1,6 +1,6 @@
 use cryptography_core::{
-    asset_proofs::{CommitmentWitness, ElgamalSecretKey},
-    AssetId, Scalar,
+    asset_proofs::{AssetId, CommitmentWitness, ElgamalSecretKey},
+    Scalar,
 };
 use mercat::{
     account::{deposit, AccountCreator},

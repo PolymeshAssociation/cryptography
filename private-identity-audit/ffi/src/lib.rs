@@ -26,7 +26,6 @@ pub type VerifierSecrets = private_identity_audit::VerifierSecrets;
 pub type InitialProver = private_identity_audit::InitialProver;
 pub type FinalProver = private_identity_audit::FinalProver;
 pub type CddClaimData = cryptography_core::cdd_claim::CddClaimData;
-// pub type Scalar = cryptography_core::curve25519_dalek::scalar::Scalar;
 
 #[repr(C)]
 pub struct InitialProverResults {

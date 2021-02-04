@@ -5,16 +5,14 @@
 //! For more details see sections 3.6 and 5.3 of the
 //! whitepaper.
 
-use crate::{
-    asset_proofs::{
-        encryption_proofs::{
-            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
-            ZKProofResponse,
-        },
-        transcript::{TranscriptProtocol, UpdateTranscript},
-        CipherText, ElgamalPublicKey, ElgamalSecretKey,
+use super::errors::{ErrorKind, Fallible};
+use crate::asset_proofs::{
+    encryption_proofs::{
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        ZKProofResponse,
     },
-    errors::{ErrorKind, Fallible},
+    transcript::{TranscriptProtocol, UpdateTranscript},
+    CipherText, ElgamalPublicKey, ElgamalSecretKey,
 };
 
 use bulletproofs::PedersenGens;

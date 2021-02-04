@@ -13,14 +13,12 @@ use cryptography_core::{
     asset_proofs::{
         ciphertext_refreshment_proof::CipherEqualSamePubKeyProof,
         correctness_proof::CorrectnessProof,
-        encrypting_same_value_proof::CipherEqualDifferentPubKeyProof,
+        encrypting_same_value_proof::CipherEqualDifferentPubKeyProof, errors::Fallible,
         membership_proof::MembershipProof, range_proof::InRangeProof,
-        wellformedness_proof::WellformednessProof, CipherText, CipherTextWithHint,
-        CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
+        wellformedness_proof::WellformednessProof, AssetId, Balance, CipherText,
+        CipherTextWithHint, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     },
     curve25519_dalek::scalar::Scalar,
-    errors::Fallible,
-    AssetId, Balance,
 };
 use rand_core::{CryptoRng, RngCore};
 

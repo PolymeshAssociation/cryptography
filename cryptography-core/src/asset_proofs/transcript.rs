@@ -7,8 +7,9 @@
 use crate::{
     asset_proofs::elgamal_encryption::CommitmentWitness,
     asset_proofs::encryption_proofs::ZKPChallenge,
-    errors::{ErrorKind, Fallible},
 };
+
+use super::errors::{ErrorKind, Fallible};
 
 use curve25519_dalek::{ristretto::CompressedRistretto, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
