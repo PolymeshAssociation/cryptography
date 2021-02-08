@@ -8,8 +8,8 @@
 # root artifact directory to the github release.
 
 # At the moment we publish the following artifacts for this crate.
-# 1. Rust source code. TODO: also publish the Rust library to crates.io
-# 2. WASM bindings as an npm package. TODO: also publish the npm package to npmjs.com
+# 1. Rust source code.
+# 2. WASM bindings as an npm package.
 # 3. CLI executables (for linux x64).
 # 4. FFI binding (a *.so file + a *.h header file)
 
@@ -30,7 +30,6 @@ mkdir -p "$ROOT/artifacts"
 # Gather artifacts
 "$ROOT/scripts/source_artifact.sh" "$ROOT/cryptography-core" "$PREFIX/artifacts/src/cryptography-core"
 "$ROOT/scripts/source_artifact.sh" "$PREFIX"                 "$PREFIX/artifacts/src/confidential-identity"
-"$ROOT/scripts/crate_artifact.sh"
 "$ROOT/scripts/npm_artifact.sh"    "$PREFIX/wasm"            "$PREFIX/artifacts/npm/"
 
 echo "Packing Confidential Identity CLI binaries..."
