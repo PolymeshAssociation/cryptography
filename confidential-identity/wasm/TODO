@@ -1,0 +1,4 @@
+For wasm:
+- Copy license
+- Change README
+- Change name in package.json
