@@ -36,24 +36,3 @@ But, in order to properly publish the package, the name should be changed to
 [cryptography-rust-lib]: https://github.com/PolymathNetwork/cryptography/tree/develop/README.md
 [mercat-rust-lib]: https://github.com/PolymathNetwork/cryptography/tree/develop/mercat
 [mercat-wasm-src]: https://github.com/PolymathNetwork/cryptography/blob/develop/mercat/wasm/src/lib.rs 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

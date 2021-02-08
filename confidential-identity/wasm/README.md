@@ -58,24 +58,3 @@ But, in order to properly publish the package, the name should be changed to
 [cryptography-rust-lib]: https://github.com/PolymathNetwork/cryptography/tree/develop/README.md
 [confidential-identity-rust-lib]: https://github.com/PolymathNetwork/cryptography/tree/develop/confidential-identity
 [confidential-identity-wasm-src]: https://github.com/PolymathNetwork/cryptography/blob/develop/confidential-identity/wasm/src/lib.rs 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
