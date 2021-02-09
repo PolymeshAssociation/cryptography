@@ -4,6 +4,7 @@
 //! PIAL project.
 
 extern crate libc;
+use cryptography_core::dalek_wrapper::Scalar;
 use libc::size_t;
 use rand::{rngs::StdRng, SeedableRng};
 use std::{ptr::null_mut, slice};
@@ -25,8 +26,6 @@ pub type VerifierSecrets = private_identity_audit::VerifierSecrets;
 pub type InitialProver = private_identity_audit::InitialProver;
 pub type FinalProver = private_identity_audit::FinalProver;
 pub type CddClaimData = cryptography_core::cdd_claim::CddClaimData;
-pub type RistrettoPoint = cryptography_core::curve25519_dalek::ristretto::RistrettoPoint;
-pub type Scalar = cryptography_core::curve25519_dalek::scalar::Scalar;
 
 #[repr(C)]
 pub struct InitialProverResults {

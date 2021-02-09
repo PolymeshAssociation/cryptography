@@ -11,10 +11,13 @@ use crate::{
     Challenge, ChallengeResponder, CommittedUids, FinalProver, InitialProver, ProofGenerator,
     Proofs, ProverFinalResponse, ProverSecrets,
 };
-use cryptography_core::cdd_claim::{
-    compute_cdd_id, get_blinding_factor, pedersen_commitments::PedersenGenerators, CddClaimData,
+use cryptography_core::curve25519_dalek::scalar::Scalar;
+use cryptography_core::{
+    cdd_claim::{
+        compute_cdd_id, get_blinding_factor, pedersen_commitments::PedersenGenerators, CddClaimData,
+    },
+    dalek_wrapper::RistrettoPoint,
 };
-use cryptography_core::curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
 
@@ -56,14 +59,14 @@ impl ProofGenerator for InitialProver {
                 cdd_id_proof_secrets,
                 cdd_id_second_half_proof_secrets,
                 uid_commitment_proof_secrets,
-                rand: r,
+                rand: r.into(),
             },
             Proofs {
                 cdd_id_proof,
                 cdd_id_second_half_proof,
                 uid_commitment_proof,
-                a,
-                b,
+                a: a.into(),
+                b: b.into(),
             },
         ))
     }
@@ -77,8 +80,13 @@ impl ChallengeResponder for FinalProver {
         rng: &mut T,
     ) -> Fallible<(ProverFinalResponse, CommittedUids)> {
         let r = secrets.rand;
-        let mut recommitted_uids: Vec<RistrettoPoint> =
-            committed_uids.0.iter().map(|e_uid| e_uid * r).collect();
+        let mut recommitted_uids: Vec<RistrettoPoint> = committed_uids
+            .0
+            .iter()
+            .map(|e_uid| e_uid.0 * r.0)
+            .map(RistrettoPoint)
+            .collect();
+
         // The prover reshuffles the set. Otherwise, once the verifiers searches for the element
         // and finds it, the verifier can tell which element it was based on the position in the
         // set.
@@ -113,7 +121,7 @@ mod tests {
         VerifierSetGenerator,
     };
     use cryptography_core::cdd_claim::{compute_cdd_id, CddClaimData};
-    use cryptography_core::curve25519_dalek::scalar::Scalar;
+    use cryptography_core::dalek_wrapper::Scalar;
     use rand::{rngs::StdRng, SeedableRng};
     use rand_core::RngCore;
     use uuid::Uuid;

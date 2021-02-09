@@ -2,16 +2,14 @@
 //! This proofs the knoweledge about the encrypted value.
 //! For more details see section 5.1 of the whitepaper.
 
-use crate::{
-    asset_proofs::{
-        encryption_proofs::{
-            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
-            ZKProofResponse,
-        },
-        transcript::{TranscriptProtocol, UpdateTranscript},
-        CipherText, CommitmentWitness, ElgamalPublicKey,
+use super::errors::{ErrorKind, Fallible};
+use crate::asset_proofs::{
+    encryption_proofs::{
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        ZKProofResponse,
     },
-    errors::{ErrorKind, Fallible},
+    transcript::{TranscriptProtocol, UpdateTranscript},
+    CipherText, CommitmentWitness, ElgamalPublicKey,
 };
 
 use bulletproofs::PedersenGens;
