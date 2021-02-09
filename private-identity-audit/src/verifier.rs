@@ -5,12 +5,8 @@ use crate::{
     Proofs, ProverFinalResponse, Verifier, VerifierSecrets, VerifierSetGenerator,
     SET_SIZE_ANONYMITY_PARAM,
 };
-use cryptography_core::curve25519_dalek::scalar::Scalar;
-use cryptography_core::dalek_wrapper::{PointData, ScalarData};
-use cryptography_core::{
-    cdd_claim::{pedersen_commitments::PedersenGenerators, CddId},
-    RistrettoPoint,
-};
+use cryptography_core::cdd_claim::{pedersen_commitments::PedersenGenerators, CddId};
+use cryptography_core::dalek_wrapper::{RistrettoPoint, Scalar};
 use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
 use uuid::{Builder, Uuid, Variant, Version};
@@ -31,7 +27,7 @@ impl ChallengeGenerator for VerifierSetGenerator {
         let padded_vec = if private_unique_identifiers.0.len() >= min_size {
             private_unique_identifiers.0
         } else {
-            let padding: Vec<ScalarData> =
+            let padding: Vec<Scalar> =
                 gen_random_uuids(min_size - private_unique_identifiers.0.len(), rng)
                     .into_iter()
                     .map(uuid_to_scalar)
@@ -41,15 +37,16 @@ impl ChallengeGenerator for VerifierSetGenerator {
 
         // Commit to each element.
         let pg = PedersenGenerators::default();
-        let r = Scalar::random(rng);
+        let r = cryptography_core::curve25519_dalek::scalar::Scalar::random(rng);
         let mut commitments = padded_vec
             .into_iter()
             .map(|scalar_uid| pg.generators[1] * scalar_uid.0 * r)
-            .map(PointData)
+            .map(RistrettoPoint)
             .collect::<Vec<_>>();
         commitments.shuffle(rng);
 
-        let challenge = Challenge(Scalar::random(rng).into());
+        let challenge =
+            Challenge(cryptography_core::curve25519_dalek::scalar::Scalar::random(rng).into());
 
         Ok((
             VerifierSecrets { rand: r.into() },
@@ -68,7 +65,7 @@ impl ProofVerifier for Verifier {
         verifier_secrets: &VerifierSecrets,
         re_committed_uids: &CommittedUids,
     ) -> Fallible<()> {
-        let uid_commitment: RistrettoPoint = initial_message.a.0 - initial_message.b.0;
+        let uid_commitment = initial_message.a.0 - initial_message.b.0;
         ensure!(
             initial_message.cdd_id_proof.generators[0] == cdd_id.0,
             ErrorKind::CDDIdMismatchError

@@ -21,8 +21,7 @@ mod prover;
 mod verifier;
 use blake2::{Blake2b, Digest};
 use cryptography_core::cdd_claim::{CddClaimData, CddId};
-use cryptography_core::curve25519_dalek::scalar::Scalar;
-use cryptography_core::dalek_wrapper::{PointData, ScalarData};
+use cryptography_core::dalek_wrapper::{RistrettoPoint, Scalar};
 use errors::Fallible;
 use proofs::{FinalResponse, InitialMessage, Secrets};
 use rand_core::{CryptoRng, RngCore};
@@ -43,15 +42,15 @@ pub struct Verifier;
 
 /// The initial private set of PUIS.
 #[derive(PartialEq, Encode, Decode)]
-pub struct PrivateUids(pub Vec<ScalarData>);
+pub struct PrivateUids(pub Vec<Scalar>);
 
 /// The committed and padded version of the private set of PUIS.
 #[derive(Clone, Debug, PartialEq, Encode, Decode)]
-pub struct CommittedUids(pub Vec<PointData>);
+pub struct CommittedUids(pub Vec<RistrettoPoint>);
 
 /// The Zero-Knowledge challenge.
 #[derive(PartialEq, Encode, Decode)]
-pub struct Challenge(pub ScalarData);
+pub struct Challenge(pub Scalar);
 
 /// Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.
 #[derive(Clone, Debug, PartialEq, Encode, Decode)]
@@ -61,9 +60,9 @@ pub struct Proofs {
     cdd_id_second_half_proof: InitialMessage,
     uid_commitment_proof: InitialMessage,
     /// Committed CDD ID. Corresponding to g^uID * h^DID * f^{hash(uID, DID)}`.
-    a: PointData,
+    a: RistrettoPoint,
     /// Committed version of the second half CDD ID. Corresponding to (h^DID*f^{hash(uID, DID)})^r.
-    b: PointData,
+    b: RistrettoPoint,
 }
 
 /// Holds the CDD Provider's response to the PUIS challenge.
@@ -81,21 +80,21 @@ pub struct ProverSecrets {
     cdd_id_proof_secrets: Secrets,
     cdd_id_second_half_proof_secrets: Secrets,
     uid_commitment_proof_secrets: Secrets,
-    rand: ScalarData,
+    rand: Scalar,
 }
 
 /// Holds PUIS secret data.
 #[derive(Clone, Encode, Decode)]
 pub struct VerifierSecrets {
-    rand: ScalarData,
+    rand: Scalar,
 }
 
 /// Modified version of `slice_to_scalar` of Confidential Identity Library.
 /// Creates a scalar from a UUID.
-pub fn uuid_to_scalar(uuid: Uuid) -> ScalarData {
+pub fn uuid_to_scalar(uuid: Uuid) -> Scalar {
     let mut hash = [0u8; 64];
     hash.copy_from_slice(Blake2b::digest(uuid.as_bytes()).as_slice());
-    Scalar::from_bytes_mod_order_wide(&hash).into()
+    cryptography_core::curve25519_dalek::scalar::Scalar::from_bytes_mod_order_wide(&hash).into()
 }
 
 /// Represents the first leg of the protocol from CDD Provider to PUIS.

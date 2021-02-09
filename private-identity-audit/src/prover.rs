@@ -16,7 +16,7 @@ use cryptography_core::{
     cdd_claim::{
         compute_cdd_id, get_blinding_factor, pedersen_commitments::PedersenGenerators, CddClaimData,
     },
-    dalek_wrapper::PointData,
+    dalek_wrapper::RistrettoPoint,
 };
 use rand::seq::SliceRandom;
 use rand_core::{CryptoRng, RngCore};
@@ -80,11 +80,11 @@ impl ChallengeResponder for FinalProver {
         rng: &mut T,
     ) -> Fallible<(ProverFinalResponse, CommittedUids)> {
         let r = secrets.rand;
-        let mut recommitted_uids: Vec<PointData> = committed_uids
+        let mut recommitted_uids: Vec<RistrettoPoint> = committed_uids
             .0
             .iter()
             .map(|e_uid| e_uid.0 * r.0)
-            .map(PointData)
+            .map(RistrettoPoint)
             .collect();
 
         // The prover reshuffles the set. Otherwise, once the verifiers searches for the element
@@ -121,7 +121,7 @@ mod tests {
         VerifierSetGenerator,
     };
     use cryptography_core::cdd_claim::{compute_cdd_id, CddClaimData};
-    use cryptography_core::dalek_wrapper::ScalarData;
+    use cryptography_core::dalek_wrapper::Scalar;
     use rand::{rngs::StdRng, SeedableRng};
     use rand_core::RngCore;
     use uuid::Uuid;
@@ -143,7 +143,7 @@ mod tests {
         // Prover generates cdd_id and places it on the chain.
         let cdd_id = compute_cdd_id(&claim);
 
-        let private_uid_scalar_set: Vec<ScalarData> =
+        let private_uid_scalar_set: Vec<Scalar> =
             private_uid_set.into_iter().map(uuid_to_scalar).collect();
 
         // P -> V: Prover generates and sends the initial message.

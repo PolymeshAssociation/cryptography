@@ -4,7 +4,7 @@
 //! PIAL project.
 
 extern crate libc;
-use cryptography_core::dalek_wrapper::ScalarData;
+use cryptography_core::dalek_wrapper::Scalar;
 use libc::size_t;
 use rand::{rngs::StdRng, SeedableRng};
 use std::{ptr::null_mut, slice};
@@ -63,7 +63,7 @@ fn box_alloc<T>(x: T) -> *mut T {
 /// `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
 /// and `investor_unique_id_size` bytes respectively.
 #[no_mangle]
-pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) -> *mut ScalarData {
+pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) -> *mut Scalar {
     assert!(!unique_id.is_null());
     assert!(unique_id_size == 16);
 
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn uuid_new(unique_id: *const u8, unique_id_size: size_t) 
 /// Should only be called on a still-valid pointer to an object returned by
 /// `uuid_new()`.
 #[no_mangle]
-pub unsafe extern "C" fn scalar_free(ptr: *mut ScalarData) {
+pub unsafe extern "C" fn scalar_free(ptr: *mut Scalar) {
     if ptr.is_null() {
         return;
     }
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn generate_initial_proofs_wrapper(
 /// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn generate_committed_set_and_challenge_wrapper(
-    private_unique_identifiers: *mut ScalarData,
+    private_unique_identifiers: *mut Scalar,
     private_unique_identifiers_size: size_t,
     min_set_size: *const size_t,
     seed: *const u8,

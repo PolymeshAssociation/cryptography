@@ -4,12 +4,12 @@
 //! This implementation is based on one-out-of-many proof construction described in the following paper
 //! <https://eprint.iacr.org/2015/643.pdf>
 
-use super::errors::{ErrorKind, Fallible};
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
         ZKProofResponse,
     },
+    errors::{ErrorKind, Fallible},
     one_out_of_many_proof::{
         convert_to_base, convert_to_matrix_rep, Matrix, OOONProofFinalResponse,
         OOONProofInitialMessage, OOONProver, OooNProofGenerators, Polynomial, R1ProofVerifier,
