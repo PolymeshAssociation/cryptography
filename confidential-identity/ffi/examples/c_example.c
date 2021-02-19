@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
+#include "../confidential_identity.h"
 #include "confidential_identity.h"
 
 int main(void) {
