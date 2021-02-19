@@ -22,3 +22,7 @@ crypto-framework/
 
 # Ignore the artifact directory
 artifacts/
+
+# The license files in wasm directorys will be copied there by the build tools. They don't need to be committed.
+confidential-identity/wasm/LICENSE
+mercat/wasm/LICENSE
