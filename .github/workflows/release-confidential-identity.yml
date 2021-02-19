@@ -2,8 +2,8 @@ name: Upload Confidential Identitiy Release Asset
 
 on:
   push:
-    tags:
-    - 'confidential-identity-v*'
+    branches:
+      - 'master'
 
 jobs:
   build:
@@ -12,27 +12,43 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Build project
+
+      # -------------- Proceed only if Cargo.toml file is modified
+      - uses: technote-space/get-diff-action@v4
+        with:
+          FILES: |
+            confidential-identity/Cargo.toml
+      - name: Build project and create the artifacts
+        if: env.GIT_DIFF
         run: bash ./scripts/confidential-identity-artifacts.sh
+
+      # -------------- Create a tag
       - name: Get tag name
         id: get-tag-name
-        run: |
-            echo "TAG_NAME=${GIT_REF/refs\/tags\//}" >> $GITHUB_ENV
-        env:
-          GIT_REF: ${{ github.ref }}
+        if: env.GIT_DIFF
+        run: bash ./scripts/get-tag-name.sh confidential-identity
+      - name: Bump version and push tag
+        id: tag-version
+        if: env.TAG_NAME
+        uses: mathieudutour/github-tag-action@v5.1
+
+      # -------------- Create a release from the tag
       - name: Create Release
+        if: env.GIT_DIFF
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: Release ${{ env.TAG_NAME }}
           draft: false
           prerelease: false
 
+      # -------------- Attach the artifacts to the release
       - name: Upload Confidential Identity Source
         id: upload-release-asset-confidential-identity-src
+        if: env.GIT_DIFF
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -43,6 +59,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Confidential Identity Source Checksum
         id: upload-release-asset-confidential-identity-src-checksum
+        if: env.GIT_DIFF
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,6 +71,7 @@ jobs:
 
       - name: Upload Confidential Identity CLI
         id: upload-release-asset-confidential-identity-cli
+        if: env.GIT_DIFF
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -64,6 +82,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Confidential Identity CLI Checksum
         id: upload-release-asset-confidential-identity-cli-checksum
+        if: env.GIT_DIFF
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -75,6 +94,7 @@ jobs:
 
       - name: Upload Confidential Identity NPM
         id: upload-release-asset-confidential-identity-npm
+        if: env.GIT_DIFF
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,6 +105,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Confidential Identity NPM Checksum
         id: upload-release-asset-confidential-identity-npm-checksum
+        if: env.GIT_DIFF
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -96,6 +117,7 @@ jobs:
 
       - name: Upload Confidential Identity FFI
         id: upload-release-asset-confidential-identity-ffi
+        if: env.GIT_DIFF
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -106,6 +128,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Confidential Identity FFI Checksum
         id: upload-release-asset-confidential-identity-ffi-checksum
+        if: env.GIT_DIFF
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -115,3 +138,12 @@ jobs:
           asset_name: ${{ env.TAG_NAME }}-ffi.sha256sum
           asset_content_type: text/plain
 
+      # -------------- Publish the npm artifacts to npmjs
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '10.x'
+          registry-url: 'https://registry.npmjs.org'
+      - run: cd confidential-identity/wasm/pkg/ && npm publish --access public
+        if: env.GIT_DIFF
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
