@@ -11,7 +11,7 @@ fi
 PROJECT_NAME="$1"
 cd "$ROOT/$PROJECT_NAME"
 
-GET_VERSION_PY='import json,sys;print json.load(sys.stdin)["packages"][0]["version"]'
+GET_VERSION_PY='import json,sys;print(json.load(sys.stdin)["packages"][0]["version"])'
 NEW_VERSION=$(cargo metadata --format-version 1 | python -c "$GET_VERSION_PY")
 echo "Version number: $NEW_VERSION"
 

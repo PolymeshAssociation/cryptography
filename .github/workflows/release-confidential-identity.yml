@@ -3,7 +3,7 @@ name: Upload Confidential Identitiy Release Asset
 on:
   push:
     branches:
-      - 'main'
+      - 'master'
 
 jobs:
   build:
