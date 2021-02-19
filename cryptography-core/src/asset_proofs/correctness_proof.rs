@@ -1,16 +1,14 @@
 //! The proof of correct encryption of the given value.
 //! For more details see section 5.2 of the whitepaper.
 
-use crate::{
-    asset_proofs::{
-        encryption_proofs::{
-            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
-            ZKProofResponse,
-        },
-        transcript::{TranscriptProtocol, UpdateTranscript},
-        CipherText, CommitmentWitness, ElgamalPublicKey,
+use super::errors::{ErrorKind, Fallible};
+use crate::asset_proofs::{
+    encryption_proofs::{
+        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        ZKProofResponse,
     },
-    errors::{ErrorKind, Fallible},
+    transcript::{TranscriptProtocol, UpdateTranscript},
+    CipherText, CommitmentWitness, ElgamalPublicKey,
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{

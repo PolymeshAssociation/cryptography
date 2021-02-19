@@ -6,7 +6,7 @@ use crate::{
     MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
 };
 use codec::{Decode, Encode};
-use cryptography_core::{asset_id_from_ticker, asset_proofs::ElgamalSecretKey};
+use cryptography_core::asset_proofs::{asset_id_from_ticker, ElgamalSecretKey};
 use curve25519_dalek::scalar::Scalar;
 use log::info;
 use mercat::{

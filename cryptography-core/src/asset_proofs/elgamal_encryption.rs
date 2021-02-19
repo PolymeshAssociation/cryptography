@@ -3,7 +3,7 @@
 //! Since Elgamal is a homomorphic encryption it also provides
 //! addition and subtraction API over the cipher texts.
 
-use crate::errors::{ErrorKind, Fallible};
+use super::errors::{ErrorKind, Fallible};
 
 use bulletproofs::PedersenGens;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
@@ -373,7 +373,7 @@ impl CipherText {
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::{AssetId, Balance};
+    use crate::asset_proofs::{AssetId, Balance};
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
 

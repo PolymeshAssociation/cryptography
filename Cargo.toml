@@ -15,7 +15,4 @@ members = [
 	"confidential-identity/cli/scp",
 	"confidential-identity/cli/scv",
 	"confidential-identity/wasm",
-	"private-identity-audit",
-	"private-identity-audit/ffi",
-	"private-identity-audit/wasm",
 ]

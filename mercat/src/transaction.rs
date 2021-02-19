@@ -7,6 +7,7 @@ use crate::{
 };
 use cryptography_core::{
     asset_proofs::{
+        bulletproofs::PedersenGens,
         ciphertext_refreshment_proof::{
             CipherTextRefreshmentProverAwaitingChallenge, CipherTextRefreshmentVerifier,
         },
@@ -17,13 +18,11 @@ use cryptography_core::{
         },
         encryption_proofs::single_property_prover,
         encryption_proofs::single_property_verifier,
+        errors::{ErrorKind, Fallible},
         range_proof::{prove_within_range, verify_within_range},
-        CommitmentWitness,
+        AssetId, Balance, CommitmentWitness, BALANCE_RANGE,
     },
-    bulletproofs::PedersenGens,
     curve25519_dalek::scalar::Scalar,
-    errors::{ErrorKind, Fallible},
-    AssetId, Balance, BALANCE_RANGE,
 };
 
 use rand_core::{CryptoRng, RngCore};
@@ -678,10 +677,9 @@ mod tests {
             ciphertext_refreshment_proof::CipherEqualSamePubKeyProof,
             correctness_proof::CorrectnessProof,
             encrypting_same_value_proof::CipherEqualDifferentPubKeyProof,
-            range_proof::InRangeProof, ElgamalSecretKey,
+            range_proof::InRangeProof, AssetId, ElgamalSecretKey,
         },
         curve25519_dalek::scalar::Scalar,
-        AssetId,
     };
     use rand::rngs::StdRng;
     use rand::SeedableRng;

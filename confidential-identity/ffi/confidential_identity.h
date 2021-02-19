@@ -9,6 +9,13 @@
 #include <stdlib.h>
 
 /**
+ * The data needed to generate a CDD ID.
+ */
+typedef struct CddClaimData CddClaimData;
+
+typedef struct CddId CddId;
+
+/**
  * An Schnorrkel/Ristretto x25519 ("sr25519") public key.
  * This is the construct that the blockchain validator will use for
  * claim proof validation.
@@ -24,10 +31,6 @@ typedef struct ScopeClaimData ScopeClaimData;
  * The data needed to generate a proof that a SCOPE ID matches a CDD ID
  */
 typedef struct ScopeClaimProofData ScopeClaimProofData;
-
-typedef struct CddClaimData CddClaimData;
-
-typedef struct CddId CddId;
 
 typedef struct RistrettoPoint RistrettoPoint;
 

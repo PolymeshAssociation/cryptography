@@ -3,9 +3,10 @@ use mercat::{
     account::{convert_asset_ids, AccountCreator},
     asset::AssetIssuer,
     cryptography_core::{
-        asset_proofs::{CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey},
+        asset_proofs::{
+            AssetId, CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
+        },
         curve25519_dalek::scalar::Scalar,
-        AssetId,
     },
     transaction::{CtxMediator, CtxReceiver, CtxSender},
     Account as MercatAccount, AccountCreatorInitializer, AssetTransactionIssuer, EncryptedAmount,

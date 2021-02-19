@@ -30,5 +30,5 @@ typedef struct <StructName> <StructName>;
 To build the example using gcc, run:
 
 ```bash
-gcc examples/c_example.c -L../../target/release/ -l confidential_identity_ffi -o example.out
+gcc examples/c_example.c -I include -L../../target/release/ -l confidential_identity_ffi -o example.out
 ```

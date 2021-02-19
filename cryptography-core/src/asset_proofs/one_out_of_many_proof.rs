@@ -6,13 +6,13 @@
 
 #![allow(non_snake_case)]
 
+use super::errors::{ErrorKind, Fallible};
 use crate::asset_proofs::{
     encryption_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
     },
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
-use crate::errors::{ErrorKind, Fallible};
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{

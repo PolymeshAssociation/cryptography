@@ -44,7 +44,7 @@ use crate::asset_proofs::elgamal_encryption::{
     CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
 };
 
-use crate::errors::Fallible;
+use super::errors::Fallible;
 
 /// This data structure wraps a twisted Elgamal cipher text with the
 /// regular Elgamal cipher text.
@@ -173,7 +173,7 @@ impl ElgamalSecretKey {
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::errors::ErrorKind;
+    use crate::asset_proofs::errors::ErrorKind;
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
 
