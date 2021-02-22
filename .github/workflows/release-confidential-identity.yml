@@ -18,14 +18,21 @@ jobs:
         with:
           FILES: |
             confidential-identity/Cargo.toml
-      - name: Build project and create the artifacts
+
+      - name: Check if the version has been changed
         if: env.GIT_DIFF
+        run: bash ./scripts/rust-version-changed.sh confidential-identity
+        env:
+          PREV_SHA: ${{ github.event.before }}
+
+      - name: Build project and create the artifacts
+        if: env.VERSION_CHANGED
         run: bash ./scripts/confidential-identity-artifacts.sh
 
       # -------------- Create a tag
       - name: Get tag name
         id: get-tag-name
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         run: bash ./scripts/get-tag-name.sh confidential-identity
       - name: Bump version and push tag
         id: tag-version
@@ -34,7 +41,7 @@ jobs:
 
       # -------------- Create a release from the tag
       - name: Create Release
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -47,8 +54,8 @@ jobs:
 
       # -------------- Attach the artifacts to the release
       - name: Upload Confidential Identity Source
+        if: env.VERSION_CHANGED
         id: upload-release-asset-confidential-identity-src
-        if: env.GIT_DIFF
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,7 +66,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Confidential Identity Source Checksum
         id: upload-release-asset-confidential-identity-src-checksum
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -71,7 +78,7 @@ jobs:
 
       - name: Upload Confidential Identity CLI
         id: upload-release-asset-confidential-identity-cli
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -82,7 +89,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Confidential Identity CLI Checksum
         id: upload-release-asset-confidential-identity-cli-checksum
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -94,7 +101,7 @@ jobs:
 
       - name: Upload Confidential Identity NPM
         id: upload-release-asset-confidential-identity-npm
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -105,7 +112,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Confidential Identity NPM Checksum
         id: upload-release-asset-confidential-identity-npm-checksum
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -117,7 +124,7 @@ jobs:
 
       - name: Upload Confidential Identity FFI
         id: upload-release-asset-confidential-identity-ffi
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -128,7 +135,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Confidential Identity FFI Checksum
         id: upload-release-asset-confidential-identity-ffi-checksum
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -144,6 +151,6 @@ jobs:
           node-version: '10.x'
           registry-url: 'https://registry.npmjs.org'
       - run: cd confidential-identity/wasm/pkg/ && npm publish --access public
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

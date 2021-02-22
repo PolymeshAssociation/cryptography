@@ -29,7 +29,7 @@ mkdir -p "$ROOT/artifacts"
 # Gather artifacts
 "$ROOT/scripts/source_artifact.sh" "$ROOT/cryptography-core" "$PREFIX/artifacts/src/cryptography-core"
 "$ROOT/scripts/source_artifact.sh" "$PREFIX"                 "$PREFIX/artifacts/src/mercat"
-"$ROOT/scripts/npm_artifact.sh"    "$PREFIX/wasm"            "$PREFIX/artifacts/npm/"
+"$ROOT/scripts/npm_artifact.sh"    "mercat" "$PREFIX/wasm"   "$PREFIX/artifacts/npm/"
 
 echo "Packing MERCAT CLI binaries..."
 mkdir -p "$PREFIX/artifacts/linux-x64"
