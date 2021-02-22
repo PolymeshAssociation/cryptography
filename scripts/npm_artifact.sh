@@ -11,6 +11,9 @@ PROJECT_NAME="$1"
 SRC_DIR="$2"
 DST_DIR="$3"
 
+# https://github.com/rustwasm/wasm-pack/issues/951#issuecomment-779601026
+cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack
+
 echo "Building npm package from $SRC_DIR to $DST_DIR"
 
 rm -rf "$DST_DIR"
