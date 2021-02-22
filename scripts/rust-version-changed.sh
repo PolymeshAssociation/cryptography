@@ -16,7 +16,7 @@ NEW_VERSION=$(cargo metadata --format-version 1 | python -c "$GET_VERSION_PY")
 git checkout $PREV_SHA
 PREV_VERSION=$(cargo metadata --format-version 1 | python -c "$GET_VERSION_PY")
 echo "---> Version before the PR $PREV_VERSION"
-echo "---> Version before in the PR $NEW_VERSION"
+echo "---> Version in the PR $NEW_VERSION"
 
 if [ "$PREV_VERSION" == "$NEW_VERSION" ]
 then
