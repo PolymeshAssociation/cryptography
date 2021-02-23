@@ -28,9 +28,9 @@ mkdir  "$PREFIX/artifacts"
 mkdir -p "$ROOT/artifacts"
 
 # Gather artifacts
-"$ROOT/scripts/source_artifact.sh" "$ROOT/cryptography-core" "$PREFIX/artifacts/src/cryptography-core"
-"$ROOT/scripts/source_artifact.sh" "$PREFIX"                 "$PREFIX/artifacts/src/confidential-identity"
-"$ROOT/scripts/npm_artifact.sh"    "$PREFIX/wasm"            "$PREFIX/artifacts/npm/"
+"$ROOT/scripts/source_artifact.sh" "$ROOT/cryptography-core"            "$PREFIX/artifacts/src/cryptography-core"
+"$ROOT/scripts/source_artifact.sh" "$PREFIX"                            "$PREFIX/artifacts/src/confidential-identity"
+"$ROOT/scripts/npm_artifact.sh"    confidential-identity "$PREFIX/wasm" "$PREFIX/artifacts/npm/"
 
 echo "Packing Confidential Identity CLI binaries..."
 mkdir -p "$PREFIX/artifacts/linux-x64"

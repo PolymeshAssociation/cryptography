@@ -18,14 +18,21 @@ jobs:
         with:
           FILES: |
             mercat/Cargo.toml
-      - name: Build project and create the artifacts
+
+      - name: Check if the version has been changed
         if: env.GIT_DIFF
+        run: bash ./scripts/rust-version-changed.sh mercat
+        env:
+          PREV_SHA: ${{ github.event.before }}
+
+      - name: Build project and create the artifacts
+        if: env.VERSION_CHANGED
         run: bash ./scripts/mercat-artifacts.sh
 
       # -------------- Create a tag
       - name: Get tag name
         id: get-tag-name
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         run: bash ./scripts/get-tag-name.sh mercat
       - name: Bump version and push tag
         id: tag-version
@@ -34,7 +41,7 @@ jobs:
 
       # -------------- Create a release from the tag
       - name: Create Release
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -47,7 +54,7 @@ jobs:
 
       # -------------- Attach the artifacts to the release
       - name: Upload MERCAT Source
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         id: upload-release-asset-mercat-src
         uses: actions/upload-release-asset@v1
         env:
@@ -58,7 +65,7 @@ jobs:
           asset_name: ${{ env.TAG_NAME }}-src.tar.gz
           asset_content_type: application/zip
       - name: Upload MERCAT Source Checksum
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         id: upload-release-asset-mercat-src-checksum
         uses: actions/upload-release-asset@v1
         env:
@@ -70,7 +77,7 @@ jobs:
           asset_content_type: text/plain
 
       - name: Upload MERCAT CLI
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         id: upload-release-asset-mercat-cli
         uses: actions/upload-release-asset@v1
         env:
@@ -81,7 +88,7 @@ jobs:
           asset_name: ${{ env.TAG_NAME }}-linux-x64.tar.gz
           asset_content_type: application/zip
       - name: Upload MERCAT CLI checksum
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         id: upload-release-asset-mercat-cli-checksum
         uses: actions/upload-release-asset@v1
         env:
@@ -93,7 +100,7 @@ jobs:
           asset_content_type: text/plain
 
       - name: Upload MERCAT NPM
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         id: upload-release-asset-mercat-npm
         uses: actions/upload-release-asset@v1
         env:
@@ -104,7 +111,7 @@ jobs:
           asset_name: ${{ env.TAG_NAME }}-npm.tar.gz
           asset_content_type: application/zip
       - name: Upload MERCAT NPM Checksum
-        if: env.GIT_DIFF
+        if: env.VERSION_CHANGED
         id: upload-release-asset-mercat-npm-checksum
         uses: actions/upload-release-asset@v1
         env:
@@ -120,7 +127,11 @@ jobs:
         with:
           node-version: '10.x'
           registry-url: 'https://registry.npmjs.org'
-      - run: cd mercat/wasm/pkg/ && npm publish --access public
-        if: env.GIT_DIFF
+      - run: cd mercat/wasm/pkg_webpack/ && npm publish --access public
+        if: env.VERSION_CHANGED
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: cd mercat/wasm/pkg_nodejs/ && npm publish --access public
+        if: env.VERSION_CHANGED
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
