@@ -8,10 +8,7 @@
 #[macro_use]
 extern crate alloc;
 
-pub use claim_proofs::{
-    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, CddClaimData, CddId,
-    ProofKeyPair, ProofPublicKey, ScopeClaimData, ScopeClaimProofData,
-};
+pub use claim_proofs::{CddClaimData, CddId, ScopeClaimData, ScopeClaimProof, ScopeClaimProofData};
 pub use curve25519_dalek::{self, ristretto::CompressedRistretto, scalar::Scalar};
 use rand_core::{CryptoRng, RngCore};
 pub use schnorrkel;
@@ -46,6 +43,33 @@ macro_rules! assert_err {
     ($predicate:expr, $err:expr) => {
         assert_eq!($predicate.expect_err("Error expected").kind(), &$err);
     };
+}
+
+pub trait ProviderTrait {
+    /// Compute the CDD_ID. \
+    /// CDD_ID = PedersenCommitment(INVESTOR_DID, INVESTOR_UNIQUE_ID, [INVESTOR_DID | INVESTOR_UNIQUE_ID]) \
+    ///
+    /// # Inputs
+    /// * `cdd_claim` is the CDD claim from which to generate the CDD_ID
+    ///
+    /// # Output
+    /// The Pedersen commitment result.
+    fn create_cdd_id(cdd_claim: &CddClaimData) -> CddId;
+}
+
+pub trait InvestorTrait {
+    fn create_scope_claim_proof<R: RngCore + CryptoRng>(
+        cdd_claim: &CddClaimData,
+        scope_claim: &ScopeClaimData,
+        rng: &mut R,
+    ) -> ScopeClaimProof;
+}
+
+pub trait VerifierTrait {
+    fn verify_scope_claim_proof(
+        proof: &ScopeClaimProof,
+        scope_claim: &ScopeClaimData,
+    ) -> Result<(), ()>;
 }
 
 mod claim_proofs;
