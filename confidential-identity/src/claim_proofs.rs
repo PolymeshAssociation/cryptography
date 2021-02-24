@@ -29,7 +29,7 @@
 //! // => cdd_id is now public knowlegde.
 //!
 //! // Investor side.
-//! let proof = Investor::create_scope_claim_proof(&cdd_claim, &scope_claim, &cdd_id, &mut rng);
+//! let proof = Investor::create_scope_claim_proof(&cdd_claim, &scope_claim, &mut rng);
 //! // => proof is now public knowlegde.
 //!
 //! // Verifier side.
@@ -103,24 +103,29 @@ pub struct ScopeClaimProofData {
 /// This is the construct that the investors will use to generate
 /// claim proofs.
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ScopeClaimProof {
-    proof_scope_id_wellfromed: Signature,
-    proof_scope_id_cdd_id_match: ZkProofData,
-    scope_claim: ScopeClaimData,
-    scope_id: RistrettoPoint,
-    public: RistrettoPoint,
+    pub proof_scope_id_wellfromed: Signature,
+    pub proof_scope_id_cdd_id_match: ZkProofData,
+    pub scope_claim: ScopeClaimData,
+    pub cdd_claim: CddClaimData,
+    pub scope_id: RistrettoPoint,
+    pub cdd_id: CddId,
+    pub public: RistrettoPoint,
 }
 
 /// Stores the Schnorr signature for verifying the wellformedness of scope_id.
 #[derive(Debug)]
-struct Signature {
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Signature {
     sig: Scalar,
     blinded_message: Scalar,
 }
 
 /// Stores the zero knowlegde proof data for scope_id and cdd_id matching.
 #[derive(Debug)]
-struct ZkProofData {
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ZkProofData {
     challenge_responses: [Scalar; 2],
     subtract_expressions_res: RistrettoPoint,
     blinded_scope_did_hash: RistrettoPoint,
@@ -148,11 +153,11 @@ impl InvestorTrait for Investor {
     fn create_scope_claim_proof<R: RngCore + CryptoRng>(
         cdd_claim: &CddClaimData,
         scope_claim: &ScopeClaimData,
-        cdd_id: &CddId,
         rng: &mut R,
     ) -> ScopeClaimProof {
         let scope_did_hash = slice_to_ristretto_point(scope_claim.scope_did.as_bytes());
         let scope_id = scope_claim.investor_unique_id * scope_did_hash;
+        let cdd_id = cryptography_core::cdd_claim::compute_cdd_id(cdd_claim);
 
         let (proof_scope_id_wellfromed, public) = sign(
             &scope_claim.investor_unique_id,
@@ -168,7 +173,9 @@ impl InvestorTrait for Investor {
             proof_scope_id_wellfromed,
             proof_scope_id_cdd_id_match,
             scope_claim: *scope_claim,
+            cdd_claim: *cdd_claim,
             scope_id,
+            cdd_id,
             public,
         }
     }
@@ -184,6 +191,9 @@ impl VerifierTrait for Verifier {
         cdd_id: &CddId,
     ) -> Fallible<()> {
         let scope_did_hash = slice_to_ristretto_point(proof.scope_claim.scope_did.as_bytes());
+
+        ensure! {cdd_id.0 == proof.cdd_id.0, ErrorKind::SignatureError};
+
         ensure! {
         verify_signature(
             &proof.proof_scope_id_wellfromed,
@@ -348,7 +358,7 @@ mod tests {
         // => cdd_id is now public knowlegde.
 
         // Investor side.
-        let proof = Investor::create_scope_claim_proof(&cdd_claim, &scope_claim, &cdd_id, &mut rng);
+        let proof = Investor::create_scope_claim_proof(&cdd_claim, &scope_claim, &mut rng);
         // => proof is now public knowlegde.
 
         // Verifier side.

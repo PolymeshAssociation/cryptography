@@ -75,7 +75,6 @@ pub trait InvestorTrait {
     fn create_scope_claim_proof<R: RngCore + CryptoRng>(
         cdd_claim: &CddClaimData,
         scope_claim: &ScopeClaimData,
-        cdd_id: &CddId,
         rng: &mut R,
     ) -> ScopeClaimProof;
 }
