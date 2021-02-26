@@ -101,4 +101,5 @@ pub trait VerifierTrait {
 pub mod claim_proofs;
 pub mod errors;
 pub mod mocked;
+mod sign;
 pub mod uuid;
