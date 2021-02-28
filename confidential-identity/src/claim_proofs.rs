@@ -152,7 +152,6 @@ impl InvestorTrait for Investor {
             SIGNATURE_MESSAGE.as_bytes(),
             &public_key,
             &scope_did_hash,
-            rng,
         );
 
         let proof_scope_id_cdd_id_match =

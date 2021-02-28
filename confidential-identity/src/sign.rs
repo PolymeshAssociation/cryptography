@@ -6,7 +6,6 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-use rand_core::{CryptoRng, RngCore};
 use sha3::{digest::FixedOutput, Digest, Sha3_512};
 use zeroize::Zeroize;
 
@@ -49,10 +48,6 @@ pub struct PublicKey {
 pub struct Signature {
     pub(crate) R: CompressedRistretto,
     pub(crate) s: Scalar,
-    /// An extra randomness. This ensures that in multiple invocations of the sign function,
-    /// even if the message and the secret key (and therefore the nonce), remain the same the
-    /// signature will be different.
-    pub(crate) rand: Scalar,
 }
 
 impl SecretKey {
@@ -62,19 +57,17 @@ impl SecretKey {
     ///
     /// Returns the signature.
     #[allow(non_snake_case)]
-    pub fn sign<R: RngCore + CryptoRng>(
+    pub fn sign(
         &self,
         message: &[u8],
         public_key: &PublicKey,
         base_point: &RistrettoPoint,
-        rng: &mut R,
     ) -> Signature {
         let mut h = Sha3_512::new();
         let R: CompressedRistretto;
         let r: Scalar;
         let s: Scalar;
         let k: Scalar;
-        let rand = Scalar::random(rng);
 
         h.input(&self.nonce);
         h.input(&message);
@@ -86,12 +79,11 @@ impl SecretKey {
         h.input(R.as_bytes());
         h.input(public_key.key.compress().as_bytes());
         h.input(&message);
-        h.input(&rand.as_bytes());
 
         k = Scalar::from_hash(h);
         s = &(&k * &self.key) + &r;
 
-        Signature { R, s, rand }
+        Signature { R, s }
     }
 }
 
@@ -116,7 +108,6 @@ impl PublicKey {
         h.input(signature.R.as_bytes());
         h.input(self.key.compress().as_bytes());
         h.input(&message);
-        h.input(&signature.rand.as_bytes());
 
         k = Scalar::from_hash(h);
         R = &k * &minus_A + &signature.s * base_point;
@@ -145,7 +136,7 @@ mod tests {
         let secret_key = SecretKey::new(secret);
         let public_key = PublicKey { key: public };
 
-        let sig = secret_key.sign("message".as_bytes(), &public_key, &base_point, &mut rng);
+        let sig = secret_key.sign("message".as_bytes(), &public_key, &base_point);
 
         assert!(public_key
             .verify("message".as_bytes(), &sig, &base_point)
