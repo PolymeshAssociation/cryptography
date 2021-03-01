@@ -40,6 +40,7 @@
 
 use crate::{
     errors::{ErrorKind, Fallible},
+    sign::{PublicKey, SecretKey, Signature},
     InvestorTrait, ProviderTrait, VerifierTrait,
 };
 use blake2::{Blake2b, Blake2s, Digest};
@@ -111,15 +112,6 @@ pub struct ScopeClaimProof {
     pub cdd_claim: CddClaimData,
     pub scope_id: RistrettoPoint,
     pub cdd_id: CddId,
-    pub public: RistrettoPoint,
-}
-
-/// Stores the Schnorr signature for verifying the wellformedness of scope_id.
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Signature {
-    sig: Scalar,
-    blinded_message: Scalar,
 }
 
 /// Stores the zero knowlegde proof data for scope_id and cdd_id matching.
@@ -159,24 +151,23 @@ impl InvestorTrait for Investor {
         let scope_id = scope_claim.investor_unique_id * scope_did_hash;
         let cdd_id = cryptography_core::cdd_claim::compute_cdd_id(cdd_claim);
 
-        let (proof_scope_id_wellfromed, public) = sign(
-            &scope_claim.investor_unique_id,
+        let public_key = PublicKey { key: scope_id };
+        let signature = SecretKey::new(scope_claim.investor_unique_id).sign(
+            SIGNATURE_MESSAGE.as_bytes(),
+            &public_key,
             &scope_did_hash,
-            SIGNATURE_MESSAGE.to_string(),
-            rng,
         );
 
         let proof_scope_id_cdd_id_match =
             gen_zkp(&scope_did_hash, &scope_id, &cdd_id.0, &cdd_claim, rng);
 
         ScopeClaimProof {
-            proof_scope_id_wellfromed,
+            proof_scope_id_wellfromed: signature,
             proof_scope_id_cdd_id_match,
             scope_claim: *scope_claim,
             cdd_claim: *cdd_claim,
             scope_id,
             cdd_id,
-            public,
         }
     }
 }
@@ -194,13 +185,15 @@ impl VerifierTrait for Verifier {
 
         ensure! {cdd_id.0 == proof.cdd_id.0, ErrorKind::SignatureError};
 
-        ensure! {
-        verify_signature(
+        let public_key = PublicKey {
+            key: proof.scope_id,
+        };
+
+        public_key.verify(
+            SIGNATURE_MESSAGE.as_bytes(),
             &proof.proof_scope_id_wellfromed,
             &scope_did_hash,
-            &proof.public,
-            SIGNATURE_MESSAGE.to_string(),
-        ), ErrorKind::SignatureError};
+        )?;
 
         ensure! {
         verify_zkp(
@@ -218,52 +211,6 @@ impl VerifierTrait for Verifier {
 // -------------------------------------------------------------------------------------------
 // -                                  Internal Functions                                     -
 // -------------------------------------------------------------------------------------------
-
-/// Perform a schnorr signature using a custom base point.
-fn sign<R: RngCore + CryptoRng>(
-    secret: &Scalar,
-    base: &RistrettoPoint,
-    message: String,
-    rng: &mut R,
-) -> (Signature, RistrettoPoint) {
-    let public = secret * base;
-
-    let k = Scalar::random(rng);
-    let r = k * base;
-    let blinded_message: [u8; 32] = Blake2s::default()
-        .chain(r.compress().to_bytes())
-        .chain(message.as_bytes())
-        .finalize()
-        .into();
-    let blinded_message = slice_to_scalar(&blinded_message);
-    let sig = k - secret * blinded_message;
-
-    (
-        Signature {
-            sig,
-            blinded_message,
-        },
-        public,
-    )
-}
-
-/// Verifies a schnorr signature using a custom base point.
-fn verify_signature(
-    sig: &Signature,
-    base: &RistrettoPoint,
-    public: &RistrettoPoint,
-    message: String,
-) -> bool {
-    let r_verif = sig.sig * base + sig.blinded_message * public;
-    let blinded_message_verif: [u8; 32] = Blake2s::default()
-        .chain(r_verif.compress().to_bytes())
-        .chain(message.as_bytes())
-        .finalize()
-        .into();
-    let blinded_message_verif = slice_to_scalar(&blinded_message_verif);
-
-    sig.blinded_message == blinded_message_verif
-}
 
 /// ZKP that two points have the same scalar. Uses Fiat-Shamir to generate the challenge.
 fn gen_zkp<R: RngCore + CryptoRng>(
@@ -365,23 +312,6 @@ mod tests {
         let result = Verifier::verify_scope_claim_proof(&proof, &cdd_claim.investor_did, &cdd_id);
 
         result.unwrap();
-    }
-
-    #[test]
-    fn test_signature_scheme() {
-        let mut rng = StdRng::from_seed(SEED);
-
-        let secret = Scalar::random(&mut rng);
-        let base = RistrettoPoint::random(&mut rng);
-        let (sig, public) = sign(&secret, &base, "message".to_string(), &mut rng);
-
-        // Positive test.
-        let res = verify_signature(&sig, &base, &public, "message".to_string());
-        assert!(res);
-
-        // Negative test.
-        let res = verify_signature(&sig, &base, &public, "invalid message".to_string());
-        assert!(!res);
     }
 
     #[test]
