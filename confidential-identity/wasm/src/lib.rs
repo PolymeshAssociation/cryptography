@@ -1,9 +1,10 @@
 use blake2::{Blake2s, Digest};
 use confidential_identity::{
-    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, mocked, CddClaimData, CddId,
-    ProofKeyPair, ScopeClaimData,
+    claim_proofs::{Investor, Provider, ScopeClaimProof},
+    mocked, CddClaimData, CddId, InvestorTrait, ProviderTrait, ScopeClaimData,
 };
 use curve25519_dalek::ristretto::RistrettoPoint;
+use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 
 use wasm_bindgen::prelude::*;
@@ -34,8 +35,7 @@ pub struct Proof {
     pub investor_did: InvestorDID,
     pub scope_id: RistrettoPoint,
     pub scope_did: ScopeDID,
-    #[serde(with = "serde_bytes")]
-    pub proof: Vec<u8>,
+    pub proof: ScopeClaimProof,
 }
 
 /// Returns the message used for checking the proof.
@@ -63,7 +63,7 @@ pub fn process_create_cdd_id(cdd_claim: String) -> Result<String, JsValue> {
 
     let cdd_claim = CddClaimData::new(&raw_cdd_data.investor_did, &raw_cdd_data.investor_unique_id);
 
-    let cdd_id = compute_cdd_id(&cdd_claim);
+    let cdd_id = Provider::create_cdd_id(&cdd_claim);
 
     let cdd_id_str = serde_json::to_string(&cdd_id)
         .map_err(|error| format!("Failed to serialize the CDD Id: {}", error))?;
@@ -94,30 +94,26 @@ pub fn process_create_claim_proof(
     let raw_scope_claim: RawScopeClaimData = serde_json::from_str(&scoped_claim)
         .map_err(|error| format!("Failed to deserialize the scope claim: {}", error))?;
 
-    let message = make_message(&raw_cdd_claim.investor_did, &raw_scope_claim.scope_did);
+    let mut rng = OsRng;
 
     let cdd_claim = CddClaimData::new(
         &raw_cdd_claim.investor_did,
         &raw_cdd_claim.investor_unique_id,
     );
+
     let scope_claim = ScopeClaimData::new(
         &raw_scope_claim.scope_did,
         &raw_scope_claim.investor_unique_id,
     );
-    let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
 
-    let pair = ProofKeyPair::from(scope_claim_proof_data);
-    let proof = pair.generate_id_match_proof(&message).to_bytes().to_vec();
-
-    let cdd_id = compute_cdd_id(&cdd_claim);
-    let scope_id = compute_scope_id(&scope_claim);
+    let proof = Investor::create_scope_claim_proof(&cdd_claim, &scope_claim, &mut rng);
 
     // => Investor makes {cdd_id, investor_did, scope_id, scope_did, proof} public knowledge.
     let packaged_proof = Proof {
-        cdd_id,
         investor_did: raw_cdd_claim.investor_did,
-        scope_id,
         scope_did: raw_scope_claim.scope_did,
+        scope_id: proof.scope_id,
+        cdd_id: proof.cdd_id,
         proof,
     };
     let proof_str = serde_json::to_string(&packaged_proof)
