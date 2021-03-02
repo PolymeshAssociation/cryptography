@@ -30,12 +30,12 @@ int main(void) {
     ScopeClaimProof *proof = create_scope_claim_proof(cdd_claim, scope_claim);
 
     // Set up on the Verifier side:
-    bool result = verify_scope_claim_proof(proof, investor_did, cdd_id);
+    bool result = verify_scope_claim_proof(proof, investor_did, investor_unique_id_size, cdd_id);
     printf("Verification result: %d\n", result);
 
     // Cleanup.
     // Investor's unique id is sensitive data, it's a good practice to zeroize it at cleanup.
-    memset_s(investor_unique_id, investor_unique_id_size, 0, investor_unique_id_size);
+    memset(investor_unique_id, 0, investor_unique_id_size);
     cdd_claim_data_free(cdd_claim);
     scope_claim_data_free(scope_claim);
     scope_claim_proof_free(proof);

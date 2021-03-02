@@ -119,6 +119,7 @@ void scope_claim_proof_free(struct ScopeClaimProof *ptr);
  */
 bool verify_scope_claim_proof(const struct ScopeClaimProof *proof,
                               const uint8_t *investor_did,
+                              size_t investor_did_size,
                               const CddId *cdd_id);
 
 #endif /* confidential_identity_ffi_h */

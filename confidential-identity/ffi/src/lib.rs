@@ -177,6 +177,7 @@ pub unsafe extern "C" fn scope_claim_proof_free(ptr: *mut ScopeClaimProof) {
 pub unsafe extern "C" fn verify_scope_claim_proof(
     proof: *const ScopeClaimProof,
     investor_did: *const u8,
+    investor_did_size: size_t,
     cdd_id: *const CddId,
 ) -> bool {
     assert!(!proof.is_null());
@@ -184,7 +185,8 @@ pub unsafe extern "C" fn verify_scope_claim_proof(
     assert!(!cdd_id.is_null());
 
     let proof: &ScopeClaimProof = &*proof;
-    let investor_did = slice_to_scalar(slice::from_raw_parts(investor_did, investor_did as usize));
+    let investor_did = slice::from_raw_parts(investor_did, investor_did_size as usize);
+    let investor_did = slice_to_scalar(investor_did);
     let cdd_id: CddId = *cdd_id;
     Verifier::verify_scope_claim_proof(proof, &investor_did, &cdd_id).is_ok()
 }
