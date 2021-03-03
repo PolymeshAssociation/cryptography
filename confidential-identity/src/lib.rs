@@ -9,6 +9,7 @@
 extern crate alloc;
 
 pub use claim_proofs::{CddClaimData, CddId, ScopeClaimData, ScopeClaimProof, ScopeClaimProofData};
+pub use cryptography_core;
 pub use curve25519_dalek::{
     self,
     ristretto::{CompressedRistretto, RistrettoPoint},
