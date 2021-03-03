@@ -2,6 +2,7 @@
 //! claim proofs and verifying them as part of the
 //! Asset Granularity Unique Identity project.
 //!
+//! TODO: update all the docs!!!
 //! The investor would use the `Proof` API to generate
 //! the proofs.
 //!
