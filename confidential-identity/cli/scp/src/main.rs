@@ -4,15 +4,14 @@
 //!
 
 use cli_common::{
-    make_message, InvestorDID, Proof, ScopeDID, UniqueID, INVESTORDID_LEN, SCOPEDID_LEN,
-    UNIQUEID_LEN,
+    InvestorDID, Proof, ScopeDID, UniqueID, INVESTORDID_LEN, SCOPEDID_LEN, UNIQUEID_LEN,
 };
 use confidential_identity::{
-    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, mocked, CddClaimData,
-    ProofKeyPair, ScopeClaimData,
+    claim_proofs::{Investor, Provider},
+    mocked, CddClaimData, InvestorTrait, ProviderTrait, ScopeClaimData,
 };
 use rand::{rngs::StdRng, SeedableRng};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
@@ -193,7 +192,7 @@ fn process_create_cdd_id(cfg: CreateCDDIdInfo) {
         );
     }
 
-    let cdd_id = compute_cdd_id(&cdd_claim);
+    let cdd_id = Provider::create_cdd_id(&cdd_claim);
 
     // => CDD provider includes the CDD Id in their claim and submits it to the PolyMesh.
     let cdd_id_str = serde_json::to_string(&cdd_id)
@@ -277,8 +276,6 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
         (file_cdd_claim, file_scope_claim)
     };
 
-    let message = make_message(&raw_cdd_claim.investor_did, &raw_scope_claim.scope_did);
-
     if cfg.verbose {
         println!(
             "CDD Claim: {:?}",
@@ -288,7 +285,6 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
             "Scope Claim: {:?}",
             serde_json::to_string(&raw_scope_claim).unwrap()
         );
-        println!("Message: {:?}", message);
     }
 
     let cdd_claim = CddClaimData::new(
@@ -299,22 +295,22 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
         &raw_scope_claim.scope_did,
         &raw_scope_claim.investor_unique_id,
     );
-    let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
 
-    let pair = ProofKeyPair::from(scope_claim_proof_data);
-    let proof = pair.generate_id_match_proof(&message).to_bytes().to_vec();
+    let mut seed = [0u8; 32];
+    OsRng.fill_bytes(&mut seed);
+    let mut rng = StdRng::from_seed(seed);
 
-    let cdd_id = compute_cdd_id(&cdd_claim);
-    let scope_id = compute_scope_id(&scope_claim);
+    let proof = Investor::create_scope_claim_proof(&cdd_claim, &scope_claim, &mut rng);
 
     // => Investor makes {cdd_id, investor_did, scope_id, scope_did, proof} public knowledge.
     let packaged_proof = Proof {
-        cdd_id,
         investor_did: raw_cdd_claim.investor_did,
-        scope_id,
         scope_did: raw_scope_claim.scope_did,
+        scope_id: proof.scope_id,
+        cdd_id: proof.cdd_id,
         proof,
     };
+
     let proof_str = serde_json::to_string(&packaged_proof)
         .unwrap_or_else(|error| panic!("Failed to serialize the proof: {}", error));
 

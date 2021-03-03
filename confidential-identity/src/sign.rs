@@ -6,6 +6,7 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
+use serde::{Deserialize, Serialize};
 use sha3::{digest::FixedOutput, Digest, Sha3_512};
 use zeroize::Zeroize;
 
@@ -43,7 +44,7 @@ pub struct PublicKey {
 }
 
 /// Stores the Schnorr signature for verifying the wellformedness of scope_id.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 #[allow(non_snake_case)]
 pub struct Signature {
     pub(crate) R: CompressedRistretto,
