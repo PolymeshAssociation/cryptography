@@ -302,12 +302,17 @@ fn process_create_claim_proof(cfg: CreateClaimProofInfo) {
 
     let proof = Investor::create_scope_claim_proof(&cdd_claim, &scope_claim, &mut rng);
 
-    // => Investor makes {cdd_id, investor_did, scope_id, scope_did, proof} public knowledge.
+    // The verifier needs the cdd_id for the verification. In the wasm/chain interaction, the chain
+    // will pass the cdd_id to the verification function. But, here in the CLI, to make things
+    // easier to implement, we write the CDD_ID as part of the proof for the verifier to read.
+    let cdd_id = Provider::create_cdd_id(&cdd_claim);
+
+    // Similarly to the cdd_id, the investor_did and the scope_did are also placed in the proof
+    // package for easier implementation.
     let packaged_proof = Proof {
         investor_did: raw_cdd_claim.investor_did,
         scope_did: raw_scope_claim.scope_did,
-        scope_id: proof.scope_id,
-        cdd_id: proof.cdd_id,
+        cdd_id: cdd_id,
         proof,
     };
 

@@ -1,9 +1,8 @@
 use blake2::{Blake2s, Digest};
 use confidential_identity::{
-    claim_proofs::{Investor, Provider, ScopeClaimProof},
-    mocked, CddClaimData, CddId, InvestorTrait, ProviderTrait, ScopeClaimData,
+    claim_proofs::{Investor, Provider},
+    mocked, CddClaimData, InvestorTrait, ProviderTrait, ScopeClaimData,
 };
-use curve25519_dalek::ristretto::RistrettoPoint;
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 
@@ -27,15 +26,6 @@ pub struct RawCddClaimData {
 pub struct RawScopeClaimData {
     pub scope_did: ScopeDID,
     pub investor_unique_id: UniqueID,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Proof {
-    pub cdd_id: CddId,
-    pub investor_did: InvestorDID,
-    pub scope_id: RistrettoPoint,
-    pub scope_did: ScopeDID,
-    pub proof: ScopeClaimProof,
 }
 
 /// Returns the message used for checking the proof.
@@ -108,15 +98,7 @@ pub fn process_create_claim_proof(
 
     let proof = Investor::create_scope_claim_proof(&cdd_claim, &scope_claim, &mut rng);
 
-    // => Investor makes {cdd_id, investor_did, scope_id, scope_did, proof} public knowledge.
-    let packaged_proof = Proof {
-        investor_did: raw_cdd_claim.investor_did,
-        scope_did: raw_scope_claim.scope_did,
-        scope_id: proof.scope_id,
-        cdd_id: proof.cdd_id,
-        proof,
-    };
-    let proof_str = serde_json::to_string(&packaged_proof)
+    let proof_str = serde_json::to_string(&proof)
         .map_err(|error| format!("Failed to serialize the proof: {}", error))?;
 
     Ok(proof_str)

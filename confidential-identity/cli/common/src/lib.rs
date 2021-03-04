@@ -1,5 +1,4 @@
 use confidential_identity::{claim_proofs::ScopeClaimProof, CddId};
-use curve25519_dalek::ristretto::RistrettoPoint;
 use serde::{Deserialize, Serialize};
 
 // IdentityId is the investor's DID.
@@ -18,7 +17,6 @@ pub const UNIQUEID_LEN: usize = 16;
 pub struct Proof {
     pub cdd_id: CddId,
     pub investor_did: InvestorDID,
-    pub scope_id: RistrettoPoint,
     pub scope_did: ScopeDID,
     pub proof: ScopeClaimProof,
 }

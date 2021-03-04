@@ -74,7 +74,7 @@ impl SecretKey {
         h.input(&message);
 
         r = Scalar::from_hash(h);
-        R = (&r * base_point).compress();
+        R = (r * base_point).compress();
 
         h = Sha3_512::new();
         h.input(R.as_bytes());
@@ -82,7 +82,7 @@ impl SecretKey {
         h.input(&message);
 
         k = Scalar::from_hash(h);
-        s = &(&k * &self.key) + &r;
+        s = (k * self.key) + r;
 
         Signature { R, s }
     }
@@ -111,7 +111,7 @@ impl PublicKey {
         h.input(&message);
 
         k = Scalar::from_hash(h);
-        R = &k * &minus_A + &signature.s * base_point;
+        R = k * minus_A + signature.s * base_point;
 
         ensure!(R.compress() == signature.R, ErrorKind::SignatureError);
 

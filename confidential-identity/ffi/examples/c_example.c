@@ -30,7 +30,7 @@ int main(void) {
     ScopeClaimProof *proof = create_scope_claim_proof(cdd_claim, scope_claim);
 
     // Set up on the Verifier side:
-    bool result = verify_scope_claim_proof(proof, investor_did, investor_unique_id_size, cdd_id);
+    bool result = verify_scope_claim_proof(proof, investor_did, investor_did_size, scope_did, scope_did_size, cdd_id);
     printf("Verification result: %d\n", result);
 
     // Cleanup.

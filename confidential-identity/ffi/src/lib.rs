@@ -54,6 +54,8 @@ pub unsafe extern "C" fn cdd_claim_data_new(
 
 /// Deallocates a `CddClaimData` object's memory.
 ///
+/// # Safety
+///
 /// Should only be called on a still-valid pointer to an object returned by
 /// `cdd_claim_data_new()`.
 #[no_mangle]
@@ -91,6 +93,8 @@ pub unsafe extern "C" fn scope_claim_data_new(
 }
 
 /// Deallocates a `ScopeClaimData` object's memory.
+///
+/// # Safety
 ///
 /// Should only be called on a still-valid pointer to an object returned by
 /// `scope_claim_data_new()`.
@@ -151,8 +155,10 @@ pub unsafe extern "C" fn create_scope_claim_proof(
 
 /// Deallocates a `ScopeClaimProof` object's memory.
 ///
+/// # Safety
+///
 /// Should only be called on a still-valid pointer to an object returned by
-/// `cdd_claim_data_new()`.
+/// `create_scope_claim_proof()`.
 #[no_mangle]
 pub unsafe extern "C" fn scope_claim_proof_free(ptr: *mut ScopeClaimProof) {
     if ptr.is_null() {
@@ -178,6 +184,8 @@ pub unsafe extern "C" fn verify_scope_claim_proof(
     proof: *const ScopeClaimProof,
     investor_did: *const u8,
     investor_did_size: size_t,
+    scope_did: *const u8,
+    scope_did_size: size_t,
     cdd_id: *const CddId,
 ) -> bool {
     assert!(!proof.is_null());
@@ -187,6 +195,8 @@ pub unsafe extern "C" fn verify_scope_claim_proof(
     let proof: &ScopeClaimProof = &*proof;
     let investor_did = slice::from_raw_parts(investor_did, investor_did_size as usize);
     let investor_did = slice_to_scalar(investor_did);
+    let scope_did = slice::from_raw_parts(scope_did, scope_did_size as usize);
+    let scope_did = slice_to_scalar(scope_did);
     let cdd_id: CddId = *cdd_id;
-    Verifier::verify_scope_claim_proof(proof, &investor_did, &cdd_id).is_ok()
+    Verifier::verify_scope_claim_proof(proof, &investor_did, &scope_did, &cdd_id).is_ok()
 }

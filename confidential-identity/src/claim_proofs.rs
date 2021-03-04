@@ -2,14 +2,6 @@
 //! claim proofs and verifying them as part of the
 //! Asset Granularity Unique Identity project.
 //!
-//! TODO: update all the docs!!!
-//! The investor would use the `Proof` API to generate
-//! the proofs.
-//!
-//! The verifier would use the `ProofPublicKey` API to verify
-//! the proofs, and conclude that an investor's identity matches
-//! its claims.
-//!
 //! ```
 //! use confidential_identity::{claim_proofs::{Provider, Investor, Verifier},
 //!     CddClaimData, ScopeClaimData, ScopeClaimProof, ProviderTrait, InvestorTrait, VerifierTrait};
@@ -34,7 +26,11 @@
 //! // => proof is now public knowlegde.
 //!
 //! // Verifier side.
-//! let result = Verifier::verify_scope_claim_proof(&proof, &cdd_claim.investor_did, &cdd_id);
+//! let result = Verifier::verify_scope_claim_proof(
+//!            &proof,
+//!            &cdd_claim.investor_did,
+//!            &scope_claim.scope_did,
+//!            &cdd_id);
 //!
 //! result.expect("Proofs did not pass!");
 //! ```
@@ -55,7 +51,7 @@ use serde::{Deserialize, Serialize};
 use sp_std::prelude::*;
 
 /// Create a scalar from a slice of data.
-fn slice_to_scalar(data: &[u8]) -> Scalar {
+pub fn slice_to_scalar(data: &[u8]) -> Scalar {
     let mut hash = [0u8; 64];
     hash.copy_from_slice(Blake2b::digest(data).as_slice());
     Scalar::from_bytes_mod_order_wide(&hash)
@@ -107,12 +103,9 @@ pub struct ScopeClaimProofData {
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ScopeClaimProof {
-    pub proof_scope_id_wellfromed: Signature,
+    pub proof_scope_id_wellformed: Signature,
     pub proof_scope_id_cdd_id_match: ZkProofData,
-    pub scope_claim: ScopeClaimData,
-    pub cdd_claim: CddClaimData,
     pub scope_id: RistrettoPoint,
-    pub cdd_id: CddId,
 }
 
 /// Stores the zero knowlegde proof data for scope_id and cdd_id matching.
@@ -163,12 +156,9 @@ impl InvestorTrait for Investor {
             gen_zkp(&scope_did_hash, &scope_id, &cdd_id.0, &cdd_claim, rng);
 
         ScopeClaimProof {
-            proof_scope_id_wellfromed: signature,
+            proof_scope_id_wellformed: signature,
             proof_scope_id_cdd_id_match,
-            scope_claim: *scope_claim,
-            cdd_claim: *cdd_claim,
             scope_id,
-            cdd_id,
         }
     }
 }
@@ -180,11 +170,10 @@ impl VerifierTrait for Verifier {
     fn verify_scope_claim_proof(
         proof: &ScopeClaimProof,
         investor_did: &Scalar,
+        scope_did: &Scalar,
         cdd_id: &CddId,
     ) -> Fallible<()> {
-        let scope_did_hash = slice_to_ristretto_point(proof.scope_claim.scope_did.as_bytes());
-
-        ensure! {cdd_id.0 == proof.cdd_id.0, ErrorKind::SignatureError};
+        let scope_did_hash = slice_to_ristretto_point(scope_did.as_bytes());
 
         let public_key = PublicKey {
             key: proof.scope_id,
@@ -192,7 +181,7 @@ impl VerifierTrait for Verifier {
 
         public_key.verify(
             SIGNATURE_MESSAGE.as_bytes(),
-            &proof.proof_scope_id_wellfromed,
+            &proof.proof_scope_id_wellformed,
             &scope_did_hash,
         )?;
 
@@ -310,7 +299,12 @@ mod tests {
         // => proof is now public knowlegde.
 
         // Verifier side.
-        let result = Verifier::verify_scope_claim_proof(&proof, &cdd_claim.investor_did, &cdd_id);
+        let result = Verifier::verify_scope_claim_proof(
+            &proof,
+            &cdd_claim.investor_did,
+            &scope_claim.scope_did,
+            &cdd_id,
+        );
 
         result.unwrap();
     }

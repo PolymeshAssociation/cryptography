@@ -4,7 +4,10 @@
 //!
 
 use cli_common::Proof;
-use confidential_identity::{claim_proofs::Verifier, VerifierTrait};
+use confidential_identity::{
+    claim_proofs::{slice_to_scalar, Verifier},
+    VerifierTrait,
+};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
@@ -37,7 +40,8 @@ fn main() {
 
     let result = Verifier::verify_scope_claim_proof(
         &proof.proof,
-        &proof.proof.cdd_claim.investor_did,
+        &slice_to_scalar(&proof.investor_did),
+        &slice_to_scalar(&proof.scope_did),
         &proof.cdd_id,
     );
 
