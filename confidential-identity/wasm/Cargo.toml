@@ -1,6 +1,6 @@
 [package]
 name = "confidential-identity-wasm"
-version = "1.1.0"
+version = "1.1.1"
 license = "Apache-2.0"
 authors = ["Polymath Inc"]
 description = "The wasm library for confidential identity."

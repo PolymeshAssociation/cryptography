@@ -11,10 +11,9 @@ fi
 
 cd "$PROJECT_DIR"
 
-GET_VERSION_PY='import json,sys;print(json.load(sys.stdin)["packages"][0]["version"])'
-NEW_VERSION=$(cargo metadata --format-version 1 | python -c "$GET_VERSION_PY")
+NEW_VERSION=$(cargo metadata --format-version 1 | python ../scripts/parse-cargo-version.py ${PROJECT_DIR})
 git checkout $PREV_SHA
-PREV_VERSION=$(cargo metadata --format-version 1 | python -c "$GET_VERSION_PY")
+NEW_VERSION=$(cargo metadata --format-version 1 | python ../scripts/parse-cargo-version.py ${PROJECT_DIR})
 echo "---> Version before the PR $PREV_VERSION"
 echo "---> Version in the PR $NEW_VERSION"
 
