@@ -3,9 +3,11 @@
 //! Use `polymath-scv --help` to see the usage.
 //!
 
-use cli_common::{make_message, Proof};
-use confidential_identity::ProofPublicKey;
-use schnorrkel::Signature;
+use cli_common::Proof;
+use confidential_identity::{
+    claim_proofs::{slice_to_scalar, Verifier},
+    VerifierTrait,
+};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
@@ -31,26 +33,19 @@ fn main() {
 
     let proof: Proof = serde_json::from_str(&proof_str)
         .unwrap_or_else(|error| panic!("Failed to deserialize the proof: {}", error));
-    // Recreate the message from the investor DID and the scope DID.
-    let message = make_message(&proof.investor_did, &proof.scope_did);
 
     if args.verbose {
         println!("Proof: {:?}", proof_str);
-        println!("Message: {:?}", message);
     }
 
-    let verifier_pub = ProofPublicKey::new(
-        proof.cdd_id,
-        &proof.investor_did,
-        proof.scope_id,
-        &proof.scope_did,
+    let result = Verifier::verify_scope_claim_proof(
+        &proof.proof,
+        &slice_to_scalar(&proof.investor_did),
+        &slice_to_scalar(&proof.scope_did),
+        &proof.cdd_id,
     );
 
-    if verifier_pub.verify_id_match_proof(
-        &message,
-        &Signature::from_bytes(proof.proof.as_slice())
-            .unwrap_or_else(|error| panic!("Failed to parse the proof: {}", error)),
-    ) {
+    if result.is_ok() {
         println!("Successfully verified the claim!");
     } else {
         println!("Failed to verify the proof!");

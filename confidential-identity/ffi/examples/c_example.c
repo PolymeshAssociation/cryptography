@@ -3,7 +3,6 @@
 #include <inttypes.h>
 #include <string.h>
 #include "../confidential_identity.h"
-#include "confidential_identity.h"
 
 int main(void) {
     uint8_t investor_did[32] = {0x49, 0x99, 0x52, 0x43, 0x74, 0x8c, 0x4a, 0xe7,
@@ -21,30 +20,23 @@ int main(void) {
         0x9d, 0x24, 0x72, 0xfd, 0xc9, 0x29, 0x44, 0x2b, 0x6, 0xf, 0xd, 0xa};
     size_t scope_did_size = sizeof(scope_did);
 
-    uint8_t message[] = {0x01, 0x02, 0x03};
-    size_t message_size = sizeof(message);
 
-    // Set up on Prover side:
+    // Set up on claim data side:
     CddClaimData *cdd_claim = cdd_claim_data_new(investor_did, investor_did_size, investor_unique_id, investor_unique_id_size);
     ScopeClaimData *scope_claim = scope_claim_data_new(scope_did, scope_did_size, investor_unique_id, investor_unique_id_size);
-    ScopeClaimProofData *prover = build_scope_claim_proof_data_wrapper(cdd_claim, scope_claim);
 
     // Create Proof.
-    Signature *sig = generate_id_match_proof_wrapper(prover, message, message_size);
-    CddId *cdd_id = compute_cdd_id_wrapper(cdd_claim);
-    RistrettoPoint *scope_id = compute_scope_id_wrapper(scope_claim);
+    CddId *cdd_id = create_cdd_id(cdd_claim);
+    ScopeClaimProof *proof = create_scope_claim_proof(cdd_claim, scope_claim);
 
     // Set up on the Verifier side:
-    ProofPublicKey *pub_key = proof_public_key_new(cdd_id, investor_did, investor_did_size, scope_id, scope_did, scope_did_size);
-    bool result = verify_id_match_proof_wrapper(pub_key, message, message_size, sig);
+    bool result = verify_scope_claim_proof(proof, investor_did, investor_did_size, scope_did, scope_did_size, cdd_id);
     printf("Verification result: %d\n", result);
 
     // Cleanup.
     // Investor's unique id is sensitive data, it's a good practice to zeroize it at cleanup.
-    memset_s(investor_unique_id, investor_unique_id_size, 0, investor_unique_id_size);
+    memset(investor_unique_id, 0, investor_unique_id_size);
     cdd_claim_data_free(cdd_claim);
     scope_claim_data_free(scope_claim);
-    scope_claim_proof_data_free(prover);
-    proof_public_key_free(pub_key);
-    signature_free(sig);
+    scope_claim_proof_free(proof);
 }

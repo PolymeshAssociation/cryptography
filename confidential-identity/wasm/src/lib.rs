@@ -1,9 +1,9 @@
 use blake2::{Blake2s, Digest};
 use confidential_identity::{
-    build_scope_claim_proof_data, compute_cdd_id, compute_scope_id, mocked, CddClaimData, CddId,
-    ProofKeyPair, ScopeClaimData,
+    claim_proofs::{Investor, Provider},
+    mocked, CddClaimData, InvestorTrait, ProviderTrait, ScopeClaimData,
 };
-use curve25519_dalek::ristretto::RistrettoPoint;
+use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 
 use wasm_bindgen::prelude::*;
@@ -28,16 +28,6 @@ pub struct RawScopeClaimData {
     pub investor_unique_id: UniqueID,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Proof {
-    pub cdd_id: CddId,
-    pub investor_did: InvestorDID,
-    pub scope_id: RistrettoPoint,
-    pub scope_did: ScopeDID,
-    #[serde(with = "serde_bytes")]
-    pub proof: Vec<u8>,
-}
-
 /// Returns the message used for checking the proof.
 pub fn make_message(investor_did: &InvestorDID, scope_did: &ScopeDID) -> [u8; 32] {
     Blake2s::default()
@@ -57,13 +47,13 @@ pub fn make_message(investor_did: &InvestorDID, scope_did: &ScopeDID) -> [u8; 32
 /// * Failure to deserialize the cdd claim.
 /// * Failure to serialize the cdd id.
 #[wasm_bindgen]
-pub fn process_create_cdd_id(cdd_claim: String) -> Result<String, JsValue> {
+pub fn create_cdd_id(cdd_claim: String) -> Result<String, JsValue> {
     let raw_cdd_data: RawCddClaimData = serde_json::from_str(&cdd_claim)
         .map_err(|error| format!("Failed to deserialize the cdd claim: {}", error))?;
 
     let cdd_claim = CddClaimData::new(&raw_cdd_data.investor_did, &raw_cdd_data.investor_unique_id);
 
-    let cdd_id = compute_cdd_id(&cdd_claim);
+    let cdd_id = Provider::create_cdd_id(&cdd_claim);
 
     let cdd_id_str = serde_json::to_string(&cdd_id)
         .map_err(|error| format!("Failed to serialize the CDD Id: {}", error))?;
@@ -78,15 +68,22 @@ pub fn process_create_cdd_id(cdd_claim: String) -> Result<String, JsValue> {
 ///   { "investor_did": [32_bytes_array], "investor_unique_id": [16_bytes_array] }
 /// * `scoped_claim` a stringified json with the following format:
 ///   { "scope_did":[12_bytes_array], "investor_unique_id":[16_bytes_array] }
+/// * `seed` is the seed used for generating random values. Thes seed MUST be generated using
+///   cryptographically secure rng and should be a stringified arry of 32 byets.
+///   At the time of writing this doc, the best practice is to use
+///   https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/generateKey
+///   in a secure context.
 ///
 /// # Errors
 /// * Failure to deserialize the cdd claim.
 /// * Failure to deserialize the scope claim.
+/// * Failure to deserialize the seed.
 /// * Failure to serialize the proof.
 #[wasm_bindgen]
-pub fn process_create_claim_proof(
+pub fn create_scope_claim_proof(
     cdd_claim: String,
     scoped_claim: String,
+    seed: String,
 ) -> Result<String, JsValue> {
     let raw_cdd_claim: RawCddClaimData = serde_json::from_str(&cdd_claim)
         .map_err(|error| format!("Failed to deserialize the cdd claim: {}", error))?;
@@ -94,40 +91,59 @@ pub fn process_create_claim_proof(
     let raw_scope_claim: RawScopeClaimData = serde_json::from_str(&scoped_claim)
         .map_err(|error| format!("Failed to deserialize the scope claim: {}", error))?;
 
-    let message = make_message(&raw_cdd_claim.investor_did, &raw_scope_claim.scope_did);
+    let seed: [u8; 32] = serde_json::from_str(&seed)
+        .map_err(|error| format!("Failed to deserialize the seed: {}", error))?;
+    let mut rng = StdRng::from_seed(seed);
 
     let cdd_claim = CddClaimData::new(
         &raw_cdd_claim.investor_did,
         &raw_cdd_claim.investor_unique_id,
     );
+
     let scope_claim = ScopeClaimData::new(
         &raw_scope_claim.scope_did,
         &raw_scope_claim.investor_unique_id,
     );
-    let scope_claim_proof_data = build_scope_claim_proof_data(&cdd_claim, &scope_claim);
 
-    let pair = ProofKeyPair::from(scope_claim_proof_data);
-    let proof = pair.generate_id_match_proof(&message).to_bytes().to_vec();
+    let proof = Investor::create_scope_claim_proof(&cdd_claim, &scope_claim, &mut rng);
 
-    let cdd_id = compute_cdd_id(&cdd_claim);
-    let scope_id = compute_scope_id(&scope_claim);
-
-    // => Investor makes {cdd_id, investor_did, scope_id, scope_did, proof} public knowledge.
-    let packaged_proof = Proof {
-        cdd_id,
-        investor_did: raw_cdd_claim.investor_did,
-        scope_id,
-        scope_did: raw_scope_claim.scope_did,
-        proof,
-    };
-    let proof_str = serde_json::to_string(&packaged_proof)
+    let proof_str = serde_json::to_string(&proof)
         .map_err(|error| format!("Failed to serialize the proof: {}", error))?;
 
     Ok(proof_str)
 }
 
+/// This function is for testing. The JS users are not expected to call this function.
 #[wasm_bindgen]
-pub fn process_create_mocked_investor_uid(did: String) -> String {
+pub fn _verify_scope_claim_proof(
+    proof: String,
+    investor_did: String,
+    scope_did: String,
+    cdd_id: String,
+) -> Result<(), JsValue> {
+    use confidential_identity::VerifierTrait;
+
+    let proof: confidential_identity::ScopeClaimProof = serde_json::from_str(&proof)
+        .map_err(|error| format!("Failed to deserialize the proof: {}", error))?;
+
+    let investor_did: InvestorDID = serde_json::from_str(&investor_did)
+        .map_err(|error| format!("Failed to deserialize the investor_did: {}", error))?;
+    let scope_did: ScopeDID = serde_json::from_str(&scope_did)
+        .map_err(|error| format!("Failed to deserialize the scope_did: {}", error))?;
+    let cdd_id: confidential_identity::CddId = serde_json::from_str(&cdd_id)
+        .map_err(|error| format!("Failed to deserialize the cdd_id: {}", error))?;
+
+    confidential_identity::claim_proofs::Verifier::verify_scope_claim_proof(
+        &proof,
+        &confidential_identity::claim_proofs::slice_to_scalar(&investor_did),
+        &confidential_identity::claim_proofs::slice_to_scalar(&scope_did),
+        &cdd_id,
+    )
+    .map_err(|error| format!("Proof verification failed: {}", error).into())
+}
+
+#[wasm_bindgen]
+pub fn create_mocked_investor_uid(did: String) -> String {
     // Sanitize Did input.
     let did = did.strip_prefix("0x").unwrap_or(&did);
     let did = did.chars().filter(|c| *c != '-').collect::<String>();
