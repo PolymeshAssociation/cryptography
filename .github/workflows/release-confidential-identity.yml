@@ -1,0 +1,160 @@
+name: Upload Confidential Identitiy Release Asset
+
+on:
+  push:
+    branches:
+      - 'master'
+
+jobs:
+  build:
+    name: Upload Confidential Identitiy Release Asset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # -------------- Proceed only if Cargo.toml file is modified
+      - uses: technote-space/get-diff-action@v4
+        with:
+          FILES: |
+            confidential-identity/Cargo.toml
+
+      - name: Check if the version has been changed
+        if: env.GIT_DIFF
+        run: bash ./scripts/rust-version-changed.sh confidential-identity
+        env:
+          PREV_SHA: ${{ github.event.before }}
+
+      - name: Build project and create the artifacts
+        if: env.VERSION_CHANGED
+        run: bash ./scripts/confidential-identity-artifacts.sh
+
+      # -------------- Create a tag
+      - name: Get tag name
+        id: get-tag-name
+        if: env.VERSION_CHANGED
+        run: bash ./scripts/get-tag-name.sh confidential-identity
+      - name: Bump version and push tag
+        id: tag-version
+        if: env.TAG_NAME
+        uses: mathieudutour/github-tag-action@v5.1
+
+      # -------------- Create a release from the tag
+      - name: Create Release
+        if: env.VERSION_CHANGED
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: Release ${{ env.TAG_NAME }}
+          draft: false
+          prerelease: false
+
+      # -------------- Attach the artifacts to the release
+      - name: Upload Confidential Identity Source
+        if: env.VERSION_CHANGED
+        id: upload-release-asset-confidential-identity-src
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-src.tar.gz
+          asset_name: ${{ env.TAG_NAME }}-src.tar.gz
+          asset_content_type: application/zip
+      - name: Upload Confidential Identity Source Checksum
+        id: upload-release-asset-confidential-identity-src-checksum
+        if: env.VERSION_CHANGED
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-src.sha256sum
+          asset_name: ${{ env.TAG_NAME }}-src.sha256sum
+          asset_content_type: text/plain
+
+      - name: Upload Confidential Identity CLI
+        id: upload-release-asset-confidential-identity-cli
+        if: env.VERSION_CHANGED
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-linux-x64.tar.gz
+          asset_name: ${{ env.TAG_NAME }}-linux-x64.tar.gz
+          asset_content_type: application/zip
+      - name: Upload Confidential Identity CLI Checksum
+        id: upload-release-asset-confidential-identity-cli-checksum
+        if: env.VERSION_CHANGED
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-linux-x64.sha256sum
+          asset_name: ${{ env.TAG_NAME }}-linux-x64.sha256sum
+          asset_content_type: text/plain
+
+      - name: Upload Confidential Identity NPM
+        id: upload-release-asset-confidential-identity-npm
+        if: env.VERSION_CHANGED
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-npm.tar.gz
+          asset_name: ${{ env.TAG_NAME }}-npm.tar.gz
+          asset_content_type: application/zip
+      - name: Upload Confidential Identity NPM Checksum
+        id: upload-release-asset-confidential-identity-npm-checksum
+        if: env.VERSION_CHANGED
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-npm.sha256sum
+          asset_name: ${{ env.TAG_NAME }}-npm.sha256sum
+          asset_content_type: text/plain
+
+      - name: Upload Confidential Identity FFI
+        id: upload-release-asset-confidential-identity-ffi
+        if: env.VERSION_CHANGED
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-ffi.tar.gz
+          asset_name: ${{ env.TAG_NAME }}-ffi.tar.gz
+          asset_content_type: application/zip
+      - name: Upload Confidential Identity FFI Checksum
+        id: upload-release-asset-confidential-identity-ffi-checksum
+        if: env.VERSION_CHANGED
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/confidential-identity-ffi.sha256sum
+          asset_name: ${{ env.TAG_NAME }}-ffi.sha256sum
+          asset_content_type: text/plain
+
+      # -------------- Publish the npm artifacts to npmjs
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '10.x'
+          registry-url: 'https://registry.npmjs.org'
+      - run: cd confidential-identity/wasm/pkg_webpack/ && npm publish --access public
+        if: env.VERSION_CHANGED
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: cd confidential-identity/wasm/pkg_nodejs/ && npm publish --access public
+        if: env.VERSION_CHANGED
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

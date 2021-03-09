@@ -3,7 +3,7 @@
 //! plain text. For example proving that the value that was encrypted
 //! is within a range.
 
-use crate::errors::{ErrorKind, Fallible};
+use super::errors::{ErrorKind, Fallible};
 
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use codec::{Decode, Encode, Error as CodecError, Input, Output};

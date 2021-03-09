@@ -4,4 +4,4 @@ language = "C"
 
 [parse]
 parse_deps = true
-include = ["confidential_identity"]
+include = ["confidential_identity", "cryptography_core"]

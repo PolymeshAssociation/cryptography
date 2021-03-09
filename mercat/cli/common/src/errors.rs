@@ -27,7 +27,7 @@ pub enum Error {
     /// An error occurred during the call to the mercat library.
     #[fail(display = "An error occurred in the underlying library: {:?}", error)]
     LibraryError {
-        error: cryptography_core::errors::Error,
+        error: cryptography_core::asset_proofs::errors::Error,
     },
 
     /// No database directory path was passed.

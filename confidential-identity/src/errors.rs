@@ -1,8 +1,7 @@
 use failure::{Backtrace, Context, Fail};
 
-use std::{fmt, result::Result};
+use sp_std::{fmt, result::Result};
 
-/// Represents PIAL errors.
 #[derive(Debug)]
 pub struct Error {
     inner: Context<ErrorKind>,
@@ -50,21 +49,13 @@ impl fmt::Display for Error {
 
 #[derive(Fail, Clone, Debug, Eq, PartialEq)]
 pub enum ErrorKind {
-    /// ZKP initial message gen failed.
-    #[fail(display = "Error in generating initial ZKP message")]
-    InitialMessageGenError,
+    /// Scope claim does not match cdd claim: Zero Knowledge Proof failed.
+    #[fail(display = "Scope claim does not match cdd claim: Zero Knowledge Proof failed.")]
+    ZkpError,
 
-    /// ZKP proof failed.
-    #[fail(display = "ZK Proof of {} failed", kind)]
-    ZKPVerificationError { kind: String },
-
-    /// Membership proof failed.
-    #[fail(display = "Membership proof failed")]
-    MembershipProofError,
-
-    /// CDD_ID mismatched.
-    #[fail(display = "CDD ID in the proof is different from the CDD ID of the chain.")]
-    CDDIdMismatchError,
+    /// Scope id is not wellformed: signature verification failed.
+    #[fail(display = "Scope id is not wellformed: signature verification failed.")]
+    SignatureError,
 }
 
 pub type Fallible<T, E = Error> = Result<T, E>;

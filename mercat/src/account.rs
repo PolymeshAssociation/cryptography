@@ -4,18 +4,17 @@ use crate::{
 };
 use cryptography_core::{
     asset_proofs::{
+        bulletproofs::PedersenGens,
         correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
         encryption_proofs::single_property_prover,
         encryption_proofs::single_property_verifier,
+        errors::Fallible,
         membership_proof::{MembershipProofVerifier, MembershipProverAwaitingChallenge},
         one_out_of_many_proof::OooNProofGenerators,
         wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
-        CommitmentWitness,
+        AssetId, Balance, CommitmentWitness,
     },
-    bulletproofs::PedersenGens,
     curve25519_dalek::scalar::Scalar,
-    errors::Fallible,
-    AssetId, Balance,
 };
 use rand_core::{CryptoRng, RngCore};
 

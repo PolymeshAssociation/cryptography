@@ -5,20 +5,17 @@ use crate::{
     AssetTransactionVerifier, AuditorPayload, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
     InitializedAssetTx, PubAccount,
 };
-use cryptography_core::{
-    asset_proofs::{
-        correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
-        encrypting_same_value_proof::{
-            EncryptingSameValueProverAwaitingChallenge, EncryptingSameValueVerifier,
-        },
-        encryption_proofs::single_property_prover,
-        encryption_proofs::single_property_verifier,
-        wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
-        CommitmentWitness,
-    },
+use cryptography_core::asset_proofs::{
     bulletproofs::PedersenGens,
+    correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
+    encrypting_same_value_proof::{
+        EncryptingSameValueProverAwaitingChallenge, EncryptingSameValueVerifier,
+    },
+    encryption_proofs::single_property_prover,
+    encryption_proofs::single_property_verifier,
     errors::{ErrorKind, Fallible},
-    Balance,
+    wellformedness_proof::{WellformednessProverAwaitingChallenge, WellformednessVerifier},
+    Balance, CommitmentWitness,
 };
 
 use rand_core::{CryptoRng, RngCore};
@@ -334,10 +331,8 @@ mod tests {
         AccountCreatorInitializer, EncryptionKeys, SecAccount,
     };
     use cryptography_core::{
-        asset_proofs::{CommitmentWitness, ElgamalSecretKey},
+        asset_proofs::{errors::ErrorKind, AssetId, CommitmentWitness, ElgamalSecretKey},
         curve25519_dalek::scalar::Scalar,
-        errors::ErrorKind,
-        AssetId,
     };
     use rand::rngs::StdRng;
     use rand::SeedableRng;

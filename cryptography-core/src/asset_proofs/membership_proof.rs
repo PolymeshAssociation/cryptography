@@ -9,6 +9,7 @@ use crate::asset_proofs::{
         AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
         ZKProofResponse,
     },
+    errors::{ErrorKind, Fallible},
     one_out_of_many_proof::{
         convert_to_base, convert_to_matrix_rep, Matrix, OOONProofFinalResponse,
         OOONProofInitialMessage, OOONProver, OooNProofGenerators, Polynomial, R1ProofVerifier,
@@ -16,7 +17,6 @@ use crate::asset_proofs::{
     },
     transcript::{TranscriptProtocol, UpdateTranscript},
 };
-use crate::errors::{ErrorKind, Fallible};
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
