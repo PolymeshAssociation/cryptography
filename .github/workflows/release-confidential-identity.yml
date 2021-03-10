@@ -34,10 +34,13 @@ jobs:
         id: get-tag-name
         if: env.VERSION_CHANGED
         run: bash ./scripts/get-tag-name.sh confidential-identity
+
       - name: Bump version and push tag
         id: tag-version
         if: env.TAG_NAME
         uses: mathieudutour/github-tag-action@v5.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       # -------------- Create a release from the tag
       - name: Create Release
