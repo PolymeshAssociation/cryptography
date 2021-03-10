@@ -13,7 +13,7 @@ cd "$PROJECT_DIR"
 
 NEW_VERSION=$(cargo metadata --format-version 1 | python ../scripts/parse-cargo-version.py ${PROJECT_DIR})
 git checkout $PREV_SHA
-NEW_VERSION=$(cargo metadata --format-version 1 | python ../scripts/parse-cargo-version.py ${PROJECT_DIR})
+PREV_VERSION=$(cargo metadata --format-version 1 | python ../scripts/parse-cargo-version.py ${PROJECT_DIR})
 echo "---> Version before the PR $PREV_VERSION"
 echo "---> Version in the PR $NEW_VERSION"
 

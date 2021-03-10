@@ -18,7 +18,8 @@ ROOT=$( cd `dirname $0`/..;  pwd )
 PREFIX="$ROOT/mercat"
 
 echo "----------------------- Build the binaries ------------------------"
-cd "$ROOT" && cargo build --release
+rustup toolchain install nightly
+cd "$ROOT" && cargo +nightly build --release
 
 echo "------------------- Packaging cryptography-core -------------------"
 # Prep directories
