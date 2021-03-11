@@ -51,7 +51,7 @@ jobs:
       - run:
           name: Run tests
           command: >-
-            # TODO uncomment me after successful test! RUST_LOG=info cargo +nightly test &&
+            RUST_LOG=info cargo +nightly test &&
 
             cd confidential-identity/wasm &&
             cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack &&
