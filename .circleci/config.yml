@@ -54,7 +54,7 @@ jobs:
             # TODO uncomment me after successful test! RUST_LOG=info cargo +nightly test &&
 
             cd confidential-identity/wasm &&
-            cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack &
+            cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack &&
             rustup run nightly wasm-pack build --release --target nodejs &&
 
             cd examples &&
