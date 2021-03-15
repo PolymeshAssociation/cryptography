@@ -5,21 +5,22 @@
 //! For more details see sections 3.6 and 5.3 of the
 //! whitepaper.
 
-use super::errors::{ErrorKind, Fallible};
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
-        ZKProofResponse,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+            ZKProofResponse,
+        },
+        errors::{ErrorKind, Fallible},
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, ElgamalPublicKey, ElgamalSecretKey,
     },
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, ElgamalPublicKey, ElgamalSecretKey,
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
 };
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT,
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
@@ -48,22 +49,18 @@ pub struct CipherTextRefreshmentFinalResponse(Scalar);
 impl Encode for CipherTextRefreshmentFinalResponse {
     #[inline]
     fn size_hint(&self) -> usize {
-        32
+        ScalarEncoder(&self.0).size_hint()
     }
 
     #[inline]
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.0.as_bytes().encode_to(dest)
+        ScalarEncoder(&self.0).encode_to(dest);
     }
 }
 
 impl Decode for CipherTextRefreshmentFinalResponse {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let inner = <[u8; 32]>::decode(input)?;
-        let inner = Scalar::from_canonical_bytes(inner).ok_or_else(|| {
-            CodecError::from("CipherTextRefreshmentFinalResponse scalar is invalid")
-        })?;
-
+        let inner = <ScalarDecoder>::decode(input)?.0;
         Ok(CipherTextRefreshmentFinalResponse(inner))
     }
 }
@@ -88,26 +85,19 @@ impl Default for CipherTextRefreshmentInitialMessage {
 impl Encode for CipherTextRefreshmentInitialMessage {
     #[inline]
     fn size_hint(&self) -> usize {
-        64
+        RistrettoPointEncoder(&self.a).size_hint() + RistrettoPointEncoder(&self.b).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let a = self.a.compress();
-        let b = self.b.compress();
-
-        (a.as_bytes(), b.as_bytes()).encode_to(dest)
+        RistrettoPointEncoder(&self.a).encode_to(dest);
+        RistrettoPointEncoder(&self.b).encode_to(dest);
     }
 }
 
 impl Decode for CipherTextRefreshmentInitialMessage {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (a, b) = <([u8; 32], [u8; 32])>::decode(input)?;
-        let a = CompressedRistretto(a).decompress().ok_or_else(|| {
-            CodecError::from("CipherTextRefreshmentInitialMessage::a point is invalid")
-        })?;
-        let b = CompressedRistretto(b).decompress().ok_or_else(|| {
-            CodecError::from("CipherTextRefreshmentInitialMessage::b point is invalid")
-        })?;
+        let a = <RistrettoPointDecoder>::decode(input)?.0;
+        let b = <RistrettoPointDecoder>::decode(input)?.0;
 
         Ok(CipherTextRefreshmentInitialMessage { a, b })
     }

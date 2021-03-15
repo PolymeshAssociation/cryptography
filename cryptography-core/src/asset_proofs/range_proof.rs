@@ -3,7 +3,13 @@
 //! plain text. For example proving that the value that was encrypted
 //! is within a range.
 
-use super::errors::{ErrorKind, Fallible};
+use crate::{
+    asset_proofs::errors::{ErrorKind, Fallible},
+    codec_wrapper::{
+        CompressedRistrettoDecoder, CompressedRistrettoEncoder, RangeProofDencoder,
+        RangeProofEncoder,
+    },
+};
 
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
@@ -12,7 +18,6 @@ use merlin::Transcript;
 use rand_core::{CryptoRng, RngCore};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use sp_std::vec::Vec;
 
 const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
 
@@ -34,19 +39,23 @@ pub struct InRangeProof {
 }
 
 impl Encode for InRangeProof {
+    fn size_hint(&self) -> usize {
+        CompressedRistrettoEncoder(&self.init).size_hint()
+            + RangeProofEncoder(&self.response).size_hint()
+            + self.range.size_hint()
+    }
+
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.init.as_bytes().encode_to(dest);
-        self.response.to_bytes().encode_to(dest);
+        CompressedRistrettoEncoder(&self.init).encode_to(dest);
+        RangeProofEncoder(&self.response).encode_to(dest);
         self.range.encode_to(dest);
     }
 }
 
 impl Decode for InRangeProof {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let init = CompressedRistretto(<[u8; 32]>::decode(input)?);
-        let response = <Vec<u8>>::decode(input)?;
-        let response = RangeProofFinalResponse::from_bytes(&response)
-            .map_err(|_| CodecError::from("InRangeProof::response is invalid"))?;
+        let init = <CompressedRistrettoDecoder>::decode(input)?.0;
+        let response = <RangeProofDencoder>::decode(input)?.0;
         let range = <u32>::decode(input)?;
 
         Ok(InRangeProof {

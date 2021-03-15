@@ -36,6 +36,7 @@ merlin = { version = "2.0.0", default-features = false }
 
 [dev-dependencies]
 wasm-bindgen-test = { version = "0.3.10"}
+hex = {version = "0.4.2" }
 
 [features]
 default = ["std", "u64_backend"]

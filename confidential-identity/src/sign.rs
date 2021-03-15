@@ -1,7 +1,13 @@
 //! A modified version of https://github.com/dalek-cryptography/ed25519-dalek which uses
 //! custom base point instead of a default base point.
 
-use crate::errors::{ErrorKind, Fallible};
+use crate::{
+    cryptography_core::codec_wrapper::{
+        CompressedRistrettoDecoder, CompressedRistrettoEncoder, ScalarDecoder, ScalarEncoder,
+    },
+    errors::{ErrorKind, Fallible},
+};
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
@@ -44,11 +50,36 @@ pub struct PublicKey {
 }
 
 /// Stores the Schnorr signature for verifying the wellformedness of scope_id.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[allow(non_snake_case)]
 pub struct Signature {
     pub(crate) R: CompressedRistretto,
     pub(crate) s: Scalar,
+}
+
+impl Encode for Signature {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        CompressedRistrettoEncoder(&self.R).size_hint() + ScalarEncoder(&self.s).size_hint()
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        CompressedRistrettoEncoder(&self.R).encode_to(dest);
+        ScalarEncoder(&self.s).encode_to(dest);
+    }
+}
+
+impl Decode for Signature {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let r_decoder = <CompressedRistrettoDecoder>::decode(input)?;
+        let s_decoder = <ScalarDecoder>::decode(input)?;
+
+        Ok(Self {
+            R: r_decoder.0,
+            s: s_decoder.0,
+        })
+    }
 }
 
 impl SecretKey {

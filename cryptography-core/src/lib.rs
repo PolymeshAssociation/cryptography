@@ -12,6 +12,6 @@ pub use curve25519_dalek::{
 
 pub mod cdd_claim;
 
-pub mod dalek_wrapper;
+pub mod codec_wrapper;
 
 pub mod asset_proofs;

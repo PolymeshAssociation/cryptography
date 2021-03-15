@@ -3,14 +3,14 @@
 //! Since Elgamal is a homomorphic encryption it also provides
 //! addition and subtraction API over the cipher texts.
 
-use super::errors::{ErrorKind, Fallible};
+use crate::{
+    asset_proofs::errors::{ErrorKind, Fallible},
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
+};
 
 use bulletproofs::PedersenGens;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
-use curve25519_dalek::{
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
-};
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand::rngs::StdRng;
 use rand_core::{CryptoRng, RngCore};
 
@@ -62,25 +62,19 @@ impl From<(Scalar, &mut StdRng)> for CommitmentWitness {
 impl Encode for CommitmentWitness {
     #[inline]
     fn size_hint(&self) -> usize {
-        64
+        ScalarEncoder(&self.value).size_hint() + ScalarEncoder(&self.blinding).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let value = self.value.to_bytes();
-        let blinding = self.blinding.to_bytes();
-
-        value.encode_to(dest);
-        blinding.encode_to(dest);
+        ScalarEncoder(&self.value).encode_to(dest);
+        ScalarEncoder(&self.blinding).encode_to(dest);
     }
 }
 
 impl Decode for CommitmentWitness {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (value, blinding) = <([u8; 32], [u8; 32])>::decode(input)?;
-        let value = Scalar::from_canonical_bytes(value)
-            .ok_or_else(|| CodecError::from("CommitmentWitness value point is invalid"))?;
-        let blinding = Scalar::from_canonical_bytes(blinding)
-            .ok_or_else(|| CodecError::from("CommitmentWitness blinding point is invalid"))?;
+        let value = <ScalarDecoder>::decode(input)?.0;
+        let blinding = <ScalarDecoder>::decode(input)?.0;
 
         Ok(CommitmentWitness { value, blinding })
     }
@@ -97,27 +91,19 @@ pub struct CipherText {
 impl Encode for CipherText {
     #[inline]
     fn size_hint(&self) -> usize {
-        64
+        RistrettoPointEncoder(&self.x).size_hint() + RistrettoPointEncoder(&self.y).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let x = self.x.compress();
-        let y = self.y.compress();
-
-        x.as_bytes().encode_to(dest);
-        y.as_bytes().encode_to(dest);
+        RistrettoPointEncoder(&self.x).encode_to(dest);
+        RistrettoPointEncoder(&self.y).encode_to(dest);
     }
 }
 
 impl Decode for CipherText {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (x, y) = <([u8; 32], [u8; 32])>::decode(input)?;
-        let x = CompressedRistretto(x)
-            .decompress()
-            .ok_or_else(|| CodecError::from("CipherText X point is invalid"))?;
-        let y = CompressedRistretto(y)
-            .decompress()
-            .ok_or_else(|| CodecError::from("CipherText Y point is invalid"))?;
+        let x = <RistrettoPointDecoder>::decode(input)?.0;
+        let y = <RistrettoPointDecoder>::decode(input)?.0;
 
         Ok(CipherText { x, y })
     }
@@ -196,19 +182,17 @@ pub struct ElgamalSecretKey {
 impl Encode for ElgamalSecretKey {
     #[inline]
     fn size_hint(&self) -> usize {
-        32
+        ScalarEncoder(&self.secret).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.secret.as_bytes().encode_to(dest);
+        ScalarEncoder(&self.secret).encode_to(dest);
     }
 }
 
 impl Decode for ElgamalSecretKey {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let secret = <[u8; 32]>::decode(input)?;
-        let secret = Scalar::from_canonical_bytes(secret)
-            .ok_or_else(|| CodecError::from("ElgamalSecretKey.secret is invalid"))?;
+        let secret = <ScalarDecoder>::decode(input)?.0;
 
         Ok(ElgamalSecretKey { secret })
     }
@@ -250,23 +234,17 @@ impl ElgamalPublicKey {
 impl Encode for ElgamalPublicKey {
     #[inline]
     fn size_hint(&self) -> usize {
-        32
+        RistrettoPointEncoder(&self.pub_key).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let pub_key = self.pub_key.compress();
-
-        pub_key.as_bytes().encode_to(dest);
+        RistrettoPointEncoder(&self.pub_key).encode_to(dest);
     }
 }
 
 impl Decode for ElgamalPublicKey {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let pub_key = <[u8; 32]>::decode(input)?;
-        let pub_key = CompressedRistretto(pub_key)
-            .decompress()
-            .ok_or_else(|| CodecError::from("ElgamalPublicKey.pub_key is invalid"))?;
-
+        let pub_key = <RistrettoPointDecoder>::decode(input)?.0;
         Ok(ElgamalPublicKey { pub_key })
     }
 }

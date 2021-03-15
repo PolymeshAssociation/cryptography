@@ -2,21 +2,22 @@
 //! under different public keys.
 //! For more details see section 5.4 of the whitepaper.
 
-use super::errors::{ErrorKind, Fallible};
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
-        ZKProofResponse,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+            ZKProofResponse,
+        },
+        errors::{ErrorKind, Fallible},
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, CommitmentWitness, ElgamalPublicKey,
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
 };
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT,
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
@@ -48,21 +49,19 @@ pub struct EncryptingSameValueFinalResponse {
 impl Encode for EncryptingSameValueFinalResponse {
     #[inline]
     fn size_hint(&self) -> usize {
-        64usize
+        ScalarEncoder(&self.z1).size_hint() + ScalarEncoder(&self.z2).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        (self.z1.as_bytes(), self.z2.as_bytes()).encode_to(dest);
+        ScalarEncoder(&self.z1).encode_to(dest);
+        ScalarEncoder(&self.z2).encode_to(dest);
     }
 }
 
 impl Decode for EncryptingSameValueFinalResponse {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (z1, z2) = <([u8; 32], [u8; 32])>::decode(input)?;
-        let z1 = Scalar::from_canonical_bytes(z1)
-            .ok_or_else(|| CodecError::from("EncryptingSameValueFinalResponse `z1` is invalid"))?;
-        let z2 = Scalar::from_canonical_bytes(z2)
-            .ok_or_else(|| CodecError::from("EncryptingSameValueFinalResponse `z2` is invalid"))?;
+        let z1 = <ScalarDecoder>::decode(input)?.0;
+        let z2 = <ScalarDecoder>::decode(input)?.0;
 
         Ok(EncryptingSameValueFinalResponse { z1, z2 })
     }
@@ -79,30 +78,23 @@ pub struct EncryptingSameValueInitialMessage {
 impl Encode for EncryptingSameValueInitialMessage {
     #[inline]
     fn size_hint(&self) -> usize {
-        96
+        RistrettoPointEncoder(&self.a1).size_hint()
+            + RistrettoPointEncoder(&self.a2).size_hint()
+            + RistrettoPointEncoder(&self.b).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let a1 = self.a1.compress();
-        let a2 = self.a2.compress();
-        let b = self.b.compress();
-
-        (a1.as_bytes(), a2.as_bytes(), b.as_bytes()).encode_to(dest);
+        RistrettoPointEncoder(&self.a1).encode_to(dest);
+        RistrettoPointEncoder(&self.a2).encode_to(dest);
+        RistrettoPointEncoder(&self.b).encode_to(dest);
     }
 }
 
 impl Decode for EncryptingSameValueInitialMessage {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (a1, a2, b) = <([u8; 32], [u8; 32], [u8; 32])>::decode(input)?;
-        let a1 = CompressedRistretto(a1)
-            .decompress()
-            .ok_or_else(|| CodecError::from("EncryptingSameValueInitialMessage `a1` is invalid"))?;
-        let a2 = CompressedRistretto(a2)
-            .decompress()
-            .ok_or_else(|| CodecError::from("EncryptingSameValueInitialMessage `a2` is invalid"))?;
-        let b = CompressedRistretto(b)
-            .decompress()
-            .ok_or_else(|| CodecError::from("EncryptingSameValueInitialMessage `b` is invalid"))?;
+        let a1 = <RistrettoPointDecoder>::decode(input)?.0;
+        let a2 = <RistrettoPointDecoder>::decode(input)?.0;
+        let b = <RistrettoPointDecoder>::decode(input)?.0;
 
         Ok(EncryptingSameValueInitialMessage { a1, a2, b })
     }
