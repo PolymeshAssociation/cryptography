@@ -4,6 +4,7 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
+use sp_std::vec::Vec;
 
 /// Constants:
 /// A serialized Ristretto point size.
