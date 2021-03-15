@@ -12,6 +12,7 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sha3::{digest::FixedOutput, Digest, Sha3_512};
 use zeroize::Zeroize;
