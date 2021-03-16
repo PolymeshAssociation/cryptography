@@ -51,7 +51,16 @@ jobs:
       - run:
           name: Run tests
           command: >-
-            RUST_LOG=info cargo +nightly test
+            RUST_LOG=info cargo +nightly test &&
+
+            cd confidential-identity/wasm &&
+            cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack &&
+            rustup run nightly wasm-pack build --release --target nodejs &&
+
+            cd examples &&
+            npm install &&
+            npm run test
+            
           no_output_timeout: 30m
       - save_cache:
           key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
