@@ -51,7 +51,7 @@ pub struct PublicKey {
 }
 
 /// Stores the Schnorr signature for verifying the wellformedness of scope_id.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[allow(non_snake_case)]
 pub struct Signature {
