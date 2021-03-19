@@ -102,7 +102,7 @@ pub struct ScopeClaimProofData {
 /// Contains the Zero Knowledge proof and the proof of wellformedness.
 /// This is the construct that the investors will use to generate
 /// claim proofs.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ScopeClaimProof {
     pub proof_scope_id_wellformed: Signature,
@@ -142,7 +142,7 @@ impl Decode for ScopeClaimProof {
 const ZK_PROOF_DATA_CHG_RESPONSES: usize = 2;
 
 /// Stores the zero knowlegde proof data for scope_id and cdd_id matching.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ZkProofData {
     challenge_responses: [Scalar; ZK_PROOF_DATA_CHG_RESPONSES],
