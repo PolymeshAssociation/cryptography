@@ -1,10 +1,9 @@
-use super::pedersen_commitments::{generate_blinding_factor, generate_pedersen_commit};
-use super::{RISTRETTO_POINT_SIZE, SCALAR_SIZE};
-use codec::{Decode, Encode, Error as CodecError, Input, Output};
-use curve25519_dalek::{
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
+use crate::{
+    cdd_claim::pedersen_commitments::{generate_blinding_factor, generate_pedersen_commit},
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
 };
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -37,22 +36,20 @@ impl CddClaimData {
 impl Encode for CddClaimData {
     #[inline]
     fn size_hint(&self) -> usize {
-        SCALAR_SIZE + SCALAR_SIZE
+        ScalarEncoder(&self.investor_did).size_hint()
+            + ScalarEncoder(&self.investor_unique_id).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.investor_did.as_bytes().encode_to(dest);
-        self.investor_unique_id.as_bytes().encode_to(dest);
+        ScalarEncoder(&self.investor_did).encode_to(dest);
+        ScalarEncoder(&self.investor_unique_id).encode_to(dest);
     }
 }
 
 impl Decode for CddClaimData {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let investor_did = <[u8; SCALAR_SIZE]>::decode(input)?;
-        let investor_did = Scalar::from_bits(investor_did);
-
-        let investor_unique_id = <[u8; SCALAR_SIZE]>::decode(input)?;
-        let investor_unique_id = Scalar::from_bits(investor_unique_id);
+        let investor_did = <ScalarDecoder>::decode(input)?.0;
+        let investor_unique_id = <ScalarDecoder>::decode(input)?.0;
 
         Ok(CddClaimData {
             investor_did,
@@ -68,21 +65,18 @@ pub struct CddId(pub RistrettoPoint);
 impl Encode for CddId {
     #[inline]
     fn size_hint(&self) -> usize {
-        RISTRETTO_POINT_SIZE
+        RistrettoPointEncoder(&self.0).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.0.compress().as_bytes().encode_to(dest);
+        RistrettoPointEncoder(&self.0).encode_to(dest);
     }
 }
 
 impl Decode for CddId {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let id = <[u8; RISTRETTO_POINT_SIZE]>::decode(input)?;
-        CompressedRistretto(id)
-            .decompress()
-            .ok_or_else(|| CodecError::from("Invalid CddId."))
-            .map(CddId)
+        let inner = <RistrettoPointDecoder>::decode(input)?.0;
+        Ok(CddId(inner))
     }
 }
 

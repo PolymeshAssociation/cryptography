@@ -2,21 +2,22 @@
 //! This proofs the knoweledge about the encrypted value.
 //! For more details see section 5.1 of the whitepaper.
 
-use super::errors::{ErrorKind, Fallible};
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
-        ZKProofResponse,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+            ZKProofResponse,
+        },
+        errors::{ErrorKind, Fallible},
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, CommitmentWitness, ElgamalPublicKey,
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
 };
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT,
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
@@ -25,7 +26,6 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
-use sp_std::convert::From;
 
 /// The domain label for the wellformedness proof.
 pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathWellformednessFinalResponse";
@@ -40,26 +40,20 @@ pub struct WellformednessFinalResponse {
 }
 
 impl Encode for WellformednessFinalResponse {
-    #[inline]
     fn size_hint(&self) -> usize {
-        64
+        ScalarEncoder(&self.z1).size_hint() + ScalarEncoder(&self.z2).size_hint()
     }
 
-    #[inline]
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        (self.z1.as_bytes(), self.z2.as_bytes()).encode_to(dest)
+        ScalarEncoder(&self.z1).encode_to(dest);
+        ScalarEncoder(&self.z2).encode_to(dest);
     }
 }
 
 impl Decode for WellformednessFinalResponse {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (z1, z2) = <([u8; 32], [u8; 32])>::decode(input)?;
-        let z1 = Scalar::from_canonical_bytes(z1).ok_or_else(|| {
-            CodecError::from("WellformednessFinalResponse `z1` scalar is invalid")
-        })?;
-        let z2 = Scalar::from_canonical_bytes(z2).ok_or_else(|| {
-            CodecError::from("WellformednessFinalResponse `z2` scalar is invalid")
-        })?;
+        let z1 = <ScalarDecoder>::decode(input)?.0;
+        let z2 = <ScalarDecoder>::decode(input)?.0;
 
         Ok(WellformednessFinalResponse { z1, z2 })
     }
@@ -85,26 +79,19 @@ impl Default for WellformednessInitialMessage {
 impl Encode for WellformednessInitialMessage {
     #[inline]
     fn size_hint(&self) -> usize {
-        64
+        RistrettoPointEncoder(&self.a).size_hint() + RistrettoPointEncoder(&self.b).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let a = self.a.compress();
-        let b = self.b.compress();
-
-        (a.as_bytes(), b.as_bytes()).encode_to(dest)
+        RistrettoPointEncoder(&self.a).encode_to(dest);
+        RistrettoPointEncoder(&self.b).encode_to(dest);
     }
 }
 
 impl Decode for WellformednessInitialMessage {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (a, b) = <([u8; 32], [u8; 32])>::decode(input)?;
-        let a = CompressedRistretto(a)
-            .decompress()
-            .ok_or_else(|| CodecError::from("WellformednessInitialMessage 'a' point is invalid"))?;
-        let b = CompressedRistretto(b)
-            .decompress()
-            .ok_or_else(|| CodecError::from("WellformednessInitialMessage 'b' point is invalid"))?;
+        let a = <RistrettoPointDecoder>::decode(input)?.0;
+        let b = <RistrettoPointDecoder>::decode(input)?.0;
 
         Ok(WellformednessInitialMessage { a, b })
     }

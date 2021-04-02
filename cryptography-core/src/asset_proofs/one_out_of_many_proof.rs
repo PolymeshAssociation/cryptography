@@ -6,21 +6,21 @@
 
 #![allow(non_snake_case)]
 
-use super::errors::{ErrorKind, Fallible};
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+        },
+        errors::{ErrorKind, Fallible},
+        transcript::{TranscriptProtocol, UpdateTranscript},
     },
-    transcript::{TranscriptProtocol, UpdateTranscript},
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
 };
 
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_COMPRESSED,
-    constants::RISTRETTO_BASEPOINT_POINT,
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
-    traits::MultiscalarMul,
+    constants::RISTRETTO_BASEPOINT_COMPRESSED, constants::RISTRETTO_BASEPOINT_POINT,
+    ristretto::RistrettoPoint, scalar::Scalar, traits::MultiscalarMul,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
@@ -291,37 +291,25 @@ impl R1ProofInitialMessage {
 impl Encode for R1ProofInitialMessage {
     #[inline]
     fn size_hint(&self) -> usize {
-        128
+        4 * RistrettoPointEncoder(&self.a).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let a = self.a.compress();
-        let b = self.b.compress();
-        let c = self.c.compress();
-        let d = self.d.compress();
-
-        (a.as_bytes(), b.as_bytes(), c.as_bytes(), d.as_bytes()).encode_to(dest)
+        RistrettoPointEncoder(&self.a).encode_to(dest);
+        RistrettoPointEncoder(&self.b).encode_to(dest);
+        RistrettoPointEncoder(&self.c).encode_to(dest);
+        RistrettoPointEncoder(&self.d).encode_to(dest);
     }
 }
 
 impl Decode for R1ProofInitialMessage {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (a, b, c, d) = <([u8; 32], [u8; 32], [u8; 32], [u8; 32])>::decode(input)?;
-        let points = [a, b, c, d]
-            .iter()
-            .map(|compressed| {
-                CompressedRistretto(*compressed)
-                    .decompress()
-                    .ok_or_else(|| CodecError::from("R1ProofInitialMessage is invalid"))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let a = <RistrettoPointDecoder>::decode(input)?.0;
+        let b = <RistrettoPointDecoder>::decode(input)?.0;
+        let c = <RistrettoPointDecoder>::decode(input)?.0;
+        let d = <RistrettoPointDecoder>::decode(input)?.0;
 
-        Ok(R1ProofInitialMessage {
-            a: points[0],
-            b: points[1],
-            c: points[2],
-            d: points[3],
-        })
+        Ok(R1ProofInitialMessage { a, b, c, d })
     }
 }
 
@@ -358,26 +346,24 @@ pub struct R1ProofFinalResponse {
 }
 
 impl Encode for R1ProofFinalResponse {
-    #[inline]
     fn size_hint(&self) -> usize {
         mem::size_of::<u32>() + 32 * self.f_elements.len() // f_elements
-            + 64    // z_a + z_c
-            + mem::size_of_val(&self.m)
-            + mem::size_of_val(&self.n)
+            + ScalarEncoder(&self.z_a).size_hint()
+            + ScalarEncoder(&self.z_c).size_hint()
+            + self.m.size_hint()
+            + self.n.size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let z_a = self.z_a.as_bytes();
-        let z_c = self.z_c.as_bytes();
         let f_elements = self
             .f_elements
             .iter()
-            .map(|s| s.as_bytes())
+            .map(ScalarEncoder)
             .collect::<Vec<_>>();
 
         f_elements.encode_to(dest);
-        z_a.encode_to(dest);
-        z_c.encode_to(dest);
+        ScalarEncoder(&self.z_a).encode_to(dest);
+        ScalarEncoder(&self.z_c).encode_to(dest);
         self.m.encode_to(dest);
         self.n.encode_to(dest);
     }
@@ -385,22 +371,13 @@ impl Encode for R1ProofFinalResponse {
 
 impl Decode for R1ProofFinalResponse {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let f_elements = <Vec<[u8; 32]>>::decode(input)?
+        let f_elements = <Vec<ScalarDecoder>>::decode(input)?
             .into_iter()
-            .map(|s| {
-                Scalar::from_canonical_bytes(s)
-                    .ok_or_else(|| CodecError::from("R1ProofFinalResponse `f_elements` is invalid"))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|decoder| decoder.0)
+            .collect::<Vec<_>>();
 
-        let z_a = <[u8; 32]>::decode(input)?;
-        let z_a = Scalar::from_canonical_bytes(z_a)
-            .ok_or_else(|| CodecError::from("R1ProofFinalResponse `z_a` is invalid"))?;
-
-        let z_c = <[u8; 32]>::decode(input)?;
-        let z_c = Scalar::from_canonical_bytes(z_c)
-            .ok_or_else(|| CodecError::from("R1ProofFinalResponse `z_c` is invalid"))?;
-
+        let z_a = <ScalarDecoder>::decode(input)?.0;
+        let z_c = <ScalarDecoder>::decode(input)?.0;
         let m = <u32>::decode(input)?;
         let n = <u32>::decode(input)?;
 
@@ -628,15 +605,15 @@ impl Encode for OOONProofInitialMessage {
     fn size_hint(&self) -> usize {
         self.r1_proof_initial_message.size_hint()
             + mem::size_of::<u32>() + 32 * self.g_vec.len() // g_vec
-            + mem::size_of_val(&self.n)
-            + mem::size_of_val(&self.m)
+            + self.n.size_hint()
+            + self.m.size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let g_vec_compressed = self.g_vec.iter().map(|p| p.compress()).collect::<Vec<_>>();
-        let g_vec = g_vec_compressed
+        let g_vec = self
+            .g_vec
             .iter()
-            .map(|gc| gc.to_bytes())
+            .map(RistrettoPointEncoder)
             .collect::<Vec<_>>();
 
         self.r1_proof_initial_message.encode_to(dest);
@@ -649,14 +626,10 @@ impl Encode for OOONProofInitialMessage {
 impl Decode for OOONProofInitialMessage {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let r1_proof_initial_message = R1ProofInitialMessage::decode(input)?;
-        let g_vec = <Vec<[u8; 32]>>::decode(input)?
+        let g_vec = <Vec<RistrettoPointDecoder>>::decode(input)?
             .into_iter()
-            .map(|g| {
-                CompressedRistretto(g).decompress().ok_or_else(|| {
-                    CodecError::from("OOONProofInitialMessage has a invalid `g` point")
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|decoder| decoder.0)
+            .collect::<Vec<_>>();
         let n = <u32>::decode(input)?;
         let m = <u32>::decode(input)?;
 
@@ -717,16 +690,14 @@ impl Encode for OOONProofFinalResponse {
     #[inline]
     fn size_hint(&self) -> usize {
         self.r1_proof_final_response.size_hint()
-            + 32                    // z
-            + mem::size_of_val(&self.m)
-            + mem::size_of_val(&self.n)
+            + ScalarEncoder(&self.z).size_hint()
+            + self.m.size_hint()
+            + self.n.size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let z = self.z.as_bytes();
-
         self.r1_proof_final_response.encode_to(dest);
-        z.encode_to(dest);
+        ScalarEncoder(&self.z).encode_to(dest);
         self.m.encode_to(dest);
         self.n.encode_to(dest);
     }
@@ -734,10 +705,10 @@ impl Encode for OOONProofFinalResponse {
 
 impl Decode for OOONProofFinalResponse {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (r1_proof_final_response, z, m, n) =
-            <(R1ProofFinalResponse, [u8; 32], u32, u32)>::decode(input)?;
-        let z = Scalar::from_canonical_bytes(z)
-            .ok_or_else(|| CodecError::from("OOONProofFinalResponse has a invalid `z` point"))?;
+        let r1_proof_final_response = <R1ProofFinalResponse>::decode(input)?;
+        let z = <ScalarDecoder>::decode(input)?.0;
+        let m = <u32>::decode(input)?;
+        let n = <u32>::decode(input)?;
 
         Ok(OOONProofFinalResponse {
             r1_proof_final_response,

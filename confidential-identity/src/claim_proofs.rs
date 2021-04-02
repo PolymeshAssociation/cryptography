@@ -41,8 +41,10 @@ use crate::{
     InvestorTrait, ProviderTrait, VerifierTrait,
 };
 use blake2::{Blake2b, Blake2s, Digest};
-use cryptography_core::cdd_claim::pedersen_commitments::{
-    generate_blinding_factor, PedersenGenerators,
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
+use cryptography_core::{
+    cdd_claim::pedersen_commitments::{generate_blinding_factor, PedersenGenerators},
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
 };
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_core::{CryptoRng, RngCore};
@@ -100,7 +102,7 @@ pub struct ScopeClaimProofData {
 /// Contains the Zero Knowledge proof and the proof of wellformedness.
 /// This is the construct that the investors will use to generate
 /// claim proofs.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ScopeClaimProof {
     pub proof_scope_id_wellformed: Signature,
@@ -108,13 +110,86 @@ pub struct ScopeClaimProof {
     pub scope_id: RistrettoPoint,
 }
 
+impl Encode for ScopeClaimProof {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.proof_scope_id_wellformed.size_hint()
+            + self.proof_scope_id_cdd_id_match.size_hint()
+            + RistrettoPointEncoder(&self.scope_id).size_hint()
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.proof_scope_id_wellformed.encode_to(dest);
+        self.proof_scope_id_cdd_id_match.encode_to(dest);
+        RistrettoPointEncoder(&self.scope_id).encode_to(dest);
+    }
+}
+
+impl Decode for ScopeClaimProof {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let proof_scope_id_wellformed = <Signature>::decode(input)?;
+        let proof_scope_id_cdd_id_match = <ZkProofData>::decode(input)?;
+        let scope_id_decoder = <RistrettoPointDecoder>::decode(input)?;
+
+        Ok(Self {
+            proof_scope_id_wellformed,
+            proof_scope_id_cdd_id_match,
+            scope_id: scope_id_decoder.0,
+        })
+    }
+}
+
+const ZK_PROOF_DATA_CHG_RESPONSES: usize = 2;
+
 /// Stores the zero knowlegde proof data for scope_id and cdd_id matching.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ZkProofData {
-    challenge_responses: [Scalar; 2],
+    challenge_responses: [Scalar; ZK_PROOF_DATA_CHG_RESPONSES],
     subtract_expressions_res: RistrettoPoint,
     blinded_scope_did_hash: RistrettoPoint,
+}
+
+impl Encode for ZkProofData {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        self.challenge_responses_to_codec().size_hint()
+            + RistrettoPointEncoder(&self.subtract_expressions_res).size_hint()
+            + RistrettoPointEncoder(&self.blinded_scope_did_hash).size_hint()
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        self.challenge_responses_to_codec().encode_to(dest);
+        RistrettoPointEncoder(&self.subtract_expressions_res).encode_to(dest);
+        RistrettoPointEncoder(&self.blinded_scope_did_hash).encode_to(dest);
+    }
+}
+
+impl Decode for ZkProofData {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let challenge_responses_decoder = <[ScalarDecoder; 2]>::decode(input)?;
+        let subtract_expressions_res_decoder = <RistrettoPointDecoder>::decode(input)?;
+        let blinded_scope_did_hash_decoder = <RistrettoPointDecoder>::decode(input)?;
+
+        Ok(Self {
+            challenge_responses: [
+                challenge_responses_decoder[0].0,
+                challenge_responses_decoder[1].0,
+            ],
+            subtract_expressions_res: subtract_expressions_res_decoder.0,
+            blinded_scope_did_hash: blinded_scope_did_hash_decoder.0,
+        })
+    }
+}
+
+impl ZkProofData {
+    /// Creates an array of `ScalarEncoder`, using references from `self.challenge_responses`.
+    fn challenge_responses_to_codec(&self) -> [ScalarEncoder; ZK_PROOF_DATA_CHG_RESPONSES] {
+        [
+            ScalarEncoder(&self.challenge_responses[0]),
+            ScalarEncoder(&self.challenge_responses[1]),
+        ]
+    }
 }
 
 const SIGNATURE_MESSAGE: &str = "SCOPE_ID is Wellformed";

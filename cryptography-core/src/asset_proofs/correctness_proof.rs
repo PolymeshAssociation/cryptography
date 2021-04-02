@@ -1,20 +1,21 @@
 //! The proof of correct encryption of the given value.
 //! For more details see section 5.2 of the whitepaper.
 
-use super::errors::{ErrorKind, Fallible};
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
-        ZKProofResponse,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+            ZKProofResponse,
+        },
+        errors::{ErrorKind, Fallible},
+        transcript::{TranscriptProtocol, UpdateTranscript},
+        CipherText, CommitmentWitness, ElgamalPublicKey,
     },
-    transcript::{TranscriptProtocol, UpdateTranscript},
-    CipherText, CommitmentWitness, ElgamalPublicKey,
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
 };
 use bulletproofs::PedersenGens;
 use curve25519_dalek::{
-    constants::RISTRETTO_BASEPOINT_POINT,
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
+    constants::RISTRETTO_BASEPOINT_POINT, ristretto::RistrettoPoint, scalar::Scalar,
 };
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
@@ -46,20 +47,17 @@ impl From<Scalar> for CorrectnessFinalResponse {
 
 impl Encode for CorrectnessFinalResponse {
     fn size_hint(&self) -> usize {
-        32
+        ScalarEncoder(&self.0).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        self.0.as_bytes().encode_to(dest)
+        ScalarEncoder(&self.0).encode_to(dest)
     }
 }
 
 impl Decode for CorrectnessFinalResponse {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let scalar = <[u8; 32]>::decode(input)?;
-        let scalar = Scalar::from_canonical_bytes(scalar)
-            .ok_or_else(|| CodecError::from("CorrectnessFinalResponse is invalid"))?;
-
+        let scalar = <ScalarDecoder>::decode(input)?.0;
         Ok(CorrectnessFinalResponse(scalar))
     }
 }
@@ -73,27 +71,19 @@ pub struct CorrectnessInitialMessage {
 
 impl Encode for CorrectnessInitialMessage {
     fn size_hint(&self) -> usize {
-        64
+        RistrettoPointEncoder(&self.a).size_hint() + RistrettoPointEncoder(&self.b).size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let a = self.a.compress();
-        let b = self.b.compress();
-
-        a.as_bytes().encode_to(dest);
-        b.as_bytes().encode_to(dest);
+        RistrettoPointEncoder(&self.a).encode_to(dest);
+        RistrettoPointEncoder(&self.b).encode_to(dest);
     }
 }
 
 impl Decode for CorrectnessInitialMessage {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (a, b) = <([u8; 32], [u8; 32])>::decode(input)?;
-        let a = CompressedRistretto(a)
-            .decompress()
-            .ok_or_else(|| CodecError::from("CorrectnessInitialMessage 'a' point is invalid"))?;
-        let b = CompressedRistretto(b)
-            .decompress()
-            .ok_or_else(|| CodecError::from("CorrectnessInitialMessage 'b' point is invalid"))?;
+        let a = <RistrettoPointDecoder>::decode(input)?.0;
+        let b = <RistrettoPointDecoder>::decode(input)?.0;
 
         Ok(CorrectnessInitialMessage { a, b })
     }
