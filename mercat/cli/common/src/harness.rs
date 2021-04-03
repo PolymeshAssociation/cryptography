@@ -45,6 +45,8 @@ pub enum Transaction {
     Issue(Issue),
     /// Validate all pending transactions up to this point.
     Validate(Validate),
+    /// Audit the specified transaction.
+    Audit(Audit),
 }
 
 /// A generic party, can be sender, receiver, or mediator.
@@ -71,7 +73,7 @@ impl TryFrom<&str> for Party {
 }
 
 /// Data type of the transaction of transferring balance.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Transfer {
     pub tx_id: u32,
     pub sender: Party,
@@ -81,15 +83,17 @@ pub struct Transfer {
     pub mediator_approves: bool,
     pub amount: u32,
     pub ticker: String,
+    pub auditors: Option<Vec<Party>>,
+    pub tx_name: Option<String>,
 }
 
 impl TryFrom<(u32, String)> for Transfer {
     type Error = Error;
     fn try_from(pair: (u32, String)) -> Result<Self, Error> {
         let (tx_id, segment) = pair;
-        // Example: transfer Bob(cheat) 40 ACME Carol approve Marry reject
+        // Example: transfer Bob(cheat) 40 ACME Carol approve Marry reject auditors Ava,Aubrey tx_name BobToAlice
         let re = Regex::new(
-            r"^transfer ([a-zA-Z0-9()]+) ([0-9]+) ([a-zA-Z0-9]+) ([a-zA-Z0-9()]+) (approve|reject) ([a-zA-Z0-9()]+) (approve|reject)$",
+            r"^transfer ([a-zA-Z0-9()]+) ([0-9]+) ([a-zA-Z0-9]+) ([a-zA-Z0-9()]+) (approve|reject) ([a-zA-Z0-9()]+) (approve|reject)( auditors)?( [a-zA-Z0-9,]+)?( tx_name)?( [a-zA-Z0-9-_]+)?$",
         )
         .map_err(|_| Error::RegexError {
             reason: String::from("Failed to compile the Transfer regex"),
@@ -98,6 +102,22 @@ impl TryFrom<(u32, String)> for Transfer {
             reason: format!("Pattern did not match {}", segment),
         })?;
         let ticker = caps[3].to_string().to_uppercase();
+        let auditors = if caps.get(9) == None {
+            None
+        } else {
+            let auditors: Vec<Party> = caps[9]
+                .to_string()
+                .to_lowercase()
+                .split(",")
+                .map(|name| Party::try_from(name))
+                .collect::<Result<_, _>>()?;
+            Some(auditors)
+        };
+        let tx_name = if caps.get(11) == None {
+            None
+        } else {
+            Some(caps[11].trim().to_string())
+        };
         Ok(Self {
             tx_id,
             sender: Party::try_from(&caps[1])?,
@@ -112,6 +132,8 @@ impl TryFrom<(u32, String)> for Transfer {
                     reason: String::from("failed to convert amount to u32."),
                 })?,
             ticker,
+            auditors,
+            tx_name,
         })
     }
 }
@@ -125,12 +147,14 @@ pub struct Create {
 }
 
 /// Data type of the transaction of funding an account by issuer.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Issue {
     pub tx_id: u32,
     pub issuer: Party,
     pub ticker: String,
     pub amount: u32,
+    pub auditors: Option<Vec<Party>>,
+    pub tx_name: Option<String>,
 }
 
 impl TryFrom<(u32, String)> for Issue {
@@ -138,15 +162,33 @@ impl TryFrom<(u32, String)> for Issue {
     fn try_from(pair: (u32, String)) -> Result<Self, Error> {
         let (tx_id, segment) = pair;
         // Example: issue Bob(cheat) 40 ACME
-        let re = Regex::new(r"^issue ([a-zA-Z0-9()]+) ([0-9]+) ([a-zA-Z0-9]+)$").map_err(|_| {
-            Error::RegexError {
-                reason: String::from("Failed to compile the Issue regex"),
-            }
+        // Example: issue Bob(cheat) 40 ACME auditors Ava,Aubrey tx_name BobIssue
+        let re = Regex::new(
+            r"^issue ([a-zA-Z0-9()]+) ([0-9]+) ([a-zA-Z0-9]+)( auditors)?( [a-zA-Z0-9,]+)?( tx_name)?( [a-zA-Z0-9-_]+)?$",
+        )
+        .map_err(|_| Error::RegexError {
+            reason: String::from("Failed to compile the Issue regex"),
         })?;
         let caps = re.captures(&segment).ok_or(Error::RegexError {
             reason: format!("Pattern did not match {}", segment),
         })?;
         let ticker = caps[3].to_string().to_uppercase();
+        let auditors = if caps.get(5) == None {
+            None
+        } else {
+            let auditors: Vec<Party> = caps[5]
+                .to_string()
+                .to_lowercase()
+                .split(",")
+                .map(|name| Party::try_from(name))
+                .collect::<Result<_, _>>()?;
+            Some(auditors)
+        };
+        let tx_name = if caps.get(7) == None {
+            None
+        } else {
+            Some(caps[7].trim().to_string())
+        };
         Ok(Self {
             tx_id,
             issuer: Party::try_from(&caps[1])?,
@@ -157,6 +199,8 @@ impl TryFrom<(u32, String)> for Issue {
                 .map_err(|_| Error::RegexError {
                     reason: String::from("failed to convert amount to u32."),
                 })?,
+            auditors,
+            tx_name,
         })
     }
 }
@@ -175,6 +219,37 @@ impl TryFrom<String> for Validate {
             });
         }
         Ok(Self {})
+    }
+}
+
+/// A generic party, can be sender, receiver, or mediator.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Audit {
+    pub tx_id: u32,
+    pub tx_name: String,
+    pub auditor: Party,
+}
+
+impl TryFrom<(u32, String)> for Audit {
+    type Error = Error;
+    fn try_from(pair: (u32, String)) -> Result<Self, Error> {
+        // Example: audit AliceIssue Ava
+        let (tx_id, segment) = pair;
+        let re = Regex::new(r"audit ([a-zA-Z0-9-_]+) ([a-zA-Z0-9]+)").map_err(|_| {
+            Error::RegexError {
+                reason: String::from("Failed to compile the Transfer regex"),
+            }
+        })?;
+        let caps = re.captures(&segment).ok_or(Error::RegexError {
+            reason: format!("Pattern did not match {}", segment),
+        })?;
+        let tx_name = caps[1].to_string();
+        let auditor = Party::try_from(&caps[2])?;
+        Ok(Self {
+            tx_id,
+            tx_name,
+            auditor,
+        })
     }
 }
 
@@ -234,6 +309,7 @@ impl Transaction {
         chain_db_dir: PathBuf,
     ) -> Vec<StepFunc> {
         match self {
+            Transaction::Audit(audit) => audit.operations_order(rng, chain_db_dir),
             Transaction::Validate(validate) => validate.operations_order(chain_db_dir),
             Transaction::Issue(fund) => fund.operations_order(rng, chain_db_dir),
             Transaction::Transfer(transfer) => transfer.operations_order(rng, chain_db_dir),
@@ -504,6 +580,30 @@ impl Validate {
 
     pub fn operations_order(&self, chain_db_dir: PathBuf) -> Vec<StepFunc> {
         vec![self.validate(chain_db_dir)]
+    }
+}
+
+impl Audit {
+    pub fn audit(&self, chain_db_dir: PathBuf) -> StepFunc {
+        // validate a transaction
+        let value = format!(
+            "tx-NA: $ mercat-validator validate --db-dir {}",
+            path_to_string(&chain_db_dir),
+        );
+
+        Box::new(move || {
+            info!("Running: {}", value.clone());
+            validate_all_pending(chain_db_dir.clone())?;
+            Ok(value.clone())
+        })
+    }
+
+    pub fn operations_order<T: RngCore + CryptoRng>(
+        &self,
+        rng: &mut T,
+        chain_db_dir: PathBuf,
+    ) -> Vec<StepFunc> {
+        vec![self.audit(chain_db_dir)]
     }
 }
 
@@ -799,11 +899,19 @@ fn parse_transactions(
                     transaction_list.push(TransactionMode::Transaction(Transaction::Validate(
                         validate,
                     )));
+                } else if let Ok(audit) = Audit::try_from((transaction_id, transaction.to_string()))
+                    .map_err(|_| Error::ErrorParsingTestHarnessConfig {
+                        path: path.clone(),
+                        reason: String::from("audit"),
+                    })
+                {
+                    // audit does not need a transaction id
+                    transaction_list.push(TransactionMode::Transaction(Transaction::Audit(audit)));
                 } else {
                     return Err(Error::ErrorParsingTestHarnessConfig {
                         path,
                         reason: format!(
-                            "Transaction {} does not match neither issuance or transfer format",
+                            "Transaction {} does not match issuance, or transfer format",
                             transaction
                         ),
                     });
@@ -869,6 +977,19 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         let accounts = to_array(&config["mediators"], path.clone(), "mediators")?;
         for user in accounts {
             let user = to_string(&user, path.clone(), "mediator.user")?;
+            let user = user.to_lowercase();
+            all_accounts.push(InputAccount {
+                balance: 0,
+                owner: Party::try_from(user.as_str())?,
+                ticker: None,
+            });
+        }
+    }
+
+    if config["auditors"] != Yaml::BadValue {
+        let accounts = to_array(&config["auditors"], path.clone(), "auditors")?;
+        for user in accounts {
+            let user = to_string(&user, path.clone(), "auditor.user")?;
             let user = user.to_lowercase();
             all_accounts.push(InputAccount {
                 balance: 0,
@@ -982,18 +1103,17 @@ fn run_from(mode: &str) {
             let want = &testcase.accounts_outcome;
             let got = testcase.run();
             if let Err(error) = got {
-                panic!(format!(
+                panic!(
                     "Test was expected to succeed, but failed with {:#?}.",
                     error
-                ));
+                );
             } else {
                 let got = got.unwrap();
                 assert!(
                     accounts_are_equal(want, &got),
-                    format!(
-                        "Test failed due to account value mismatch.\nWant: {:#?}, got: {:#?}",
-                        want, got
-                    )
+                    "Test failed due to account value mismatch.\nWant: {:#?}, got: {:#?}",
+                    want,
+                    got
                 );
             }
         }
@@ -1048,6 +1168,155 @@ mod tests {
     fn test_on_wasm() {
         cleanup_previous_run("wasm");
         run_from("wasm");
+    }
+
+    #[test]
+    fn test_parse_issue() {
+        let issue = Issue::try_from((1, "invalid".to_string()));
+        assert!(issue.is_err());
+
+        assert_eq!(
+            Issue::try_from((1, "issue Bob 40 ACME".to_string())).unwrap(),
+            Issue {
+                tx_id: 1,
+                issuer: Party {
+                    name: "bob".to_string(),
+                    cheater: false
+                },
+                ticker: "ACME".to_string(),
+                amount: 40,
+                auditors: None,
+                tx_name: None,
+            }
+        );
+        assert_eq!(
+            Issue::try_from((2, "issue Bob(cheat) 40 ACME".to_string())).unwrap(),
+            Issue {
+                tx_id: 2,
+                issuer: Party {
+                    name: "bob".to_string(),
+                    cheater: true
+                },
+                ticker: "ACME".to_string(),
+                amount: 40,
+                auditors: None,
+                tx_name: None,
+            }
+        );
+
+        assert_eq!(
+            Issue::try_from((
+                3,
+                "issue Bob(cheat) 40 ACME auditors Ava,Aubrey tx_name BobIssue".to_string(),
+            ))
+            .unwrap(),
+            Issue {
+                tx_id: 3,
+                issuer: Party {
+                    name: "bob".to_string(),
+                    cheater: true
+                },
+                ticker: "ACME".to_string(),
+                amount: 40,
+                auditors: Some(vec![
+                    Party {
+                        name: "ava".to_string(),
+                        cheater: false
+                    },
+                    Party {
+                        name: "aubrey".to_string(),
+                        cheater: false
+                    }
+                ]),
+                tx_name: Some("BobIssue".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_transfer() {
+        assert!(Transfer::try_from((1, "invalid".to_string())).is_err());
+        assert_eq!(
+            Transfer::try_from((
+                2,
+                "transfer Bob(cheat) 40 ACME Carol approve Marry reject".to_string()
+            ))
+            .unwrap(),
+            Transfer {
+                tx_id: 2,
+                sender: Party {
+                    name: "bob".to_string(),
+                    cheater: true
+                },
+                receiver: Party {
+                    name: "carol".to_string(),
+                    cheater: false
+                },
+                receiver_approves: true,
+                mediator: Party {
+                    name: "marry".to_string(),
+                    cheater: false
+                },
+                mediator_approves: false,
+                amount: 40,
+                ticker: "ACME".to_string(),
+                auditors: None,
+                tx_name: None,
+            }
+        );
+
+        assert_eq!(
+            Transfer::try_from((
+                3,
+                "transfer Bob(cheat) 40 ACME Carol approve Marry reject auditors Ava,Aubrey tx_name BobToAlice".to_string()
+            ))
+            .unwrap(),
+            Transfer {
+                tx_id: 3,
+                sender: Party {
+                    name: "bob".to_string(),
+                    cheater: true
+                },
+                receiver: Party {
+                    name: "carol".to_string(),
+                    cheater: false
+                },
+                receiver_approves: true,
+                mediator: Party {
+                    name: "marry".to_string(),
+                    cheater: false
+                },
+                mediator_approves: false,
+                amount: 40,
+                ticker: "ACME".to_string(),
+                auditors: Some(vec![
+                    Party {
+                        name: "ava".to_string(),
+                        cheater: false
+                    },
+                    Party {
+                        name: "aubrey".to_string(),
+                        cheater: false
+                    }
+                ]),
+                tx_name: Some("BobToAlice".to_string()),
+            }
+        );
+    }
+    #[test]
+    fn test_parse_audit() {
+        assert!(Transfer::try_from((1, "invalid".to_string())).is_err());
+        assert_eq!(
+            Audit::try_from((2, "audit AliceIssue Ava".to_string())).unwrap(),
+            Audit {
+                tx_id: 2,
+                tx_name: "AliceIssue".to_string(),
+                auditor: Party {
+                    name: "ava".to_string(),
+                    cheater: false
+                },
+            }
+        );
     }
 }
 
