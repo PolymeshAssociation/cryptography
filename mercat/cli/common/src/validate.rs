@@ -5,14 +5,15 @@ use crate::{
     parse_tx_name, save_object, save_to_file, user_public_account_balance_file,
     user_public_account_file, AssetInstruction, CoreTransaction, Direction, OrderedPubAccount,
     OrderedPubAccountTx, PrintableAccountId, TransferInstruction, ValidationResult,
-    COMMON_OBJECTS_DIR, LAST_VALIDATED_TX_ID_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    AUDITOR_PUBLIC_ACCOUNT_FILE, COMMON_OBJECTS_DIR, LAST_VALIDATED_TX_ID_FILE, OFF_CHAIN_DIR,
+    ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
 use log::{debug, error, info};
 use mercat::{
     account::AccountValidator, asset::AssetValidator, transaction::TransactionValidator,
     AccountCreatorVerifier, AssetTransactionVerifier, AssetTxState, EncryptedAmount,
-    EncryptedAssetId, InitializedAssetTx, JustifiedTransferTx, PubAccount,
+    EncryptedAssetId, EncryptionPubKey, InitializedAssetTx, JustifiedTransferTx, PubAccount,
     TransferTransactionVerifier, TransferTxState, TxSubstate,
 };
 use metrics::timing;
@@ -48,9 +49,15 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                 issuer: _,
                 ordering_state: _,
                 amount,
+                auditors,
             } => {
-                let result =
-                    validate_asset_issuance(db_dir.clone(), amount, issue_tx.clone(), tx_id);
+                let result = validate_asset_issuance(
+                    db_dir.clone(),
+                    amount,
+                    issue_tx.clone(),
+                    tx_id,
+                    &auditors,
+                );
                 results.push(result);
                 last_tx_id = Some(std::cmp::max(last_tx_id.unwrap_or_default(), tx_id));
             }
@@ -237,6 +244,7 @@ pub fn validate_asset_issuance(
     amount: u32,
     asset_tx: InitializedAssetTx,
     tx_id: u32,
+    auditors: &[String],
 ) -> ValidationResult {
     let load_objects_timer = Instant::now();
 
@@ -276,6 +284,25 @@ pub fn validate_asset_issuance(
     }
     let issuer_account_balance = issuer_account_balance.unwrap();
 
+    let auditors = auditors
+        .into_iter()
+        .map(|auditor| {
+            let key: Result<(u32, EncryptionPubKey), _> = load_object(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                &auditor,
+                AUDITOR_PUBLIC_ACCOUNT_FILE,
+            );
+
+            key
+        })
+        .collect::<Result<Vec<(u32, EncryptionPubKey)>, _>>()
+        .map_err(|error| {
+            error!("Error in validation of tx-{}: {:#?}", tx_id, error);
+            ValidationResult::error("user", "ticker")
+        });
+    let auditors = auditors.unwrap(); // TODO
+
     timing!(
         "validator.issuance.load_objects",
         load_objects_timer,
@@ -293,7 +320,7 @@ pub fn validate_asset_issuance(
             &asset_tx,
             &issuer_ordered_pub_account.pub_account,
             &issuer_account_balance,
-            &[],
+            &auditors,
         )
         .map_err(|error| Error::LibraryError { error })
     {

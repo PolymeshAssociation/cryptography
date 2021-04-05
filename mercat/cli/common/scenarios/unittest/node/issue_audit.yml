@@ -1,5 +1,5 @@
 --- 
-title: "Fund a single account with two auditors, only will audit."
+title: "Fund a single account with two auditors, but only one audits."
 
 tickers: 
   - ACME

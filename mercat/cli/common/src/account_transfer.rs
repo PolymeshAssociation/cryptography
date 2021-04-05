@@ -171,6 +171,7 @@ pub fn process_create_tx(
         state: new_state,
         ordering_state,
         data: asset_tx.encode().to_vec(),
+        auditors: vec![], // TODO
     };
 
     save_object(
@@ -322,6 +323,7 @@ pub fn process_finalize_tx(
         state,
         ordering_state,
         data: asset_tx.encode().to_vec(),
+        auditors: vec![], // TODO
     };
 
     save_object(

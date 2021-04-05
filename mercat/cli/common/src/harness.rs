@@ -2,6 +2,7 @@ use crate::{
     account_create::process_create_account,
     account_issue::process_issue_asset,
     account_transfer::{process_create_tx, process_finalize_tx},
+    audit::process_create_auditor,
     chain_setup::process_asset_id_creation,
     create_rng_from_seed, debug_decrypt_account_balance,
     errors::Error,
@@ -17,12 +18,12 @@ use rand::Rng;
 use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, RngCore};
 use regex::Regex;
-use std::path::PathBuf;
 use std::{
     collections::HashSet,
     convert::{From, TryFrom},
     fs, io,
 };
+use std::{convert::TryInto, path::PathBuf};
 use yaml_rust::{Yaml, YamlLoader};
 
 // --------------------------------------------------------------------------------------------------
@@ -49,16 +50,26 @@ pub enum Transaction {
     Audit(Audit),
 }
 
+/// Distinguishes between the three types of users in the system.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PartyKind {
+    Normal,
+    Mediator,
+    Auditor,
+}
+
 /// A generic party, can be sender, receiver, or mediator.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Party {
     pub name: String,
     pub cheater: bool,
+    pub kind: PartyKind,
 }
 
-impl TryFrom<&str> for Party {
+impl TryFrom<(&str, PartyKind)> for Party {
     type Error = Error;
-    fn try_from(segment: &str) -> Result<Self, Error> {
+    fn try_from(pair: (&str, PartyKind)) -> Result<Self, Error> {
+        let (segment, kind) = pair;
         // Example: alice or alice(cheat)
         let re = Regex::new(r"([a-zA-Z0-9]+)(\(cheat\))?").map_err(|_| Error::RegexError {
             reason: String::from("Failed to compile the Transfer regex"),
@@ -68,7 +79,11 @@ impl TryFrom<&str> for Party {
         })?;
         let name = caps[1].to_string().to_lowercase();
         let cheater = caps.get(2).is_some();
-        Ok(Self { name, cheater })
+        Ok(Self {
+            name,
+            cheater,
+            kind,
+        })
     }
 }
 
@@ -83,7 +98,7 @@ pub struct Transfer {
     pub mediator_approves: bool,
     pub amount: u32,
     pub ticker: String,
-    pub auditors: Option<Vec<Party>>,
+    pub auditors: Vec<Party>,
     pub tx_name: Option<String>,
 }
 
@@ -103,15 +118,14 @@ impl TryFrom<(u32, String)> for Transfer {
         })?;
         let ticker = caps[3].to_string().to_uppercase();
         let auditors = if caps.get(9) == None {
-            None
+            vec![]
         } else {
-            let auditors: Vec<Party> = caps[9]
+            caps[9]
                 .to_string()
                 .to_lowercase()
                 .split(",")
-                .map(|name| Party::try_from(name))
-                .collect::<Result<_, _>>()?;
-            Some(auditors)
+                .map(|name| Party::try_from((name, PartyKind::Auditor)))
+                .collect::<Result<_, _>>()?
         };
         let tx_name = if caps.get(11) == None {
             None
@@ -120,10 +134,10 @@ impl TryFrom<(u32, String)> for Transfer {
         };
         Ok(Self {
             tx_id,
-            sender: Party::try_from(&caps[1])?,
-            receiver: Party::try_from(&caps[4])?,
+            sender: Party::try_from((&caps[1], PartyKind::Normal))?,
+            receiver: Party::try_from((&caps[4], PartyKind::Normal))?,
             receiver_approves: caps[5].to_string() == "approve",
-            mediator: Party::try_from(&caps[6])?,
+            mediator: Party::try_from((&caps[6], PartyKind::Mediator))?,
             mediator_approves: caps[7].to_string() == "approve",
             amount: caps[2]
                 .to_string()
@@ -143,6 +157,7 @@ impl TryFrom<(u32, String)> for Transfer {
 pub struct Create {
     pub tx_id: u32,
     pub owner: Party,
+    pub owner_id: Option<u32>,
     pub ticker: Option<String>,
 }
 
@@ -153,7 +168,7 @@ pub struct Issue {
     pub issuer: Party,
     pub ticker: String,
     pub amount: u32,
-    pub auditors: Option<Vec<Party>>,
+    pub auditors: Vec<Party>,
     pub tx_name: Option<String>,
 }
 
@@ -174,15 +189,14 @@ impl TryFrom<(u32, String)> for Issue {
         })?;
         let ticker = caps[3].to_string().to_uppercase();
         let auditors = if caps.get(5) == None {
-            None
+            vec![]
         } else {
-            let auditors: Vec<Party> = caps[5]
+            caps[5]
                 .to_string()
                 .to_lowercase()
                 .split(",")
-                .map(|name| Party::try_from(name))
-                .collect::<Result<_, _>>()?;
-            Some(auditors)
+                .map(|name| Party::try_from((name, PartyKind::Auditor)))
+                .collect::<Result<_, _>>()?
         };
         let tx_name = if caps.get(7) == None {
             None
@@ -191,7 +205,7 @@ impl TryFrom<(u32, String)> for Issue {
         };
         Ok(Self {
             tx_id,
-            issuer: Party::try_from(&caps[1])?,
+            issuer: Party::try_from((&caps[1], PartyKind::Normal))?,
             ticker,
             amount: caps[2]
                 .to_string()
@@ -244,7 +258,7 @@ impl TryFrom<(u32, String)> for Audit {
             reason: format!("Pattern did not match {}", segment),
         })?;
         let tx_name = caps[1].to_string();
-        let auditor = Party::try_from(&caps[2])?;
+        let auditor = Party::try_from((&caps[2], PartyKind::Auditor))?;
         Ok(Self {
             tx_id,
             tx_name,
@@ -257,7 +271,7 @@ impl TryFrom<(u32, String)> for Audit {
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub struct InputAccount {
     owner: Party,
-    ticker: Option<String>,
+    ticker: String,
     balance: u32,
 }
 
@@ -460,9 +474,10 @@ impl Create {
         chain_db_dir: PathBuf,
     ) -> StepFunc {
         let seed = gen_seed_from(rng);
-        if let Some(ticker) = self.ticker.clone() {
-            // create a normal account
-            let value = format!(
+        match self.owner.kind {
+            PartyKind::Normal => {
+                if let Some(ticker) = self.ticker.clone() {
+                    let value = format!(
                 "tx-{}: $ mercat-account create --ticker {} --user {} --seed {} --db-dir {} --tx-id {} {}",
                 self.tx_id,
                 ticker,
@@ -472,40 +487,71 @@ impl Create {
                 self.tx_id,
                 cheater_flag(self.owner.cheater)
             );
-            let owner = self.owner.name.clone();
-            let cheat = self.owner.cheater;
-            let tx_id = self.tx_id;
+                    let owner = self.owner.name.clone();
+                    let cheat = self.owner.cheater;
+                    let tx_id = self.tx_id;
 
-            Box::new(move || {
-                info!("Running: {}", value.clone());
-                process_create_account(
-                    Some(seed.clone()),
-                    chain_db_dir.clone(),
-                    ticker.clone(),
-                    owner.clone(),
-                    false, // Do not print the transaction data to stdout.
-                    tx_id,
-                    cheat,
-                )?;
-                Ok(value.clone())
-            })
-        } else {
-            // create a mediator account
-            let value = format!(
-                "tx-{}: $ mercat-mediator create --user {} --seed {} --db-dir {} {}",
-                self.tx_id,
-                self.owner.name,
-                seed,
-                path_to_string(&chain_db_dir),
-                cheater_flag(self.owner.cheater)
-            );
-            let owner = self.owner.name.clone();
+                    Box::new(move || {
+                        info!("Running: {}", value.clone());
+                        process_create_account(
+                            Some(seed.clone()),
+                            chain_db_dir.clone(),
+                            ticker.clone(),
+                            owner.clone(),
+                            false, // Do not print the transaction data to stdout.
+                            tx_id,
+                            cheat,
+                        )?;
+                        Ok(value.clone())
+                    })
+                } else {
+                    panic!("Tech debt: the function should return error when ticker is not set for normal users.");
+                }
+            }
+            PartyKind::Mediator => {
+                let value = format!(
+                    "tx-{}: $ mercat-mediator create --user {} --seed {} --db-dir {} {}",
+                    self.tx_id,
+                    self.owner.name,
+                    seed,
+                    path_to_string(&chain_db_dir),
+                    cheater_flag(self.owner.cheater)
+                );
+                let owner = self.owner.name.clone();
 
-            Box::new(move || {
-                info!("Running: {}", value.clone());
-                process_create_mediator(seed.clone(), chain_db_dir.clone(), owner.clone())?;
-                Ok(value.clone())
-            })
+                Box::new(move || {
+                    info!("Running: {}", value.clone());
+                    process_create_mediator(seed.clone(), chain_db_dir.clone(), owner.clone())?;
+                    Ok(value.clone())
+                })
+            }
+            PartyKind::Auditor => {
+                if let Some(owner_id) = self.owner_id {
+                    let value = format!(
+                        "tx-{}: $ mercat-auditor create --user {} --id {} --seed {} --db-dir {} {}",
+                        self.tx_id,
+                        self.owner.name,
+                        owner_id,
+                        seed,
+                        path_to_string(&chain_db_dir),
+                        cheater_flag(self.owner.cheater)
+                    );
+                    let owner = self.owner.name.clone();
+
+                    Box::new(move || {
+                        info!("Running: {}", value.clone());
+                        process_create_auditor(
+                            seed.clone(),
+                            chain_db_dir.clone(),
+                            owner.clone(),
+                            owner_id,
+                        )?;
+                        Ok(value.clone())
+                    })
+                } else {
+                    panic!("Tech debt: the function should return error when the owner id is not set for normal users.");
+                }
+            }
         }
     }
 
@@ -537,6 +583,12 @@ impl Issue {
         let amount = self.amount;
         let tx_id = self.tx_id;
         let cheat = self.issuer.cheater;
+        let auditors: Vec<String> = self
+            .auditors
+            .clone()
+            .into_iter()
+            .map(|auditor| auditor.name)
+            .collect();
 
         Box::new(move || {
             info!("Running: {}", value.clone());
@@ -544,6 +596,7 @@ impl Issue {
                 seed.clone(),
                 chain_db_dir.clone(),
                 issuer.clone(),
+                &auditors,
                 ticker.clone(),
                 amount,
                 false, // Do not print the transaction data to stdout.
@@ -716,8 +769,8 @@ impl TestCase {
                             self.chain_db_dir.clone(),
                         )?;
                         accounts.insert(InputAccount {
-                            owner: Party::try_from(user)?,
-                            ticker: Some(ticker),
+                            owner: Party::try_from((user, PartyKind::Normal))?,
+                            ticker: ticker,
                             balance,
                         });
                     }
@@ -768,23 +821,54 @@ fn all_dirs_in_dir(dir: PathBuf) -> Result<Vec<PathBuf>, Error> {
     }
     Ok(files)
 }
-fn make_empty_accounts(accounts: &[InputAccount]) -> Result<(u32, TransactionMode), Error> {
+
+fn make_empty_normal_accounts(
+    accounts: &[InputAccount],
+) -> Result<(u32, Vec<TransactionMode>), Error> {
     let mut transaction_counter = 0;
     let mut seq: Vec<TransactionMode> = vec![];
     for account in accounts {
         seq.push(TransactionMode::Transaction(Transaction::Create(Create {
             tx_id: transaction_counter,
             owner: account.owner.clone(),
-            ticker: account.ticker.clone(),
+            ticker: Some(account.ticker.clone()),
+            owner_id: None,
         })));
         transaction_counter += 1;
     }
     Ok((
         transaction_counter,
-        TransactionMode::Sequence {
-            repeat: 1,
-            steps: seq,
-        },
+        seq
+        //TransactionMode::Sequence {
+        //    repeat: 1,
+        //    steps: seq,
+        //},
+    ))
+}
+
+fn make_empty_non_normal_accounts(
+    accounts: &[(Party, Option<u32>)],
+    starting_id: u32,
+) -> Result<(u32, Vec<TransactionMode>), Error> {
+    let mut transaction_counter = starting_id;
+    let mut seq: Vec<TransactionMode> = vec![];
+    for account in accounts {
+        let (party, owner_id) = account;
+        seq.push(TransactionMode::Transaction(Transaction::Create(Create {
+            tx_id: transaction_counter,
+            owner: party.clone(),
+            ticker: None,
+            owner_id: *owner_id,
+        })));
+        transaction_counter += 1;
+    }
+    Ok((
+        transaction_counter,
+        seq
+        //TransactionMode::Sequence {
+        //    repeat: 1,
+        //    steps: seq,
+        //},
     ))
 }
 
@@ -949,13 +1033,14 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         }
     }
 
-    let mut all_accounts: Vec<InputAccount> = vec![];
+    let mut all_normal_accounts: Vec<InputAccount> = vec![];
+    let mut all_non_normal_accounts: Vec<(Party, Option<u32>)> = vec![];
     let accounts = to_array(&config["accounts"], path.clone(), "accounts")?;
     for user in accounts {
         let user = to_hash(&user, path.clone(), "accounts.user")?;
         for (user, tickers) in user {
             let user: &str = &to_string(&user, path.clone(), "accounts.user")?;
-            let user = Party::try_from(user)?;
+            let user = Party::try_from((user, PartyKind::Normal))?;
             let tickers = to_array(&tickers, path.clone(), "accounts.tickers")?;
             for ticker in tickers {
                 let ticker = to_string(
@@ -964,10 +1049,10 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
                     &format!("accounts.{}.ticker", user.name),
                 )?;
                 let ticker = ticker.to_uppercase();
-                all_accounts.push(InputAccount {
+                all_normal_accounts.push(InputAccount {
                     balance: 0,
                     owner: user.clone(),
-                    ticker: Some(ticker),
+                    ticker,
                 });
             }
         }
@@ -978,24 +1063,20 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         for user in accounts {
             let user = to_string(&user, path.clone(), "mediator.user")?;
             let user = user.to_lowercase();
-            all_accounts.push(InputAccount {
-                balance: 0,
-                owner: Party::try_from(user.as_str())?,
-                ticker: None,
-            });
+            all_non_normal_accounts
+                .push((Party::try_from((user.as_str(), PartyKind::Mediator))?, None));
         }
     }
 
     if config["auditors"] != Yaml::BadValue {
         let accounts = to_array(&config["auditors"], path.clone(), "auditors")?;
-        for user in accounts {
+        for (id, user) in accounts.iter().enumerate() {
             let user = to_string(&user, path.clone(), "auditor.user")?;
             let user = user.to_lowercase();
-            all_accounts.push(InputAccount {
-                balance: 0,
-                owner: Party::try_from(user.as_str())?,
-                ticker: None,
-            });
+            all_non_normal_accounts.push((
+                Party::try_from((user.as_str(), PartyKind::Auditor))?,
+                id.try_into().ok(),
+            ));
         }
     }
 
@@ -1027,8 +1108,8 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
                     let balance = u32::try_from(balance).map_err(|_| Error::BalanceTooBig)?;
                     if ticker != "NONE" {
                         accounts_outcome.insert(InputAccount {
-                            owner: Party::try_from(owner.as_str())?,
-                            ticker: Some(ticker.clone()),
+                            owner: Party::try_from((owner.as_str(), PartyKind::Normal))?,
+                            ticker: ticker.clone(),
                             balance,
                         });
                     }
@@ -1037,7 +1118,19 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         }
     }
 
-    let (next_transaction_id, create_account_transactions) = make_empty_accounts(&all_accounts)?;
+    let (next_transaction_id, create_normal_account_transactions) =
+        make_empty_normal_accounts(&all_normal_accounts)?;
+
+    let (next_transaction_id, create_non_normal_account_transactions) =
+        make_empty_non_normal_accounts(&all_non_normal_accounts, next_transaction_id)?;
+
+    let create_account_transactions = TransactionMode::Sequence {
+        repeat: 1,
+        steps: create_normal_account_transactions
+            .into_iter()
+            .chain(create_non_normal_account_transactions.into_iter())
+            .collect(),
+    };
 
     // Declared mutable since later I want to consume a single element of it.
     let (_, mut transactions_list) = parse_transactions(
@@ -1181,11 +1274,12 @@ mod tests {
                 tx_id: 1,
                 issuer: Party {
                     name: "bob".to_string(),
-                    cheater: false
+                    cheater: false,
+                    kind: PartyKind::Normal,
                 },
                 ticker: "ACME".to_string(),
                 amount: 40,
-                auditors: None,
+                auditors: vec![],
                 tx_name: None,
             }
         );
@@ -1195,11 +1289,12 @@ mod tests {
                 tx_id: 2,
                 issuer: Party {
                     name: "bob".to_string(),
-                    cheater: true
+                    cheater: true,
+                    kind: PartyKind::Normal,
                 },
                 ticker: "ACME".to_string(),
                 amount: 40,
-                auditors: None,
+                auditors: vec![],
                 tx_name: None,
             }
         );
@@ -1214,20 +1309,23 @@ mod tests {
                 tx_id: 3,
                 issuer: Party {
                     name: "bob".to_string(),
-                    cheater: true
+                    cheater: true,
+                    kind: PartyKind::Normal,
                 },
                 ticker: "ACME".to_string(),
                 amount: 40,
-                auditors: Some(vec![
+                auditors: vec![
                     Party {
                         name: "ava".to_string(),
-                        cheater: false
+                        cheater: false,
+                        kind: PartyKind::Auditor,
                     },
                     Party {
                         name: "aubrey".to_string(),
-                        cheater: false
+                        cheater: false,
+                        kind: PartyKind::Auditor,
                     }
-                ]),
+                ],
                 tx_name: Some("BobIssue".to_string()),
             }
         );
@@ -1246,21 +1344,24 @@ mod tests {
                 tx_id: 2,
                 sender: Party {
                     name: "bob".to_string(),
-                    cheater: true
+                    cheater: true,
+                    kind: PartyKind::Normal,
                 },
                 receiver: Party {
                     name: "carol".to_string(),
-                    cheater: false
+                    cheater: false,
+                    kind: PartyKind::Normal,
                 },
                 receiver_approves: true,
                 mediator: Party {
                     name: "marry".to_string(),
-                    cheater: false
+                    cheater: false,
+                    kind: PartyKind::Mediator,
                 },
                 mediator_approves: false,
                 amount: 40,
                 ticker: "ACME".to_string(),
-                auditors: None,
+                auditors: vec![],
                 tx_name: None,
             }
         );
@@ -1275,30 +1376,35 @@ mod tests {
                 tx_id: 3,
                 sender: Party {
                     name: "bob".to_string(),
-                    cheater: true
+                    cheater: true,
+                    kind: PartyKind::Normal,
                 },
                 receiver: Party {
                     name: "carol".to_string(),
-                    cheater: false
+                    cheater: false,
+                    kind: PartyKind::Normal,
                 },
                 receiver_approves: true,
                 mediator: Party {
                     name: "marry".to_string(),
-                    cheater: false
+                    cheater: false,
+                    kind: PartyKind::Mediator,
                 },
                 mediator_approves: false,
                 amount: 40,
                 ticker: "ACME".to_string(),
-                auditors: Some(vec![
+                auditors: vec![
                     Party {
                         name: "ava".to_string(),
-                        cheater: false
+                        cheater: false,
+                        kind: PartyKind::Auditor,
                     },
                     Party {
                         name: "aubrey".to_string(),
-                        cheater: false
+                        cheater: false,
+                        kind: PartyKind::Auditor,
                     }
-                ]),
+                ],
                 tx_name: Some("BobToAlice".to_string()),
             }
         );
@@ -1313,7 +1419,8 @@ mod tests {
                 tx_name: "AliceIssue".to_string(),
                 auditor: Party {
                     name: "ava".to_string(),
-                    cheater: false
+                    cheater: false,
+                    kind: PartyKind::Auditor,
                 },
             }
         );

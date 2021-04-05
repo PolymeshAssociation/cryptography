@@ -3,6 +3,7 @@
 pub mod account_create;
 pub mod account_issue;
 pub mod account_transfer;
+pub mod audit;
 pub mod chain_setup;
 pub mod errors;
 mod harness;
@@ -38,6 +39,7 @@ use std::{
 pub const ON_CHAIN_DIR: &str = "on-chain";
 pub const OFF_CHAIN_DIR: &str = "off-chain";
 pub const MEDIATOR_PUBLIC_ACCOUNT_FILE: &str = "mediator_public_account";
+pub const AUDITOR_PUBLIC_ACCOUNT_FILE: &str = "auditor_public_account";
 pub const VALIDATED_PUBLIC_ACCOUNT_FILE: &str = "validated_public_account";
 pub const VALIDATED_PUBLIC_ACCOUNT_BALANCE_FILE: &str = "validated_public_account_balance";
 pub const SECRET_ACCOUNT_FILE: &str = "secret_account";
@@ -62,12 +64,14 @@ pub enum CoreTransaction {
         ordering_state: OrderingState,
         tx_id: u32,
         amount: u32,
+        auditors: Vec<String>,
     },
     TransferInit {
         tx: InitializedTransferTx,
         sender: String,
         ordering_state: OrderingState,
         tx_id: u32,
+        auditors: Vec<String>,
     },
     TransferFinalize {
         tx: FinalizedTransferTx,
@@ -98,6 +102,7 @@ impl CoreTransaction {
                 tx_id: _,
                 ordering_state: _,
                 amount: _,
+                auditors: _,
             } => true,
             CoreTransaction::TransferJustify {
                 tx: _,
@@ -110,13 +115,16 @@ impl CoreTransaction {
 
     /// Returns true for outgoing transactions.
     fn decreases_account_balance(&self) -> bool {
-        matches!(self,
-        CoreTransaction::TransferInit {
-            tx: _,
-            sender: _,
-            ordering_state: _,
-            tx_id: _,
-        })
+        matches!(
+            self,
+            CoreTransaction::TransferInit {
+                tx: _,
+                sender: _,
+                ordering_state: _,
+                tx_id: _,
+                auditors: _,
+            }
+        )
     }
 
     pub fn ordering_state(&self) -> OrderingState {
@@ -132,12 +140,14 @@ impl CoreTransaction {
                 ordering_state,
                 tx_id: _,
                 amount: _,
+                auditors: _,
             } => ordering_state.clone(),
             CoreTransaction::TransferInit {
                 tx: _,
                 sender: _,
                 ordering_state,
                 tx_id: _,
+                auditors: _,
             } => ordering_state.clone(),
             CoreTransaction::TransferFinalize {
                 tx: _,
@@ -157,7 +167,7 @@ pub enum Direction {
 }
 
 /// A wrapper that hides the validation error and only keeps the result of the validation.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ValidationResult {
     user: String,
     ticker: String,
@@ -218,6 +228,7 @@ pub struct OrderedAssetInstruction {
     pub state: AssetTxState,
     pub amount: u32,
     pub ordering_state: OrderingState,
+    pub auditors: Vec<String>,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
@@ -235,6 +246,7 @@ pub struct AssetInstruction {
 pub struct OrderedTransferInstruction {
     pub state: TransferTxState,
     pub ordering_state: OrderingState,
+    pub auditors: Vec<String>,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
@@ -804,6 +816,7 @@ pub fn compute_enc_pending_balance(
             sender: _,
             ordering_state: _,
             tx_id: _,
+            auditors: _,
         } = core_tx
         {
             pending_balance -= tx.memo.enc_amount_using_sender;
@@ -897,6 +910,7 @@ pub fn load_tx_file(
             ordering_state: instruction.ordering_state,
             tx_id,
             amount: instruction.amount,
+            auditors: instruction.auditors,
         }
     } else if state == TransferTxState::Initialization(TxSubstate::Started).to_string() {
         let instruction: OrderedTransferInstruction =
@@ -907,6 +921,7 @@ pub fn load_tx_file(
             sender: user,
             ordering_state: instruction.ordering_state,
             tx_id,
+            auditors: instruction.auditors,
         }
     } else if state == TransferTxState::Finalization(TxSubstate::Started).to_string() {
         let instruction: OrderedTransferInstruction =

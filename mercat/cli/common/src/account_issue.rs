@@ -1,13 +1,16 @@
 use crate::{
     asset_transaction_file, create_rng_from_seed, errors::Error, last_ordering_state, load_object,
     save_object, user_public_account_file, user_secret_account_file, OrderedAssetInstruction,
-    OrderedPubAccount, OrderingState, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    OrderedPubAccount, OrderingState, AUDITOR_PUBLIC_ACCOUNT_FILE, COMMON_OBJECTS_DIR,
+    OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::Encode;
 use cryptography_core::asset_proofs::{asset_id_from_ticker, CommitmentWitness};
 use curve25519_dalek::scalar::Scalar;
 use log::info;
-use mercat::{asset::AssetIssuer, Account, AssetTransactionIssuer, AssetTxState, TxSubstate};
+use mercat::{
+    asset::AssetIssuer, Account, AssetTransactionIssuer, AssetTxState, EncryptionPubKey, TxSubstate,
+};
 use metrics::timing;
 use rand::Rng;
 use std::{path::PathBuf, time::Instant};
@@ -16,6 +19,7 @@ pub fn process_issue_asset(
     seed: String,
     db_dir: PathBuf,
     issuer: String,
+    auditors: &[String],
     ticker: String,
     amount: u32,
     stdout: bool,
@@ -40,6 +44,19 @@ pub fn process_issue_asset(
             &user_secret_account_file(&ticker),
         )?,
     };
+    let auditors_accounts = auditors
+        .into_iter()
+        .map(|auditor| {
+            let key: Result<(u32, EncryptionPubKey), _> = load_object(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                &auditor,
+                AUDITOR_PUBLIC_ACCOUNT_FILE,
+            );
+
+            key
+        })
+        .collect::<Result<Vec<(u32, EncryptionPubKey)>, _>>()?;
 
     timing!(
         "account.issue_asset.load_from_file",
@@ -88,7 +105,7 @@ pub fn process_issue_asset(
     let issuance_init_timer = Instant::now();
     let ctx_issuer = AssetIssuer;
     let mut asset_tx = ctx_issuer
-        .initialize_asset_transaction(&issuer_account, &[], amount, &mut rng)
+        .initialize_asset_transaction(&issuer_account, &auditors_accounts, amount, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     let ordering_state = OrderingState {
@@ -126,6 +143,7 @@ pub fn process_issue_asset(
         ordering_state,
         data: asset_tx.encode().to_vec(),
         amount,
+        auditors: auditors.to_vec(),
     };
 
     save_object(

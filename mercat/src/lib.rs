@@ -88,6 +88,13 @@ pub struct MediatorAccount {
     pub encryption_key: EncryptionKeys,
 }
 
+#[derive(Clone, Encode, Decode, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AuditorAccount {
+    pub encryption_key: EncryptionKeys,
+    pub auditor_id: u32,
+}
+
 #[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAccount {
