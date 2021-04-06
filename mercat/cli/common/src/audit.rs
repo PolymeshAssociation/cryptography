@@ -1,12 +1,18 @@
 use crate::{
-    create_rng_from_seed, errors::Error, save_object, AUDITOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR,
-    ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
+    asset_audit_result_file, asset_transaction_file, construct_path, create_rng_from_seed,
+    errors::Error, load_object, load_transaction_names, save_object, user_public_account_file,
+    AuditResult, InitializedAssetTx, OrderedAssetInstruction, OrderedPubAccount, TxNameIdInfo,
+    AUDITOR_PUBLIC_ACCOUNT_FILE, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    SECRET_ACCOUNT_FILE,
 };
-use codec::Encode;
+use codec::{Decode, Encode};
 use cryptography_core::asset_proofs::ElgamalSecretKey;
 use curve25519_dalek::scalar::Scalar;
 use log::info;
-use mercat::{AuditorAccount, EncryptionKeys, EncryptionPubKey};
+use mercat::{
+    asset::AssetAuditor, AssetTransactionAuditor, AssetTxState, AuditorAccount, EncryptionKeys,
+    EncryptionPubKey, TxSubstate,
+};
 use metrics::timing;
 use rand::{CryptoRng, RngCore};
 use std::{path::PathBuf, time::Instant};
@@ -29,6 +35,7 @@ fn generate_auditors_keys<R: RngCore + CryptoRng>(
         },
     )
 }
+
 pub fn process_create_auditor(
     seed: String,
     db_dir: PathBuf,
@@ -76,4 +83,83 @@ pub fn process_create_auditor(
     );
 
     Ok(())
+}
+
+pub fn process_audit(auditor: String, tx_name: String, db_dir: PathBuf) -> Result<(), Error> {
+    let tx_info = load_transaction_names(db_dir.clone())[&tx_name].clone();
+    match tx_info {
+        TxNameIdInfo::Asset(tx_asset_info) => {
+            let instruction_path = asset_transaction_file(
+                tx_asset_info.tx_id,
+                &tx_asset_info.issuer,
+                AssetTxState::Initialization(TxSubstate::Started),
+            );
+            let instruction: OrderedAssetInstruction = load_object(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                COMMON_OBJECTS_DIR,
+                &instruction_path,
+            )?;
+
+            let issuer_ordered_pub_account: OrderedPubAccount = load_object(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                &tx_asset_info.issuer,
+                &user_public_account_file(&tx_asset_info.ticker),
+            )?;
+
+            let auditor_account: AuditorAccount =
+                load_object(db_dir.clone(), OFF_CHAIN_DIR, &auditor, SECRET_ACCOUNT_FILE)?;
+
+            let asset_tx =
+                InitializedAssetTx::decode(&mut &instruction.data[..]).map_err(|error| {
+                    Error::ObjectLoadError {
+                        error,
+                        path: construct_path(
+                            db_dir.clone(),
+                            ON_CHAIN_DIR,
+                            COMMON_OBJECTS_DIR,
+                            &instruction_path,
+                        ),
+                    }
+                })?;
+
+            let result = AssetAuditor {}.audit_asset_transaction(
+                &asset_tx,
+                &issuer_ordered_pub_account.pub_account,
+                &(auditor_account.auditor_id, auditor_account.encryption_key),
+            );
+
+            let audit_result_path = asset_audit_result_file(
+                tx_asset_info.tx_id,
+                &tx_asset_info.issuer,
+                AssetTxState::Initialization(TxSubstate::Started),
+            );
+            match result {
+                Ok(ok) => {
+                    save_object(
+                        db_dir,
+                        ON_CHAIN_DIR,
+                        &auditor,
+                        &audit_result_path,
+                        &(tx_name, AuditResult::Passed),
+                    )?;
+                    Ok(ok)
+                }
+                Err(error) => {
+                    save_object(
+                        db_dir,
+                        ON_CHAIN_DIR,
+                        &auditor,
+                        &audit_result_path,
+                        &(tx_name, AuditResult::Failed),
+                    )?;
+                    Err(Error::LibraryError { error })
+                }
+            }
+        }
+        TxNameIdInfo::Transfer => {
+            unimplemented!();
+        }
+    }
 }

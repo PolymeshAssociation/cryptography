@@ -28,7 +28,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    convert::TryInto,
+    convert::{TryFrom, TryInto},
     fmt,
     fs::{create_dir_all, File},
     hash::Hash,
@@ -46,6 +46,7 @@ pub const SECRET_ACCOUNT_FILE: &str = "secret_account";
 pub const ASSET_ID_LIST_FILE: &str = "valid_asset_ids.json";
 pub const COMMON_OBJECTS_DIR: &str = "common";
 pub const USER_ACCOUNT_MAP: &str = "user_ticker_to_account_id.json";
+pub const TRANSACTION_NAME_ID_MAP: &str = "transaction_name_to_id.json";
 pub const LAST_VALIDATED_TX_ID_FILE: &str = "last_validated_tx_id_file.json";
 
 /// A wrapper around MERCAT api which holds the transaction data, the transaction id,
@@ -274,9 +275,36 @@ impl PrintableAccountId {
     }
 }
 
+/// Represents the result of an audit. This result will be written in a file. The lack of a file
+/// means that an auditor has chosen NOT to audit a transaction.
+#[derive(Encode, Decode, PartialEq, Eq, Hash, Debug)]
+pub enum AuditResult {
+    Passed,
+    Failed,
+}
+
+impl TryFrom<String> for AuditResult {
+    type Error = Error;
+    fn try_from(rep: String) -> Result<Self, Self::Error> {
+        match rep.as_str() {
+            "passed_audit" => Ok(AuditResult::Passed),
+            "failed_audit" => Ok(AuditResult::Failed),
+            _ => {
+                error!("Cannot convert {} to AuditResult.", rep);
+                Err(Error::AuditResultParseError)
+            }
+        }
+    }
+}
+
 #[inline]
 pub fn asset_transaction_file(tx_id: u32, user: &str, state: AssetTxState) -> String {
     format!("tx_{}_{}_{}.json", tx_id, user, state)
+}
+
+#[inline]
+pub fn asset_audit_result_file(tx_id: u32, user: &str, state: AssetTxState) -> String {
+    format!("tx_{}_{}_{}_audit_result.json", tx_id, user, state)
 }
 
 #[inline]
@@ -875,6 +903,59 @@ pub fn all_unverified_tx_files(db_dir: PathBuf) -> Result<Vec<String>, Error> {
         }
     }
     Ok(files)
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TxAssetNameIdInfo {
+    tx_id: u32,
+    issuer: String,
+    ticker: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub enum TxNameIdInfo {
+    Asset(TxAssetNameIdInfo),
+    Transfer,
+}
+
+#[inline]
+pub fn save_issue_transaction_name(
+    tx_id: u32,
+    tx_name: String,
+    issuer: String,
+    ticker: String,
+    db_dir: PathBuf,
+) -> Result<(), Error> {
+    let mut mapping = load_transaction_names(db_dir.clone());
+    mapping.insert(
+        tx_name,
+        TxNameIdInfo::Asset(TxAssetNameIdInfo {
+            tx_id,
+            issuer,
+            ticker,
+        }),
+    );
+    save_to_file(
+        db_dir,
+        OFF_CHAIN_DIR,
+        COMMON_OBJECTS_DIR,
+        TRANSACTION_NAME_ID_MAP,
+        &mapping,
+    )
+}
+
+#[inline]
+pub fn load_transaction_names(db_dir: PathBuf) -> HashMap<String, TxNameIdInfo> {
+    let mapping: Result<HashMap<String, TxNameIdInfo>, Error> = load_from_file(
+        db_dir,
+        OFF_CHAIN_DIR,
+        COMMON_OBJECTS_DIR,
+        TRANSACTION_NAME_ID_MAP,
+    );
+    match mapping {
+        Err(_error) => HashMap::new(),
+        Ok(mapping) => mapping,
+    }
 }
 
 /// Loads the tx_id of the last verified transaction from an off-chain file.

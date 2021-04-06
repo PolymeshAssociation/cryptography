@@ -1,8 +1,8 @@
 use crate::{
     asset_transaction_file, create_rng_from_seed, errors::Error, last_ordering_state, load_object,
-    save_object, user_public_account_file, user_secret_account_file, OrderedAssetInstruction,
-    OrderedPubAccount, OrderingState, AUDITOR_PUBLIC_ACCOUNT_FILE, COMMON_OBJECTS_DIR,
-    OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    save_issue_transaction_name, save_object, user_public_account_file, user_secret_account_file,
+    OrderedAssetInstruction, OrderedPubAccount, OrderingState, AUDITOR_PUBLIC_ACCOUNT_FILE,
+    COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::Encode;
 use cryptography_core::asset_proofs::{asset_id_from_ticker, CommitmentWitness};
@@ -14,6 +14,26 @@ use mercat::{
 use metrics::timing;
 use rand::Rng;
 use std::{path::PathBuf, time::Instant};
+
+pub fn process_issue_asset_with_tx_name(
+    seed: String,
+    db_dir: PathBuf,
+    issuer: String,
+    auditors: &[String],
+    ticker: String,
+    amount: u32,
+    stdout: bool,
+    tx_id: u32,
+    tx_name: Option<String>,
+    cheat: bool,
+) -> Result<(), Error> {
+    if let Some(name) = tx_name {
+        save_issue_transaction_name(tx_id, name, issuer.clone(), ticker.clone(), db_dir.clone())?;
+    }
+    process_issue_asset(
+        seed, db_dir, issuer, auditors, ticker, amount, stdout, tx_id, cheat,
+    )
+}
 
 pub fn process_issue_asset(
     seed: String,

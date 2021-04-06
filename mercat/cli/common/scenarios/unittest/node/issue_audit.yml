@@ -22,3 +22,7 @@ transactions:
 outcome: 
   - alice: 
       - ACME: 10
+
+audit_outcome: 
+  - ava:
+    - alice_issue: passed_audit

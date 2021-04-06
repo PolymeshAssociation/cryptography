@@ -1,16 +1,16 @@
 use crate::{
     account_create::process_create_account,
-    account_issue::process_issue_asset,
+    account_issue::process_issue_asset_with_tx_name,
     account_transfer::{process_create_tx, process_finalize_tx},
-    audit::process_create_auditor,
+    audit::{process_audit, process_create_auditor},
     chain_setup::process_asset_id_creation,
     create_rng_from_seed, debug_decrypt_account_balance,
     errors::Error,
     gen_seed, gen_seed_from,
     justify::{justify_asset_transfer_transaction, process_create_mediator},
-    user_public_account_file,
+    load_object_from, user_public_account_file,
     validate::validate_all_pending,
-    COMMON_OBJECTS_DIR, ON_CHAIN_DIR,
+    AuditResult, COMMON_OBJECTS_DIR, ON_CHAIN_DIR,
 };
 use linked_hash_map::LinkedHashMap;
 use log::{error, info, warn};
@@ -21,7 +21,7 @@ use regex::Regex;
 use std::{
     collections::HashSet,
     convert::{From, TryFrom},
-    fs, io,
+    fs,
 };
 use std::{convert::TryInto, path::PathBuf};
 use yaml_rust::{Yaml, YamlLoader};
@@ -275,6 +275,14 @@ pub struct InputAccount {
     balance: u32,
 }
 
+/// The expected result of an audit.
+#[derive(PartialEq, Eq, Hash, Debug)]
+pub struct AuditExpectation {
+    auditor: Party,
+    tx_name: String,
+    tx_status: AuditResult,
+}
+
 /// Represents the various combinations of the transactions.
 #[derive(Debug)]
 pub enum TransactionMode {
@@ -307,6 +315,9 @@ pub struct TestCase {
 
     /// The expected value of the accounts at the end of the scenario.
     accounts_outcome: HashSet<InputAccount>,
+
+    /// The expected state of auditted transactions.
+    audit_outcome: HashSet<AuditExpectation>,
 
     /// The directory that will act as the chain datastore.
     chain_db_dir: PathBuf,
@@ -582,6 +593,7 @@ impl Issue {
         let issuer = self.issuer.name.clone();
         let amount = self.amount;
         let tx_id = self.tx_id;
+        let tx_name = self.tx_name.clone();
         let cheat = self.issuer.cheater;
         let auditors: Vec<String> = self
             .auditors
@@ -592,7 +604,7 @@ impl Issue {
 
         Box::new(move || {
             info!("Running: {}", value.clone());
-            process_issue_asset(
+            process_issue_asset_with_tx_name(
                 seed.clone(),
                 chain_db_dir.clone(),
                 issuer.clone(),
@@ -601,6 +613,7 @@ impl Issue {
                 amount,
                 false, // Do not print the transaction data to stdout.
                 tx_id,
+                tx_name.clone(),
                 cheat,
             )?;
             Ok(value.clone())
@@ -640,13 +653,16 @@ impl Audit {
     pub fn audit(&self, chain_db_dir: PathBuf) -> StepFunc {
         // validate a transaction
         let value = format!(
-            "tx-NA: $ mercat-validator validate --db-dir {}",
+            "tx-NA: $ mercat-auditor audit TODO --db-dir {}",
             path_to_string(&chain_db_dir),
         );
 
+        let auditor = self.auditor.name.clone();
+        let tx_name = self.tx_name.clone();
+
         Box::new(move || {
             info!("Running: {}", value.clone());
-            validate_all_pending(chain_db_dir.clone())?;
+            process_audit(auditor.clone(), tx_name.clone(), chain_db_dir.clone())?;
             Ok(value.clone())
         })
     }
@@ -713,7 +729,7 @@ impl TransactionMode {
 }
 
 impl TestCase {
-    fn run(&self) -> Result<HashSet<InputAccount>, Error> {
+    fn run(&self) -> Result<(HashSet<InputAccount>, HashSet<AuditExpectation>), Error> {
         let seed = gen_seed();
         info!("Using seed {}, for testcase: {}.", seed, self.title);
         let mut rng = create_rng_from_seed(Some(seed))?;
@@ -738,7 +754,7 @@ impl TestCase {
             }
         }
 
-        self.resulting_accounts()
+        Ok((self.resulting_accounts()?, self.audit_results()?))
     }
 
     fn chain_setup(&self) -> Result<(), Error> {
@@ -749,6 +765,7 @@ impl TestCase {
     /// the balance with the secret account from the off-chain directory.
     fn resulting_accounts(&self) -> Result<HashSet<InputAccount>, Error> {
         let mut accounts: HashSet<InputAccount> = HashSet::new();
+        //let mut audit_results: HashSet<AuditExpectation> = HashSet::new();
         let mut path = self.chain_db_dir.clone();
         path.push(ON_CHAIN_DIR);
 
@@ -770,7 +787,7 @@ impl TestCase {
                         )?;
                         accounts.insert(InputAccount {
                             owner: Party::try_from((user, PartyKind::Normal))?,
-                            ticker: ticker,
+                            ticker,
                             balance,
                         });
                     }
@@ -778,6 +795,40 @@ impl TestCase {
             }
         }
         Ok(accounts)
+    }
+
+    fn audit_results(&self) -> Result<HashSet<AuditExpectation>, Error> {
+        let mut audit_results: HashSet<AuditExpectation> = HashSet::new();
+        let mut path = self.chain_db_dir.clone();
+        path.push(ON_CHAIN_DIR);
+
+        for dir in all_dirs_in_dir(path.clone())? {
+            if let Some(user) = dir.file_name().and_then(|user| user.to_str()) {
+                if user != COMMON_OBJECTS_DIR {
+                    // Read all the files and try to deserialize them to (String, AuditResult).
+                    // If they get converted successfully, add them to the HashSet of
+                    // AuditExpectation.
+
+                    let mut file_path = path.clone();
+                    file_path.push(user);
+                    for file in all_files_in_dir(file_path)? {
+                        let tx: Result<(String, AuditResult), _> = load_object_from(file.clone());
+                        if let Ok((tx_name, tx_status)) = tx {
+                            println!(
+                                "---------> Found file {:?} with content: {:?} {:?}",
+                                &file, &tx_name, &tx_status
+                            );
+                            audit_results.insert(AuditExpectation {
+                                auditor: Party::try_from((user, PartyKind::Auditor))?,
+                                tx_name,
+                                tx_status,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        Ok(audit_results)
     }
 }
 
@@ -792,10 +843,16 @@ fn cheater_flag(is_cheater: bool) -> String {
     }
 }
 
-fn all_files_in_dir(dir: PathBuf) -> io::Result<Vec<PathBuf>> {
+fn all_files_in_dir(dir: PathBuf) -> Result<Vec<PathBuf>, Error> {
     let mut files = vec![];
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
+    for entry in fs::read_dir(dir.clone()).map_err(|error| Error::FileReadError {
+        error,
+        path: dir.clone(),
+    })? {
+        let entry = entry.map_err(|error| Error::FileReadError {
+            error,
+            path: dir.clone(),
+        })?;
         let path = entry.path();
         if !path.is_dir() {
             files.push(path);
@@ -1118,6 +1175,47 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         }
     }
 
+    let mut audit_outcome: HashSet<AuditExpectation> = HashSet::new();
+    if config["audit_outcome"] != Yaml::BadValue {
+        let outcomes = to_array(&config["audit_outcome"], path.clone(), "audit_outcome")?;
+        for outcome in outcomes {
+            let outcome_type = to_hash(&outcome, path.clone(), "audit_outcome.key")?;
+            for (auditor, value) in outcome_type {
+                let auditor = to_string(auditor, path.clone(), "audit_outcome.key")?;
+                let auditted_transactions = to_array(
+                    &value,
+                    path.clone(),
+                    &format!("audit_outcome.{}.transaction_names", auditor),
+                )?;
+                for transaction in auditted_transactions {
+                    let transaction = to_hash(
+                        &transaction,
+                        path.clone(),
+                        &format!("audit_outcome.{}.transaction_hashes", auditor),
+                    )?;
+                    for (tx_name, tx_status) in transaction {
+                        let tx_name = to_string(
+                            &tx_name,
+                            path.clone(),
+                            &format!("audit_outcome.{}.tx_name", auditor),
+                        )?;
+                        let tx_status = to_string(
+                            &tx_status,
+                            path.clone(),
+                            &format!("audit_outcome.{}.tx_status", auditor),
+                        )?;
+
+                        audit_outcome.insert(AuditExpectation {
+                            auditor: Party::try_from((auditor.as_str(), PartyKind::Auditor))?,
+                            tx_name,
+                            tx_status: AuditResult::try_from(tx_status)?,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     let (next_transaction_id, create_normal_account_transactions) =
         make_empty_normal_accounts(&all_normal_accounts)?;
 
@@ -1155,12 +1253,13 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
         ticker_names,
         transactions,
         accounts_outcome,
+        audit_outcome,
         chain_db_dir,
     })
 }
 
 #[allow(unused)]
-fn accounts_are_equal(want: &HashSet<InputAccount>, got: &HashSet<InputAccount>) -> bool {
+fn sets_are_equal<T: std::cmp::Eq + std::hash::Hash>(want: &HashSet<T>, got: &HashSet<T>) -> bool {
     let intersection: HashSet<_> = want.intersection(&got).collect();
     intersection.len() == want.len() && want.len() == got.len()
 }
@@ -1193,21 +1292,30 @@ fn run_from(mode: &str) {
             info!("----------------------------------------------------------------------------------");
             info!("- Running test case: {}.", testcase.title);
             info!("----------------------------------------------------------------------------------");
-            let want = &testcase.accounts_outcome;
+            let want_accounts = &testcase.accounts_outcome;
+            let want_audit_results = &testcase.audit_outcome;
             let got = testcase.run();
-            if let Err(error) = got {
-                panic!(
-                    "Test was expected to succeed, but failed with {:#?}.",
-                    error
-                );
-            } else {
-                let got = got.unwrap();
-                assert!(
-                    accounts_are_equal(want, &got),
-                    "Test failed due to account value mismatch.\nWant: {:#?}, got: {:#?}",
-                    want,
-                    got
-                );
+            match got {
+                Err(error) => {
+                    panic!(
+                        "Test was expected to succeed, but failed with {:#?}.",
+                        error
+                    );
+                }
+                Ok((got_accounts, got_audit_results)) => {
+                    assert!(
+                        sets_are_equal::<InputAccount>(want_accounts, &got_accounts),
+                        "Test failed due to account value mismatch.\nWant: {:#?}, got: {:#?}",
+                        want_accounts,
+                        got_accounts
+                    );
+                    assert!(
+                        sets_are_equal::<AuditExpectation>(want_audit_results, &got_audit_results),
+                        "Test failed due to audit results mismatch.\nWant: {:#?}, got: {:#?}",
+                        want_audit_results,
+                        got_audit_results
+                    );
+                }
             }
         }
     }

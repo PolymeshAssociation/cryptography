@@ -153,6 +153,9 @@ pub enum Error {
     )]
     InvalidLastProcessedTxCounter { value: i32 },
 
+    #[fail(display = "Invalid AuditResult string.")]
+    AuditResultParseError,
+
     #[fail(display = "Not implemented, story: {}", story)]
     NotImplemented { story: String },
 }
