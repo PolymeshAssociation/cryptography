@@ -142,7 +142,8 @@ pub fn process_audit(auditor: String, tx_name: String, db_dir: PathBuf) -> Resul
                         ON_CHAIN_DIR,
                         &auditor,
                         &audit_result_path,
-                        &(tx_name, AuditResult::Passed),
+                        &serde_json::to_string(&(tx_name, AuditResult::Passed))
+                            .map_err(|_| Error::SerializeError)?,
                     )?;
                     Ok(ok)
                 }
@@ -152,7 +153,8 @@ pub fn process_audit(auditor: String, tx_name: String, db_dir: PathBuf) -> Resul
                         ON_CHAIN_DIR,
                         &auditor,
                         &audit_result_path,
-                        &(tx_name, AuditResult::Failed),
+                        &serde_json::to_string(&(tx_name, AuditResult::Failed))
+                            .map_err(|_| Error::SerializeError)?,
                     )?;
                     Err(Error::LibraryError { error })
                 }

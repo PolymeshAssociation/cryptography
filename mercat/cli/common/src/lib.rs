@@ -277,7 +277,7 @@ impl PrintableAccountId {
 
 /// Represents the result of an audit. This result will be written in a file. The lack of a file
 /// means that an auditor has chosen NOT to audit a transaction.
-#[derive(Encode, Decode, PartialEq, Eq, Hash, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 pub enum AuditResult {
     Passed,
     Failed,

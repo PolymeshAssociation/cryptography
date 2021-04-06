@@ -812,17 +812,19 @@ impl TestCase {
                     let mut file_path = path.clone();
                     file_path.push(user);
                     for file in all_files_in_dir(file_path)? {
-                        let tx: Result<(String, AuditResult), _> = load_object_from(file.clone());
-                        if let Ok((tx_name, tx_status)) = tx {
-                            println!(
-                                "---------> Found file {:?} with content: {:?} {:?}",
-                                &file, &tx_name, &tx_status
-                            );
-                            audit_results.insert(AuditExpectation {
-                                auditor: Party::try_from((user, PartyKind::Auditor))?,
-                                tx_name,
-                                tx_status,
-                            });
+                        let tx: Result<String, _> = load_object_from(file.clone());
+                        if let Ok(serialized) = tx {
+                            if let Ok((tx_name, tx_status)) = serde_json::from_str(&serialized) {
+                                println!(
+                                    "---------> Found file {:?} with content: {:?} {:?}",
+                                    &file, &tx_name, &tx_status
+                                );
+                                audit_results.insert(AuditExpectation {
+                                    auditor: Party::try_from((user, PartyKind::Auditor))?,
+                                    tx_name,
+                                    tx_status,
+                                });
+                            }
                         }
                     }
                 }

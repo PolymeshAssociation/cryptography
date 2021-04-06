@@ -156,6 +156,9 @@ pub enum Error {
     #[fail(display = "Invalid AuditResult string.")]
     AuditResultParseError,
 
+    #[fail(display = "Error in serializing AuditResults")]
+    SerializeError,
+
     #[fail(display = "Not implemented, story: {}", story)]
     NotImplemented { story: String },
 }
