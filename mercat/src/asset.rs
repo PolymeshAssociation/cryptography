@@ -288,33 +288,27 @@ impl AssetTransactionAuditor for AssetAuditor {
         asset_issuance_init_verify_proofs(&initialized_asset_tx, issuer_account)?;
 
         // If all checks pass, decrypt the encrypted amount and verify issuer's correctness proof.
-        let _: Fallible<()> = initialized_asset_tx
+        initialized_asset_tx
             .auditors_payload
             .iter()
+            .filter(|payload| payload.auditor_id == auditor_enc_key.0)
             .map(|payload| {
-                if payload.auditor_id == auditor_enc_key.0 {
-                    let amount = auditor_enc_key
-                        .1
-                        .secret
-                        .const_time_decrypt(&payload.encrypted_amount)?;
+                let amount = auditor_enc_key
+                    .1
+                    .secret
+                    .const_time_decrypt(&payload.encrypted_amount)?;
 
-                    let result = single_property_verifier(
-                        &CorrectnessVerifier {
-                            value: amount.into(),
-                            pub_key: issuer_account.owner_enc_pub_key,
-                            cipher: initialized_asset_tx.memo.enc_issued_amount,
-                            pc_gens: &gens,
-                        },
-                        initialized_asset_tx.balance_correctness_proof,
-                    );
-
-                    return result;
-                }
-                Ok(())
+                single_property_verifier(
+                    &CorrectnessVerifier {
+                        value: amount.into(),
+                        pub_key: issuer_account.owner_enc_pub_key,
+                        cipher: initialized_asset_tx.memo.enc_issued_amount,
+                        pc_gens: &gens,
+                    },
+                    initialized_asset_tx.balance_correctness_proof,
+                )
             })
-            .collect();
-
-        Err(ErrorKind::AuditorPayloadError.into())
+            .collect()
     }
 }
 
@@ -477,12 +471,18 @@ mod tests {
             .is_ok());
 
         // ----------------------- Auditing
-        let _ = auditors_list.iter().map(|auditor| {
-            let transaction_auditor = AssetAuditor;
-            assert!(transaction_auditor
-                .audit_asset_transaction(&asset_tx, &issuer_public_account, auditor,)
-                .is_ok());
-        });
+        let result = auditors_list
+            .into_iter()
+            .map(|auditor| {
+                let transaction_auditor = AssetAuditor;
+                transaction_auditor.audit_asset_transaction(
+                    &asset_tx,
+                    &issuer_public_account,
+                    auditor,
+                )
+            })
+            .collect::<Result<(), _>>();
+        assert!(result.is_ok())
     }
 
     fn gen_enc_key_pair(seed: u8) -> EncryptionKeys {
