@@ -45,7 +45,7 @@ impl Encode for InRangeProof {
             + self.range.size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         CompressedRistrettoEncoder(&self.init).encode_to(dest);
         RangeProofEncoder(&self.response).encode_to(dest);
         self.range.encode_to(dest);

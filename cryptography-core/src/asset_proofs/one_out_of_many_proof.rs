@@ -294,7 +294,7 @@ impl Encode for R1ProofInitialMessage {
         4 * RistrettoPointEncoder(&self.a).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         RistrettoPointEncoder(&self.a).encode_to(dest);
         RistrettoPointEncoder(&self.b).encode_to(dest);
         RistrettoPointEncoder(&self.c).encode_to(dest);
@@ -354,7 +354,7 @@ impl Encode for R1ProofFinalResponse {
             + self.n.size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let f_elements = self
             .f_elements
             .iter()
@@ -609,7 +609,7 @@ impl Encode for OOONProofInitialMessage {
             + self.m.size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let g_vec = self
             .g_vec
             .iter()
@@ -695,7 +695,7 @@ impl Encode for OOONProofFinalResponse {
             + self.n.size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.r1_proof_final_response.encode_to(dest);
         ScalarEncoder(&self.z).encode_to(dest);
         self.m.encode_to(dest);

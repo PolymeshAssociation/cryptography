@@ -65,7 +65,7 @@ impl Encode for CommitmentWitness {
         ScalarEncoder(&self.value).size_hint() + ScalarEncoder(&self.blinding).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         ScalarEncoder(&self.value).encode_to(dest);
         ScalarEncoder(&self.blinding).encode_to(dest);
     }
@@ -94,7 +94,7 @@ impl Encode for CipherText {
         RistrettoPointEncoder(&self.x).size_hint() + RistrettoPointEncoder(&self.y).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         RistrettoPointEncoder(&self.x).encode_to(dest);
         RistrettoPointEncoder(&self.y).encode_to(dest);
     }
@@ -185,7 +185,7 @@ impl Encode for ElgamalSecretKey {
         ScalarEncoder(&self.secret).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         ScalarEncoder(&self.secret).encode_to(dest);
     }
 }
@@ -237,7 +237,7 @@ impl Encode for ElgamalPublicKey {
         RistrettoPointEncoder(&self.pub_key).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         RistrettoPointEncoder(&self.pub_key).encode_to(dest);
     }
 }

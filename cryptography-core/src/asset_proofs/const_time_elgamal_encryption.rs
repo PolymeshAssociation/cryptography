@@ -70,7 +70,7 @@ impl Encode for CipherTextWithHint {
             + self.z.size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.elgamal_cipher.encode_to(dest);
         RistrettoPointEncoder(&self.y).encode_to(dest);
         self.z.encode_to(dest);

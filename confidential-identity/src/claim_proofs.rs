@@ -118,7 +118,7 @@ impl Encode for ScopeClaimProof {
             + RistrettoPointEncoder(&self.scope_id).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.proof_scope_id_wellformed.encode_to(dest);
         self.proof_scope_id_cdd_id_match.encode_to(dest);
         RistrettoPointEncoder(&self.scope_id).encode_to(dest);
@@ -158,7 +158,7 @@ impl Encode for ZkProofData {
             + RistrettoPointEncoder(&self.blinded_scope_did_hash).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.challenge_responses_to_codec().encode_to(dest);
         RistrettoPointEncoder(&self.subtract_expressions_res).encode_to(dest);
         RistrettoPointEncoder(&self.blinded_scope_did_hash).encode_to(dest);

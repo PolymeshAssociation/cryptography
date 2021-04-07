@@ -65,7 +65,7 @@ impl Encode for Signature {
         CompressedRistrettoEncoder(&self.R).size_hint() + ScalarEncoder(&self.s).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         CompressedRistrettoEncoder(&self.R).encode_to(dest);
         ScalarEncoder(&self.s).encode_to(dest);
     }

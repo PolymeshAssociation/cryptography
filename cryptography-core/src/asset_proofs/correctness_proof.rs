@@ -50,7 +50,7 @@ impl Encode for CorrectnessFinalResponse {
         ScalarEncoder(&self.0).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         ScalarEncoder(&self.0).encode_to(dest)
     }
 }
@@ -74,7 +74,7 @@ impl Encode for CorrectnessInitialMessage {
         RistrettoPointEncoder(&self.a).size_hint() + RistrettoPointEncoder(&self.b).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         RistrettoPointEncoder(&self.a).encode_to(dest);
         RistrettoPointEncoder(&self.b).encode_to(dest);
     }

@@ -40,7 +40,7 @@ impl Encode for CddClaimData {
             + ScalarEncoder(&self.investor_unique_id).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         ScalarEncoder(&self.investor_did).encode_to(dest);
         ScalarEncoder(&self.investor_unique_id).encode_to(dest);
     }
@@ -68,7 +68,7 @@ impl Encode for CddId {
         RistrettoPointEncoder(&self.0).size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         RistrettoPointEncoder(&self.0).encode_to(dest);
     }
 }

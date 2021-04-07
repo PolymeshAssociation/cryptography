@@ -982,18 +982,17 @@ fn run_from(mode: &str) {
             let want = &testcase.accounts_outcome;
             let got = testcase.run();
             if let Err(error) = got {
-                panic!(format!(
+                panic!(
                     "Test was expected to succeed, but failed with {:#?}.",
                     error
-                ));
+                );
             } else {
                 let got = got.unwrap();
                 assert!(
                     accounts_are_equal(want, &got),
-                    format!(
-                        "Test failed due to account value mismatch.\nWant: {:#?}, got: {:#?}",
-                        want, got
-                    )
+                    "Test failed due to account value mismatch.\nWant: {:#?}, got: {:#?}",
+                    want,
+                    got
                 );
             }
         }

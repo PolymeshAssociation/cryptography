@@ -49,7 +49,7 @@ impl Encode for MembershipProofInitialMessage {
             + self.elements_set_size.size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.ooon_proof_initial_message.encode_to(dest);
         RistrettoPointEncoder(&self.secret_element_comm).encode_to(dest);
         self.elements_set_size.encode_to(dest);

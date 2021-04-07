@@ -23,7 +23,7 @@ impl<'a> Encode for RistrettoPointEncoder<'a> {
     }
 
     /// Compresses the `RistrettoPoint` and encodes it as an array of bytes.
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.0.compress().as_bytes().encode_to(dest);
     }
 }
@@ -53,7 +53,7 @@ impl<'a> Encode for CompressedRistrettoEncoder<'a> {
     }
 
     /// Encodes itself as an array of bytes.
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.0.as_bytes().encode_to(dest);
     }
 }
@@ -85,7 +85,7 @@ impl<'a> Encode for ScalarEncoder<'a> {
     }
 
     /// Encodes itself as an array of bytes.
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.0.as_bytes().encode_to(dest);
     }
 }
@@ -116,7 +116,7 @@ impl<'a> Encode for RangeProofEncoder<'a> {
     }
 
     /// Encodes itself as an array of bytes.
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.0.to_bytes().encode_to(dest);
     }
 }
