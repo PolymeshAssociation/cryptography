@@ -43,18 +43,27 @@ mediators: # List of all the known mediators. For each of these mediators, a set
            # keypairs is generated.
   - Mike
     
+auditors: # List of all the known auditors. For each of these mediators, a set of
+          # keypairs is generated.
+  - Ava
+  - Aubrey
+    
 transactions: # List of all transactions. This config must have exactly one
               # child, either a `sequence` or a `concurrent`.
   - sequence: # Runs its children sequentially.
     - validate # This validates the account creation steps.
     - issue Alice 100 ACME Mike approve # An asset issuance transaction.
+    - issue Alice 100 ACME Mike approve auditors Ava,Aubrey tx_name AliceIssue # Optionally, asset issue transactions can be auditted by multiple auditors.
     - validate # without this, the account is not deposited at the time of the
                # next transaction
     - concurrent: # Runs its children concurrently.
       - transfer Alice 10 ACME Bob approve Mike approve # An asset transfer transaction.
       - transfer Alice 20 ACME Bob approve Mike approve
       - transfer Alice 30 ACME Bob approve Mike approve
+      - transfer Alice 30 ACME Bob approve Mike approve auditors Ava,Aubrey tx_name AliceToBob # Optionally, asset transfer transactions can be auditted by multiple auditors.
     - validate
+    - audit AliceIssue Ava # Auditors can audit a transaction by name at any point.
+    - audit AliceToBob Aubrey
 
 outcome: # Defines the expected value of each account after running all the transactions.
   - alice: 
@@ -62,6 +71,11 @@ outcome: # Defines the expected value of each account after running all the tran
   - bob: 
       - ACME: 60
 
+audit_outcome: # Defines the expected outcome of an audit.
+  - ava:
+    - AliceIssue: passed_audit
+  - aubrey:
+    - AliceToBob: failed_audit
 ```
 
 ## Cheating config
