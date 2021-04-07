@@ -72,7 +72,6 @@ pub enum CoreTransaction {
         sender: String,
         ordering_state: OrderingState,
         tx_id: u32,
-        auditors: Vec<String>,
     },
     TransferFinalize {
         tx: FinalizedTransferTx,
@@ -84,6 +83,7 @@ pub enum CoreTransaction {
         tx: JustifiedTransferTx,
         mediator: String,
         tx_id: u32,
+        auditors: Vec<String>,
     },
     Invalid,
 }
@@ -109,6 +109,7 @@ impl CoreTransaction {
                 tx: _,
                 mediator: _,
                 tx_id: _,
+                auditors: _,
             } => true,
             _ => false,
         }
@@ -123,7 +124,6 @@ impl CoreTransaction {
                 sender: _,
                 ordering_state: _,
                 tx_id: _,
-                auditors: _,
             }
         )
     }
@@ -148,7 +148,6 @@ impl CoreTransaction {
                 sender: _,
                 ordering_state,
                 tx_id: _,
-                auditors: _,
             } => ordering_state.clone(),
             CoreTransaction::TransferFinalize {
                 tx: _,
@@ -256,6 +255,7 @@ pub struct OrderedTransferInstruction {
 #[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
 pub struct TransferInstruction {
     pub state: TransferTxState,
+    pub auditors: Vec<String>,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
@@ -303,13 +303,22 @@ pub fn asset_transaction_file(tx_id: u32, user: &str, state: AssetTxState) -> St
 }
 
 #[inline]
-pub fn asset_audit_result_file(tx_id: u32, user: &str, state: AssetTxState) -> String {
+pub fn asset_transaction_audit_result_file(tx_id: u32, user: &str, state: AssetTxState) -> String {
     format!("tx_{}_{}_{}_audit_result.json", tx_id, user, state)
 }
 
 #[inline]
 pub fn confidential_transaction_file(tx_id: u32, user: &str, state: TransferTxState) -> String {
     format!("tx_{}_{}_{}.json", tx_id, user, state)
+}
+
+#[inline]
+pub fn confidential_transaction_audit_result_file(
+    tx_id: u32,
+    user: &str,
+    state: TransferTxState,
+) -> String {
+    format!("tx_{}_{}_{}_audit_result.json", tx_id, user, state)
 }
 
 #[inline]
@@ -844,7 +853,6 @@ pub fn compute_enc_pending_balance(
             sender: _,
             ordering_state: _,
             tx_id: _,
-            auditors: _,
         } = core_tx
         {
             pending_balance -= tx.memo.enc_amount_using_sender;
@@ -913,9 +921,17 @@ pub struct TxAssetNameIdInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct TxTransferNameIdInfo {
+    tx_id: u32,
+    sender: String,
+    receiver: String,
+    ticker: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub enum TxNameIdInfo {
     Asset(TxAssetNameIdInfo),
-    Transfer,
+    Transfer(TxTransferNameIdInfo),
 }
 
 #[inline]
@@ -932,6 +948,34 @@ pub fn save_issue_transaction_name(
         TxNameIdInfo::Asset(TxAssetNameIdInfo {
             tx_id,
             issuer,
+            ticker,
+        }),
+    );
+    save_to_file(
+        db_dir,
+        OFF_CHAIN_DIR,
+        COMMON_OBJECTS_DIR,
+        TRANSACTION_NAME_ID_MAP,
+        &mapping,
+    )
+}
+
+#[inline]
+pub fn save_transfer_transaction_name(
+    tx_id: u32,
+    tx_name: String,
+    sender: String,
+    receiver: String,
+    ticker: String,
+    db_dir: PathBuf,
+) -> Result<(), Error> {
+    let mut mapping = load_transaction_names(db_dir.clone());
+    mapping.insert(
+        tx_name,
+        TxNameIdInfo::Transfer(TxTransferNameIdInfo {
+            tx_id,
+            sender,
+            receiver,
             ticker,
         }),
     );
@@ -1002,7 +1046,6 @@ pub fn load_tx_file(
             sender: user,
             ordering_state: instruction.ordering_state,
             tx_id,
-            auditors: instruction.auditors,
         }
     } else if state == TransferTxState::Finalization(TxSubstate::Started).to_string() {
         let instruction: OrderedTransferInstruction =
@@ -1021,6 +1064,7 @@ pub fn load_tx_file(
                 .map_err(|_| Error::DecodeError)?,
             mediator: user,
             tx_id,
+            auditors: instruction.auditors,
         }
     } else if state.starts_with("ticker#") {
         let ordered_account_tx: OrderedPubAccountTx =

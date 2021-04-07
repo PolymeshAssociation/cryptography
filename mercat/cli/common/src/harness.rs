@@ -1,7 +1,7 @@
 use crate::{
     account_create::process_create_account,
     account_issue::process_issue_asset_with_tx_name,
-    account_transfer::{process_create_tx, process_finalize_tx},
+    account_transfer::{process_create_tx_with_tx_name, process_finalize_tx},
     audit::{process_audit, process_create_auditor},
     chain_setup::process_asset_id_creation,
     create_rng_from_seed, debug_decrypt_account_balance,
@@ -334,7 +334,7 @@ impl Transaction {
         chain_db_dir: PathBuf,
     ) -> Vec<StepFunc> {
         match self {
-            Transaction::Audit(audit) => audit.operations_order(rng, chain_db_dir),
+            Transaction::Audit(audit) => audit.operations_order(chain_db_dir),
             Transaction::Validate(validate) => validate.operations_order(chain_db_dir),
             Transaction::Issue(fund) => fund.operations_order(rng, chain_db_dir),
             Transaction::Transfer(transfer) => transfer.operations_order(rng, chain_db_dir),
@@ -366,21 +366,30 @@ impl Transfer {
         let mediator = self.mediator.name.clone();
         let amount = self.amount;
         let tx_id = self.tx_id;
+        let tx_name = self.tx_name.clone();
         let cheat = self.sender.cheater;
+        let auditors: Vec<String> = self
+            .auditors
+            .clone()
+            .into_iter()
+            .map(|auditor| auditor.name)
+            .collect();
 
         Box::new(move || {
             info!("Running: {}", value.clone());
-            process_create_tx(
+            process_create_tx_with_tx_name(
                 seed.clone(),
                 chain_db_dir.clone(),
                 sender.clone(),
                 receiver.clone(),
                 mediator.clone(),
+                &auditors,
                 ticker.clone(),
                 amount,
                 false, // Do not print the transaction data to stdout.
                 tx_id,
                 cheat,
+                tx_name.clone(),
             )?;
             Ok(value.clone())
         })
@@ -446,6 +455,12 @@ impl Transfer {
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
         let cheat = self.mediator.cheater;
+        let auditors: Vec<String> = self
+            .auditors
+            .clone()
+            .into_iter()
+            .map(|auditor| auditor.name)
+            .collect();
 
         Box::new(move || {
             info!("Running: {}", value.clone());
@@ -454,6 +469,7 @@ impl Transfer {
                 sender.clone(),
                 receiver.clone(),
                 mediator.clone(),
+                &auditors,
                 ticker.clone(),
                 seed.clone(),
                 false, // Do not print the transaction data to stdout.
@@ -667,11 +683,7 @@ impl Audit {
         })
     }
 
-    pub fn operations_order<T: RngCore + CryptoRng>(
-        &self,
-        rng: &mut T,
-        chain_db_dir: PathBuf,
-    ) -> Vec<StepFunc> {
+    pub fn operations_order(&self, chain_db_dir: PathBuf) -> Vec<StepFunc> {
         vec![self.audit(chain_db_dir)]
     }
 }

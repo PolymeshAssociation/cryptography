@@ -65,6 +65,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                 tx,
                 tx_id,
                 mediator,
+                auditors,
             } => {
                 let account_id = tx.finalized_data.init_data.memo.sender_account_id;
                 let (sender, ticker, _) = get_user_ticker_from(account_id, db_dir.clone())?;
@@ -98,8 +99,14 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                     tx_id,
                     debug_decrypt(account_id, pending_balance, db_dir.clone())?
                 );
-                let (sender_result, receiver_result) =
-                    validate_transaction(db_dir.clone(), tx, mediator, pending_balance, tx_id);
+                let (sender_result, receiver_result) = validate_transaction(
+                    db_dir.clone(),
+                    tx,
+                    mediator,
+                    pending_balance,
+                    tx_id,
+                    &auditors,
+                );
                 results.push(sender_result);
                 results.push(receiver_result);
                 last_tx_id = Some(std::cmp::max(last_tx_id.unwrap_or_default(), tx_id));
@@ -448,9 +455,24 @@ fn process_transaction(
     sender_pub_account: PubAccount,
     receiver_pub_account: PubAccount,
     pending_balance: EncryptedAmount,
+    auditors: &[String],
+    db_dir: PathBuf,
 ) -> Result<(), Error> {
     let mut rng = OsRng::default();
     let tx = JustifiedTransferTx::decode(&mut &instruction.data[..]).unwrap();
+    let auditors_accounts = auditors
+        .into_iter()
+        .map(|auditor| {
+            let key: Result<(u32, EncryptionPubKey), _> = load_object(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                &auditor,
+                AUDITOR_PUBLIC_ACCOUNT_FILE,
+            );
+
+            key
+        })
+        .collect::<Result<Vec<(u32, EncryptionPubKey)>, _>>()?;
     let validator = TransactionValidator;
     validator
         .verify_transaction(
@@ -458,7 +480,7 @@ fn process_transaction(
             &sender_pub_account,
             &pending_balance,
             &receiver_pub_account,
-            &[],
+            &auditors_accounts,
             &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })
@@ -470,6 +492,7 @@ pub fn validate_transaction(
     mediator: String,
     pending_balance: EncryptedAmount,
     tx_id: u32,
+    auditors: &[String],
 ) -> (ValidationResult, ValidationResult) {
     let load_objects_timer = Instant::now();
     // Load the transaction, mediator's account, and issuer's public account.
@@ -569,6 +592,8 @@ pub fn validate_transaction(
         sender_ordered_pub_account.pub_account,
         receiver_ordered_pub_account.pub_account,
         pending_balance,
+        auditors,
+        db_dir.clone(),
     ) {
         Err(error) => {
             error!("Error in validation of tx-{}: {:#?}", tx_id, error);

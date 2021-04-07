@@ -1,17 +1,19 @@
 use crate::{
-    asset_audit_result_file, asset_transaction_file, construct_path, create_rng_from_seed,
-    errors::Error, load_object, load_transaction_names, save_object, user_public_account_file,
-    AuditResult, InitializedAssetTx, OrderedAssetInstruction, OrderedPubAccount, TxNameIdInfo,
-    AUDITOR_PUBLIC_ACCOUNT_FILE, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
-    SECRET_ACCOUNT_FILE,
+    asset_transaction_audit_result_file, asset_transaction_file,
+    confidential_transaction_audit_result_file, confidential_transaction_file, construct_path,
+    create_rng_from_seed, errors::Error, load_object, load_transaction_names, save_object,
+    user_public_account_file, AuditResult, InitializedAssetTx, OrderedAssetInstruction,
+    OrderedPubAccount, TransferInstruction, TxNameIdInfo, AUDITOR_PUBLIC_ACCOUNT_FILE,
+    COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
 };
 use codec::{Decode, Encode};
 use cryptography_core::asset_proofs::ElgamalSecretKey;
 use curve25519_dalek::scalar::Scalar;
 use log::info;
 use mercat::{
-    asset::AssetAuditor, AssetTransactionAuditor, AssetTxState, AuditorAccount, EncryptionKeys,
-    EncryptionPubKey, TxSubstate,
+    asset::AssetAuditor, transaction::CtxAuditor, AssetTransactionAuditor, AssetTxState,
+    AuditorAccount, EncryptionKeys, EncryptionPubKey, JustifiedTransferTx,
+    TransferTransactionAuditor, TransferTxState, TxSubstate,
 };
 use metrics::timing;
 use rand::{CryptoRng, RngCore};
@@ -130,7 +132,7 @@ pub fn process_audit(auditor: String, tx_name: String, db_dir: PathBuf) -> Resul
                 &(auditor_account.auditor_id, auditor_account.encryption_key),
             );
 
-            let audit_result_path = asset_audit_result_file(
+            let audit_result_path = asset_transaction_audit_result_file(
                 tx_asset_info.tx_id,
                 &tx_asset_info.issuer,
                 AssetTxState::Initialization(TxSubstate::Started),
@@ -160,8 +162,84 @@ pub fn process_audit(auditor: String, tx_name: String, db_dir: PathBuf) -> Resul
                 }
             }
         }
-        TxNameIdInfo::Transfer => {
-            unimplemented!();
+        TxNameIdInfo::Transfer(tx_transfer_info) => {
+            let instruction_path = confidential_transaction_file(
+                tx_transfer_info.tx_id,
+                &tx_transfer_info.sender,
+                TransferTxState::Justification(TxSubstate::Validated),
+            );
+            let instruction: TransferInstruction = load_object(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                COMMON_OBJECTS_DIR,
+                &instruction_path,
+            )?;
+
+            let sender_ordered_pub_account: OrderedPubAccount = load_object(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                &tx_transfer_info.sender,
+                &user_public_account_file(&tx_transfer_info.ticker),
+            )?;
+            let receiver_ordered_pub_account: OrderedPubAccount = load_object(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                &tx_transfer_info.receiver,
+                &user_public_account_file(&tx_transfer_info.ticker),
+            )?;
+
+            let auditor_account: AuditorAccount =
+                load_object(db_dir.clone(), OFF_CHAIN_DIR, &auditor, SECRET_ACCOUNT_FILE)?;
+
+            let asset_tx =
+                JustifiedTransferTx::decode(&mut &instruction.data[..]).map_err(|error| {
+                    Error::ObjectLoadError {
+                        error,
+                        path: construct_path(
+                            db_dir.clone(),
+                            ON_CHAIN_DIR,
+                            COMMON_OBJECTS_DIR,
+                            &instruction_path,
+                        ),
+                    }
+                })?;
+
+            let result = CtxAuditor {}.audit_transaction(
+                &asset_tx,
+                &sender_ordered_pub_account.pub_account,
+                &receiver_ordered_pub_account.pub_account,
+                &(auditor_account.auditor_id, auditor_account.encryption_key),
+            );
+
+            let audit_result_path = confidential_transaction_audit_result_file(
+                tx_transfer_info.tx_id,
+                &tx_transfer_info.sender,
+                TransferTxState::Justification(TxSubstate::Validated),
+            );
+            match result {
+                Ok(ok) => {
+                    save_object(
+                        db_dir,
+                        ON_CHAIN_DIR,
+                        &auditor,
+                        &audit_result_path,
+                        &serde_json::to_string(&(tx_name, AuditResult::Passed))
+                            .map_err(|_| Error::SerializeError)?,
+                    )?;
+                    Ok(ok)
+                }
+                Err(error) => {
+                    save_object(
+                        db_dir,
+                        ON_CHAIN_DIR,
+                        &auditor,
+                        &audit_result_path,
+                        &serde_json::to_string(&(tx_name, AuditResult::Failed))
+                            .map_err(|_| Error::SerializeError)?,
+                    )?;
+                    Err(Error::LibraryError { error })
+                }
+            }
         }
     }
 }

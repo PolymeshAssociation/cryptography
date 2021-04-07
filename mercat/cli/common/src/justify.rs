@@ -2,8 +2,9 @@ use crate::{
     compute_enc_pending_balance, confidential_transaction_file, construct_path,
     create_rng_from_seed, errors::Error, last_ordering_state, load_object, non_empty_account_id,
     save_object, user_public_account_balance_file, user_public_account_file, OrderedPubAccount,
-    OrderedTransferInstruction, TransferInstruction, COMMON_OBJECTS_DIR,
-    MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
+    OrderedTransferInstruction, TransferInstruction, AUDITOR_PUBLIC_ACCOUNT_FILE,
+    COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    SECRET_ACCOUNT_FILE,
 };
 use codec::{Decode, Encode};
 use cryptography_core::asset_proofs::{asset_id_from_ticker, ElgamalSecretKey};
@@ -83,6 +84,7 @@ pub fn justify_asset_transfer_transaction(
     sender: String,
     receiver: String,
     mediator: String,
+    auditors: &[String],
     ticker: String,
     seed: String,
     stdout: bool,
@@ -124,6 +126,19 @@ pub fn justify_asset_transfer_transaction(
         &mediator,
         SECRET_ACCOUNT_FILE,
     )?;
+    let auditors_accounts = auditors
+        .into_iter()
+        .map(|auditor| {
+            let key: Result<(u32, EncryptionPubKey), _> = load_object(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                &auditor,
+                AUDITOR_PUBLIC_ACCOUNT_FILE,
+            );
+
+            key
+        })
+        .collect::<Result<Vec<(u32, EncryptionPubKey)>, _>>()?;
 
     let sender_ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
@@ -181,7 +196,7 @@ pub fn justify_asset_transfer_transaction(
             &sender_ordered_pub_account.pub_account,
             &pending_balance,
             &receiver_ordered_pub_account.pub_account,
-            &[],
+            &auditors_accounts,
             asset_id,
             &mut rng,
         )
@@ -211,6 +226,7 @@ pub fn justify_asset_transfer_transaction(
         next_instruction = TransferInstruction {
             data: asset_tx.encode().to_vec(),
             state: rejected_state,
+            auditors: auditors.to_vec(),
         };
 
         save_object(
@@ -233,6 +249,7 @@ pub fn justify_asset_transfer_transaction(
         next_instruction = TransferInstruction {
             data: justified_tx.encode().to_vec(),
             state: new_state,
+            auditors: auditors.to_vec(),
         };
 
         save_object(

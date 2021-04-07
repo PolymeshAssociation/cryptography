@@ -630,32 +630,27 @@ impl TransferTransactionAuditor for CtxAuditor {
         verify_finalized_transaction(&finalized_transaction, &receiver_account)?;
 
         // If all checks pass, decrypt the encrypted amount and verify sender's correctness proof.
-        let _: Fallible<()> = initialized_transaction
+        initialized_transaction
             .auditors_payload
             .iter()
+            .filter(|payload| payload.auditor_id == auditor_enc_key.0)
             .map(|payload| {
-                if payload.auditor_id == auditor_enc_key.0 {
-                    let amount = auditor_enc_key
-                        .1
-                        .secret
-                        .const_time_decrypt(&payload.encrypted_amount)?;
+                let amount = auditor_enc_key
+                    .1
+                    .secret
+                    .const_time_decrypt(&payload.encrypted_amount)?;
 
-                    let result = single_property_verifier(
-                        &CorrectnessVerifier {
-                            value: amount.into(),
-                            pub_key: sender_account.owner_enc_pub_key,
-                            cipher: initialized_transaction.memo.enc_amount_using_sender,
-                            pc_gens: &gens,
-                        },
-                        initialized_transaction.amount_correctness_proof,
-                    );
-                    return result;
-                }
-                Ok(())
+                single_property_verifier(
+                    &CorrectnessVerifier {
+                        value: amount.into(),
+                        pub_key: sender_account.owner_enc_pub_key,
+                        cipher: initialized_transaction.memo.enc_amount_using_sender,
+                        pc_gens: &gens,
+                    },
+                    initialized_transaction.amount_correctness_proof,
+                )
             })
-            .collect();
-
-        Err(ErrorKind::AuditorPayloadError.into())
+            .collect()
     }
 }
 
@@ -1121,17 +1116,19 @@ mod tests {
             .is_ok());
 
         // ----------------------- Auditing
-        let _ = auditors_list.iter().map(|auditor| {
-            let transaction_auditor = CtxAuditor;
-            assert!(transaction_auditor
-                .audit_transaction(
+        let result = auditors_list
+            .iter()
+            .map(|auditor| {
+                let transaction_auditor = CtxAuditor;
+                transaction_auditor.audit_transaction(
                     &ctx_just,
                     &sender_account.public,
                     &receiver_account.public,
                     auditor,
                 )
-                .is_ok());
-        });
+            })
+            .collect::<Result<(), _>>();
+        assert!(result.is_ok())
     }
 
     #[test]

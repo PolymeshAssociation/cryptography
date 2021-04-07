@@ -1,9 +1,10 @@
 use crate::{
     compute_enc_pending_balance, confidential_transaction_file, construct_path,
     create_rng_from_seed, debug_decrypt, errors::Error, last_ordering_state, load_object,
-    non_empty_account_id, save_object, user_public_account_balance_file, user_public_account_file,
-    user_secret_account_file, OrderedPubAccount, OrderedTransferInstruction, OrderingState,
-    PrintableAccountId, COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR,
+    non_empty_account_id, save_object, save_transfer_transaction_name,
+    user_public_account_balance_file, user_public_account_file, user_secret_account_file,
+    OrderedPubAccount, OrderedTransferInstruction, OrderingState, PrintableAccountId,
+    AUDITOR_PUBLIC_ACCOUNT_FILE, COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR,
     ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
@@ -17,12 +18,42 @@ use metrics::timing;
 use rand::Rng;
 use std::{path::PathBuf, time::Instant};
 
+pub fn process_create_tx_with_tx_name(
+    seed: String,
+    db_dir: PathBuf,
+    sender: String,
+    receiver: String,
+    mediator: String,
+    auditors: &[String],
+    ticker: String,
+    amount: u32,
+    stdout: bool,
+    tx_id: u32,
+    cheat: bool,
+    tx_name: Option<String>,
+) -> Result<(), Error> {
+    if let Some(name) = tx_name {
+        save_transfer_transaction_name(
+            tx_id,
+            name,
+            sender.clone(),
+            receiver.clone(),
+            ticker.clone(),
+            db_dir.clone(),
+        )?;
+    }
+    process_create_tx(
+        seed, db_dir, sender, receiver, mediator, auditors, ticker, amount, stdout, tx_id, cheat,
+    )
+}
+
 pub fn process_create_tx(
     seed: String,
     db_dir: PathBuf,
     sender: String,
     receiver: String,
     mediator: String,
+    auditors: &[String],
     ticker: String,
     amount: u32,
     stdout: bool,
@@ -67,6 +98,19 @@ pub fn process_create_tx(
         &mediator,
         MEDIATOR_PUBLIC_ACCOUNT_FILE,
     )?;
+    let auditors_accounts = auditors
+        .into_iter()
+        .map(|auditor| {
+            let key: Result<(u32, EncryptionPubKey), _> = load_object(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                &auditor,
+                AUDITOR_PUBLIC_ACCOUNT_FILE,
+            );
+
+            key
+        })
+        .collect::<Result<Vec<(u32, EncryptionPubKey)>, _>>()?;
 
     timing!(
         "account.create_tx.load_from_file",
@@ -142,7 +186,7 @@ pub fn process_create_tx(
             &pending_balance,
             &receiver_account.pub_account,
             &mediator_account,
-            &[],
+            &auditors_accounts,
             amount,
             &mut rng,
         )
@@ -171,7 +215,7 @@ pub fn process_create_tx(
         state: new_state,
         ordering_state,
         data: asset_tx.encode().to_vec(),
-        auditors: vec![], // TODO
+        auditors: auditors.to_vec(),
     };
 
     save_object(
