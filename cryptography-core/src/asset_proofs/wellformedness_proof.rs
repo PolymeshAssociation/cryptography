@@ -48,7 +48,7 @@ impl Encode for WellformednessFinalResponse {
     }
 
     #[inline]
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         (self.z1.as_bytes(), self.z2.as_bytes()).encode_to(dest)
     }
 }
@@ -90,7 +90,7 @@ impl Encode for WellformednessInitialMessage {
         64
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let a = self.a.compress();
         let b = self.b.compress();
 

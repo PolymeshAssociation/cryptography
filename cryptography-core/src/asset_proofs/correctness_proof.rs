@@ -51,7 +51,7 @@ impl Encode for CorrectnessFinalResponse {
         32
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.0.as_bytes().encode_to(dest)
     }
 }
@@ -78,7 +78,7 @@ impl Encode for CorrectnessInitialMessage {
         64
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let a = self.a.compress();
         let b = self.b.compress();
 

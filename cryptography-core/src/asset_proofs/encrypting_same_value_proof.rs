@@ -53,7 +53,7 @@ impl Encode for EncryptingSameValueFinalResponse {
         64usize
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         (self.z1.as_bytes(), self.z2.as_bytes()).encode_to(dest);
     }
 }
@@ -84,7 +84,7 @@ impl Encode for EncryptingSameValueInitialMessage {
         96
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let a1 = self.a1.compress();
         let a2 = self.a2.compress();
         let b = self.b.compress();

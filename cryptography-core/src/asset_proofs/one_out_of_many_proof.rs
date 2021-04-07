@@ -294,7 +294,7 @@ impl Encode for R1ProofInitialMessage {
         128
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let a = self.a.compress();
         let b = self.b.compress();
         let c = self.c.compress();
@@ -366,7 +366,7 @@ impl Encode for R1ProofFinalResponse {
             + mem::size_of_val(&self.n)
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let z_a = self.z_a.as_bytes();
         let z_c = self.z_c.as_bytes();
         let f_elements = self
@@ -632,7 +632,7 @@ impl Encode for OOONProofInitialMessage {
             + mem::size_of_val(&self.m)
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let g_vec_compressed = self.g_vec.iter().map(|p| p.compress()).collect::<Vec<_>>();
         let g_vec = g_vec_compressed
             .iter()
@@ -722,7 +722,7 @@ impl Encode for OOONProofFinalResponse {
             + mem::size_of_val(&self.n)
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let z = self.z.as_bytes();
 
         self.r1_proof_final_response.encode_to(dest);

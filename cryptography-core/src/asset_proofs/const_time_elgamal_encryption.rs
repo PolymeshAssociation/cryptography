@@ -69,7 +69,7 @@ impl Encode for CipherTextWithHint {
         self.elgamal_cipher.size_hint() + 2 * 32
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let y = self.y.compress();
 
         self.elgamal_cipher.encode_to(dest);

@@ -65,7 +65,7 @@ impl Encode for CommitmentWitness {
         64
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let value = self.value.to_bytes();
         let blinding = self.blinding.to_bytes();
 
@@ -100,7 +100,7 @@ impl Encode for CipherText {
         64
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let x = self.x.compress();
         let y = self.y.compress();
 
@@ -199,7 +199,7 @@ impl Encode for ElgamalSecretKey {
         32
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         self.secret.as_bytes().encode_to(dest);
     }
 }
@@ -253,7 +253,7 @@ impl Encode for ElgamalPublicKey {
         32
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let pub_key = self.pub_key.compress();
 
         pub_key.as_bytes().encode_to(dest);

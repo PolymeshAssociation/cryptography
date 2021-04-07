@@ -47,7 +47,7 @@ impl Encode for MembershipProofInitialMessage {
         32usize + mem::size_of::<u32>() + self.ooon_proof_initial_message.size_hint()
     }
 
-    fn encode_to<W: Output>(&self, dest: &mut W) {
+    fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
         let secret_element_comm = self.secret_element_comm.compress();
 
         self.ooon_proof_initial_message.encode_to(dest);
