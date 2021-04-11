@@ -62,6 +62,7 @@ fn main() {
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.issuer,
+            &[], // TODO
             cfg.account_id_from_ticker,
             cfg.amount,
             true,
@@ -260,7 +261,7 @@ pub fn process_create_tx(
             &pending_balance,
             &receiver_pub_account,
             &mediator_account,
-            &[],
+            &[], // TODO
             amount,
             &mut rng,
         )
@@ -369,7 +370,7 @@ pub fn justify_asset_transfer_transaction(
             &sender_pub_account,
             &sender_balance,
             &receiver_pub_account,
-            &[],
+            &[], // TODO
             asset_id,
             &mut rng,
         )

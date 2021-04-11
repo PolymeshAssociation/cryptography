@@ -4,7 +4,11 @@
 
 mod input;
 
-use mercat_common::{audit::process_create_auditor, errors::Error, init_print_logger};
+use mercat_common::{
+    audit::{process_audit, process_create_auditor},
+    errors::Error,
+    init_print_logger,
+};
 
 use input::{parse_input, CLI};
 use log::info;
@@ -28,7 +32,12 @@ fn main() {
             cfg.user_id,
         )
         .unwrap(),
-        CLI::AuditIransferTransaction(_cfg) => unimplemented!(),
+        CLI::AuditTransaction(cfg) => process_audit(
+            cfg.auditor,
+            cfg.tx_name,
+            cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
+        )
+        .unwrap(),
     };
 
     info!("The program finished successfully.");

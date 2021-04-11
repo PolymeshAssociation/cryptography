@@ -346,15 +346,22 @@ impl Transaction {
 impl Transfer {
     pub fn send<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
+        let auditors: Vec<String> = self
+            .auditors
+            .clone()
+            .into_iter()
+            .map(|auditor| auditor.name)
+            .collect();
         let value = format!(
             "tx-{}: $ mercat-account create-transaction --account-id-from-ticker {} --amount {} --sender {} --receiver {} \
-            --mediator {} --tx-id {} --seed {} --db-dir {} {}",
+            --mediator {} --auditors {} --tx-id {} --seed {} --db-dir {} {}",
             self.tx_id,
             self.ticker,
             self.amount,
             self.sender.name,
             self.receiver.name,
             self.mediator.name,
+            auditors.join(","),
             self.tx_id,
             seed,
             path_to_string(&chain_db_dir),
@@ -368,12 +375,6 @@ impl Transfer {
         let tx_id = self.tx_id;
         let tx_name = self.tx_name.clone();
         let cheat = self.sender.cheater;
-        let auditors: Vec<String> = self
-            .auditors
-            .clone()
-            .into_iter()
-            .map(|auditor| auditor.name)
-            .collect();
 
         Box::new(move || {
             info!("Running: {}", value.clone());
@@ -436,12 +437,19 @@ impl Transfer {
 
     pub fn mediate<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
+        let auditors: Vec<String> = self
+            .auditors
+            .clone()
+            .into_iter()
+            .map(|auditor| auditor.name)
+            .collect();
         let value = format!(
-            "tx-{}: $ mercat-mediator justify-transaction --sender {} --receiver {} --mediator {} --ticker {} --tx-id {} --seed {} --db-dir {} {}",
+            "tx-{}: $ mercat-mediator justify-transaction --sender {} --receiver {} --mediator {} --auditors {} --ticker {} --tx-id {} --seed {} --db-dir {} {}",
             self.tx_id,
             self.sender.name,
             self.receiver.name,
             self.mediator.name,
+            auditors.join(","),
             self.ticker,
             self.tx_id,
             seed,
@@ -455,12 +463,6 @@ impl Transfer {
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
         let cheat = self.mediator.cheater;
-        let auditors: Vec<String> = self
-            .auditors
-            .clone()
-            .into_iter()
-            .map(|auditor| auditor.name)
-            .collect();
 
         Box::new(move || {
             info!("Running: {}", value.clone());
@@ -594,12 +596,19 @@ impl Create {
 impl Issue {
     pub fn issue<T: RngCore + CryptoRng>(&self, rng: &mut T, chain_db_dir: PathBuf) -> StepFunc {
         let seed = gen_seed_from(rng);
+        let auditors: Vec<String> = self
+            .auditors
+            .clone()
+            .into_iter()
+            .map(|auditor| auditor.name)
+            .collect();
         let value = format!(
-            "tx-{}: $ mercat-account issue --account-id-from-ticker {} --amount {} --issuer {} --tx-id {} --seed {} --db-dir {} {}",
+            "tx-{}: $ mercat-account issue --account-id-from-ticker {} --amount {} --issuer {} --auditors {} --tx-id {} --seed {} --db-dir {} {}",
             self.tx_id,
             self.ticker,
             self.amount,
             self.issuer.name,
+            auditors.join(","),
             self.tx_id,
             seed,
             path_to_string(&chain_db_dir),
@@ -611,12 +620,6 @@ impl Issue {
         let tx_id = self.tx_id;
         let tx_name = self.tx_name.clone();
         let cheat = self.issuer.cheater;
-        let auditors: Vec<String> = self
-            .auditors
-            .clone()
-            .into_iter()
-            .map(|auditor| auditor.name)
-            .collect();
 
         Box::new(move || {
             info!("Running: {}", value.clone());
@@ -827,10 +830,6 @@ impl TestCase {
                         let tx: Result<String, _> = load_object_from(file.clone());
                         if let Ok(serialized) = tx {
                             if let Ok((tx_name, tx_status)) = serde_json::from_str(&serialized) {
-                                println!(
-                                    "---------> Found file {:?} with content: {:?} {:?}",
-                                    &file, &tx_name, &tx_status
-                                );
                                 audit_results.insert(AuditExpectation {
                                     auditor: Party::try_from((user, PartyKind::Auditor))?,
                                     tx_name,
