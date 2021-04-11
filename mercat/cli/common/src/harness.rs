@@ -157,7 +157,7 @@ impl TryFrom<(u32, String)> for Transfer {
 pub struct Create {
     pub tx_id: u32,
     pub owner: Party,
-    pub owner_id: Option<u32>,
+    pub owner_id: Option<u8>,
     pub ticker: Option<String>,
 }
 
@@ -348,9 +348,8 @@ impl Transfer {
         let seed = gen_seed_from(rng);
         let auditors: Vec<String> = self
             .auditors
-            .clone()
-            .into_iter()
-            .map(|auditor| auditor.name)
+            .iter()
+            .map(|auditor| auditor.name.clone())
             .collect();
         let value = format!(
             "tx-{}: $ mercat-account create-transaction --account-id-from-ticker {} --amount {} --sender {} --receiver {} \
@@ -439,9 +438,8 @@ impl Transfer {
         let seed = gen_seed_from(rng);
         let auditors: Vec<String> = self
             .auditors
-            .clone()
-            .into_iter()
-            .map(|auditor| auditor.name)
+            .iter()
+            .map(|auditor| auditor.name.clone())
             .collect();
         let value = format!(
             "tx-{}: $ mercat-mediator justify-transaction --sender {} --receiver {} --mediator {} --auditors {} --ticker {} --tx-id {} --seed {} --db-dir {} {}",
@@ -598,9 +596,8 @@ impl Issue {
         let seed = gen_seed_from(rng);
         let auditors: Vec<String> = self
             .auditors
-            .clone()
-            .into_iter()
-            .map(|auditor| auditor.name)
+            .iter()
+            .map(|auditor| auditor.name.clone())
             .collect();
         let value = format!(
             "tx-{}: $ mercat-account issue --account-id-from-ticker {} --amount {} --issuer {} --auditors {} --tx-id {} --seed {} --db-dir {} {}",
@@ -917,13 +914,12 @@ fn make_empty_normal_accounts(
 }
 
 fn make_empty_non_normal_accounts(
-    accounts: &[(Party, Option<u32>)],
+    accounts: &[(Party, Option<u8>)],
     starting_id: u32,
 ) -> Result<(u32, Vec<TransactionMode>), Error> {
     let mut transaction_counter = starting_id;
     let mut seq: Vec<TransactionMode> = vec![];
-    for account in accounts {
-        let (party, owner_id) = account;
+    for (party, owner_id) in accounts {
         seq.push(TransactionMode::Transaction(Transaction::Create(Create {
             tx_id: transaction_counter,
             owner: party.clone(),
@@ -932,14 +928,7 @@ fn make_empty_non_normal_accounts(
         })));
         transaction_counter += 1;
     }
-    Ok((
-        transaction_counter,
-        seq
-        //TransactionMode::Sequence {
-        //    repeat: 1,
-        //    steps: seq,
-        //},
-    ))
+    Ok((transaction_counter, seq))
 }
 
 fn to_string(value: &Yaml, path: PathBuf, attribute: &str) -> Result<String, Error> {
@@ -1104,7 +1093,7 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
     }
 
     let mut all_normal_accounts: Vec<InputAccount> = vec![];
-    let mut all_non_normal_accounts: Vec<(Party, Option<u32>)> = vec![];
+    let mut all_non_normal_accounts: Vec<(Party, Option<u8>)> = vec![];
     let accounts = to_array(&config["accounts"], path.clone(), "accounts")?;
     for user in accounts {
         let user = to_hash(&user, path.clone(), "accounts.user")?;

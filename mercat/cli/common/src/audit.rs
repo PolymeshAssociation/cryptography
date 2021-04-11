@@ -12,7 +12,7 @@ use curve25519_dalek::scalar::Scalar;
 use log::info;
 use mercat::{
     asset::AssetAuditor, transaction::CtxAuditor, AssetTransactionAuditor, AssetTxState,
-    AuditorAccount, EncryptionKeys, EncryptionPubKey, JustifiedTransferTx,
+    AuditorAccount, AuditorPubAccount, EncryptionKeys, JustifiedTransferTx,
     TransferTransactionAuditor, TransferTxState, TxSubstate,
 };
 use metrics::timing;
@@ -21,8 +21,8 @@ use std::{path::PathBuf, time::Instant};
 
 fn generate_auditors_keys<R: RngCore + CryptoRng>(
     rng: &mut R,
-    auditor_id: u32,
-) -> ((u32, EncryptionPubKey), AuditorAccount) {
+    auditor_id: u8,
+) -> (AuditorPubAccount, AuditorAccount) {
     let auditor_elg_secret_key = ElgamalSecretKey::new(Scalar::random(rng));
     let auditor_enc_key = EncryptionKeys {
         public: auditor_elg_secret_key.get_public_key(),
@@ -30,10 +30,13 @@ fn generate_auditors_keys<R: RngCore + CryptoRng>(
     };
 
     (
-        (auditor_id, auditor_enc_key.public),
+        AuditorPubAccount {
+            auditor_id: [auditor_id; 32],
+            encryption_public_key: auditor_enc_key.public,
+        },
         AuditorAccount {
             encryption_key: auditor_enc_key,
-            auditor_id,
+            auditor_id: [auditor_id; 32],
         },
     )
 }
@@ -42,7 +45,7 @@ pub fn process_create_auditor(
     seed: String,
     db_dir: PathBuf,
     user: String,
-    auditor_id: u32,
+    auditor_id: u8,
 ) -> Result<(), Error> {
     // Setup the rng.
     let mut rng = create_rng_from_seed(Some(seed))?;
@@ -129,7 +132,7 @@ pub fn process_audit(auditor: String, tx_name: String, db_dir: PathBuf) -> Resul
             let result = AssetAuditor {}.audit_asset_transaction(
                 &asset_tx,
                 &issuer_ordered_pub_account.pub_account,
-                &(auditor_account.auditor_id, auditor_account.encryption_key),
+                &auditor_account,
             );
 
             let audit_result_path = asset_transaction_audit_result_file(
@@ -137,30 +140,17 @@ pub fn process_audit(auditor: String, tx_name: String, db_dir: PathBuf) -> Resul
                 &tx_asset_info.issuer,
                 AssetTxState::Initialization(TxSubstate::Started),
             );
-            match result {
-                Ok(ok) => {
-                    save_object(
-                        db_dir,
-                        ON_CHAIN_DIR,
-                        &auditor,
-                        &audit_result_path,
-                        &serde_json::to_string(&(tx_name, AuditResult::Passed))
-                            .map_err(|_| Error::SerializeError)?,
-                    )?;
-                    Ok(ok)
-                }
-                Err(error) => {
-                    save_object(
-                        db_dir,
-                        ON_CHAIN_DIR,
-                        &auditor,
-                        &audit_result_path,
-                        &serde_json::to_string(&(tx_name, AuditResult::Failed))
-                            .map_err(|_| Error::SerializeError)?,
-                    )?;
-                    Err(Error::LibraryError { error })
-                }
-            }
+            let audit_result = AuditResult::from(&result);
+            save_object(
+                db_dir,
+                ON_CHAIN_DIR,
+                &auditor,
+                &audit_result_path,
+                &serde_json::to_string(&(tx_name, audit_result))
+                    .map_err(|_| Error::SerializeError)?,
+            )?;
+
+            result.map_err(|error| Error::LibraryError { error })
         }
         TxNameIdInfo::Transfer(tx_transfer_info) => {
             let instruction_path = confidential_transaction_file(
@@ -208,7 +198,7 @@ pub fn process_audit(auditor: String, tx_name: String, db_dir: PathBuf) -> Resul
                 &asset_tx,
                 &sender_ordered_pub_account.pub_account,
                 &receiver_ordered_pub_account.pub_account,
-                &(auditor_account.auditor_id, auditor_account.encryption_key),
+                &auditor_account,
             );
 
             let audit_result_path = confidential_transaction_audit_result_file(
@@ -216,30 +206,17 @@ pub fn process_audit(auditor: String, tx_name: String, db_dir: PathBuf) -> Resul
                 &tx_transfer_info.sender,
                 TransferTxState::Justification(TxSubstate::Validated),
             );
-            match result {
-                Ok(ok) => {
-                    save_object(
-                        db_dir,
-                        ON_CHAIN_DIR,
-                        &auditor,
-                        &audit_result_path,
-                        &serde_json::to_string(&(tx_name, AuditResult::Passed))
-                            .map_err(|_| Error::SerializeError)?,
-                    )?;
-                    Ok(ok)
-                }
-                Err(error) => {
-                    save_object(
-                        db_dir,
-                        ON_CHAIN_DIR,
-                        &auditor,
-                        &audit_result_path,
-                        &serde_json::to_string(&(tx_name, AuditResult::Failed))
-                            .map_err(|_| Error::SerializeError)?,
-                    )?;
-                    Err(Error::LibraryError { error })
-                }
-            }
+            let audit_result = AuditResult::from(&result);
+            save_object(
+                db_dir,
+                ON_CHAIN_DIR,
+                &auditor,
+                &audit_result_path,
+                &serde_json::to_string(&(tx_name, audit_result))
+                    .map_err(|_| Error::SerializeError)?,
+            )?;
+
+            result.map_err(|error| Error::LibraryError { error })
         }
     }
 }

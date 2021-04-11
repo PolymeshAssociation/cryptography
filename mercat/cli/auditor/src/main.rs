@@ -6,7 +6,6 @@ mod input;
 
 use mercat_common::{
     audit::{process_audit, process_create_auditor},
-    errors::Error,
     init_print_logger,
 };
 
@@ -26,8 +25,8 @@ fn main() {
 
     match args {
         CLI::Create(cfg) => process_create_auditor(
-            cfg.seed.ok_or(Error::EmptySeed).unwrap(),
-            cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
+            cfg.seed.expect("Empty seed!"),
+            cfg.db_dir.expect("Empty database directory"),
             cfg.user,
             cfg.user_id,
         )
@@ -35,7 +34,7 @@ fn main() {
         CLI::AuditTransaction(cfg) => process_audit(
             cfg.auditor,
             cfg.tx_name,
-            cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
+            cfg.db_dir.expect("Empty database directory"),
         )
         .unwrap(),
     };

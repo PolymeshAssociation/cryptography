@@ -92,7 +92,14 @@ pub struct MediatorAccount {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AuditorAccount {
     pub encryption_key: EncryptionKeys,
-    pub auditor_id: u32,
+    pub auditor_id: [u8; 32],
+}
+
+#[derive(Clone, Encode, Decode, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AuditorPubAccount {
+    pub encryption_public_key: EncryptionPubKey,
+    pub auditor_id: [u8; 32],
 }
 
 #[derive(Clone, Encode, Decode, Debug, PartialEq)]
@@ -277,7 +284,7 @@ pub trait AssetTransactionIssuer {
     fn initialize_asset_transaction<T: RngCore + CryptoRng>(
         &self,
         issr_account: &Account,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[AuditorPubAccount],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedAssetTx>;
@@ -291,7 +298,7 @@ pub trait AssetTransactionVerifier {
         justified_asset_tx: &InitializedAssetTx,
         issr_account: &PubAccount,
         issr_init_balance: &EncryptedAmount,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[AuditorPubAccount],
     ) -> Fallible<EncryptedAmount>;
 }
 
@@ -302,7 +309,7 @@ pub trait AssetTransactionAuditor {
         &self,
         justified_asset_tx: &InitializedAssetTx,
         issuer_account: &PubAccount,
-        auditor_enc_keys: &(u32, EncryptionKeys),
+        auditor_enc_keys: &AuditorAccount,
     ) -> Fallible<()>;
 }
 
@@ -313,7 +320,7 @@ pub trait AssetTransactionAuditor {
 #[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AuditorPayload {
-    pub auditor_id: u32,
+    pub auditor_id: [u8; 32],
     pub encrypted_amount: EncryptedAmountWithHint,
     pub amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof,
 }
@@ -375,7 +382,7 @@ pub trait TransferTransactionSender {
         sender_init_balance: &EncryptedAmount,
         receiver_pub_account: &PubAccount,
         mediator_pub_key: &EncryptionPubKey,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[AuditorPubAccount],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedTransferTx>;
@@ -403,7 +410,7 @@ pub trait TransferTransactionMediator {
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[AuditorPubAccount],
         asset_id_hint: AssetId,
         rng: &mut R,
     ) -> Fallible<JustifiedTransferTx>;
@@ -417,7 +424,7 @@ pub trait TransferTransactionVerifier {
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[AuditorPubAccount],
         rng: &mut R,
     ) -> Fallible<()>;
 }
@@ -430,7 +437,7 @@ pub trait TransferTransactionAuditor {
         justified_transaction: &JustifiedTransferTx,
         sender_account: &PubAccount,
         receiver_account: &PubAccount,
-        auditor_enc_keys: &(u32, EncryptionKeys),
+        auditor_enc_keys: &AuditorAccount,
     ) -> Fallible<()>;
 }
 

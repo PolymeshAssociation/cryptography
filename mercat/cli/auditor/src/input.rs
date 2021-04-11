@@ -18,12 +18,8 @@ pub struct CreateAuditorAccountInfo {
 
     /// The id of the auditor.
     /// It is the responsibility of the caller to ensure this id is unique.
-    #[structopt(
-        short,
-        long,
-        help = "The name of the auditor. This name must be unique."
-    )]
-    pub user_id: u32,
+    #[structopt(short, long, help = "The auditor's id. This name must be unique.")]
+    pub user_id: u8,
 
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the

@@ -2,18 +2,17 @@ use crate::{
     account_create_transaction_file, all_unverified_tx_files, asset_transaction_file,
     compute_enc_pending_balance, confidential_transaction_file, debug_decrypt, errors::Error,
     get_asset_ids, get_user_ticker_from, last_ordering_state, load_object, load_tx_file,
-    parse_tx_name, save_object, save_to_file, user_public_account_balance_file,
-    user_public_account_file, AssetInstruction, CoreTransaction, Direction, OrderedPubAccount,
-    OrderedPubAccountTx, PrintableAccountId, TransferInstruction, ValidationResult,
-    AUDITOR_PUBLIC_ACCOUNT_FILE, COMMON_OBJECTS_DIR, LAST_VALIDATED_TX_ID_FILE, OFF_CHAIN_DIR,
-    ON_CHAIN_DIR,
+    parse_tx_name, retrieve_auditors_by_names, save_object, save_to_file,
+    user_public_account_balance_file, user_public_account_file, AssetInstruction, CoreTransaction,
+    Direction, OrderedPubAccount, OrderedPubAccountTx, PrintableAccountId, TransferInstruction,
+    ValidationResult, COMMON_OBJECTS_DIR, LAST_VALIDATED_TX_ID_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
 use log::{debug, error, info};
 use mercat::{
     account::AccountValidator, asset::AssetValidator, transaction::TransactionValidator,
     AccountCreatorVerifier, AssetTransactionVerifier, AssetTxState, EncryptedAmount,
-    EncryptedAssetId, EncryptionPubKey, InitializedAssetTx, JustifiedTransferTx, PubAccount,
+    EncryptedAssetId, InitializedAssetTx, JustifiedTransferTx, PubAccount,
     TransferTransactionVerifier, TransferTxState, TxSubstate,
 };
 use metrics::timing;
@@ -291,24 +290,11 @@ pub fn validate_asset_issuance(
     }
     let issuer_account_balance = issuer_account_balance.unwrap();
 
-    let auditors = auditors
-        .into_iter()
-        .map(|auditor| {
-            let key: Result<(u32, EncryptionPubKey), _> = load_object(
-                db_dir.clone(),
-                ON_CHAIN_DIR,
-                &auditor,
-                AUDITOR_PUBLIC_ACCOUNT_FILE,
-            );
-
-            key
-        })
-        .collect::<Result<Vec<(u32, EncryptionPubKey)>, _>>()
-        .map_err(|error| {
-            error!("Error in validation of tx-{}: {:#?}", tx_id, error);
-            ValidationResult::error("user", "ticker")
-        });
-    let auditors = auditors.unwrap(); // TODO
+    let auditors = retrieve_auditors_by_names(auditors, db_dir.clone()).map_err(|error| {
+        error!("Error in validation of tx-{}: {:#?}", tx_id, error);
+        return ValidationResult::error("user", "ticker");
+    });
+    let auditors = auditors.unwrap();
 
     timing!(
         "validator.issuance.load_objects",
@@ -460,19 +446,7 @@ fn process_transaction(
 ) -> Result<(), Error> {
     let mut rng = OsRng::default();
     let tx = JustifiedTransferTx::decode(&mut &instruction.data[..]).unwrap();
-    let auditors_accounts = auditors
-        .into_iter()
-        .map(|auditor| {
-            let key: Result<(u32, EncryptionPubKey), _> = load_object(
-                db_dir.clone(),
-                ON_CHAIN_DIR,
-                &auditor,
-                AUDITOR_PUBLIC_ACCOUNT_FILE,
-            );
-
-            key
-        })
-        .collect::<Result<Vec<(u32, EncryptionPubKey)>, _>>()?;
+    let auditors_accounts = retrieve_auditors_by_names(auditors, db_dir.clone())?;
     let validator = TransactionValidator;
     validator
         .verify_transaction(

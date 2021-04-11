@@ -2,8 +2,8 @@
 
 use crate::{
     account::deposit, Account, AssetMemo, AssetTransactionAuditor, AssetTransactionIssuer,
-    AssetTransactionVerifier, AuditorPayload, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
-    InitializedAssetTx, PubAccount,
+    AssetTransactionVerifier, AuditorAccount, AuditorPayload, AuditorPubAccount, EncryptedAmount,
+    EncryptionPubKey, InitializedAssetTx, PubAccount,
 };
 use cryptography_core::asset_proofs::{
     bulletproofs::PedersenGens,
@@ -45,7 +45,7 @@ fn asset_issuance_init_verify_proofs(
 fn asset_issuance_init_verify(
     asset_tx: &InitializedAssetTx,
     issr_pub_account: &PubAccount,
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[AuditorPubAccount],
 ) -> Fallible<()> {
     asset_issuance_init_verify_proofs(asset_tx, issr_pub_account)?;
 
@@ -60,7 +60,7 @@ fn asset_issuance_init_verify(
 
 fn verify_auditor_payload(
     auditors_payload: &[AuditorPayload],
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[AuditorPubAccount],
     issuer_enc_pub_key: EncryptionPubKey,
     issuer_enc_amount: EncryptedAmount,
 ) -> Fallible<()> {
@@ -72,17 +72,17 @@ fn verify_auditor_payload(
     let gens = &PedersenGens::default();
     let _: Fallible<()> = auditors_enc_pub_keys
         .iter()
-        .map(|(auditor_id, auditor_pub_key)| {
+        .map(|auditor| {
             let mut found_auditor = false;
             let _: Fallible<()> = auditors_payload
                 .iter()
                 .map(|payload| {
-                    if *auditor_id == payload.auditor_id {
+                    if auditor.auditor_id == payload.auditor_id {
                         // Verify that the encrypted amounts are equal.
                         single_property_verifier(
                             &EncryptingSameValueVerifier {
                                 pub_key1: issuer_enc_pub_key,
-                                pub_key2: *auditor_pub_key,
+                                pub_key2: auditor.encryption_public_key,
                                 cipher1: issuer_enc_amount,
                                 cipher2: payload.encrypted_amount.elgamal_cipher,
                                 pc_gens: &gens,
@@ -114,7 +114,7 @@ impl AssetTransactionIssuer for AssetIssuer {
     fn initialize_asset_transaction<T: RngCore + CryptoRng>(
         &self,
         issr_account: &Account,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[AuditorPubAccount],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedAssetTx> {
@@ -170,7 +170,7 @@ impl AssetTransactionIssuer for AssetIssuer {
 }
 
 fn add_asset_transaction_auditor<T: RngCore + CryptoRng>(
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[AuditorPubAccount],
     issuer_enc_pub_key: &EncryptionPubKey,
     amount_witness: &CommitmentWitness,
     rng: &mut T,
@@ -181,15 +181,17 @@ fn add_asset_transaction_auditor<T: RngCore + CryptoRng>(
     // Add the required payload for the auditors.
     let _: Fallible<()> = auditors_enc_pub_keys
         .iter()
-        .map(|(auditor_id, auditor_enc_pub_key)| {
-            let encrypted_amount = auditor_enc_pub_key.const_time_encrypt(amount_witness, rng);
+        .map(|auditor| {
+            let encrypted_amount = auditor
+                .encryption_public_key
+                .const_time_encrypt(amount_witness, rng);
 
             // Prove that the sender and auditor's ciphertexts are encrypting the same
             // commitment witness.
             let amount_equal_cipher_proof = single_property_prover(
                 EncryptingSameValueProverAwaitingChallenge {
                     pub_key1: *issuer_enc_pub_key,
-                    pub_key2: *auditor_enc_pub_key,
+                    pub_key2: auditor.encryption_public_key,
                     w: Zeroizing::new(amount_witness.clone()),
                     pc_gens: &gens,
                 },
@@ -197,7 +199,7 @@ fn add_asset_transaction_auditor<T: RngCore + CryptoRng>(
             )?;
 
             let payload = AuditorPayload {
-                auditor_id: *auditor_id,
+                auditor_id: auditor.auditor_id,
                 encrypted_amount,
                 amount_equal_cipher_proof,
             };
@@ -220,7 +222,7 @@ pub struct AssetValidator;
 fn verify_initialization(
     asset_tx: &InitializedAssetTx,
     issr_pub_account: &PubAccount,
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[AuditorPubAccount],
 ) -> Fallible<()> {
     Ok(asset_issuance_init_verify(
         asset_tx,
@@ -237,7 +239,7 @@ impl AssetTransactionVerifier for AssetValidator {
         initialized_asset_tx: &InitializedAssetTx,
         issr_account: &PubAccount,
         issr_init_balance: &EncryptedAmount,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[AuditorPubAccount],
     ) -> Fallible<EncryptedAmount> {
         let gens = PedersenGens::default();
 
@@ -280,7 +282,7 @@ impl AssetTransactionAuditor for AssetAuditor {
         &self,
         initialized_asset_tx: &InitializedAssetTx,
         issuer_account: &PubAccount,
-        auditor_enc_key: &(u32, EncryptionKeys),
+        auditor_enc_key: &AuditorAccount,
     ) -> Fallible<()> {
         let gens = PedersenGens::default();
 
@@ -291,10 +293,10 @@ impl AssetTransactionAuditor for AssetAuditor {
         initialized_asset_tx
             .auditors_payload
             .iter()
-            .filter(|payload| payload.auditor_id == auditor_enc_key.0)
+            .filter(|payload| payload.auditor_id == auditor_enc_key.auditor_id)
             .map(|payload| {
                 let amount = auditor_enc_key
-                    .1
+                    .encryption_key
                     .secret
                     .const_time_decrypt(&payload.encrypted_amount)?;
 
@@ -397,10 +399,10 @@ mod tests {
     }
 
     fn asset_issuance_auditing_helper(
-        issuer_auditor_list: &[(u32, EncryptionPubKey)],
-        validator_auditor_list: &[(u32, EncryptionPubKey)],
+        issuer_auditor_list: &[AuditorPubAccount],
+        validator_auditor_list: &[AuditorPubAccount],
         validator_check_fails: bool,
-        auditors_list: &[(u32, EncryptionKeys)],
+        auditors_list: &[AuditorAccount],
     ) {
         // ----------------------- Setup
         let mut rng = StdRng::from_seed([10u8; 32]);
@@ -474,12 +476,7 @@ mod tests {
         let result = auditors_list
             .into_iter()
             .map(|auditor| {
-                let transaction_auditor = AssetAuditor;
-                transaction_auditor.audit_asset_transaction(
-                    &asset_tx,
-                    &issuer_public_account,
-                    auditor,
-                )
+                AssetAuditor.audit_asset_transaction(&asset_tx, &issuer_public_account, auditor)
             })
             .collect::<Result<(), _>>();
         assert!(result.is_ok())
@@ -500,17 +497,23 @@ mod tests {
     fn test_asset_transaction_auditor() {
         // Make imaginary auditors.
         let auditors_num = 5u32;
-        let auditors_secret_vec: Vec<(u32, EncryptionKeys)> = (0..auditors_num)
+        let auditors_secret_vec: Vec<AuditorAccount> = (0..auditors_num)
             .map(|index| {
                 let auditor_keys = gen_enc_key_pair(index as u8);
-                (index, auditor_keys)
+                AuditorAccount {
+                    auditor_id: [index as u8; 32],
+                    encryption_key: auditor_keys,
+                }
             })
             .collect();
         let auditors_secret_account_list = auditors_secret_vec.as_slice();
 
-        let auditors_vec: Vec<(u32, EncryptionPubKey)> = auditors_secret_vec
+        let auditors_vec: Vec<AuditorPubAccount> = auditors_secret_vec
             .iter()
-            .map(|a| (a.0, a.1.public))
+            .map(|a| AuditorPubAccount {
+                auditor_id: a.auditor_id,
+                encryption_public_key: a.encryption_key.public,
+            })
             .collect();
 
         let auditors_list = auditors_vec.as_slice();
@@ -528,11 +531,11 @@ mod tests {
         // Change the order of auditors lists on validator side.
         // The tests still must pass.
         let validator_auditor_list = vec![
-            auditors_vec[4],
-            auditors_vec[3],
-            auditors_vec[2],
-            auditors_vec[1],
-            auditors_vec[0],
+            auditors_vec[4].clone(),
+            auditors_vec[3].clone(),
+            auditors_vec[2].clone(),
+            auditors_vec[1].clone(),
+            auditors_vec[0].clone(),
         ];
         let validator_auditor_list = validator_auditor_list.as_slice();
 
@@ -550,10 +553,10 @@ mod tests {
 
         // Sender misses an auditor. Mediator catches it.
         let four_auditor_list = vec![
-            auditors_vec[1],
-            auditors_vec[0],
-            auditors_vec[3],
-            auditors_vec[2],
+            auditors_vec[1].clone(),
+            auditors_vec[0].clone(),
+            auditors_vec[3].clone(),
+            auditors_vec[2].clone(),
         ];
         let four_auditor_list = four_auditor_list.as_slice();
 

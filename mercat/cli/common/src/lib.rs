@@ -16,9 +16,9 @@ use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
 use errors::Error;
 use log::{debug, error, info};
 use mercat::{
-    Account, AssetTxState, EncryptedAmount, EncryptedAssetId, FinalizedTransferTx,
-    InitializedAssetTx, InitializedTransferTx, JustifiedTransferTx, PubAccount, PubAccountTx,
-    SecAccount, TransferTxState, TxSubstate,
+    Account, AssetTxState, AuditorPubAccount, EncryptedAmount, EncryptedAssetId,
+    FinalizedTransferTx, InitializedAssetTx, InitializedTransferTx, JustifiedTransferTx,
+    PubAccount, PubAccountTx, SecAccount, TransferTxState, TxSubstate,
 };
 use metrics::Recorder;
 use metrics_core::Key;
@@ -92,40 +92,16 @@ impl CoreTransaction {
     /// Returns true for transactions that can be verified by the network validators.
     fn is_ready_for_validation(&self) -> bool {
         match self {
-            CoreTransaction::Account {
-                account_tx: _,
-                ordering_state: _,
-                tx_id: _,
-            } => true,
-            CoreTransaction::IssueInit {
-                issue_tx: _,
-                issuer: _,
-                tx_id: _,
-                ordering_state: _,
-                amount: _,
-                auditors: _,
-            } => true,
-            CoreTransaction::TransferJustify {
-                tx: _,
-                mediator: _,
-                tx_id: _,
-                auditors: _,
-            } => true,
+            CoreTransaction::Account { .. }
+            | CoreTransaction::IssueInit { .. }
+            | CoreTransaction::TransferJustify { .. } => true,
             _ => false,
         }
     }
 
     /// Returns true for outgoing transactions.
     fn decreases_account_balance(&self) -> bool {
-        matches!(
-            self,
-            CoreTransaction::TransferInit {
-                tx: _,
-                sender: _,
-                ordering_state: _,
-                tx_id: _,
-            }
-        )
+        matches!(self, CoreTransaction::TransferInit { .. })
     }
 
     pub fn ordering_state(&self) -> OrderingState {
@@ -293,6 +269,15 @@ impl TryFrom<String> for AuditResult {
                 error!("Cannot convert {} to AuditResult.", rep);
                 Err(Error::AuditResultParseError)
             }
+        }
+    }
+}
+
+impl<T, E> From<&Result<T, E>> for AuditResult {
+    fn from(r: &Result<T, E>) -> Self {
+        match r {
+            Ok(_) => Self::Passed,
+            Err(_) => Self::Failed,
         }
     }
 }
@@ -632,10 +617,7 @@ pub fn create_rng_from_seed(seed: Option<String>) -> Result<StdRng, Error> {
 pub fn load_account_map(db_dir: PathBuf) -> HashMap<String, (String, String, u32)> {
     let mapping: Result<HashMap<String, (String, String, u32)>, Error> =
         load_from_file(db_dir, OFF_CHAIN_DIR, COMMON_OBJECTS_DIR, USER_ACCOUNT_MAP);
-    match mapping {
-        Err(_error) => HashMap::new(),
-        Ok(mapping) => mapping,
-    }
+    mapping.unwrap_or_default()
 }
 
 /// Updates the account mapping file with a new record.
@@ -1078,6 +1060,23 @@ pub fn load_tx_file(
         return Err(Error::InvalidTransactionFile { path: tx_file_path });
     };
     Ok(tx)
+}
+
+pub fn retrieve_auditors_by_names(
+    auditors: &[String],
+    db_dir: PathBuf,
+) -> Result<Vec<AuditorPubAccount>, Error> {
+    auditors
+        .iter()
+        .map(|auditor| {
+            load_object::<AuditorPubAccount>(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                auditor,
+                AUDITOR_PUBLIC_ACCOUNT_FILE,
+            )
+        })
+        .collect()
 }
 
 /// Use only for debugging purposes.

@@ -1,11 +1,10 @@
 use crate::{
     compute_enc_pending_balance, confidential_transaction_file, construct_path,
     create_rng_from_seed, debug_decrypt, errors::Error, last_ordering_state, load_object,
-    non_empty_account_id, save_object, save_transfer_transaction_name,
+    non_empty_account_id, retrieve_auditors_by_names, save_object, save_transfer_transaction_name,
     user_public_account_balance_file, user_public_account_file, user_secret_account_file,
     OrderedPubAccount, OrderedTransferInstruction, OrderingState, PrintableAccountId,
-    AUDITOR_PUBLIC_ACCOUNT_FILE, COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR,
-    ON_CHAIN_DIR,
+    COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
 use log::{debug, info};
@@ -98,19 +97,8 @@ pub fn process_create_tx(
         &mediator,
         MEDIATOR_PUBLIC_ACCOUNT_FILE,
     )?;
-    let auditors_accounts = auditors
-        .into_iter()
-        .map(|auditor| {
-            let key: Result<(u32, EncryptionPubKey), _> = load_object(
-                db_dir.clone(),
-                ON_CHAIN_DIR,
-                &auditor,
-                AUDITOR_PUBLIC_ACCOUNT_FILE,
-            );
 
-            key
-        })
-        .collect::<Result<Vec<(u32, EncryptionPubKey)>, _>>()?;
+    let auditors_accounts = retrieve_auditors_by_names(auditors, db_dir.clone())?;
 
     timing!(
         "account.create_tx.load_from_file",

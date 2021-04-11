@@ -1,16 +1,14 @@
 use crate::{
     asset_transaction_file, create_rng_from_seed, errors::Error, last_ordering_state, load_object,
-    save_issue_transaction_name, save_object, user_public_account_file, user_secret_account_file,
-    OrderedAssetInstruction, OrderedPubAccount, OrderingState, AUDITOR_PUBLIC_ACCOUNT_FILE,
+    retrieve_auditors_by_names, save_issue_transaction_name, save_object, user_public_account_file,
+    user_secret_account_file, OrderedAssetInstruction, OrderedPubAccount, OrderingState,
     COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::Encode;
 use cryptography_core::asset_proofs::{asset_id_from_ticker, CommitmentWitness};
 use curve25519_dalek::scalar::Scalar;
 use log::info;
-use mercat::{
-    asset::AssetIssuer, Account, AssetTransactionIssuer, AssetTxState, EncryptionPubKey, TxSubstate,
-};
+use mercat::{asset::AssetIssuer, Account, AssetTransactionIssuer, AssetTxState, TxSubstate};
 use metrics::timing;
 use rand::Rng;
 use std::{path::PathBuf, time::Instant};
@@ -64,19 +62,7 @@ pub fn process_issue_asset(
             &user_secret_account_file(&ticker),
         )?,
     };
-    let auditors_accounts = auditors
-        .into_iter()
-        .map(|auditor| {
-            let key: Result<(u32, EncryptionPubKey), _> = load_object(
-                db_dir.clone(),
-                ON_CHAIN_DIR,
-                &auditor,
-                AUDITOR_PUBLIC_ACCOUNT_FILE,
-            );
-
-            key
-        })
-        .collect::<Result<Vec<(u32, EncryptionPubKey)>, _>>()?;
+    let auditors_accounts = retrieve_auditors_by_names(auditors, db_dir.clone())?;
 
     timing!(
         "account.issue_asset.load_from_file",
