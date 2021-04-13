@@ -25,12 +25,8 @@
 //! In this implementation, we set `random_1` to the blinding factor used for the
 //! twisted Elgamal encryption. This way the twisted Elgamal and regular Elgamal
 //! ciphertexts can share the same `X`.
-
 use bulletproofs::PedersenGens;
-use curve25519_dalek::{
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
-};
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_core::{CryptoRng, RngCore};
 
 #[cfg(feature = "serde")]
@@ -40,8 +36,11 @@ use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use sha3::{digest::FixedOutput, Digest, Sha3_256};
 use sp_std::prelude::*;
 
-use crate::asset_proofs::elgamal_encryption::{
-    CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
+use crate::{
+    asset_proofs::elgamal_encryption::{
+        CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
+    },
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder},
 };
 
 use super::errors::Fallible;
@@ -66,24 +65,23 @@ pub struct CipherTextWithHint {
 impl Encode for CipherTextWithHint {
     #[inline]
     fn size_hint(&self) -> usize {
-        self.elgamal_cipher.size_hint() + 2 * 32
+        self.elgamal_cipher.size_hint()
+            + RistrettoPointEncoder(&self.y).size_hint()
+            + self.z.size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let y = self.y.compress();
-
         self.elgamal_cipher.encode_to(dest);
-        y.as_bytes().encode_to(dest);
+        RistrettoPointEncoder(&self.y).encode_to(dest);
         self.z.encode_to(dest);
     }
 }
 
 impl Decode for CipherTextWithHint {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (elgamal_cipher, y, z) = <(CipherText, [u8; 32], [u8; 32])>::decode(input)?;
-        let y = CompressedRistretto(y)
-            .decompress()
-            .ok_or_else(|| CodecError::from("CipherTextWithHint Y point is invalid"))?;
+        let elgamal_cipher = <CipherText>::decode(input)?;
+        let y = <RistrettoPointDecoder>::decode(input)?.0;
+        let z = <[u8; 32]>::decode(input)?;
 
         Ok(CipherTextWithHint {
             elgamal_cipher,

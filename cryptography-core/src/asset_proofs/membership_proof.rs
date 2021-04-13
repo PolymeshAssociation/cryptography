@@ -4,23 +4,23 @@
 //! This implementation is based on one-out-of-many proof construction described in the following paper
 //! <https://eprint.iacr.org/2015/643.pdf>
 
-use crate::asset_proofs::{
-    encryption_proofs::{
-        AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
-        ZKProofResponse,
+use crate::{
+    asset_proofs::{
+        encryption_proofs::{
+            AssetProofProver, AssetProofProverAwaitingChallenge, AssetProofVerifier, ZKPChallenge,
+            ZKProofResponse,
+        },
+        errors::{ErrorKind, Fallible},
+        one_out_of_many_proof::{
+            convert_to_base, convert_to_matrix_rep, Matrix, OOONProofFinalResponse,
+            OOONProofInitialMessage, OOONProver, OooNProofGenerators, Polynomial, R1ProofVerifier,
+            R1ProverAwaitingChallenge,
+        },
+        transcript::{TranscriptProtocol, UpdateTranscript},
     },
-    errors::{ErrorKind, Fallible},
-    one_out_of_many_proof::{
-        convert_to_base, convert_to_matrix_rep, Matrix, OOONProofFinalResponse,
-        OOONProofInitialMessage, OOONProver, OooNProofGenerators, Polynomial, R1ProofVerifier,
-        R1ProverAwaitingChallenge,
-    },
-    transcript::{TranscriptProtocol, UpdateTranscript},
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder},
 };
-use curve25519_dalek::{
-    ristretto::{CompressedRistretto, RistrettoPoint},
-    scalar::Scalar,
-};
+use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use merlin::{Transcript, TranscriptRng};
 use rand_core::{CryptoRng, RngCore};
 #[cfg(feature = "serde")]
@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
-use sp_std::{cmp::min, convert::TryFrom, mem, prelude::*};
+use sp_std::{cmp::min, convert::TryFrom, prelude::*};
 
 pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
@@ -44,25 +44,23 @@ pub struct MembershipProofInitialMessage {
 impl Encode for MembershipProofInitialMessage {
     #[inline]
     fn size_hint(&self) -> usize {
-        32usize + mem::size_of::<u32>() + self.ooon_proof_initial_message.size_hint()
+        self.ooon_proof_initial_message.size_hint()
+            + RistrettoPointEncoder(&self.secret_element_comm).size_hint()
+            + self.elements_set_size.size_hint()
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let secret_element_comm = self.secret_element_comm.compress();
-
         self.ooon_proof_initial_message.encode_to(dest);
-        secret_element_comm.as_bytes().encode_to(dest);
+        RistrettoPointEncoder(&self.secret_element_comm).encode_to(dest);
         self.elements_set_size.encode_to(dest);
     }
 }
 
 impl Decode for MembershipProofInitialMessage {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let (ooon_proof_initial_message, secret, elements_set_size) =
-            <(OOONProofInitialMessage, [u8; 32], u32)>::decode(input)?;
-        let secret_element_comm = CompressedRistretto(secret).decompress().ok_or_else(|| {
-            CodecError::from("MembershipProofInitialMessage::secret_element_comm is invalid")
-        })?;
+        let ooon_proof_initial_message = <OOONProofInitialMessage>::decode(input)?;
+        let secret_element_comm = <RistrettoPointDecoder>::decode(input)?.0;
+        let elements_set_size = <u32>::decode(input)?;
 
         Ok(MembershipProofInitialMessage {
             ooon_proof_initial_message,
