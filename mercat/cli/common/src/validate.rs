@@ -290,10 +290,11 @@ pub fn validate_asset_issuance(
     }
     let issuer_account_balance = issuer_account_balance.unwrap();
 
-    let auditors = retrieve_auditors_by_names(auditors, db_dir.clone()).map_err(|error| {
+    let auditors = retrieve_auditors_by_names(auditors, db_dir.clone());
+    if let Err(error) = auditors {
         error!("Error in validation of tx-{}: {:#?}", tx_id, error);
         return ValidationResult::error("user", "ticker");
-    });
+    };
     let auditors = auditors.unwrap();
 
     timing!(
