@@ -156,6 +156,10 @@ pub struct JustifyTransferInfo {
     #[structopt(short, long, help = "The name of the mediator.")]
     pub mediator: String,
 
+    /// The auditors names. An account must have already been created for these users.
+    #[structopt(short, long, help = "The name of the issuer.")]
+    pub auditors: Vec<String>,
+
     /// An optional seed, to feed to the RNG, that can be passed to reproduce a previous run of this CLI.
     /// The seed can be found inside the logs.
     #[structopt(
@@ -245,6 +249,7 @@ pub fn parse_input() -> Result<CLI, confy::ConfyError> {
                 sender: cfg.sender,
                 receiver: cfg.receiver,
                 mediator: cfg.mediator,
+                auditors: cfg.auditors,
                 seed,
                 reject: cfg.reject,
                 save_config: cfg.save_config.clone(),

@@ -135,6 +135,10 @@ pub struct IssueAssetInfo {
     #[structopt(short, long, help = "The name of the issuer.")]
     pub issuer: String,
 
+    /// The auditors names. An account must have already been created for these users.
+    #[structopt(short, long, help = "The name of the issuer.")]
+    pub auditors: Vec<String>,
+
     /// An optional path to save the config used for this experiment.
     #[structopt(
         parse(from_os_str),
@@ -206,6 +210,10 @@ pub struct CreateTransactionInfo {
     /// Use `mercat-mediator` CLI to create the credentials needed for this role.
     #[structopt(short, long, help = "The mediator's name.")]
     pub mediator: String,
+
+    /// The auditors names. An account must have already been created for these users.
+    #[structopt(short, long, help = "The name of the issuer.")]
+    pub auditors: Vec<String>,
 
     /// An optional path to save the config used for this experiment.
     #[structopt(
@@ -396,6 +404,7 @@ pub fn parse_input() -> CLI {
                 amount: cfg.amount,
                 db_dir,
                 issuer: cfg.issuer,
+                auditors: cfg.auditors,
                 save_config: cfg.save_config.clone(),
                 stdout: cfg.stdout,
                 cheat: cfg.cheat,
@@ -427,6 +436,7 @@ pub fn parse_input() -> CLI {
                 sender: cfg.sender,
                 receiver: cfg.receiver,
                 mediator: cfg.mediator,
+                auditors: cfg.auditors,
                 save_config: cfg.save_config.clone(),
                 stdout: cfg.stdout,
                 cheat: cfg.cheat,

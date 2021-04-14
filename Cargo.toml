@@ -7,6 +7,7 @@ members = [
 	"mercat/cli/chain_setup",
 	"mercat/cli/common",
 	"mercat/cli/mediator",
+	"mercat/cli/auditor",
 	"mercat/cli/validator",
 	"mercat/cli/interactive",
 	"mercat/wasm",

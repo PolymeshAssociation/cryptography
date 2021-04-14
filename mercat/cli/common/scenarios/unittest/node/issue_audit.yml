@@ -1,0 +1,28 @@
+--- 
+title: "Fund a single account with two auditors, but only one audits."
+
+tickers: 
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+
+auditors:
+  - Ava
+  - Aubrey
+
+transactions:
+  - sequence:
+    - validate # This validates the account creations. Can be done automatically without needing to write it here explicitly
+    - issue Alice 10 ACME auditors Ava,Aubrey tx_name alice_issue
+    - validate
+    - audit alice_issue Ava
+
+outcome: 
+  - alice: 
+      - ACME: 10
+
+audit_outcome: 
+  - ava:
+    - alice_issue: passed_audit

@@ -1,0 +1,38 @@
+--- 
+title: "A single confidential transaction with an auditor"
+
+tickers: 
+  - ACME
+
+accounts:
+  - alice:
+    - ACME
+  - bob:
+    - ACME
+
+mediators:
+  - Mike
+
+auditors:
+  - Ava
+    
+transactions:
+  - sequence:
+    - validate # This validates the account creations. Can be done automatically without needing to write it here explicitly.
+    - issue Alice 50 ACME auditors Ava tx_name alice_issue
+    - validate # without this, the account is not deposited at the time of the next transaction
+    - transfer Alice 30 ACME Bob approve Mike approve auditors Ava tx_name alice_to_bob
+    - validate
+    - audit alice_issue Ava
+    - audit alice_to_bob Ava
+
+outcome: 
+  - alice: 
+      - ACME: 20
+  - bob: 
+      - ACME: 30
+
+audit_outcome:
+  - ava:
+    - alice_issue: passed_audit
+    - alice_to_bob: passed_audit

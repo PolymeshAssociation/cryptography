@@ -36,6 +36,7 @@ fn main() {
             cfg.sender,
             cfg.receiver,
             cfg.mediator,
+            &cfg.auditors,
             cfg.ticker,
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),
             cfg.stdout,

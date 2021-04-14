@@ -3,6 +3,7 @@
 pub mod account_create;
 pub mod account_issue;
 pub mod account_transfer;
+pub mod audit;
 pub mod chain_setup;
 pub mod errors;
 mod harness;
@@ -15,9 +16,9 @@ use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
 use errors::Error;
 use log::{debug, error, info};
 use mercat::{
-    Account, AssetTxState, EncryptedAmount, EncryptedAssetId, FinalizedTransferTx,
-    InitializedAssetTx, InitializedTransferTx, JustifiedTransferTx, PubAccount, PubAccountTx,
-    SecAccount, TransferTxState, TxSubstate,
+    Account, AssetTxState, AuditorPubAccount, EncryptedAmount, EncryptedAssetId,
+    FinalizedTransferTx, InitializedAssetTx, InitializedTransferTx, JustifiedTransferTx,
+    PubAccount, PubAccountTx, SecAccount, TransferTxState, TxSubstate,
 };
 use metrics::Recorder;
 use metrics_core::Key;
@@ -27,7 +28,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    convert::TryInto,
+    convert::{TryFrom, TryInto},
     fmt,
     fs::{create_dir_all, File},
     hash::Hash,
@@ -38,12 +39,14 @@ use std::{
 pub const ON_CHAIN_DIR: &str = "on-chain";
 pub const OFF_CHAIN_DIR: &str = "off-chain";
 pub const MEDIATOR_PUBLIC_ACCOUNT_FILE: &str = "mediator_public_account";
+pub const AUDITOR_PUBLIC_ACCOUNT_FILE: &str = "auditor_public_account";
 pub const VALIDATED_PUBLIC_ACCOUNT_FILE: &str = "validated_public_account";
 pub const VALIDATED_PUBLIC_ACCOUNT_BALANCE_FILE: &str = "validated_public_account_balance";
 pub const SECRET_ACCOUNT_FILE: &str = "secret_account";
 pub const ASSET_ID_LIST_FILE: &str = "valid_asset_ids.json";
 pub const COMMON_OBJECTS_DIR: &str = "common";
 pub const USER_ACCOUNT_MAP: &str = "user_ticker_to_account_id.json";
+pub const TRANSACTION_NAME_ID_MAP: &str = "transaction_name_to_id.json";
 pub const LAST_VALIDATED_TX_ID_FILE: &str = "last_validated_tx_id_file.json";
 
 /// A wrapper around MERCAT api which holds the transaction data, the transaction id,
@@ -62,6 +65,7 @@ pub enum CoreTransaction {
         ordering_state: OrderingState,
         tx_id: u32,
         amount: u32,
+        auditors: Vec<String>,
     },
     TransferInit {
         tx: InitializedTransferTx,
@@ -79,6 +83,7 @@ pub enum CoreTransaction {
         tx: JustifiedTransferTx,
         mediator: String,
         tx_id: u32,
+        auditors: Vec<String>,
     },
     Invalid,
 }
@@ -87,38 +92,16 @@ impl CoreTransaction {
     /// Returns true for transactions that can be verified by the network validators.
     fn is_ready_for_validation(&self) -> bool {
         match self {
-            CoreTransaction::Account {
-                account_tx: _,
-                ordering_state: _,
-                tx_id: _,
-            } => true,
-            CoreTransaction::IssueInit {
-                issue_tx: _,
-                issuer: _,
-                tx_id: _,
-                ordering_state: _,
-                amount: _,
-            } => true,
-            CoreTransaction::TransferJustify {
-                tx: _,
-                mediator: _,
-                tx_id: _,
-            } => true,
+            CoreTransaction::Account { .. }
+            | CoreTransaction::IssueInit { .. }
+            | CoreTransaction::TransferJustify { .. } => true,
             _ => false,
         }
     }
 
     /// Returns true for outgoing transactions.
     fn decreases_account_balance(&self) -> bool {
-        matches!(
-            self,
-            CoreTransaction::TransferInit {
-                tx: _,
-                sender: _,
-                ordering_state: _,
-                tx_id: _,
-            }
-        )
+        matches!(self, CoreTransaction::TransferInit { .. })
     }
 
     pub fn ordering_state(&self) -> OrderingState {
@@ -134,6 +117,7 @@ impl CoreTransaction {
                 ordering_state,
                 tx_id: _,
                 amount: _,
+                auditors: _,
             } => ordering_state.clone(),
             CoreTransaction::TransferInit {
                 tx: _,
@@ -159,7 +143,7 @@ pub enum Direction {
 }
 
 /// A wrapper that hides the validation error and only keeps the result of the validation.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ValidationResult {
     user: String,
     ticker: String,
@@ -220,6 +204,7 @@ pub struct OrderedAssetInstruction {
     pub state: AssetTxState,
     pub amount: u32,
     pub ordering_state: OrderingState,
+    pub auditors: Vec<String>,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
@@ -237,6 +222,7 @@ pub struct AssetInstruction {
 pub struct OrderedTransferInstruction {
     pub state: TransferTxState,
     pub ordering_state: OrderingState,
+    pub auditors: Vec<String>,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
@@ -245,6 +231,7 @@ pub struct OrderedTransferInstruction {
 #[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
 pub struct TransferInstruction {
     pub state: TransferTxState,
+    pub auditors: Vec<String>,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
@@ -264,14 +251,59 @@ impl PrintableAccountId {
     }
 }
 
+/// Represents the result of an audit. This result will be written in a file. The lack of a file
+/// means that an auditor has chosen NOT to audit a transaction.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+pub enum AuditResult {
+    Passed,
+    Failed,
+}
+
+impl TryFrom<String> for AuditResult {
+    type Error = Error;
+    fn try_from(rep: String) -> Result<Self, Self::Error> {
+        match rep.as_str() {
+            "passed_audit" => Ok(AuditResult::Passed),
+            "failed_audit" => Ok(AuditResult::Failed),
+            _ => {
+                error!("Cannot convert {} to AuditResult.", rep);
+                Err(Error::AuditResultParseError)
+            }
+        }
+    }
+}
+
+impl<T, E> From<&Result<T, E>> for AuditResult {
+    fn from(r: &Result<T, E>) -> Self {
+        match r {
+            Ok(_) => Self::Passed,
+            Err(_) => Self::Failed,
+        }
+    }
+}
+
 #[inline]
 pub fn asset_transaction_file(tx_id: u32, user: &str, state: AssetTxState) -> String {
     format!("tx_{}_{}_{}.json", tx_id, user, state)
 }
 
 #[inline]
+pub fn asset_transaction_audit_result_file(tx_id: u32, user: &str, state: AssetTxState) -> String {
+    format!("tx_{}_{}_{}_audit_result.json", tx_id, user, state)
+}
+
+#[inline]
 pub fn confidential_transaction_file(tx_id: u32, user: &str, state: TransferTxState) -> String {
     format!("tx_{}_{}_{}.json", tx_id, user, state)
+}
+
+#[inline]
+pub fn confidential_transaction_audit_result_file(
+    tx_id: u32,
+    user: &str,
+    state: TransferTxState,
+) -> String {
+    format!("tx_{}_{}_{}_audit_result.json", tx_id, user, state)
 }
 
 #[inline]
@@ -585,10 +617,7 @@ pub fn create_rng_from_seed(seed: Option<String>) -> Result<StdRng, Error> {
 pub fn load_account_map(db_dir: PathBuf) -> HashMap<String, (String, String, u32)> {
     let mapping: Result<HashMap<String, (String, String, u32)>, Error> =
         load_from_file(db_dir, OFF_CHAIN_DIR, COMMON_OBJECTS_DIR, USER_ACCOUNT_MAP);
-    match mapping {
-        Err(_error) => HashMap::new(),
-        Ok(mapping) => mapping,
-    }
+    mapping.unwrap_or_default()
 }
 
 /// Updates the account mapping file with a new record.
@@ -866,6 +895,95 @@ pub fn all_unverified_tx_files(db_dir: PathBuf) -> Result<Vec<String>, Error> {
     Ok(files)
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TxAssetNameIdInfo {
+    tx_id: u32,
+    issuer: String,
+    ticker: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TxTransferNameIdInfo {
+    tx_id: u32,
+    sender: String,
+    receiver: String,
+    ticker: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub enum TxNameIdInfo {
+    Asset(TxAssetNameIdInfo),
+    Transfer(TxTransferNameIdInfo),
+}
+
+#[inline]
+pub fn save_issue_transaction_name(
+    tx_id: u32,
+    tx_name: String,
+    issuer: String,
+    ticker: String,
+    db_dir: PathBuf,
+) -> Result<(), Error> {
+    let mut mapping = load_transaction_names(db_dir.clone());
+    mapping.insert(
+        tx_name,
+        TxNameIdInfo::Asset(TxAssetNameIdInfo {
+            tx_id,
+            issuer,
+            ticker,
+        }),
+    );
+    save_to_file(
+        db_dir,
+        OFF_CHAIN_DIR,
+        COMMON_OBJECTS_DIR,
+        TRANSACTION_NAME_ID_MAP,
+        &mapping,
+    )
+}
+
+#[inline]
+pub fn save_transfer_transaction_name(
+    tx_id: u32,
+    tx_name: String,
+    sender: String,
+    receiver: String,
+    ticker: String,
+    db_dir: PathBuf,
+) -> Result<(), Error> {
+    let mut mapping = load_transaction_names(db_dir.clone());
+    mapping.insert(
+        tx_name,
+        TxNameIdInfo::Transfer(TxTransferNameIdInfo {
+            tx_id,
+            sender,
+            receiver,
+            ticker,
+        }),
+    );
+    save_to_file(
+        db_dir,
+        OFF_CHAIN_DIR,
+        COMMON_OBJECTS_DIR,
+        TRANSACTION_NAME_ID_MAP,
+        &mapping,
+    )
+}
+
+#[inline]
+pub fn load_transaction_names(db_dir: PathBuf) -> HashMap<String, TxNameIdInfo> {
+    let mapping: Result<HashMap<String, TxNameIdInfo>, Error> = load_from_file(
+        db_dir,
+        OFF_CHAIN_DIR,
+        COMMON_OBJECTS_DIR,
+        TRANSACTION_NAME_ID_MAP,
+    );
+    match mapping {
+        Err(_error) => HashMap::new(),
+        Ok(mapping) => mapping,
+    }
+}
+
 /// Loads the tx_id of the last verified transaction from an off-chain file.
 #[inline]
 pub fn last_verified_tx_id(db_dir: PathBuf) -> i32 {
@@ -899,6 +1017,7 @@ pub fn load_tx_file(
             ordering_state: instruction.ordering_state,
             tx_id,
             amount: instruction.amount,
+            auditors: instruction.auditors,
         }
     } else if state == TransferTxState::Initialization(TxSubstate::Started).to_string() {
         let instruction: OrderedTransferInstruction =
@@ -927,6 +1046,7 @@ pub fn load_tx_file(
                 .map_err(|_| Error::DecodeError)?,
             mediator: user,
             tx_id,
+            auditors: instruction.auditors,
         }
     } else if state.starts_with("ticker#") {
         let ordered_account_tx: OrderedPubAccountTx =
@@ -940,6 +1060,23 @@ pub fn load_tx_file(
         return Err(Error::InvalidTransactionFile { path: tx_file_path });
     };
     Ok(tx)
+}
+
+pub fn retrieve_auditors_by_names(
+    auditors: &[String],
+    db_dir: PathBuf,
+) -> Result<Vec<AuditorPubAccount>, Error> {
+    auditors
+        .iter()
+        .map(|auditor| {
+            load_object::<AuditorPubAccount>(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                auditor,
+                AUDITOR_PUBLIC_ACCOUNT_FILE,
+            )
+        })
+        .collect()
 }
 
 /// Use only for debugging purposes.
