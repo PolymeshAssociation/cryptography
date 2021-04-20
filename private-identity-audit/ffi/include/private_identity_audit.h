@@ -13,86 +13,28 @@
  */
 typedef struct CddClaimData CddClaimData;
 
-typedef struct CddId CddId;
-
-/**
- * The committed and padded version of the private set of PUIS.
- */
-typedef struct CommittedUids CommittedUids;
-
-typedef struct Scalar Scalar;
-
-/**
- * Holds PUIS secret data.
- */
-typedef struct VerifierSecrets VerifierSecrets;
-
-/**
- * Holds the CDD Provider's response to the PUIS challenge.
- */
-typedef struct ZKPFinalResponse ZKPFinalResponse;
-
-/**
- * Holds the initial messages in the Zero-Knowledge Proofs sent by CDD Provider.
- */
-typedef struct ZKPInitialmessage ZKPInitialmessage;
-
-typedef struct VerifierSetGeneratorResults {
-  VerifierSecrets *verifier_secrets;
-  CommittedUids *committed_uids;
-} VerifierSetGeneratorResults;
-
-typedef struct ArrZKPInitialmessage {
-  ZKPInitialmessage *arr;
+typedef struct SingleEncoding {
+  uint8_t *arr;
   uintptr_t n;
-  uintptr_t cap;
-} ArrZKPInitialmessage;
+} SingleEncoding;
 
-typedef struct ArrZKPFinalResponse {
-  ZKPFinalResponse *arr;
+typedef struct ArrEncoding {
+  struct SingleEncoding *arr;
   uintptr_t n;
-  uintptr_t cap;
-} ArrZKPFinalResponse;
+} ArrEncoding;
 
 typedef struct ProverResults {
-  struct ArrZKPInitialmessage *prover_initial_messages;
-  struct ArrZKPFinalResponse *prover_final_responses;
-  CommittedUids *committed_uids;
+  struct ArrEncoding *prover_initial_messages;
+  struct ArrEncoding *prover_final_responses;
+  struct SingleEncoding *committed_uids;
 } ProverResults;
 
-typedef struct ArrCddClaimData {
-  CddClaimData *arr;
-  uintptr_t n;
-  uintptr_t cap;
-} ArrCddClaimData;
+typedef struct VerifierSetGeneratorResults {
+  struct SingleEncoding *verifier_secrets;
+  struct SingleEncoding *committed_uids;
+} VerifierSetGeneratorResults;
 
-typedef struct ArrCddId {
-  CddId *arr;
-  uintptr_t n;
-  uintptr_t cap;
-} ArrCddId;
-
-/**
- * Convert a Uuid byte array into a scalar object.
- *
- * Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
- *
- * # Safety
- * Caller is also responsible for making sure `investor_did` and
- * `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
- * and `investor_unique_id_size` bytes respectively.
- */
-struct Scalar *uuid_new(const uint8_t *unique_id, size_t unique_id_size);
-
-struct Scalar *uuid_new2(const uint8_t *unique_id, size_t unique_id_size);
-
-/**
- * Deallocates a `Scalar` object's memory.
- *
- * Should only be called on a still-valid pointer to an object returned by
- * `uuid_new()`.
- */
-void scalar_free(struct Scalar *ptr);
+void bbb(struct ArrEncoding _a, struct SingleEncoding _b);
 
 /**
  * Create a new `CddClaimData` object.
@@ -104,43 +46,10 @@ void scalar_free(struct Scalar *ptr);
  * `investor_unique_id` point to allocated blocks of memory of `investor_did_size`
  * and `investor_unique_id_size` bytes respectively.
  */
-CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
-                                 size_t investor_did_size,
-                                 const uint8_t *investor_unique_id,
-                                 size_t investor_unique_id_size);
-
-/**
- * Deallocates a `CddClaimData` object's memory.
- *
- * Should only be called on a still-valid pointer to an object returned by
- * `cdd_claim_data_new()`.
- */
-void cdd_claim_data_free(CddClaimData *ptr);
-
-/**
- * Deallocates a `VerifierSetGeneratorResults` object's memory.
- *
- * Should only be called on a still-valid pointer to an object returned by
- * `generate_committed_set()`.
- */
-void verifier_set_generator_results_free(struct VerifierSetGeneratorResults *ptr);
-
-/**
- * Deallocates a `ProverResults` object's memory.
- *
- * Should only be called on a still-valid pointer to an object returned by
- * `generate_proofs()`.
- */
-void prover_results_free(struct ProverResults *ptr);
-
-/**
- * Deallocates a `TODO` object's memory.
- *
- * Should only be called on a still-valid pointer to an object returned by
- * `TODO()`.
- * TODO: Do the same for the other arrays as well.
- */
-void todo(struct ArrZKPInitialmessage *ptr);
+struct CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
+                                        size_t investor_did_size,
+                                        const uint8_t *investor_unique_id,
+                                        size_t investor_unique_id_size);
 
 /**
  * Creates a `InitialProverResults` object from a CDD claim and a seed.
@@ -152,8 +61,8 @@ void todo(struct ArrZKPInitialmessage *ptr);
  * 32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
-struct ProverResults *generate_proofs(const struct ArrCddClaimData *cdd_claims,
-                                      const CommittedUids *committed_uids,
+struct ProverResults *generate_proofs(const struct ArrEncoding *cdd_claims,
+                                      const struct SingleEncoding *committed_uids,
                                       const uint8_t *seed,
                                       size_t seed_size);
 
@@ -167,8 +76,7 @@ struct ProverResults *generate_proofs(const struct ArrCddClaimData *cdd_claims,
  * 32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
-struct VerifierSetGeneratorResults *generate_committed_set(struct Scalar *private_unique_identifiers,
-                                                           size_t private_unique_identifiers_size,
+struct VerifierSetGeneratorResults *generate_committed_set(struct ArrEncoding *private_unique_identifiers,
                                                            const size_t *min_set_size,
                                                            const uint8_t *seed,
                                                            size_t seed_size);
@@ -183,10 +91,10 @@ struct VerifierSetGeneratorResults *generate_committed_set(struct Scalar *privat
  * this API.
  * Caller is responsible for deallocating memory after use.
  */
-bool verify_proofs(const struct ArrZKPInitialmessage *initial_messages,
-                   const struct ArrZKPFinalResponse *final_responses,
-                   const struct ArrCddId *cdd_ids,
-                   const VerifierSecrets *verifier_secrets,
-                   const CommittedUids *re_committed_uids);
+bool verify_proofs(const struct ArrEncoding *initial_messages,
+                   const struct ArrEncoding *final_responses,
+                   const struct ArrEncoding *cdd_ids,
+                   const struct SingleEncoding *verifier_secrets,
+                   const struct SingleEncoding *re_committed_uids);
 
 #endif /* private_identity_audit_ffi_h */

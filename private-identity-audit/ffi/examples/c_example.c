@@ -4,16 +4,16 @@
 #include <string.h>
 #include "private_identity_audit.h"
 
-/**
- * Creates a CDD ID from a CDD claim.
- * (copy/pasted here from confidential-identity/ffi/include/confidential_identity.h
- *  for convenience.)
- *
- * SAFETY: Caller is responsible to make sure `cdd_claim` pointer is a valid
- *         `CddClaimData` object, created by this API.
- * Caller is responsible for deallocating memory after use.
- */
-extern CddId *compute_cdd_id_wrapper(const CddClaimData *cdd_claim);
+///**
+// * Creates a CDD ID from a CDD claim.
+// * (copy/pasted here from confidential-identity/ffi/include/confidential_identity.h
+// *  for convenience.)
+// *
+// * SAFETY: Caller is responsible to make sure `cdd_claim` pointer is a valid
+// *         `CddClaimData` object, created by this API.
+// * Caller is responsible for deallocating memory after use.
+// */
+//extern CddId *compute_cdd_id_wrapper(const CddClaimData *cdd_claim);
 
 int main(void) {
     uint8_t investor_did[32] = {0x49, 0x99, 0x52, 0x43, 0x74, 0x8c, 0x4a, 0xe7,
@@ -46,20 +46,21 @@ int main(void) {
         0x85, 0xf8, 0xa7, 0x1d, 0x99, 0x93, 0x9c, 0xbe, 0xab, 0xdd, 0x7};
     size_t seed_size3 = sizeof(seed3);
 
-    // Set up on PUIS/Verifier side:
-    Scalar *uuid1 = uuid_new2(investor_unique_id1, investor_unique_id_size1);
-    Scalar *uuid2 = uuid_new2(investor_unique_id2, investor_unique_id_size2);
-    Scalar *private_unique_identifiers[] = {uuid1, uuid2};
-    size_t private_unique_identifiers_size = sizeof(private_unique_identifiers)/sizeof(private_unique_identifiers[0]);
+    //// Set up on PUIS/Verifier side:
+    SingleEncoding uuid1 = { .arr = investor_unique_id1, .n = investor_unique_id_size1 };
+    SingleEncoding uuid2 = { .arr = investor_unique_id2, .n = investor_unique_id_size2 };
+    SingleEncoding private_unique_identifiers_inner[] = {uuid1, uuid2};
+    ArrEncoding private_unique_identifiers = { .arr = private_unique_identifiers_inner, .n = 2 };
+
 
     //// Set up on Prover side:
     //CddClaimData *cdd_claim = cdd_claim_data_new(investor_did, investor_did_size, investor_unique_id1, investor_unique_id_size1);
     //CddId *cdd_id = compute_cdd_id_wrapper(cdd_claim);
 
-    //// Verifier generates the set:
-    //size_t min_set_size = 4;
-    //VerifierSetGeneratorResults *verifier_set_generator_results = generate_committed_set(*private_unique_identifiers,
-    //    private_unique_identifiers_size, &min_set_size, seed2, seed_size2);
+    // Verifier generates the set:
+    size_t min_set_size = 4;
+    VerifierSetGeneratorResults *verifier_set_generator_results = generate_committed_set(&private_unique_identifiers,
+        &min_set_size, seed2, seed_size2);
 
     //// Prover creates the proofs:
     //ArrCddClaimData *cdd_claims = empty_arr_cdd_claim_data();

@@ -32,6 +32,7 @@ path = "../../confidential-identity"
 libc = "^0.2"
 cryptography_core = { path = "../../cryptography-core/", default_features = false }
 macros = { path = "./macros", package ="private-identity-audit-ffi-macros" }
+codec = { package = "parity-scale-codec", version = "1.3.6", default-features = false, features = ["derive"] }
 rand_core = { version = "0.5", default-features = false }
 rand = { version = "0.7", default-features = false }
 uuid = { version = "0.8.1", features = ["serde", "v4"], optional = true }
