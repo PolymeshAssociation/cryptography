@@ -46,6 +46,8 @@ CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
 /**
  * Deallocates a `CddClaimData` object's memory.
  *
+ * # Safety
+ *
  * Should only be called on a still-valid pointer to an object returned by
  * `cdd_claim_data_new()`.
  */
@@ -69,6 +71,8 @@ ScopeClaimData *scope_claim_data_new(const uint8_t *scope_did,
 
 /**
  * Deallocates a `ScopeClaimData` object's memory.
+ *
+ * # Safety
  *
  * Should only be called on a still-valid pointer to an object returned by
  * `scope_claim_data_new()`.
@@ -102,8 +106,10 @@ struct ScopeClaimProof *create_scope_claim_proof(const CddClaimData *cdd_claim,
 /**
  * Deallocates a `ScopeClaimProof` object's memory.
  *
+ * # Safety
+ *
  * Should only be called on a still-valid pointer to an object returned by
- * `cdd_claim_data_new()`.
+ * `create_scope_claim_proof()`.
  */
 void scope_claim_proof_free(struct ScopeClaimProof *ptr);
 
