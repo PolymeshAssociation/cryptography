@@ -18,6 +18,5 @@ members = [
 	"confidential-identity/wasm",
 	"private-identity-audit",
 	"private-identity-audit/ffi",
-	"private-identity-audit/ffi/macros",
 	"private-identity-audit/wasm",
 ]
