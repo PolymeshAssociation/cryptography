@@ -37,60 +37,6 @@ const investor_did = [
   0xdd,
   0x5,
 ];
-//const investor_unique_id = [
-//  0x96,
-//  0xd2,
-//  0x2c,
-//  0x25,
-//  0x4a,
-//  0xe1,
-//  0xf4,
-//  0x44,
-//  0xe1,
-//  0x3c,
-//  0x6d,
-//  0x7f,
-//  0xc6,
-//  0xde,
-//  0xc2,
-//  0xca,
-//];
-
-//// cdd_id is generated outside of PIAL system and is saved on the chain
-//const cdd_id = [
-//  30,
-//  129,
-//  68,
-//  184,
-//  40,
-//  28,
-//  244,
-//  188,
-//  229,
-//  174,
-//  230,
-//  87,
-//  147,
-//  91,
-//  85,
-//  31,
-//  87,
-//  221,
-//  60,
-//  110,
-//  52,
-//  4,
-//  32,
-//  196,
-//  87,
-//  59,
-//  63,
-//  99,
-//  253,
-//  118,
-//  34,
-//  41,
-//];
 
 test("Prove and verify", () => {
   // // In the web
@@ -132,15 +78,19 @@ test("Prove and verify", () => {
   //          CDD Provider has independently received a private uuid as well.
   const investor_unique_id = [...uuidParse(rand_uuids[0])].map((v) => v);
 
-  const cdd_claims = JSON.stringify([
+  const cdd_claims = [
     { investor_did: investor_did, investor_unique_id: investor_unique_id },
-  ]);
+  ];
   const cdd_id_str = cil.create_cdd_id(JSON.stringify(cdd_claims[0]));
   const cdd_ids = JSON.stringify([JSON.parse(cdd_id_str)]);
 
   buff = crypto.randomBytes(32);
   seed = JSON.stringify(buff.toJSON().data);
-  const proofs = pial.generate_proofs(cdd_claims, committed_uids, seed);
+  const proofs = pial.generate_proofs(
+    JSON.stringify(cdd_claims),
+    committed_uids,
+    seed
+  );
 
   // Phase 3: PUIS receives the proofs. PUIS also has previous stored some verifier_secrets.
   const results = pial.verify_proofs(
@@ -153,7 +103,6 @@ test("Prove and verify", () => {
 
   var i;
   for (i = 0; i < results.length; i++) {
-    // TODO: change to assert
-    console.log(results.get(0));
+    expect(results.get(i)).toEqual(true);
   }
 });

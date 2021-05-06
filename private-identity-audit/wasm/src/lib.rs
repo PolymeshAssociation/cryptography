@@ -39,8 +39,12 @@ pub struct VerificationResult {
 #[wasm_bindgen]
 impl VerificationResult {
     #[wasm_bindgen(method, structural, indexing_getter)]
-    pub fn get(&self, i: usize) -> Fallible<()> {
-        self.results[i].clone()
+    pub fn get(&self, i: usize) -> bool {
+        if let Ok(_) = self.results[i] {
+            return true;
+        } else {
+            return false;
+        }
     }
     #[wasm_bindgen(getter)]
     pub fn length(&self) -> usize {
@@ -102,7 +106,6 @@ pub enum WasmError {
     GenerateInitialMessageError,
     GenerateCommittedSetError,
     GenerateChallengeResponseError,
-    DeserializationError,
     Base64DecodingError,
     DecryptionError,
 }
@@ -135,8 +138,11 @@ pub fn generate_committed_set(
 
     let uuids = uuids
         .into_iter()
-        .map(|uuid| Uuid::from_str(&uuid).map_err(|_| WasmError::DeserializationError))
-        .collect::<Result<Vec<Uuid>, WasmError>>()?;
+        .map(|uuid| {
+            Uuid::from_str(&uuid)
+                .map_err(|err| format!("Deserialization error for UUIDs: {}", err).into())
+        })
+        .collect::<Result<Vec<Uuid>, JsValue>>()?;
     let uuids = PrivateUids(uuids.into_iter().map(|uuid| uuid_to_scalar(uuid)).collect());
 
     let min_set_size = if min_set_size > 0 {
@@ -222,5 +228,5 @@ pub fn verify_proofs(
 
 fn decode_base64<T: Decode>(data: Base64) -> Fallible<T> {
     let decoded = base64::decode(data).map_err(|_| WasmError::Base64DecodingError)?;
-    T::decode(&mut &decoded[..]).map_err(|_| WasmError::DeserializationError.into())
+    T::decode(&mut &decoded[..]).map_err(|err| format!("Deserialization error: {}", err).into())
 }

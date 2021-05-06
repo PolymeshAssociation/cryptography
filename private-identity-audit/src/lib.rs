@@ -91,14 +91,25 @@ impl Encode for CommittedUids {
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
         for point in self.0.iter() {
-            RistrettoPointEncoder(point).encode_to(dest);
+            point.compress().as_bytes().encode_to(dest);
         }
     }
 }
 
 impl Decode for CommittedUids {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
-        let raws = <Vec<[u8; RISTRETTO_POINT_SIZE]>>::decode(input)?;
+        let mut raws: Vec<[u8; RISTRETTO_POINT_SIZE]> = vec![];
+
+        loop {
+            if let Ok(Some(n)) = input.remaining_len() {
+                if n == 0 {
+                    break;
+                }
+                raws.push(<[u8; RISTRETTO_POINT_SIZE]>::decode(input)?);
+            } else {
+                break;
+            }
+        }
 
         let inner = raws
             .into_iter()

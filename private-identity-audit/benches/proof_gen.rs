@@ -1,6 +1,6 @@
 use criterion::*;
 use cryptography_core::cdd_claim::{compute_cdd_id, CddClaimData};
-use cryptography_core::dalek_wrapper::Scalar;
+use cryptography_core::curve25519_dalek::scalar::Scalar;
 use private_identity_audit::{
     uuid_to_scalar, verifier::gen_random_uuids, CommittedSetGenerator, PrivateUids, ProofGenerator,
     ProofVerifier, Prover, Verifier, VerifierSetGenerator,
