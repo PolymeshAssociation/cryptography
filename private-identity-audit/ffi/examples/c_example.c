@@ -3,17 +3,18 @@
 #include <inttypes.h>
 #include <string.h>
 #include "private_identity_audit.h"
+#include "confidential_identity.h"
 
-///**
-// * Creates a CDD ID from a CDD claim.
-// * (copy/pasted here from confidential-identity/ffi/include/confidential_identity.h
-// *  for convenience.)
-// *
-// * SAFETY: Caller is responsible to make sure `cdd_claim` pointer is a valid
-// *         `CddClaimData` object, created by this API.
-// * Caller is responsible for deallocating memory after use.
-// */
-//extern CddId *compute_cdd_id_wrapper(const CddClaimData *cdd_claim);
+/**
+ * Creates a CDD ID from a CDD claim.
+ * (copy/pasted here from confidential-identity/ffi/include/confidential_identity.h
+ *  for convenience.)
+ *
+ * SAFETY: Caller is responsible to make sure `cdd_claim` pointer is a valid
+ *         `CddClaimData` object, created by this API.
+ * Caller is responsible for deallocating memory after use.
+ */
+extern CddId *compute_cdd_id_wrapper(const CddClaimData *cdd_claim);
 
 int main(void) {
     uint8_t investor_did[32] = {0x49, 0x99, 0x52, 0x43, 0x74, 0x8c, 0x4a, 0xe7,
@@ -47,46 +48,44 @@ int main(void) {
     size_t seed_size3 = sizeof(seed3);
 
     //// Set up on PUIS/Verifier side:
-    SingleEncoding uuid1 = { .arr = investor_unique_id1, .n = investor_unique_id_size1 };
-    SingleEncoding uuid2 = { .arr = investor_unique_id2, .n = investor_unique_id_size2 };
-    SingleEncoding private_unique_identifiers_inner[] = {uuid1, uuid2};
-    ArrEncoding private_unique_identifiers = { .arr = private_unique_identifiers_inner, .n = 2 };
+    //VecEncoding uuid1 = { .arr = investor_unique_id1, .n = investor_unique_id_size1 };
+    //VecEncoding uuid2 = { .arr = investor_unique_id2, .n = investor_unique_id_size2 };
+    //VecEncoding private_unique_identifiers_inner[] = {uuid1, uuid2};
+    //ArrEncoding private_unique_identifiers = { .arr = private_unique_identifiers_inner, .n = 2 };
+
+    uint8_t private_unique_identifiers_inner [] = {*investor_unique_id1, *investor_unique_id2};
+    MatrixEncoding private_unique_identifiers = { .arr = private_unique_identifiers_inner, .rows = 2, .cols =  investor_unique_id_size1 };
 
 
-    //// Set up on Prover side:
-    //CddClaimData *cdd_claim = cdd_claim_data_new(investor_did, investor_did_size, investor_unique_id1, investor_unique_id_size1);
-    //CddId *cdd_id = compute_cdd_id_wrapper(cdd_claim);
+    // Set up on Prover side:
+    CddClaimData *cdd_claim = cdd_claim_data_new(investor_did, investor_did_size, investor_unique_id1, investor_unique_id_size1);
+    CddId *cdd_id = create_cdd_id(cdd_claim);
 
     // Verifier generates the set:
     size_t min_set_size = 4;
     VerifierSetGeneratorResults *verifier_set_generator_results = generate_committed_set(&private_unique_identifiers,
         &min_set_size, seed2, seed_size2);
 
+    printf("-------------> B3\n");
     //// Prover creates the proofs:
-    //ArrCddClaimData *cdd_claims = empty_arr_cdd_claim_data();
-    //cdd_claims->arr = cdd_id;
-    ////cdd_claim->n = 1;
-    ////cdd_claim->cap = 1;
+    //ArrCddClaimData cdd_claims = { .arr = cdd_claim, .n = 1 };
+    //ProverResults *prover_results = generate_proofs(&cdd_claims, verifier_set_generator_results->committed_uids, seed1, seed_size1);
 
-    //ProverResults *prover_results = generate_proofs(cdd_claims, verifier_set_generator_results->committed_uids, seed1, seed_size1);
-
+    //printf("-------------> 4");
     //// Verifier verifies the membership proof:
-    //ArrCddId *cdd_ids = empty_arr_cdd_id();
-    //cdd_ids->arr = cdd_id;
-    ////cdd_ids->n = 1;
-    ////cdd_ids->cap = 1;
-    //bool verification_result = verify_proofs(prover_results->prover_initial_messages, prover_results->prover_final_responses, cdd_ids,
+    //ArrCddId cdd_ids = { .arr = cdd_id, .n = 1 };
+    //bool verification_result = verify_proofs(prover_results->prover_initial_messages, prover_results->prover_final_responses, &cdd_ids,
     //    verifier_set_generator_results->verifier_secrets, prover_results->committed_uids);
     //printf("UUID memebrship verification result: %d\n", verification_result);
-    //
-    ////// Cleanup.
-    ////// Investor's unique id is sensitive data, it's a good practice to zeroize it at cleanup.
-    ////memset_s(investor_unique_id1, investor_unique_id_size1, 0, investor_unique_id_size1);
-    ////memset_s(investor_unique_id2, investor_unique_id_size2, 0, investor_unique_id_size2);
-    ////scalar_free(uuid1);
-    ////scalar_free(uuid2);
-    ////cdd_claim_data_free(cdd_claim);
-    ////initial_prover_results_free(initial_prover_results);
-    ////verifier_set_generator_results_free(verifier_set_generator_results);
+
+    //////// Cleanup.
+    //////// Investor's unique id is sensitive data, it's a good practice to zeroize it at cleanup.
+    //////memset_s(investor_unique_id1, investor_unique_id_size1, 0, investor_unique_id_size1);
+    //////memset_s(investor_unique_id2, investor_unique_id_size2, 0, investor_unique_id_size2);
+    //////scalar_free(uuid1);
+    //////scalar_free(uuid2);
+    //////cdd_claim_data_free(cdd_claim);
+    //////initial_prover_results_free(initial_prover_results);
+    //////verifier_set_generator_results_free(verifier_set_generator_results);
 }
 

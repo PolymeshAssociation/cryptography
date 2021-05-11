@@ -13,28 +13,21 @@
  */
 typedef struct CddClaimData CddClaimData;
 
-typedef struct SingleEncoding {
+typedef struct VecEncoding {
   uint8_t *arr;
   uintptr_t n;
-} SingleEncoding;
-
-typedef struct ArrEncoding {
-  struct SingleEncoding *arr;
-  uintptr_t n;
-} ArrEncoding;
-
-typedef struct ProverResults {
-  struct ArrEncoding *prover_initial_messages;
-  struct ArrEncoding *prover_final_responses;
-  struct SingleEncoding *committed_uids;
-} ProverResults;
+} VecEncoding;
 
 typedef struct VerifierSetGeneratorResults {
-  struct SingleEncoding *verifier_secrets;
-  struct SingleEncoding *committed_uids;
+  struct VecEncoding *verifier_secrets;
+  struct VecEncoding *committed_uids;
 } VerifierSetGeneratorResults;
 
-void bbb(struct ArrEncoding _a, struct SingleEncoding _b);
+typedef struct MatrixEncoding {
+  uint8_t *arr;
+  uintptr_t rows;
+  uintptr_t cols;
+} MatrixEncoding;
 
 /**
  * Create a new `CddClaimData` object.
@@ -52,21 +45,6 @@ struct CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
                                         size_t investor_unique_id_size);
 
 /**
- * Creates a `InitialProverResults` object from a CDD claim and a seed.
- *
- *
- * # Safety
- * Caller is responsible to make sure `cdd_claim` is a valid
- * pointer to a `CddClaimData` object, and `seed` is a random
- * 32-byte array.
- * Caller is responsible for deallocating memory after use.
- */
-struct ProverResults *generate_proofs(const struct ArrEncoding *cdd_claims,
-                                      const struct SingleEncoding *committed_uids,
-                                      const uint8_t *seed,
-                                      size_t seed_size);
-
-/**
  * Creates a `VerifierSetGeneratorResults` object from a private Uuid (as
  * a Scalar object), a minimum set size, and a seed.
  *
@@ -76,25 +54,9 @@ struct ProverResults *generate_proofs(const struct ArrEncoding *cdd_claims,
  * 32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
-struct VerifierSetGeneratorResults *generate_committed_set(struct ArrEncoding *private_unique_identifiers,
+struct VerifierSetGeneratorResults *generate_committed_set(struct MatrixEncoding *private_unique_identifiers,
                                                            const size_t *min_set_size,
                                                            const uint8_t *seed,
                                                            size_t seed_size);
-
-/**
- * Verifies the proof of a Uuid's membership in a set of Uuids.
- *
- * # Safety
- * Caller is responsible to make sure `initial_message`,
- * `final_response`, `challenge`, `cdd_id`, `verifier_secrets`,
- * and `re_committed_uids` pointers are valid objects, created by
- * this API.
- * Caller is responsible for deallocating memory after use.
- */
-bool verify_proofs(const struct ArrEncoding *initial_messages,
-                   const struct ArrEncoding *final_responses,
-                   const struct ArrEncoding *cdd_ids,
-                   const struct SingleEncoding *verifier_secrets,
-                   const struct SingleEncoding *re_committed_uids);
 
 #endif /* private_identity_audit_ffi_h */
