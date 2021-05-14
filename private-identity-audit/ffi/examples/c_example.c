@@ -26,6 +26,11 @@ int main(void) {
         0x91, 0xc4, 0x59, 0xec, 0x33, 0x62, 0x4b,};
     size_t investor_unique_id_size1 = sizeof(investor_unique_id1);
 
+    uint8_t bbb1[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+        0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,};
+    uint8_t bbb2[16] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+        0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,};
+
     uint8_t investor_unique_id2[16] = {0x5d, 0xa8, 0xdf, 0xe3, 0x37, 0xf7, 0x4a, 0x24,
         0x8f, 0x95, 0xde, 0x16, 0x16, 0xb6, 0xb, 0xe8,};
     size_t investor_unique_id_size2 = sizeof(investor_unique_id2);
@@ -56,6 +61,8 @@ int main(void) {
     uint8_t private_unique_identifiers_inner [] = {*investor_unique_id1, *investor_unique_id2};
     MatrixEncoding private_unique_identifiers = { .arr = private_unique_identifiers_inner, .rows = 2, .cols =  investor_unique_id_size1 };
 
+    uint8_t private_unique_identifiers_inner_new [] = {*bbb1, *bbb2};
+    MatrixEncoding private_unique_identifiers_new = { .arr = private_unique_identifiers_inner_new, .rows = 2, .cols =  investor_unique_id_size1 };
 
     // Set up on Prover side:
     CddClaimData *cdd_claim = cdd_claim_data_new(investor_did, investor_did_size, investor_unique_id1, investor_unique_id_size1);
@@ -63,7 +70,7 @@ int main(void) {
 
     // Verifier generates the set:
     size_t min_set_size = 4;
-    VerifierSetGeneratorResults *verifier_set_generator_results = generate_committed_set(&private_unique_identifiers,
+    VerifierSetGeneratorResults *verifier_set_generator_results = generate_committed_set(private_unique_identifiers_new, &private_unique_identifiers,
         &min_set_size, seed2, seed_size2);
 
     printf("-------------> B3\n");

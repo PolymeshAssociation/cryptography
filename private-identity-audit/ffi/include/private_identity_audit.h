@@ -54,7 +54,8 @@ struct CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
  * 32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
-struct VerifierSetGeneratorResults *generate_committed_set(struct MatrixEncoding *private_unique_identifiers,
+struct VerifierSetGeneratorResults *generate_committed_set(struct MatrixEncoding aaa,
+                                                           struct MatrixEncoding *private_unique_identifiers,
                                                            const size_t *min_set_size,
                                                            const uint8_t *seed,
                                                            size_t seed_size);

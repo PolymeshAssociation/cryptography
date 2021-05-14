@@ -74,15 +74,23 @@ impl MatrixEncoding {
     }
 
     unsafe fn to_vec(&self) -> Vec<Vec<u8>> {
-        let mut arr = (*(self.arr)).clone();
-        //let mut arr = *self.arr;
+        let mut arr = &mut *(self.arr);
         let rows = self.rows;
         let cols = self.cols;
-        let vec = Vec::from_raw_parts(&mut arr, rows * cols, rows * cols).clone();
+        let vec = Vec::from_raw_parts(&mut arr, rows * cols, rows * cols);
         let slice = vec.as_slice();
+        println!("Vec: {:x?}", &slice);
         let mut res: Vec<Vec<u8>> = vec![];
         for r in 0..rows {
-            res.push(slice[r * cols..(r + 1) * cols].to_vec());
+            res.push(
+                slice[r * cols..(r + 1) * cols]
+                    .into_iter()
+                    .map(|x| {
+                        println!("{:x?}", x);
+                        *(*x)
+                    })
+                    .collect(),
+            );
         }
 
         res.clone()
@@ -313,6 +321,7 @@ pub unsafe extern "C" fn cdd_claim_data_new(
 /// Caller is responsible for deallocating memory after use.
 #[no_mangle]
 pub unsafe extern "C" fn generate_committed_set(
+    aaa: MatrixEncoding,
     private_unique_identifiers: *mut MatrixEncoding,
     min_set_size: *const size_t,
     seed: *const u8,
@@ -321,6 +330,30 @@ pub unsafe extern "C" fn generate_committed_set(
     assert!(!private_unique_identifiers.is_null());
     assert!(!seed.is_null());
     assert!(seed_size == 32);
+
+    let slice: &mut [u8] = slice::from_raw_parts_mut(aaa.arr, aaa.rows * aaa.cols);
+    println!(
+        "-----------------\nVec: {:x?}\n-----------------------",
+        slice
+    );
+
+    drop(Box::from_raw(slice));
+    //let mut arr = (*private_unique_identifiers).arr;
+    //let rows = (*private_unique_identifiers).rows;
+    //let cols = (*private_unique_identifiers).cols;
+    //let vec = Vec::from_raw_parts(&mut arr, rows * cols, rows * cols);
+    ////let slice = vec.as_slice();
+    //let slice: Vec<u8> = vec
+    //    .into_iter()
+    //    .map(|x| {
+    //        println!("---> x: {:x?}", *x);
+    //        *x
+    //    })
+    //    .collect();
+    println!(
+        "-----------------\nVec: {:x?}\n-----------------------",
+        &slice
+    );
 
     println!(
         "--------------> input: {:?}",
