@@ -13,21 +13,46 @@
  */
 typedef struct CddClaimData CddClaimData;
 
+typedef struct CddId CddId;
+
 typedef struct VecEncoding {
   uint8_t *arr;
   uintptr_t n;
 } VecEncoding;
 
-typedef struct VerifierSetGeneratorResults {
-  struct VecEncoding *verifier_secrets;
-  struct VecEncoding *committed_uids;
-} VerifierSetGeneratorResults;
+/**
+ * The data needed to generate a CDD ID.
+ */
+typedef struct TestGen {
+  struct VecEncoding inner;
+} TestGen;
 
 typedef struct MatrixEncoding {
   uint8_t *arr;
   uintptr_t rows;
   uintptr_t cols;
 } MatrixEncoding;
+
+typedef struct ProverResults {
+  struct MatrixEncoding prover_initial_messages;
+  struct MatrixEncoding prover_final_responses;
+  struct VecEncoding committed_uids;
+} ProverResults;
+
+typedef struct ArrCddClaimData {
+  struct CddClaimData *arr;
+  uintptr_t n;
+} ArrCddClaimData;
+
+typedef struct VerifierSetGeneratorResults {
+  struct VecEncoding verifier_secrets;
+  struct VecEncoding committed_uids;
+} VerifierSetGeneratorResults;
+
+typedef struct ArrCddId {
+  struct CddId *arr;
+  uintptr_t n;
+} ArrCddId;
 
 /**
  * Create a new `CddClaimData` object.
@@ -44,20 +69,55 @@ struct CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
                                         const uint8_t *investor_unique_id,
                                         size_t investor_unique_id_size);
 
+struct TestGen *gen_test(void);
+
+void consume_test(struct TestGen data);
+
+/**
+ * Creates a `InitialProverResults` object from a CDD claim and a seed.
+ *
+ *
+ * # Safety
+ * Caller is responsible to make sure `cdd_claim` is a valid
+ * pointer to a `CddClaimData` object, and `seed` is a random
+ * 32-byte array.
+ * Caller is responsible for deallocating memory after use.
+ */
+struct ProverResults *generate_proofs(struct ArrCddClaimData cdd_claims,
+                                      struct VecEncoding committed_uids,
+                                      const uint8_t *seed,
+                                      size_t seed_size);
+
 /**
  * Creates a `VerifierSetGeneratorResults` object from a private Uuid (as
  * a Scalar object), a minimum set size, and a seed.
  *
- * # Safety
+ * # Safety TODO revisit all the safety notes and minimize them.
  * Caller is responsible to make sure `private_unique_identifiers`
  * is a valid pointer to a `Scalar` object, and `seed` is a random
  * 32-byte array.
  * Caller is responsible for deallocating memory after use.
+ *
  */
-struct VerifierSetGeneratorResults *generate_committed_set(struct MatrixEncoding aaa,
-                                                           struct MatrixEncoding *private_unique_identifiers,
+struct VerifierSetGeneratorResults *generate_committed_set(struct MatrixEncoding private_unique_identifiers,
                                                            const size_t *min_set_size,
                                                            const uint8_t *seed,
                                                            size_t seed_size);
+
+/**
+ * Verifies the proof of a Uuid's membership in a set of Uuids.
+ *
+ * # Safety
+ * Caller is responsible to make sure `initial_message`,
+ * `final_response`, `challenge`, `cdd_id`, `verifier_secrets`,
+ * and `re_committed_uids` pointers are valid objects, created by
+ * this API.
+ * Caller is responsible for deallocating memory after use.
+ */
+bool verify_proofs(struct MatrixEncoding initial_messages,
+                   struct MatrixEncoding final_responses,
+                   struct ArrCddId cdd_ids,
+                   struct VecEncoding verifier_secrets,
+                   struct VecEncoding re_committed_uids);
 
 #endif /* private_identity_audit_ffi_h */
