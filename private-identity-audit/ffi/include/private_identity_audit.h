@@ -15,42 +15,61 @@ typedef struct CddClaimData CddClaimData;
 
 typedef struct CddId CddId;
 
+/**
+ * Used to pass a Vec of u8 between Rust and FFI users.
+ * The code assumes that the pointer `ptr` is the start a "continous" block of memory of size `n`.
+ */
 typedef struct VecEncoding {
-  uint8_t *arr;
+  uint8_t *ptr;
   uintptr_t n;
 } VecEncoding;
 
 /**
- * The data needed to generate a CDD ID.
+ * Holds the result of the first phase of the protocol. The `verifier_secrets` should be kept
+ * private, while the `committed_uids` should be shared with the prover.
  */
-typedef struct TestGen {
-  struct VecEncoding inner;
-} TestGen;
+typedef struct VerifierSetGeneratorResults {
+  struct VecEncoding verifier_secrets;
+  struct VecEncoding committed_uids;
+} VerifierSetGeneratorResults;
 
+/**
+ * Used to pass a 2D Vec of u8 between Rust and FFI users.
+ * The code assumes that the pointer `ptr` is the start a "continous" block of memory of size `rows*cols`.
+ */
 typedef struct MatrixEncoding {
-  uint8_t *arr;
+  uint8_t *ptr;
   uintptr_t rows;
   uintptr_t cols;
 } MatrixEncoding;
 
+/**
+ * Holds the result of the second phase of the protocol. All the messages should be shared with
+ * the verifier.
+ */
 typedef struct ProverResults {
   struct MatrixEncoding prover_initial_messages;
   struct MatrixEncoding prover_final_responses;
   struct VecEncoding committed_uids;
 } ProverResults;
 
+/**
+ * Used to pass a Vec of `CddClaimData` between Rust and FFI users.
+ * The code assumes that the pointer `ptr` is the start a "continous" block of memory of size
+ * `n * length of the encoded version of CddClaimData`.
+ */
 typedef struct ArrCddClaimData {
-  struct CddClaimData *arr;
+  struct CddClaimData *ptr;
   uintptr_t n;
 } ArrCddClaimData;
 
-typedef struct VerifierSetGeneratorResults {
-  struct VecEncoding verifier_secrets;
-  struct VecEncoding committed_uids;
-} VerifierSetGeneratorResults;
-
+/**
+ * Used to pass a Vec of `ArrCddId` between Rust and FFI users.
+ * The code assumes that the pointer `ptr` is the start a "continous" block of memory of size
+ * `n * length of the encoded version of ArrCddId`.
+ */
 typedef struct ArrCddId {
-  struct CddId *arr;
+  struct CddId *ptr;
   uintptr_t n;
 } ArrCddId;
 
@@ -69,9 +88,29 @@ struct CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
                                         const uint8_t *investor_unique_id,
                                         size_t investor_unique_id_size);
 
-struct TestGen *gen_test(void);
+/**
+ * Deallocates a `CddClaimData` object's memory.
+ *
+ * Should only be called on a still-valid pointer to an object returned by
+ * `cdd_claim_data_new()`.
+ */
+void cdd_claim_data_free(struct CddClaimData *ptr);
 
-void consume_test(struct TestGen data);
+/**
+ * Deallocates a `VerifierSetGeneratorResults` object's memory.
+ *
+ * Should only be called on a still-valid pointer to an object returned by
+ * `generate_committed_set()`.
+ */
+void verifier_set_generator_results_free(struct VerifierSetGeneratorResults *ptr);
+
+/**
+ * Deallocates a `ProverResults` object's memory.
+ *
+ * Should only be called on a still-valid pointer to an object returned by
+ * `generate_proofs()`.
+ */
+void prover_results_free(struct ProverResults *ptr);
 
 /**
  * Creates a `InitialProverResults` object from a CDD claim and a seed.
@@ -92,12 +131,11 @@ struct ProverResults *generate_proofs(struct ArrCddClaimData cdd_claims,
  * Creates a `VerifierSetGeneratorResults` object from a private Uuid (as
  * a Scalar object), a minimum set size, and a seed.
  *
- * # Safety TODO revisit all the safety notes and minimize them.
+ * # Safety
  * Caller is responsible to make sure `private_unique_identifiers`
- * is a valid pointer to a `Scalar` object, and `seed` is a random
+ * is a valid pointer to a `MatrixEncoding` object, and `seed` is a random
  * 32-byte array.
  * Caller is responsible for deallocating memory after use.
- *
  */
 struct VerifierSetGeneratorResults *generate_committed_set(struct MatrixEncoding private_unique_identifiers,
                                                            const size_t *min_set_size,
@@ -109,7 +147,7 @@ struct VerifierSetGeneratorResults *generate_committed_set(struct MatrixEncoding
  *
  * # Safety
  * Caller is responsible to make sure `initial_message`,
- * `final_response`, `challenge`, `cdd_id`, `verifier_secrets`,
+ * `final_response`, `cdd_ids`, `verifier_secrets`,
  * and `re_committed_uids` pointers are valid objects, created by
  * this API.
  * Caller is responsible for deallocating memory after use.

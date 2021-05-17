@@ -53,13 +53,7 @@ int main(void) {
         0x85, 0xf8, 0xa7, 0x1d, 0x99, 0x93, 0x9c, 0xbe, 0xab, 0xdd, 0x7};
     size_t seed_size3 = sizeof(seed3);
 
-    //// Set up on PUIS/Verifier side:
-    //VecEncoding uuid1 = { .arr = investor_unique_id1, .n = investor_unique_id_size1 };
-    //VecEncoding uuid2 = { .arr = investor_unique_id2, .n = investor_unique_id_size2 };
-    //VecEncoding private_unique_identifiers_inner[] = {uuid1, uuid2};
-    //ArrEncoding private_unique_identifiers = { .arr = private_unique_identifiers_inner, .n = 2 };
-
-    MatrixEncoding private_unique_identifiers = { .arr = investor_unique_ids, .rows = 2, .cols = 16 };
+    MatrixEncoding private_unique_identifiers = { .ptr = investor_unique_ids, .rows = 2, .cols = 16 };
 
     // Set up on Prover side:
     CddClaimData *cdd_claim = cdd_claim_data_new(investor_did, investor_did_size, investor_unique_ids_2d[0], investor_unique_id_size);
@@ -70,23 +64,22 @@ int main(void) {
     VerifierSetGeneratorResults *verifier_set_generator_results = generate_committed_set(private_unique_identifiers, &min_set_size, seed2, seed_size2);
 
     // Prover creates the proofs:
-    ArrCddClaimData cdd_claims = { .arr = cdd_claim, .n = 1 };
+    ArrCddClaimData cdd_claims = { .ptr = cdd_claim, .n = 1 };
     ProverResults *prover_results = generate_proofs(cdd_claims, verifier_set_generator_results->committed_uids, seed1, seed_size1);
 
     // Verifier verifies the membership proof:
-    ArrCddId cdd_ids = { .arr = cdd_id, .n = 1 };
+    ArrCddId cdd_ids = { .ptr = cdd_id, .n = 1 };
     bool verification_result = verify_proofs(prover_results->prover_initial_messages, prover_results->prover_final_responses, cdd_ids,
         verifier_set_generator_results->verifier_secrets, prover_results->committed_uids);
     printf("UUID memebrship verification result: %d\n", verification_result);
 
-    //////// Cleanup.
-    //////// Investor's unique id is sensitive data, it's a good practice to zeroize it at cleanup.
-    //////memset_s(investor_unique_id1, investor_unique_id_size1, 0, investor_unique_id_size1);
-    //////memset_s(investor_unique_id2, investor_unique_id_size2, 0, investor_unique_id_size2);
-    //////scalar_free(uuid1);
-    //////scalar_free(uuid2);
-    //////cdd_claim_data_free(cdd_claim);
-    //////initial_prover_results_free(initial_prover_results);
-    //////verifier_set_generator_results_free(verifier_set_generator_results);
+    // Cleanup.
+    // Investor's unique id is sensitive data, it's a good practice to zeroize it at cleanup.
+    memset(investor_unique_ids_2d, 0, sizeof(investor_unique_ids_2d));
+    memset(investor_unique_ids, 0, investor_unique_ids_size);
+
+    prover_results_free(prover_results);
+    //cdd_claim_data_free(cdd_claim);
+    //verifier_set_generator_results_free(verifier_set_generator_results);
 }
 
