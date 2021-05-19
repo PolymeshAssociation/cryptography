@@ -1,5 +1,5 @@
 //! The `private_identity_audit_ffi` is the Foreign Function Interface (FFI)
-//! for the `private_identity_audit` library. It contains API for generating
+//! for the `private_identity_audit` library. It contains APIs for generating
 //! unique identity membership proofs and verifying them as part of the
 //! PIAL project.
 
@@ -36,6 +36,9 @@ impl VecEncoding {
         Self { ptr, n: len }
     }
     /// Converts the pointer received from FFI to a Vector of u8.
+    ///
+    /// # Safety
+    /// Refer to the safety notes of `Vec::from_raw_parts`.
     unsafe fn to_vec(&self) -> Vec<u8> {
         Vec::from_raw_parts(self.ptr, self.n, self.n)
     }
@@ -44,7 +47,7 @@ impl VecEncoding {
 /// Used to pass a 2D Vec of u8 between Rust and FFI users.
 /// The code assumes that the pointer `ptr` is the start a "continous" block of memory of size `rows*cols`.
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MatrixEncoding {
     ptr: *mut u8,
     rows: usize,
@@ -53,27 +56,41 @@ pub struct MatrixEncoding {
 
 impl MatrixEncoding {
     /// The code assumes that all the elements of `vec` encode to the same length.
-    pub fn new<T: Encode>(vec: Vec<T>) -> Self {
+    pub fn new<T: Encode>(vec: Vec<T>) -> Option<Self> {
         let vec = vec
             .iter()
             .map(|item| item.encode())
             .collect::<Vec<Vec<u8>>>();
         let rows = vec.len();
-        let cols = vec.first().unwrap().len(); // TODO remove unwrap
+        if let Some(cols) = vec.first() {
+            let cols = cols.len();
+            for r in vec.iter() {
+                if r.len() != cols {
+                    println!("Mismatch on encoded data size. Expected all items to encode to {} bytes, found an element that encodes to {} bytes.", cols, r.len());
+                    return None;
+                }
+            }
 
-        let vec: Vec<u8> = vec.into_iter().flatten().collect();
-        let (ptr, _len, _cap) = vec.into_raw_parts();
-        Self { ptr, rows, cols }
+            let mut flattened_vec: Vec<u8> = Vec::with_capacity(rows * cols);
+            for row in vec.iter() {
+                flattened_vec.extend(row);
+            }
+            assert_eq!(flattened_vec.capacity(), rows * cols);
+            let (ptr, _len, _cap) = flattened_vec.into_raw_parts();
+            Some(Self { ptr, rows, cols })
+        } else {
+            println!("The input `vec` should have at least two elements");
+            None
+        }
     }
 
-    /// Converts a pointer received from FFI, to a 2D Rust vector.
-    unsafe fn to_vec(&self) -> Vec<Vec<u8>> {
-        let slice: &mut [u8] = slice::from_raw_parts_mut(self.ptr, self.rows * self.cols);
+    fn as_slice(&self) -> &[u8] {
+        // SAFETY: Refer to the safety notes of `slice::from_raw_parts_mut`.
+        unsafe { slice::from_raw_parts(self.ptr, self.rows * self.cols) }
+    }
 
-        slice
-            .chunks_exact(self.cols)
-            .map(<[_]>::to_vec)
-            .collect::<Vec<Vec<u8>>>()
+    fn as_cols(&self) -> impl '_ + Iterator<Item = &[u8]> {
+        self.as_slice().chunks_exact(self.cols)
     }
 }
 
@@ -88,6 +105,9 @@ pub struct ArrCddClaimData {
 
 impl ArrCddClaimData {
     /// Converts the pointer received from FFI to a Vector of CddClaimData.
+    ///
+    /// # Safety
+    /// Refer to the safety notes of `vec::from_raw_parts`.
     unsafe fn to_vec(&self) -> Vec<CddClaimData> {
         Vec::from_raw_parts(self.ptr, self.n, self.n)
     }
@@ -104,6 +124,9 @@ pub struct ArrCddId {
 
 impl ArrCddId {
     /// Converts the pointer received from FFI to a Vector of CddId.
+    ///
+    /// # Safety
+    /// Refer to the safety notes of `vec::from_raw_parts`.
     unsafe fn to_vec(&self) -> Vec<CddId> {
         Vec::from_raw_parts(self.ptr, self.n, self.n)
     }
@@ -137,11 +160,11 @@ fn box_alloc<T>(x: T) -> *mut T {
 /// Convert a Uuid byte array into a scalar object.
 ///
 /// Caller is responsible for calling `cdd_claim_data_free()` to deallocate this object.
-fn to_uuid(raw: Vec<u8>) -> Scalar {
+fn to_uuid(raw: &[u8]) -> Scalar {
     assert!(raw.len() == 16, "Expected 16, got {}", raw.len());
 
     let mut uuid_bytes = [0u8; 16];
-    uuid_bytes.copy_from_slice(raw.as_slice());
+    uuid_bytes.copy_from_slice(raw);
 
     let uuid = Builder::from_bytes(uuid_bytes)
         .set_variant(Variant::RFC4122)
@@ -178,6 +201,7 @@ pub unsafe extern "C" fn cdd_claim_data_new(
 
 /// Deallocates a `CddClaimData` object's memory.
 ///
+/// # Safety
 /// Should only be called on a still-valid pointer to an object returned by
 /// `cdd_claim_data_new()`.
 #[no_mangle]
@@ -190,6 +214,7 @@ pub unsafe extern "C" fn cdd_claim_data_free(ptr: *mut CddClaimData) {
 
 /// Deallocates a `VerifierSetGeneratorResults` object's memory.
 ///
+/// # Safety
 /// Should only be called on a still-valid pointer to an object returned by
 /// `generate_committed_set()`.
 #[no_mangle]
@@ -204,6 +229,7 @@ pub unsafe extern "C" fn verifier_set_generator_results_free(
 
 /// Deallocates a `ProverResults` object's memory.
 ///
+/// # Safety
 /// Should only be called on a still-valid pointer to an object returned by
 /// `generate_proofs()`.
 #[no_mangle]
@@ -219,7 +245,6 @@ pub unsafe extern "C" fn prover_results_free(ptr: *mut ProverResults) {
 // ------------------------------------------------------------------------
 
 /// Creates a `InitialProverResults` object from a CDD claim and a seed.
-///
 ///
 /// # Safety
 /// Caller is responsible to make sure `cdd_claim` is a valid
@@ -238,12 +263,19 @@ pub unsafe extern "C" fn generate_proofs(
 
     let cdd_claims = cdd_claims.to_vec();
 
-    let committed_uids = CommittedUids::decode(&mut committed_uids.to_vec().as_slice()).unwrap(); // TODO unwrap
+    let committed_uids = CommittedUids::decode(&mut committed_uids.to_vec().as_slice());
+    if let Ok(committed_uids) = committed_uids {
+        let mut rng_seed = [0u8; 32];
+        rng_seed.copy_from_slice(slice::from_raw_parts(seed, seed_size as usize));
 
-    let mut rng_seed = [0u8; 32];
-    rng_seed.copy_from_slice(slice::from_raw_parts(seed, seed_size as usize));
-
-    _generate_proofs(cdd_claims, committed_uids, rng_seed)
+        _generate_proofs(cdd_claims, committed_uids, rng_seed)
+    } else {
+        println!(
+            "Error in decoding committed uids: {:?}",
+            committed_uids.unwrap_err()
+        );
+        return null_mut();
+    }
 }
 
 fn _generate_proofs(
@@ -256,18 +288,25 @@ fn _generate_proofs(
     let result = Prover::generate_proofs::<StdRng>(&cdd_claims, &committed_uids, &mut rng);
 
     // Log the error and return.
-    if result.is_err() {
-        println!("Step 2) Prover -> Verifier error: {:?}", result.is_err());
-        return null_mut();
+    match result {
+        Err(err) => {
+            println!("Error in generating proofs: {:?}", err);
+            return null_mut();
+        }
+        Ok((initial_message_vec, final_responses_vec, re_committed_uids)) => {
+            if let Some(prover_initial_messages) = MatrixEncoding::new(initial_message_vec) {
+                if let Some(prover_final_responses) = MatrixEncoding::new(final_responses_vec) {
+                    return box_alloc(ProverResults {
+                        prover_initial_messages,
+                        prover_final_responses,
+                        committed_uids: VecEncoding::new(re_committed_uids.encode()),
+                    });
+                }
+            }
+
+            return null_mut();
+        }
     }
-
-    let (initial_message_vec, final_responses_vec, re_committed_uids) = result.unwrap();
-
-    box_alloc(ProverResults {
-        prover_initial_messages: MatrixEncoding::new(initial_message_vec),
-        prover_final_responses: MatrixEncoding::new(final_responses_vec),
-        committed_uids: VecEncoding::new(re_committed_uids.encode()),
-    })
 }
 
 // ------------------------------------------------------------------------
@@ -292,13 +331,8 @@ pub unsafe extern "C" fn generate_committed_set(
     assert!(!seed.is_null());
     assert!(seed_size == 32);
 
-    let unique_identifiers = PrivateUids(
-        private_unique_identifiers
-            .to_vec()
-            .into_iter()
-            .map(|raw_uid| to_uuid(raw_uid))
-            .collect(),
-    );
+    let unique_identifiers =
+        PrivateUids(private_unique_identifiers.as_cols().map(to_uuid).collect());
     let mut rng_seed = [0u8; 32];
     rng_seed.copy_from_slice(slice::from_raw_parts(seed, seed_size as usize));
 
@@ -321,17 +355,16 @@ fn _generate_committed_set(
         VerifierSetGenerator::generate_committed_set(unique_identifiers, min_set_size, &mut rng);
 
     // Log the error and return.
-    if result.is_err() {
-        println!("Step 1) Verifier -> Prover error: {:?}", result.is_err());
-        return null_mut();
+    match result {
+        Err(err) => {
+            println!("Error in generating comitted set: {:?}", err);
+            return null_mut();
+        }
+        Ok((verifier_secrets, committed_uids)) => box_alloc(VerifierSetGeneratorResults {
+            verifier_secrets: VecEncoding::new(verifier_secrets.encode()),
+            committed_uids: VecEncoding::new(committed_uids.encode()),
+        }),
     }
-
-    let (verifier_secrets, committed_uids) = result.unwrap();
-
-    box_alloc(VerifierSetGeneratorResults {
-        verifier_secrets: VecEncoding::new(verifier_secrets.encode()),
-        committed_uids: VecEncoding::new(committed_uids.encode()),
-    })
 }
 
 // ------------------------------------------------------------------------
@@ -354,28 +387,44 @@ pub unsafe extern "C" fn verify_proofs(
     verifier_secrets: VecEncoding,
     re_committed_uids: VecEncoding,
 ) -> bool {
-    let initial_messages = initial_messages
-        .to_vec()
-        .into_iter()
-        .map(|raw| ZKPInitialmessage::decode(&mut raw.as_slice()).unwrap())
-        .collect::<Vec<ZKPInitialmessage>>();
+    let initial_messages = if let Ok(decoded) = initial_messages
+        .as_cols()
+        .map(|mut raw| ZKPInitialmessage::decode(&mut raw))
+        .collect::<Result<Vec<ZKPInitialmessage>, _>>()
+    {
+        decoded
+    } else {
+        println!("Error in decoding initial messages.");
+        return false;
+    };
 
-    let final_responses = final_responses
-        .to_vec()
-        .into_iter()
-        .map(|raw| ZKPFinalResponse::decode(&mut raw.as_slice()).unwrap())
-        .collect::<Vec<ZKPFinalResponse>>();
+    let final_responses = if let Ok(decoded) = final_responses
+        .as_cols()
+        .map(|mut raw| ZKPFinalResponse::decode(&mut raw))
+        .collect::<Result<Vec<ZKPFinalResponse>, _>>()
+    {
+        decoded
+    } else {
+        println!("Error in decoding final responses.");
+        return false;
+    };
 
     let cdd_ids = cdd_ids.to_vec();
 
-    let verifier_secrets = VerifierSecrets::decode(
-        &mut &slice::from_raw_parts(verifier_secrets.ptr, verifier_secrets.n)[..],
-    )
-    .unwrap();
-    let re_committed_uids = CommittedUids::decode(
-        &mut &slice::from_raw_parts(re_committed_uids.ptr, re_committed_uids.n)[..],
-    )
-    .unwrap();
+    let verifier_secrets =
+        if let Ok(decoded) = VerifierSecrets::decode(&mut verifier_secrets.to_vec().as_slice()) {
+            decoded
+        } else {
+            println!("Error in decoding verifier secrets.");
+            return false;
+        };
+    let re_committed_uids =
+        if let Ok(decoded) = CommittedUids::decode(&mut re_committed_uids.to_vec().as_slice()) {
+            decoded
+        } else {
+            println!("Error in decoding Committed UIDs.");
+            return false;
+        };
 
     _verify_proofs(
         initial_messages,

@@ -91,6 +91,7 @@ struct CddClaimData *cdd_claim_data_new(const uint8_t *investor_did,
 /**
  * Deallocates a `CddClaimData` object's memory.
  *
+ * # Safety
  * Should only be called on a still-valid pointer to an object returned by
  * `cdd_claim_data_new()`.
  */
@@ -99,6 +100,7 @@ void cdd_claim_data_free(struct CddClaimData *ptr);
 /**
  * Deallocates a `VerifierSetGeneratorResults` object's memory.
  *
+ * # Safety
  * Should only be called on a still-valid pointer to an object returned by
  * `generate_committed_set()`.
  */
@@ -107,6 +109,7 @@ void verifier_set_generator_results_free(struct VerifierSetGeneratorResults *ptr
 /**
  * Deallocates a `ProverResults` object's memory.
  *
+ * # Safety
  * Should only be called on a still-valid pointer to an object returned by
  * `generate_proofs()`.
  */
@@ -114,7 +117,6 @@ void prover_results_free(struct ProverResults *ptr);
 
 /**
  * Creates a `InitialProverResults` object from a CDD claim and a seed.
- *
  *
  * # Safety
  * Caller is responsible to make sure `cdd_claim` is a valid

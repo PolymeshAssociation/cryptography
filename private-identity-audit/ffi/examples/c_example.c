@@ -28,13 +28,15 @@ int main(void) {
     };
     size_t investor_unique_id_size = 16;
 
+    // Encode the matrix above into this 1D array.
     uint8_t investor_unique_ids[32];
-    for(int i=0; i<2; i++) {
-      for(int j=0;j<investor_unique_id_size;j++) {
+    for(int i = 0; i < 2; i++) {
+      for(int j = 0;j < investor_unique_id_size; j++) {
         investor_unique_ids[i * investor_unique_id_size + j] = investor_unique_ids_2d[i][j];
       }
     }
     size_t investor_unique_ids_size = sizeof(investor_unique_ids);
+    MatrixEncoding private_unique_identifiers = { .ptr = investor_unique_ids, .rows = 2, .cols = 16 };
 
     // We use a set of static seeds here. In a real application these must be generated
     // using a secure random number generator on the fly.
@@ -53,7 +55,6 @@ int main(void) {
         0x85, 0xf8, 0xa7, 0x1d, 0x99, 0x93, 0x9c, 0xbe, 0xab, 0xdd, 0x7};
     size_t seed_size3 = sizeof(seed3);
 
-    MatrixEncoding private_unique_identifiers = { .ptr = investor_unique_ids, .rows = 2, .cols = 16 };
 
     // Set up on Prover side:
     CddClaimData *cdd_claim = cdd_claim_data_new(investor_did, investor_did_size, investor_unique_ids_2d[0], investor_unique_id_size);
@@ -75,11 +76,9 @@ int main(void) {
 
     // Cleanup.
     // Investor's unique id is sensitive data, it's a good practice to zeroize it at cleanup.
-    memset(investor_unique_ids_2d, 0, sizeof(investor_unique_ids_2d));
+    memset(investor_unique_ids_2d, 0, 32);
     memset(investor_unique_ids, 0, investor_unique_ids_size);
 
     prover_results_free(prover_results);
-    //cdd_claim_data_free(cdd_claim);
-    //verifier_set_generator_results_free(verifier_set_generator_results);
 }
 
