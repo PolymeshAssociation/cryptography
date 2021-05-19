@@ -40,11 +40,7 @@ pub struct VerificationResult {
 impl VerificationResult {
     #[wasm_bindgen(method, structural, indexing_getter)]
     pub fn get(&self, i: usize) -> bool {
-        if let Ok(_) = self.results[i] {
-            return true;
-        } else {
-            return false;
-        }
+        self.results[i].is_ok()
     }
     #[wasm_bindgen(getter)]
     pub fn length(&self) -> usize {
@@ -145,11 +141,7 @@ pub fn generate_committed_set(
         .collect::<Result<Vec<Uuid>, JsValue>>()?;
     let uuids = PrivateUids(uuids.into_iter().map(|uuid| uuid_to_scalar(uuid)).collect());
 
-    let min_set_size = if min_set_size > 0 {
-        Some(min_set_size)
-    } else {
-        None
-    };
+    let min_set_size = Some(min_set_size).filter(|s| *s > 0);
 
     let seed: [u8; 32] = serde_json::from_str(&seed)
         .map_err(|error| format!("Failed to deserialize the seed: {}", error))?;

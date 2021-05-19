@@ -51,11 +51,9 @@ pub struct PrivateUids(pub Vec<Scalar>);
 impl Encode for PrivateUids {
     #[inline]
     fn size_hint(&self) -> usize {
-        let mut size_hint = 0;
-        for scalar in self.0.iter() {
-            size_hint += ScalarEncoder(&scalar).size_hint()
-        }
-        size_hint
+        self.0
+            .iter()
+            .fold(0, |sh, scalar| sh + ScalarEncoder(&scalar).size_hint())
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -69,7 +67,7 @@ impl Decode for PrivateUids {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let raws = <Vec<[u8; SCALAR_SIZE]>>::decode(input)?;
 
-        let inner = raws.into_iter().map(|raw| Scalar::from_bits(raw)).collect();
+        let inner = raws.into_iter().map(Scalar::from_bits).collect();
 
         Ok(Self(inner))
     }
@@ -82,11 +80,9 @@ pub struct CommittedUids(pub Vec<RistrettoPoint>);
 impl Encode for CommittedUids {
     #[inline]
     fn size_hint(&self) -> usize {
-        let mut size_hint = 0;
-        for point in self.0.iter() {
-            size_hint += RistrettoPointEncoder(&point).size_hint()
-        }
-        size_hint
+        self.0.iter().fold(0, |sh, point| {
+            sh + RistrettoPointEncoder(&point).size_hint()
+        })
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -100,15 +96,11 @@ impl Decode for CommittedUids {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
         let mut raws: Vec<[u8; RISTRETTO_POINT_SIZE]> = vec![];
 
-        loop {
-            if let Ok(Some(n)) = input.remaining_len() {
-                if n == 0 {
-                    break;
-                }
-                raws.push(<[u8; RISTRETTO_POINT_SIZE]>::decode(input)?);
-            } else {
+        while let Ok(Some(n)) = input.remaining_len() {
+            if n == 0 {
                 break;
             }
+            raws.push(<[u8; RISTRETTO_POINT_SIZE]>::decode(input)?);
         }
 
         let inner = raws

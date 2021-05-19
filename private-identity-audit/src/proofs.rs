@@ -136,13 +136,12 @@ impl Encode for Secrets {
     }
 
     fn encode_to<W: Output>(&self, dest: &mut W) {
-        let rands: Vec<[u8; SCALAR_SIZE]> = self.rands.iter().map(|g| g.to_bytes()).collect();
-
-        rands.encode_to(dest);
-
-        let secrets: Vec<[u8; SCALAR_SIZE]> = self.secrets.iter().map(|g| g.to_bytes()).collect();
-
-        secrets.encode_to(dest);
+        let mut encode_to_dest = |inp: &[Scalar]| {
+            let encoding: Vec<[u8; SCALAR_SIZE]> = inp.iter().map(|g| g.to_bytes()).collect();
+            encoding.encode_to(dest);
+        };
+        encode_to_dest(&self.rands);
+        encode_to_dest(&self.secrets);
     }
 }
 
@@ -192,17 +191,14 @@ pub fn verify(
     statement: &RistrettoPoint,
     c: &Challenge,
 ) -> bool {
-    if let Some(lhs) = initial_message
+    initial_message
         .generators
         .iter()
         .zip(&final_response.response)
         .map(|(gen, s)| gen * s)
         .reduce(|v1, v2| v1 + v2)
-    {
-        return lhs == initial_message.a + statement * (c.0);
-    }
-
-    false
+        .filter(|lhs| *lhs == initial_message.a + statement * (c.0))
+        .is_some()
 }
 
 pub fn non_interactive_prove<T: RngCore + CryptoRng>(
