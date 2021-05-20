@@ -12,6 +12,7 @@ use cryptography_core::{
     curve25519_dalek::scalar::Scalar,
 };
 use libc::size_t;
+use matrix_encoding::MatrixEncoding;
 use private_identity_audit::{
     uuid_to_scalar, CommittedSetGenerator, CommittedUids, PrivateUids, ProofGenerator,
     ProofVerifier, Prover, Verifier, VerifierSecrets, VerifierSetGenerator, ZKPFinalResponse,
@@ -20,6 +21,69 @@ use private_identity_audit::{
 use rand::{rngs::StdRng, SeedableRng};
 use std::{ptr::null_mut, slice};
 use uuid::{Builder, Variant, Version};
+
+mod matrix_encoding {
+    use codec::Encode;
+    use std::slice;
+
+    /// Used to pass a 2D Vec of u8 between Rust and FFI users.
+    /// The code assumes that the pointer `ptr` is the start a "continous" block of memory of size `rows*cols`.
+    #[repr(C)]
+    #[derive(Debug)]
+    pub struct MatrixEncoding {
+        ptr: *mut u8,
+        rows: usize,
+        cols: usize,
+    }
+
+    impl MatrixEncoding {
+        /// The code assumes that all the elements of `vec` encode to the same length.
+        /// This function is only accessible to the Rust code and is mainly used to prepare a Rust
+        /// Vector to be passed through the FFI interface.
+        pub fn new<T: Encode>(vec: Vec<T>) -> Option<Self> {
+            let vec = vec
+                .iter()
+                .map(|item| item.encode())
+                .collect::<Vec<Vec<u8>>>();
+            let rows = vec.len();
+            if let Some(cols) = vec.first() {
+                let cols = cols.len();
+                if vec.iter().any(|r| r.len() != cols) {
+                    println!(
+                        "Mismatch on encoded data size. Expected all items to encode to {} bytes.",
+                        cols
+                    );
+                    return None;
+                }
+
+                let mut flattened_vec: Vec<u8> = Vec::with_capacity(rows * cols);
+                flattened_vec.extend(vec.iter().flatten());
+                assert_eq!(flattened_vec.capacity(), rows * cols);
+                let (ptr, ..) = flattened_vec.into_raw_parts();
+                Some(Self { ptr, rows, cols })
+            } else {
+                println!("The input `vec` should have at least two elements");
+                None
+            }
+        }
+
+        fn as_slice(&self) -> &[u8] {
+            // SAFETY: If `self` came from Rust, we know we have a valid `self` created in `fn new`,
+            // so `ptr` points to a valid `&amp;[u8]` with exactly `rows * cols` elements.
+            // Otherwise, if `self` came from outside Rust, e.g., from C, it too has promised somewhere
+            // that `self` was created via `new` or equivalent logic.
+            //
+            // Beyond this, refer to the safety notes of `std::slice::from_raw_parts`
+            unsafe { slice::from_raw_parts(self.ptr, self.rows * self.cols) }
+        }
+
+        /// This function is used to convered a pointer received from FFI to a type useable by
+        /// Rust.
+        pub fn as_cols(&self) -> impl '_ + Iterator<Item = &[u8]> {
+            self.as_slice().chunks_exact(self.cols)
+        }
+    }
+}
 
 /// Used to pass a Vec of u8 between Rust and FFI users.
 /// The code assumes that the pointer `ptr` is the start a "continous" block of memory of size `n`.
@@ -38,59 +102,12 @@ impl VecEncoding {
     /// Converts the pointer received from FFI to a Vector of u8.
     ///
     /// # Safety
-    /// Refer to the safety notes of `Vec::from_raw_parts`.
+    ///
+    /// For a call to be safe, `self.ptr` must point to a previously allocated and
+    /// valid `Vec<u8>`, with exactly `self.n` in both `.len()` and `.capacity()`.
+    /// Consult the safety notes of `vec::from_raw_parts` for more details.
     unsafe fn to_vec(&self) -> Vec<u8> {
         Vec::from_raw_parts(self.ptr, self.n, self.n)
-    }
-}
-
-/// Used to pass a 2D Vec of u8 between Rust and FFI users.
-/// The code assumes that the pointer `ptr` is the start a "continous" block of memory of size `rows*cols`.
-#[repr(C)]
-#[derive(Debug)]
-pub struct MatrixEncoding {
-    ptr: *mut u8,
-    rows: usize,
-    cols: usize,
-}
-
-impl MatrixEncoding {
-    /// The code assumes that all the elements of `vec` encode to the same length.
-    pub fn new<T: Encode>(vec: Vec<T>) -> Option<Self> {
-        let vec = vec
-            .iter()
-            .map(|item| item.encode())
-            .collect::<Vec<Vec<u8>>>();
-        let rows = vec.len();
-        if let Some(cols) = vec.first() {
-            let cols = cols.len();
-            for r in vec.iter() {
-                if r.len() != cols {
-                    println!("Mismatch on encoded data size. Expected all items to encode to {} bytes, found an element that encodes to {} bytes.", cols, r.len());
-                    return None;
-                }
-            }
-
-            let mut flattened_vec: Vec<u8> = Vec::with_capacity(rows * cols);
-            for row in vec.iter() {
-                flattened_vec.extend(row);
-            }
-            assert_eq!(flattened_vec.capacity(), rows * cols);
-            let (ptr, _len, _cap) = flattened_vec.into_raw_parts();
-            Some(Self { ptr, rows, cols })
-        } else {
-            println!("The input `vec` should have at least two elements");
-            None
-        }
-    }
-
-    fn as_slice(&self) -> &[u8] {
-        // SAFETY: Refer to the safety notes of `slice::from_raw_parts_mut`.
-        unsafe { slice::from_raw_parts(self.ptr, self.rows * self.cols) }
-    }
-
-    fn as_cols(&self) -> impl '_ + Iterator<Item = &[u8]> {
-        self.as_slice().chunks_exact(self.cols)
     }
 }
 
@@ -107,7 +124,9 @@ impl ArrCddClaimData {
     /// Converts the pointer received from FFI to a Vector of CddClaimData.
     ///
     /// # Safety
-    /// Refer to the safety notes of `vec::from_raw_parts`.
+    /// For a call to be safe, `self.ptr` must point to a previously allocated and
+    /// valid `Vec<CddClaimData>`, with exactly `self.n` in both `.len()` and `.capacity()`.
+    /// Consult the safety notes of `vec::from_raw_parts` for more details.
     unsafe fn to_vec(&self) -> Vec<CddClaimData> {
         Vec::from_raw_parts(self.ptr, self.n, self.n)
     }
@@ -126,7 +145,9 @@ impl ArrCddId {
     /// Converts the pointer received from FFI to a Vector of CddId.
     ///
     /// # Safety
-    /// Refer to the safety notes of `vec::from_raw_parts`.
+    /// For a call to be safe, `self.ptr` must point to a previously allocated and
+    /// valid `Vec<CddId>`, with exactly `self.n` in both `.len()` and `.capacity()`.
+    /// Consult the safety notes of `vec::from_raw_parts` for more details.
     unsafe fn to_vec(&self) -> Vec<CddId> {
         Vec::from_raw_parts(self.ptr, self.n, self.n)
     }
@@ -318,7 +339,7 @@ fn _generate_proofs(
 ///
 /// # Safety
 /// Caller is responsible to make sure `private_unique_identifiers`
-/// is a valid pointer to a `MatrixEncoding` object, and `seed` is a random
+/// is a `MatrixEncoding` object, and `seed` is a random
 /// 32-byte array.
 /// Caller is responsible for deallocating memory after use.
 #[no_mangle]

@@ -157,14 +157,14 @@ impl Decode for ZKPInitialmessage {
         let cdd_id_proof = <InitialMessage>::decode(input)?;
         let cdd_id_second_half_proof = <InitialMessage>::decode(input)?;
         let uid_commitment_proof = <InitialMessage>::decode(input)?;
+        let decode_ristretto = |input: &mut I| {
+            return CompressedRistretto(<[u8; RISTRETTO_POINT_SIZE]>::decode(input)?)
+                .decompress()
+                .ok_or_else(|| CodecError::from("Invalid compressed `RistrettoPoint`."));
+        };
 
-        let a = CompressedRistretto(<[u8; RISTRETTO_POINT_SIZE]>::decode(input)?)
-            .decompress()
-            .ok_or_else(|| CodecError::from("Invalid compressed `RistrettoPoint`."))?;
-
-        let b = CompressedRistretto(<[u8; RISTRETTO_POINT_SIZE]>::decode(input)?)
-            .decompress()
-            .ok_or_else(|| CodecError::from("Invalid compressed `RistrettoPoint`."))?;
+        let a = decode_ristretto(input)?;
+        let b = decode_ristretto(input)?;
 
         Ok(Self {
             cdd_id_proof,

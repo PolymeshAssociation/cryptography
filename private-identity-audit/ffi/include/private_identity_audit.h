@@ -135,7 +135,7 @@ struct ProverResults *generate_proofs(struct ArrCddClaimData cdd_claims,
  *
  * # Safety
  * Caller is responsible to make sure `private_unique_identifiers`
- * is a valid pointer to a `MatrixEncoding` object, and `seed` is a random
+ * is a `MatrixEncoding` object, and `seed` is a random
  * 32-byte array.
  * Caller is responsible for deallocating memory after use.
  */
