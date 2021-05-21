@@ -51,15 +51,32 @@ jobs:
       - run:
           name: Run tests
           command: >-
+            # ----------------------------------- Test Rust &&
             RUST_LOG=info cargo +nightly test &&
 
+            # ----------------------------------- Test WASM &&
             cd confidential-identity/wasm &&
-            cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack &&
-            rustup run nightly wasm-pack build --release --target nodejs &&
+            rustup run nightly wasm-pack build --target nodejs &&
+
+            cd examples &&
+            npm install &&
+            npm run test &&
+
+            cd ../../../private-identity-audit/wasm  &&
+            rustup run nightly wasm-pack build --target nodejs &&
 
             cd examples &&
             npm install &&
             npm run test
+
+            # ----------------------------------- Test FFI &&
+            cd ../../ffi/ &&
+            make build &&
+            make run &&
+
+            cd ../../confidential-identity/ffi/ &&
+            make build &&
+            make run
             
           no_output_timeout: 30m
       - save_cache:
@@ -94,9 +111,8 @@ jobs:
             cargo +nightly build --target wasm32-unknown-unknown --bench mercat_account &&
             cargo +nightly build --target wasm32-unknown-unknown --bench mercat_asset &&
             cargo +nightly build --target wasm32-unknown-unknown --bench mercat_transaction &&
-            cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
+            cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend
 
-            echo "TODO: add wasm tests"
           no_output_timeout: 30m
       - save_cache:
           key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
@@ -118,7 +134,7 @@ jobs:
             - v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
             - v6-bench-cache-{{ checksum "./rust.version" }}
       - run:
-          name: Run tests
+          name: Run benchmarks
           command: cargo +nightly bench
           no_output_timeout: 30m
       - save_cache:
