@@ -1,0 +1,16 @@
+{
+  "name": "cil_wasm_test",
+  "version": "1.0.0",
+  "description": "Tests loading and calling wasm bindings for Confidential Identity Library",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "author": "",
+  "devDependencies": {
+    "jest": "^26.6.3"
+  },
+  "dependencies": {
+    "uuid": "^8.3.2"
+  }
+}
