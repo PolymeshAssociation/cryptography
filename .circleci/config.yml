@@ -12,17 +12,8 @@ jobs:
           docker_layer_caching: true
       - run: ./scripts/docker.sh build
       - run:
-          name: DEBUG1
-          command: ls -al ./scripts/
-      - run:
-          name: DEBUG3
-          command: ./scripts/docker.sh run pwd
-      - run:
           name: Check formatting
-          command: ./scripts/docker.sh run /src/cryptography/scripts/lint
-      - run:
-          name: Check formatting
-          command: ./scripts/docker.sh run ./scripts/lint
+          command: ./scripts/docker.sh run /bin/bash ./scripts/lint
   build:
     docker:
       - image: cimg/base:2021.05
