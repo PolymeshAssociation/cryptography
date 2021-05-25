@@ -62,24 +62,7 @@ jobs:
             - v6-test-cache-{{ checksum "./rust.version" }}
       - run:
           name: Run tests
-          command: >-
-            # ----------------------------------- Test Rust &&
-            ./scripts/docker.sh run RUST_LOG=info cargo +nightly test &&
-
-            # ----------------------------------- Test WASM &&
-            ./scripts/docker.sh run cd confidential-identity/wasm && rustup run nightly wasm-pack build --target nodejs &&
-
-            ./scripts/docker.sh run cd confidential-identity/wasm/examples && npm install && npm run test &&
-
-            ./scripts/docker.sh run cd private-identity-audit/wasm  && rustup run nightly wasm-pack build --target nodejs &&
-
-            ./scripts/docker.sh run cd private-identity-audit/wasm/examples && npm install && npm run test &&
-
-            # ----------------------------------- Test FFI &&
-            ./scripts/docker.sh run cd private-identity-audit/ffi/ && make build && make run &&
-
-            ./scripts/docker.sh run cd confidential-identity/ffi/ && make build && make run
-            
+          command: ./scripts/docker.sh run ./scripts/test
           no_output_timeout: 30m
       - save_cache:
           key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
