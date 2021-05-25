@@ -1,7 +1,8 @@
 version: 2
 jobs:
   lint:
-    machine: true
+    docker:
+      - image: cimg/base:2021.05
     environment:
       VERBOSE: "1"
     steps:
@@ -14,7 +15,8 @@ jobs:
           name: Check formatting
           command: ./scripts/docker.sh run ./scripts/lint
   build:
-    machine: true
+    docker:
+      - image: cimg/base:2021.05
     environment:
       VERBOSE: "1"
     steps:
@@ -41,7 +43,8 @@ jobs:
             - "~/.cargo"
             - "./target"
   test:
-    machine: true
+    docker:
+      - image: cimg/base:2021.05
     environment:
       VERBOSE: "1"
     steps:
@@ -94,7 +97,8 @@ jobs:
             - "~/.cargo"
             - "./target"
   build_wasm:
-    machine: true
+    docker:
+      - image: cimg/base:2021.05
     environment:
       VERBOSE: "1"
     steps:
@@ -132,7 +136,8 @@ jobs:
             - "~/.cargo"
             - "./target"
   bench:
-    machine: true
+    docker:
+      - image: cimg/base:2021.05
     environment:
       VERBOSE: "1"
     steps:
