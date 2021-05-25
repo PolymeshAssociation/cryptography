@@ -1,6 +1,7 @@
 version: 2
 jobs:
   lint:
+    machine: true
     environment:
       VERBOSE: "1"
     steps:
@@ -13,6 +14,7 @@ jobs:
           name: Check formatting
           command: ./scripts/docker.sh run ./scripts/lint
   build:
+    machine: true
     environment:
       VERBOSE: "1"
     steps:
@@ -39,6 +41,7 @@ jobs:
             - "~/.cargo"
             - "./target"
   test:
+    machine: true
     environment:
       VERBOSE: "1"
     steps:
@@ -91,6 +94,7 @@ jobs:
             - "~/.cargo"
             - "./target"
   build_wasm:
+    machine: true
     environment:
       VERBOSE: "1"
     steps:
@@ -128,6 +132,7 @@ jobs:
             - "~/.cargo"
             - "./target"
   bench:
+    machine: true
     environment:
       VERBOSE: "1"
     steps:
