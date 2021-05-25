@@ -12,6 +12,18 @@ jobs:
           docker_layer_caching: true
       - run: ./scripts/docker.sh build
       - run:
+          name: DEBUG1
+          command: ls -al ./scripts/
+      - run:
+          name: DEBUG2
+          command: ls -al /src/scripts/
+      - run:
+          name: DEBUG3
+          command:./scripts/docker.sh run pwd
+      - run:
+          name: Check formatting
+          command: ./scripts/docker.sh run /src/scripts/lint
+      - run:
           name: Check formatting
           command: ./scripts/docker.sh run ./scripts/lint
   build:
@@ -60,9 +72,6 @@ jobs:
           keys:
             - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
             - v6-test-cache-{{ checksum "./rust.version" }}
-      - run:
-          name: DEBUG
-          command: ls -al ./scripts/
       - run:
           name: Run tests
           command: ./scripts/docker.sh run ./scripts/test
