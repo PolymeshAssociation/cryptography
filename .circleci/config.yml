@@ -61,6 +61,9 @@ jobs:
             - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
             - v6-test-cache-{{ checksum "./rust.version" }}
       - run:
+          name: DEBUG
+          command: ls -al ./scripts/
+      - run:
           name: Run tests
           command: ./scripts/docker.sh run ./scripts/test
           no_output_timeout: 30m
