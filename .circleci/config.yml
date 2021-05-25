@@ -1,25 +1,29 @@
 version: 2
 jobs:
   lint:
-    docker:
-      - image: rustlang/rust:nightly
     environment:
       VERBOSE: "1"
     steps:
       - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+          docker_layer_caching: true
+      - run: ./scripts/docker.sh build
       - run:
           name: Check formatting
-          command: ./scripts/lint
+          command: ./scripts/docker.sh run ./scripts/lint
   build:
-    docker:
-      - image: rustlang/rust:nightly
     environment:
       VERBOSE: "1"
     steps:
       - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+          docker_layer_caching: true
+      - run: ./scripts/docker.sh build
       - run:
           name: Store rust version in an environment var for cache key
-          command: rustc --version > rust.version
+          command: ./scripts/docker.sh run rustc --version > rust.version
       - restore_cache:
           keys:
             - v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
@@ -27,7 +31,7 @@ jobs:
             - v2-cli-cache-{{ checksum "./rust.version" }}
       - run:
           name: Build nightly
-          command: cargo +nightly build
+          command: ./scripts/docker.sh run cargo +nightly build
           no_output_timeout: 4h
       - save_cache:
           key: v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
@@ -35,15 +39,17 @@ jobs:
             - "~/.cargo"
             - "./target"
   test:
-    docker:
-      - image: rustlang/rust:nightly
     environment:
       VERBOSE: "1"
     steps:
       - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+          docker_layer_caching: true
+      - run: ./scripts/docker.sh build
       - run:
           name: Store rust version in a file for cache key
-          command: rustc --version > rust.version
+          command: ./scripts/docker.sh run rustc --version > rust.version
       - restore_cache:
           keys:
             - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
@@ -52,7 +58,7 @@ jobs:
           name: Run tests
           command: >-
             # ----------------------------------- Test Rust &&
-            RUST_LOG=info cargo +nightly test &&
+            ./scripts/docker.sh run RUST_LOG=info cargo +nightly test &&
 
             # ----------------------------------- Test WASM &&
             cd confidential-identity/wasm &&
@@ -85,15 +91,17 @@ jobs:
             - "~/.cargo"
             - "./target"
   build_wasm:
-    docker:
-      - image: rustlang/rust:nightly
     environment:
       VERBOSE: "1"
     steps:
       - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+          docker_layer_caching: true
+      - run: ./scripts/docker.sh build
       - run:
           name: Store rust version in a file for cache key
-          command: rustc --version > rust.version
+          command: ./scripts/docker.sh run rustc --version > rust.version
       - restore_cache:
           keys:
             - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
@@ -101,7 +109,7 @@ jobs:
       - run:
           name: Run tests
           command: >-
-            cd cryptography-core &&
+            ./scripts/docker.sh run cd cryptography-core &&
             echo "Wasm build (features 'no_std' & 'u32_backend')"  &&
             cargo +nightly build --target wasm32-unknown-unknown --bench elgamal_decryption &&
             cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
@@ -120,22 +128,24 @@ jobs:
             - "~/.cargo"
             - "./target"
   bench:
-    docker:
-      - image: rustlang/rust:nightly
     environment:
       VERBOSE: "1"
     steps:
       - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+          docker_layer_caching: true
+      - run: ./scripts/docker.sh build
       - run:
           name: Store rust version in a file for cache key
-          command: rustc --version > rust.version
+          command: ./scripts/docker.sh run rustc --version > rust.version
       - restore_cache:
           keys:
             - v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
             - v6-bench-cache-{{ checksum "./rust.version" }}
       - run:
           name: Run benchmarks
-          command: cargo +nightly bench
+          command: ./scripts/docker.sh run cargo +nightly bench
           no_output_timeout: 30m
       - save_cache:
           key: v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
