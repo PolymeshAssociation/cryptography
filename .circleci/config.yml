@@ -19,7 +19,7 @@ jobs:
           command: ls -al /src/scripts/
       - run:
           name: DEBUG3
-          command:./scripts/docker.sh run pwd
+          command: ./scripts/docker.sh run pwd
       - run:
           name: Check formatting
           command: ./scripts/docker.sh run /src/scripts/lint
