@@ -12,7 +12,10 @@ jobs:
           docker_layer_caching: true
       - run: ./scripts/docker.sh build
       - run:
-          name: DEBUG3
+          name: DEBUG1
+          command: ls -al
+      - run:
+          name: DEBUG2
           command: ./scripts/docker.sh run ls -al
       - run:
           name: Check formatting
