@@ -67,28 +67,18 @@ jobs:
             ./scripts/docker.sh run RUST_LOG=info cargo +nightly test &&
 
             # ----------------------------------- Test WASM &&
-            cd confidential-identity/wasm &&
-            rustup run nightly wasm-pack build --target nodejs &&
+            ./scripts/docker.sh run cd confidential-identity/wasm && rustup run nightly wasm-pack build --target nodejs &&
 
-            cd examples &&
-            npm install &&
-            npm run test &&
+            ./scripts/docker.sh run cd confidential-identity/wasm/examples && npm install && npm run test &&
 
-            cd ../../../private-identity-audit/wasm  &&
-            rustup run nightly wasm-pack build --target nodejs &&
+            ./scripts/docker.sh run cd private-identity-audit/wasm  && rustup run nightly wasm-pack build --target nodejs &&
 
-            cd examples &&
-            npm install &&
-            npm run test
+            ./scripts/docker.sh run cd private-identity-audit/wasm/examples && npm install && npm run test &&
 
             # ----------------------------------- Test FFI &&
-            cd ../../ffi/ &&
-            make build &&
-            make run &&
+            ./scripts/docker.sh run cd private-identity-audit/ffi/ && make build && make run &&
 
-            cd ../../confidential-identity/ffi/ &&
-            make build &&
-            make run
+            ./scripts/docker.sh run cd confidential-identity/ffi/ && make build && make run
             
           no_output_timeout: 30m
       - save_cache:
