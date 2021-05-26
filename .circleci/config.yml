@@ -2,24 +2,35 @@ version: 2
 jobs:
   lint:
     docker:
-      - image: rustlang/rust:nightly
+      - image: cimg/base:2021.05
     environment:
       VERBOSE: "1"
     steps:
       - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+          docker_layer_caching: true
+      - run: ./scripts/docker.sh build
       - run:
           name: Check formatting
-          command: ./scripts/lint
+          command: |
+            docker create -v /src --name sources alpine:3.4 /bin/true
+            docker cp . sources:/src
+            docker run --volumes-from sources cryptography /src/scripts/lint
   build:
     docker:
-      - image: rustlang/rust:nightly
+      - image: cimg/base:2021.05
     environment:
       VERBOSE: "1"
     steps:
       - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+          docker_layer_caching: true
+      - run: ./scripts/docker.sh build
       - run:
           name: Store rust version in an environment var for cache key
-          command: rustc --version > rust.version
+          command: ./scripts/docker.sh run rustc --version > rust.version
       - restore_cache:
           keys:
             - v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
@@ -27,8 +38,10 @@ jobs:
             - v2-cli-cache-{{ checksum "./rust.version" }}
       - run:
           name: Build nightly
-          command: cargo +nightly build
-          no_output_timeout: 4h
+          command: |
+            docker create -v /src --name sources alpine:3.4 /bin/true
+            docker cp . sources:/src
+            docker run --volumes-from sources -w /src cryptography cargo +nightly build
       - save_cache:
           key: v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
           paths:
@@ -36,68 +49,28 @@ jobs:
             - "./target"
   test:
     docker:
-      - image: rustlang/rust:nightly
+      - image: cimg/base:2021.05
     environment:
       VERBOSE: "1"
     steps:
       - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+          docker_layer_caching: true
+      - run: ./scripts/docker.sh build
       - run:
           name: Store rust version in a file for cache key
-          command: rustc --version > rust.version
+          command: ./scripts/docker.sh run rustc --version > rust.version
       - restore_cache:
           keys:
             - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
             - v6-test-cache-{{ checksum "./rust.version" }}
       - run:
           name: Run tests
-          command: >-
-            RUST_LOG=info cargo +nightly test &&
-
-            cd confidential-identity/wasm &&
-            cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack &&
-            rustup run nightly wasm-pack build --release --target nodejs &&
-
-            cd examples &&
-            npm install &&
-            npm run test
-            
-          no_output_timeout: 30m
-      - save_cache:
-          key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
-          paths:
-            - "~/.cargo"
-            - "./target"
-  build_wasm:
-    docker:
-      - image: rustlang/rust:nightly
-    environment:
-      VERBOSE: "1"
-    steps:
-      - checkout
-      - run:
-          name: Store rust version in a file for cache key
-          command: rustc --version > rust.version
-      - restore_cache:
-          keys:
-            - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
-            - v6-test-cache-{{ checksum "./rust.version" }}
-      - run:
-          name: Run tests
-          command: >-
-            cd cryptography-core &&
-            echo "Wasm build (features 'no_std' & 'u32_backend')"  &&
-            cargo +nightly build --target wasm32-unknown-unknown --bench elgamal_decryption &&
-            cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
-
-            cd ../mercat &&
-            echo "Wasm build (features 'no_std' & 'u32_backend')"  &&
-            cargo +nightly build --target wasm32-unknown-unknown --bench mercat_account &&
-            cargo +nightly build --target wasm32-unknown-unknown --bench mercat_asset &&
-            cargo +nightly build --target wasm32-unknown-unknown --bench mercat_transaction &&
-            cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
-
-            echo "TODO: add wasm tests"
-          no_output_timeout: 30m
+          command: |
+            docker create -v /src --name sources alpine:3.4 /bin/true
+            docker cp . sources:/src
+            docker run --volumes-from sources cryptography /src/scripts/test
       - save_cache:
           key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
           paths:
@@ -105,22 +78,28 @@ jobs:
             - "./target"
   bench:
     docker:
-      - image: rustlang/rust:nightly
+      - image: cimg/base:2021.05
     environment:
       VERBOSE: "1"
     steps:
       - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+          docker_layer_caching: true
+      - run: ./scripts/docker.sh build
       - run:
           name: Store rust version in a file for cache key
-          command: rustc --version > rust.version
+          command: ./scripts/docker.sh run rustc --version > rust.version
       - restore_cache:
           keys:
             - v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
             - v6-bench-cache-{{ checksum "./rust.version" }}
       - run:
           name: Run tests
-          command: cargo +nightly bench
-          no_output_timeout: 30m
+          command: |
+            docker create -v /src --name sources alpine:3.4 /bin/true
+            docker cp . sources:/src
+            docker run --volumes-from sources -w cryptography cargo +nightly bench
       - save_cache:
           key: v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
           paths:

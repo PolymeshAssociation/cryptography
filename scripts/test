@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+set -eo pipefail
+
+ROOT=$( cd `dirname $0`/..;  pwd )
+
+cd $ROOT
+
+cargo +nightly build --release
+
+RUST_LOG=info cargo +nightly test
+
+# ----------------------------------- Test WASM
+cd confidential-identity/wasm
+rustup run nightly wasm-pack build --target nodejs
+
+cd $ROOT/confidential-identity/wasm/examples
+npm install
+npm run test
+
+cd $ROOT/private-identity-audit/wasm
+rustup run nightly wasm-pack build --target nodejs
+
+cd $ROOT/private-identity-audit/wasm/examples
+npm install
+npm run test
+
+# ----------------------------------- Test FFI
+cd $ROOT/private-identity-audit/ffi
+make build
+make run
+
+cd $ROOT/confidential-identity/ffi
+make build
+make run
+
+# TODO: fix later: these were not running in the CI previously either.
+## ----------------------------------- WASM benches
+#
+#cd $ROOT/cryptography-core
+#cargo +nightly build --target wasm32-unknown-unknown --bench elgamal_decryption
+#cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend
+#
+#cd $ROOT/mercat
+#cargo +nightly build --target wasm32-unknown-unknown --bench mercat_account
+#cargo +nightly build --target wasm32-unknown-unknown --bench mercat_asset
+#cargo +nightly build --target wasm32-unknown-unknown --bench mercat_transaction
+#cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend
