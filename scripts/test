@@ -34,14 +34,15 @@ cd $ROOT/confidential-identity/ffi
 make build
 make run
 
-# ----------------------------------- WASM benches
-
-cd $ROOT/cryptography-core
-cargo +nightly build --target wasm32-unknown-unknown --bench elgamal_decryption
-cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend
-
-cd $ROOT/mercat
-cargo +nightly build --target wasm32-unknown-unknown --bench mercat_account
-cargo +nightly build --target wasm32-unknown-unknown --bench mercat_asset
-cargo +nightly build --target wasm32-unknown-unknown --bench mercat_transaction
-cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend
+# TODO: fix later: these were not running in the CI previously either.
+## ----------------------------------- WASM benches
+#
+#cd $ROOT/cryptography-core
+#cargo +nightly build --target wasm32-unknown-unknown --bench elgamal_decryption
+#cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend
+#
+#cd $ROOT/mercat
+#cargo +nightly build --target wasm32-unknown-unknown --bench mercat_account
+#cargo +nightly build --target wasm32-unknown-unknown --bench mercat_asset
+#cargo +nightly build --target wasm32-unknown-unknown --bench mercat_transaction
+#cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend
