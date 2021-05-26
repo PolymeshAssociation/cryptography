@@ -25,11 +25,3 @@ then
   shift 1
   docker run -v "$(pwd)":/src -w /src cryptography $@
 fi
-
-if [ "$1" == "copy-run" ] 
-then
-  shift 1
-  docker cp . cryptography:/src
-  docker run -w /src cryptography $@
-fi
-
