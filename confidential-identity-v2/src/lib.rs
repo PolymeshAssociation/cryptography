@@ -36,7 +36,8 @@
 //! Example workflow:
 //!
 //! ```
-//! use confidential_identity_v2::{UserKeys, IdentitySignature, CddClaim, ScopeClaim};
+//! use confidential_identity_v2::{UserKeys, CddClaim, ScopeClaim, sign::IdentitySignature};
+//! use cryptography_core::{RistrettoPoint, Scalar};
 //! use rand::{thread_rng, Rng};
 //!
 //! // ---------------- Done by the user
@@ -47,7 +48,13 @@
 //!
 //! // ---------------- Done by issuer (PUIS)
 //! let verified_identity = identity_proof.verify().expect("Identity verification must pass");
-//! let identity_signature = IdentitySignature::new(verified_identity);
+//! // TODO: Run the identity signature protocol.
+//! let identity_signature = IdentitySignature{
+//!   h: RistrettoPoint::default(),
+//!   sigma_z_prime: RistrettoPoint::default(),
+//!   sigma_c_prime: Scalar::default(),
+//!   sigma_r_prime: Scalar::default(),
+//! };
 //! // Send the `identity_signature` back to the user.
 //!
 //! // ---------------- Done by the user
@@ -65,31 +72,21 @@
 //! scope_claim.verify().expect("SCOPE claim verification must pass");
 //! ```
 
-use cryptography_core::{
-    asset_proofs::{ElgamalPublicKey, ElgamalSecretKey},
-    Scalar,
-};
+use cryptography_core::{cdd_claim::PedersenGenerators, RistrettoPoint, Scalar};
 use rand_core::{CryptoRng, RngCore};
+use sign::IdentitySignature;
 
-/// Hook desc.
-///
-/// Detailed aoesuthaoesh `arg1` aontseuhonsetahus `arg2`. `out1`
-///
-/// # Arguments
-/// If not redundant
-///
-/// # Examples
-/// executable examples, edge cases, etc
-///
-/// # Errors
-/// * if there is any or they can be added to desc
-///
-/// # Panics
-/// * if there is any
+pub mod errors;
+pub mod sign;
 
 pub struct UserKeys {
-    public: ElgamalPublicKey,
-    secret: ElgamalSecretKey,
+    public: RistrettoPoint,
+    private: Scalar,
+}
+
+pub struct IssuerKeys {
+    public: RistrettoPoint,
+    private: Scalar,
 }
 
 #[derive(Clone)]
@@ -101,22 +98,43 @@ pub struct IdentityZkProof {
     claim: IdentityZkClaim,
 }
 
-pub struct IdentitySignature {}
-
 pub struct CddClaim {}
 
 pub struct ScopeClaim {}
 
 impl UserKeys {
     pub fn new<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        let key = Scalar::random(rng);
-        let secret = ElgamalSecretKey::new(key);
-        let public = secret.get_public_key();
-        Self { secret, public }
+        let private = Scalar::random(rng);
+        let public = private * get_g1();
+        Self { private, public }
     }
+    /// Hook desc.
+    ///
+    /// Detailed aoesuthaoesh `arg1` aontseuhonsetahus `arg2`. `out1`
+    ///
+    /// # Arguments
+    /// If not redundant
+    ///
+    /// # Examples
+    /// executable examples, edge cases, etc
+    ///
+    /// # Errors
+    /// * if there is any or they can be added to desc
+    ///
+    /// # Panics
+    /// * if there is any
     pub fn generate_identity_proof(&self) -> IdentityZkProof {
         // generate zkp prove
         IdentityZkProof::new()
+    }
+}
+
+impl IssuerKeys {
+    pub fn new<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
+        let private = Scalar::random(rng);
+        // The only difference between this and UserKey is the base generator.
+        let public = private * get_g();
+        Self { private, public }
     }
 }
 
@@ -140,13 +158,6 @@ impl From<IdentityZkClaim> for IdentityZkVerifiedClaim {
     }
 }
 
-impl IdentitySignature {
-    pub fn new(verified_identity: IdentityZkVerifiedClaim) -> Self {
-        // Creates a signature for a verified identity
-        Self {}
-    }
-}
-
 impl CddClaim {
     pub fn new(identity_signature: &IdentitySignature) -> Self {
         Self {}
@@ -165,4 +176,10 @@ impl ScopeClaim {
     }
 }
 
-pub mod errors;
+pub fn get_g() -> RistrettoPoint {
+    PedersenGenerators::default().generators[0]
+}
+
+pub fn get_g1() -> RistrettoPoint {
+    PedersenGenerators::default().generators[1]
+}
