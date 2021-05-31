@@ -57,19 +57,19 @@
 //! };
 //! // Send the `identity_signature` back to the user.
 //!
-//! // ---------------- Done by the user
-//! let cdd_claim = CddClaim::new(&identity_signature);
-//! // send `cdd_claim` to PolMesh
+//! //// ---------------- Done by the user
+//! //let cdd_claim = CddClaim::new(&identity_signature);
+//! //// send `cdd_claim` to PolMesh
 //!
-//! // ---------------- Done by the PolyMesh
-//! cdd_claim.verify().expect("CDD claim verification must pass");
+//! //// ---------------- Done by the PolyMesh
+//! //cdd_claim.verify().expect("CDD claim verification must pass");
 //!
-//! // ---------------- Done by the user
-//! let scope_claim = ScopeClaim::new(&identity_signature, &cdd_claim);
-//! // send `scope_claim` to PolyMesh
+//! //// ---------------- Done by the user
+//! //let scope_claim = ScopeClaim::new(&identity_signature, &cdd_claim);
+//! //// send `scope_claim` to PolyMesh
 //!
-//! // ---------------- Done by the PolyMesh
-//! scope_claim.verify().expect("SCOPE claim verification must pass");
+//! //// ---------------- Done by the PolyMesh
+//! //scope_claim.verify().expect("SCOPE claim verification must pass");
 //! ```
 
 use cdd_claim::CddClaim;
@@ -82,13 +82,13 @@ pub mod errors;
 pub mod sign;
 
 pub struct UserKeys {
-    public: RistrettoPoint,
+    pub public: RistrettoPoint,
     private: Scalar,
 }
 
 pub struct IssuerKeys {
     public: RistrettoPoint,
-    private: Scalar,
+    pub private: Scalar,
 }
 
 #[derive(Clone)]
@@ -108,6 +108,7 @@ impl UserKeys {
         let public = private * get_g1();
         Self { private, public }
     }
+
     /// Hook desc.
     ///
     /// Detailed aoesuthaoesh `arg1` aontseuhonsetahus `arg2`. `out1`

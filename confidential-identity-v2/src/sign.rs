@@ -7,6 +7,7 @@
 //!         - The Issuer creates a keypair.
 //!         - The User creates a keypair.
 //!         - The Issuer and the User exchange their public keys.
+//!
 
 use crate::{get_g, IssuerKeys};
 use cryptography_core::{RistrettoPoint, Scalar};
@@ -54,7 +55,7 @@ pub struct IdentitySignaturePrivateKey(pub(crate) Scalar);
 /// should be kept private by the issuer. This value will be used in `step3`.
 pub fn step1<R: RngCore + CryptoRng>(
     user_public_key: RistrettoPoint,
-    issuer_keypair: IssuerKeys,
+    issuer_keypair: &IssuerKeys,
     rng: &mut R,
 ) -> (Step1PublicData, Step1SecretData) {
     let gamma = user_public_key + issuer_keypair.public;
@@ -87,7 +88,7 @@ pub fn step2<R: RngCore + CryptoRng>(
     let beta2 = Scalar::random(rng);
     let gamma = user_public_key + issuer_public_key;
     let h = gamma * alpha;
-    let t1 = user_public_key * beta1 + get_g() * beta2;
+    let t1 = issuer_public_key * beta1 + get_g() * beta2;
     let t2 = h * beta2;
     let sigma_z_prime = step1_data.sigma_z * alpha;
     let sigma_a_prime = t1 + step1_data.sigma_a;
@@ -119,11 +120,11 @@ pub fn step2<R: RngCore + CryptoRng>(
 /// issuer blinds `sigma_c` and returns `sigma_r`. The `step1_secret` can be safely deleted after
 /// this step.
 pub fn step3(
-    sigma_c: Step2PublicData,
+    step2_public: Step2PublicData,
     step1_secret: Step1SecretData,
-    issuer_secret_key: Scalar,
+    issuer_private_key: &Scalar,
 ) -> Scalar {
-    sigma_c.0 * issuer_secret_key + step1_secret.0
+    step2_public.0 * issuer_private_key + step1_secret.0
 }
 
 /// TODO: needs better name
@@ -132,10 +133,10 @@ pub fn step3(
 /// checks pass, the function returns the certificate and its corresponding private key.
 /// TODO: return proper errors.
 pub fn step4(
-    sigma_r: Scalar,
+    step3_public: Scalar,
     step2_secret_data: Step2SecretData,
-    issuer_public_key: RistrettoPoint,
-) -> Result<(IdentitySignature, IdentitySignaturePrivateKey), ()> {
+    issuer_public_key: &RistrettoPoint,
+) -> Result<(IdentitySignature, IdentitySignaturePrivateKey), String> {
     let alpha = step2_secret_data.alpha;
     let beta2 = step2_secret_data.beta2;
     let h = step2_secret_data.h;
@@ -143,15 +144,14 @@ pub fn step4(
     let sigma_b_prime = step2_secret_data.sigma_b_prime;
     let sigma_z_prime = step2_secret_data.sigma_z_prime;
     let sigma_c_prime = step2_secret_data.sigma_c_prime;
-
-    let sigma_r_prime = sigma_r + beta2;
+    let sigma_r_prime = step3_public + beta2;
 
     let lhs = sigma_a_prime + sigma_b_prime;
     let rhs = (get_g() + h) * sigma_r_prime - (issuer_public_key + sigma_z_prime) * sigma_c_prime;
 
     if lhs != rhs {
         // TODO: use `ensure!`
-        return Err(());
+        return Err("LHS neq RHS".into());
     }
 
     Ok((
@@ -167,7 +167,7 @@ pub fn step4(
 
 impl IdentitySignature {
     /// This method is used by the chain to verify the signature.
-    pub fn verify(&self, issuer_public_key: RistrettoPoint) -> bool {
+    pub fn verify(&self, issuer_public_key: &RistrettoPoint) -> bool {
         let sigma_a_prime = get_g() * self.sigma_r_prime - issuer_public_key * self.sigma_c_prime;
         let sigma_b_prime = self.h * self.sigma_r_prime - self.sigma_z_prime * self.sigma_c_prime;
         let sigma_c_prime = Scalar::from_hash(
@@ -184,3 +184,37 @@ impl IdentitySignature {
 
 // TODO: Make sure to add asserts and handles the cases were random numbers end up being zero.
 // TODO: Make sure to Zeroize secrets.
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        sign::{step1, step2, step3, step4},
+        IssuerKeys, UserKeys,
+    };
+    use rand::thread_rng;
+
+    #[test]
+    fn test_happy_path_end_to_end() {
+        // ---------------- Done by the User.
+        // In the real implementation each party will have its own rng.
+        let mut rng = thread_rng();
+        let user_keypair = UserKeys::new(&mut rng);
+        let user_public_key = user_keypair.public;
+
+        // ---------------- Done by the Issuer.
+        let issuer_keypair = IssuerKeys::new(&mut rng);
+        let issuer_public_key = user_keypair.public;
+
+        let (step1_public, step1_secret) = step1(user_public_key, &issuer_keypair, &mut rng);
+        let (step2_public, step2_secret) =
+            step2(user_public_key, issuer_public_key, step1_public, &mut rng);
+        let step3_public = step3(step2_public, step1_secret, &issuer_keypair.private);
+        let (signature, _signature_private_key) =
+            step4(step3_public, step2_secret, &issuer_public_key).expect("Verification failed!");
+
+        assert!(
+            signature.verify(&issuer_public_key),
+            "Signature verification failed!"
+        );
+    }
+}
