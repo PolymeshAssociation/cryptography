@@ -36,7 +36,7 @@
 //! Example workflow:
 //!
 //! ```
-//! use confidential_identity_v2::{UserKeys, CddClaim, ScopeClaim, sign::IdentitySignature};
+//! use confidential_identity_v2::{UserKeys, cdd_claim::CddClaim, ScopeClaim, sign::IdentitySignature};
 //! use cryptography_core::{RistrettoPoint, Scalar};
 //! use rand::{thread_rng, Rng};
 //!
@@ -72,10 +72,12 @@
 //! scope_claim.verify().expect("SCOPE claim verification must pass");
 //! ```
 
+use cdd_claim::CddClaim;
 use cryptography_core::{cdd_claim::PedersenGenerators, RistrettoPoint, Scalar};
 use rand_core::{CryptoRng, RngCore};
 use sign::IdentitySignature;
 
+pub mod cdd_claim;
 pub mod errors;
 pub mod sign;
 
@@ -97,8 +99,6 @@ pub struct IdentityZkVerifiedClaim {}
 pub struct IdentityZkProof {
     claim: IdentityZkClaim,
 }
-
-pub struct CddClaim {}
 
 pub struct ScopeClaim {}
 
@@ -158,15 +158,6 @@ impl From<IdentityZkClaim> for IdentityZkVerifiedClaim {
     }
 }
 
-impl CddClaim {
-    pub fn new(identity_signature: &IdentitySignature) -> Self {
-        Self {}
-    }
-    pub fn verify(&self) -> Result<(), ()> {
-        Ok(())
-    }
-}
-
 impl ScopeClaim {
     pub fn new(identity_signature: &IdentitySignature, cdd_claim: &CddClaim) -> Self {
         Self {}
@@ -182,4 +173,8 @@ pub fn get_g() -> RistrettoPoint {
 
 pub fn get_g1() -> RistrettoPoint {
     PedersenGenerators::default().generators[1]
+}
+
+pub fn get_g2() -> RistrettoPoint {
+    PedersenGenerators::default().generators[2]
 }

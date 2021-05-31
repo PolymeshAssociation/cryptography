@@ -46,7 +46,7 @@ pub struct IdentitySignature {
     pub sigma_r_prime: Scalar,
 }
 
-pub struct IdentitySignaturePrivateKey(Scalar);
+pub struct IdentitySignaturePrivateKey(pub(crate) Scalar);
 
 /// TODO: needs better name
 /// Given the `user_public_key` and the `issuer_keypair`, the Issuer computes and returns
@@ -163,6 +163,23 @@ pub fn step4(
         },
         IdentitySignaturePrivateKey(Scalar::invert(&alpha)),
     ))
+}
+
+impl IdentitySignature {
+    /// This method is used by the chain to verify the signature.
+    pub fn verify(&self, issuer_public_key: RistrettoPoint) -> bool {
+        let sigma_a_prime = get_g() * self.sigma_r_prime - issuer_public_key * self.sigma_c_prime;
+        let sigma_b_prime = self.h * self.sigma_r_prime - self.sigma_z_prime * self.sigma_c_prime;
+        let sigma_c_prime = Scalar::from_hash(
+            Sha3_512::default()
+                .chain(self.h.compress().as_bytes())
+                .chain(self.sigma_z_prime.compress().as_bytes())
+                .chain(sigma_a_prime.compress().as_bytes())
+                .chain(sigma_b_prime.compress().as_bytes()),
+        );
+
+        sigma_c_prime == self.sigma_c_prime
+    }
 }
 
 // TODO: Make sure to add asserts and handles the cases were random numbers end up being zero.
