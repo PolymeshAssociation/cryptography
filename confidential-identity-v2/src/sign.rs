@@ -137,13 +137,15 @@ pub fn step4(
     step2_secret_data: Step2SecretData,
     issuer_public_key: &RistrettoPoint,
 ) -> Result<(IdentitySignature, IdentitySignaturePrivateKey), String> {
-    let alpha = step2_secret_data.alpha;
-    let beta2 = step2_secret_data.beta2;
-    let h = step2_secret_data.h;
-    let sigma_a_prime = step2_secret_data.sigma_a_prime;
-    let sigma_b_prime = step2_secret_data.sigma_b_prime;
-    let sigma_z_prime = step2_secret_data.sigma_z_prime;
-    let sigma_c_prime = step2_secret_data.sigma_c_prime;
+    let Step2SecretData {
+        alpha,
+        beta2,
+        h,
+        sigma_a_prime,
+        sigma_b_prime,
+        sigma_z_prime,
+        sigma_c_prime,
+    } = step2_secret_data;
     let sigma_r_prime = step3_public + beta2;
 
     let lhs = sigma_a_prime + sigma_b_prime;
@@ -191,13 +193,15 @@ mod tests {
         sign::{step1, step2, step3, step4},
         IssuerKeys, UserKeys,
     };
-    use rand::thread_rng;
+    use rand::{rngs::StdRng, SeedableRng};
+
+    const SEED: [u8; 32] = [42u8; 32];
 
     #[test]
     fn test_happy_path_end_to_end() {
         // ---------------- Done by the User.
         // In the real implementation each party will have its own rng.
-        let mut rng = thread_rng();
+        let mut rng = StdRng::from_seed(SEED);
         let user_keypair = UserKeys::new(&mut rng);
         let user_public_key = user_keypair.public;
 
