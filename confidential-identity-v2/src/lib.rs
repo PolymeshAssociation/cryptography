@@ -36,7 +36,11 @@
 //! Example workflow:
 //!
 //! ```
-//! use confidential_identity_v2::{UserKeys, cdd_claim::CddClaim, ScopeClaim, sign::IdentitySignature};
+//! use confidential_identity_v2::{
+//!     UserKeys, IssuerKeys,
+//!     cdd_claim::CddClaim, ScopeClaim,
+//!     sign::{IdentitySignature, step1, step2, step3, step4}
+//! };
 //! use cryptography_core::{RistrettoPoint, Scalar};
 //! use rand::{thread_rng, Rng};
 //!
@@ -48,21 +52,44 @@
 //!
 //! // ---------------- Done by issuer (PUIS)
 //! let verified_identity = identity_proof.verify().expect("Identity verification must pass");
-//! // TODO: Run the identity signature protocol.
-//! let identity_signature = IdentitySignature{
-//!   h: RistrettoPoint::default(),
-//!   sigma_z_prime: RistrettoPoint::default(),
-//!   sigma_c_prime: Scalar::default(),
-//!   sigma_r_prime: Scalar::default(),
-//! };
+//!
+//! let user_keypair = UserKeys::new(&mut rng);
+//! let user_public_key = user_keypair.public;
+//!
+//! // ---------------- Done by the Issuer.
+//! let issuer_keypair = IssuerKeys::new(&mut rng);
+//! let issuer_public_key = issuer_keypair.public;
+//!
+//! let (step1_public, step1_secret) = step1(user_public_key, &issuer_keypair, &mut rng);
+//! let (step2_public, step2_secret) =
+//!     step2(user_public_key, issuer_public_key, step1_public, &mut rng);
+//! let step3_public = step3(step2_public, step1_secret, &issuer_keypair.private);
+//! let (identity_signature, identity_signature_private_key) =
+//!     step4(step3_public, step2_secret, &issuer_public_key).expect("Verification failed!");
+//!
+//! assert!(
+//!     identity_signature.verify(&issuer_public_key),
+//!     "Signature verification failed!"
+//! );
 //! // Send the `identity_signature` back to the user.
 //!
-//! //// ---------------- Done by the user
-//! //let cdd_claim = CddClaim::new(&identity_signature);
-//! //// send `cdd_claim` to PolMesh
+//! // ---------------- Done by the user
+//! let user_did = Scalar::random(&mut rng);
 //!
-//! //// ---------------- Done by the PolyMesh
-//! //cdd_claim.verify().expect("CDD claim verification must pass");
+//! let cdd_claim = CddClaim::new(
+//!     &identity_signature,
+//!     &identity_signature_private_key,
+//!     user_keypair,
+//!     user_did,
+//!     &mut rng,
+//! );
+//!
+//! // send `cdd_claim` to PolMesh
+//!
+//! // ---------------- Done by the PolyMesh
+//! cdd_claim
+//!     .verify(&identity_signature, user_did, issuer_public_key)
+//!     .expect("CDD Claim verification failed!");
 //!
 //! //// ---------------- Done by the user
 //! //let scope_claim = ScopeClaim::new(&identity_signature, &cdd_claim);
@@ -87,7 +114,7 @@ pub struct UserKeys {
 }
 
 pub struct IssuerKeys {
-    public: RistrettoPoint,
+    pub public: RistrettoPoint,
     pub private: Scalar,
 }
 
@@ -154,13 +181,13 @@ impl IdentityZkProof {
 }
 
 impl From<IdentityZkClaim> for IdentityZkVerifiedClaim {
-    fn from(claim: IdentityZkClaim) -> Self {
+    fn from(_claim: IdentityZkClaim) -> Self {
         Self {}
     }
 }
 
 impl ScopeClaim {
-    pub fn new(identity_signature: &IdentitySignature, cdd_claim: &CddClaim) -> Self {
+    pub fn new(_identity_signature: &IdentitySignature, _cdd_claim: &CddClaim) -> Self {
         Self {}
     }
     pub fn verify(&self) -> Result<(), ()> {
