@@ -203,7 +203,7 @@ mod tests {
 
         // ---------------- Done by the Issuer.
         let issuer_keypair = IssuerKeys::new(&mut rng);
-        let issuer_public_key = user_keypair.public;
+        let issuer_public_key = issuer_keypair.public;
 
         let (step1_public, step1_secret) = step1(user_public_key, &issuer_keypair, &mut rng);
         let (step2_public, step2_secret) =
