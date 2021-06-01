@@ -1,4 +1,4 @@
-//! This modules is used for creating and verifying CDD Claims
+//! This modules is used for creating and verifying CDD Claims.
 //!
 //! The user can create a CDD Claim after she has verified her identity and has received
 //! a certificate from PUIS. The user may create many CDD Claims for each of her public keys.
@@ -21,7 +21,8 @@ use crate::{
 };
 
 pub struct CddClaim {
-    claim_c_1_hat: RistrettoPoint,
+    pub claim_c_1_hat: RistrettoPoint,
+    pub claim_o_1_hat: Scalar,
     claim_a_1_hat: Scalar,
     claim_r_1_hat: Scalar,
     proof_a: Scalar,
@@ -33,7 +34,7 @@ impl CddClaim {
     pub fn new<R: RngCore + CryptoRng>(
         identity_signature: &IdentitySignature,
         identity_signature_private_key: &IdentitySignaturePrivateKey,
-        user_keypair: UserKeys,
+        user_keypair: &UserKeys,
         user_did: Scalar,
         rng: &mut R,
     ) -> Self {
@@ -67,6 +68,7 @@ impl CddClaim {
             claim_c_1_hat: c_1_hat,
             claim_a_1_hat: a_1_hat,
             claim_r_1_hat: r_1_hat,
+            claim_o_1_hat: o_1_hat,
             proof_a: a,
             proof_r0: r0,
             proof_r1: r1,
@@ -143,6 +145,8 @@ mod tests {
         UserKeys,
         RistrettoPoint,
     ) {
+        // TODO: instead of copy-pasting this test from sign.rs, hard-code a hand-crafted signature
+        // struct.
         // ---------------- Done by the User.
         // In the real implementation each party will have its own rng.
         let user_keypair = UserKeys::new(rng);
@@ -171,6 +175,7 @@ mod tests {
             issuer_public_key,
         )
     }
+
     #[test]
     fn test_cdd_claim() {
         // ---------------- Done by the User.
@@ -184,7 +189,7 @@ mod tests {
         let cdd_claim = CddClaim::new(
             &identity_signature,
             &identity_signature_private_key,
-            user_keypair,
+            &user_keypair,
             user_did,
             &mut rng,
         );

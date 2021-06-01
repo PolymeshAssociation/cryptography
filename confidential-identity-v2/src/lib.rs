@@ -38,7 +38,7 @@
 //! ```
 //! use confidential_identity_v2::{
 //!     UserKeys, IssuerKeys,
-//!     cdd_claim::CddClaim, ScopeClaim,
+//!     cdd_claim::CddClaim,
 //!     sign::{IdentitySignature, step1, step2, step3, step4}
 //! };
 //! use cryptography_core::{RistrettoPoint, Scalar};
@@ -99,13 +99,12 @@
 //! //scope_claim.verify().expect("SCOPE claim verification must pass");
 //! ```
 
-use cdd_claim::CddClaim;
 use cryptography_core::{cdd_claim::PedersenGenerators, RistrettoPoint, Scalar};
 use rand_core::{CryptoRng, RngCore};
-use sign::IdentitySignature;
 
 pub mod cdd_claim;
 pub mod errors;
+pub mod scope_claim;
 pub mod sign;
 
 pub struct UserKeys {
@@ -126,8 +125,6 @@ pub struct IdentityZkVerifiedClaim {}
 pub struct IdentityZkProof {
     claim: IdentityZkClaim,
 }
-
-pub struct ScopeClaim {}
 
 impl UserKeys {
     pub fn new<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
@@ -183,15 +180,6 @@ impl IdentityZkProof {
 impl From<IdentityZkClaim> for IdentityZkVerifiedClaim {
     fn from(_claim: IdentityZkClaim) -> Self {
         Self {}
-    }
-}
-
-impl ScopeClaim {
-    pub fn new(_identity_signature: &IdentitySignature, _cdd_claim: &CddClaim) -> Self {
-        Self {}
-    }
-    pub fn verify(&self) -> Result<(), ()> {
-        Ok(())
     }
 }
 
