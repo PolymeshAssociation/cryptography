@@ -39,6 +39,7 @@
 //! use confidential_identity_v2::{
 //!     UserKeys, IssuerKeys,
 //!     cdd_claim::CddClaim,
+//!     scope_claim::ScopeClaim,
 //!     sign::{IdentitySignature, step1, step2, step3, step4}
 //! };
 //! use cryptography_core::{RistrettoPoint, Scalar};
@@ -79,7 +80,7 @@
 //! let cdd_claim = CddClaim::new(
 //!     &identity_signature,
 //!     &identity_signature_private_key,
-//!     user_keypair,
+//!     &user_keypair,
 //!     user_did,
 //!     &mut rng,
 //! );
@@ -92,11 +93,16 @@
 //!     .expect("CDD Claim verification failed!");
 //!
 //! //// ---------------- Done by the user
-//! //let scope_claim = ScopeClaim::new(&identity_signature, &cdd_claim);
+//! let scope_did = Scalar::random(&mut rng);
+//!
 //! //// send `scope_claim` to PolyMesh
+//! let scope_claim = ScopeClaim::new(&cdd_claim, scope_did, &user_keypair, &mut rng);
 //!
 //! //// ---------------- Done by the PolyMesh
-//! //scope_claim.verify().expect("SCOPE claim verification must pass");
+//! scope_claim
+//!     .verify(&cdd_claim, user_did)
+//!     .expect("SCOPE Claim verification failed!");
+//!
 //! ```
 
 use cryptography_core::{cdd_claim::PedersenGenerators, RistrettoPoint, Scalar};

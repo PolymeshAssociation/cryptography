@@ -27,15 +27,24 @@ impl ScopeClaim {
         let hashed_asset =
             RistrettoPoint::from_hash(Sha3_512::default().chain(scope_did.as_bytes()));
         let claim = hashed_asset * user_keypair.private;
-        // Prove that statement_1 and statement_2 share the same private key.
 
         let s = Scalar::random(rng);
         let t = Scalar::random(rng);
         let ss = hashed_asset * s;
         let tt = get_g() * s + get_g1() * t;
 
-        // TODO: compute challenge c using fiat-shamir
-        let c = Scalar::random(rng);
+        // Compute challenge c using fiat-shamir from the input data
+        // TODO: Very important: Carefully think about what needs to contribute to this challenge.
+        //       1. Should `ccd_claim`, `user_keypair.public` also be added?
+        //       2. Should we use Merlin transcript and have a history of full protocol?
+        let c = Scalar::from_hash(
+            Sha3_512::default()
+                .chain(scope_did.as_bytes())
+                .chain(claim.compress().as_bytes())
+                .chain(ss.compress().as_bytes())
+                .chain(tt.compress().as_bytes())
+                .chain(hashed_asset.compress().as_bytes()),
+        );
         let a = s * c + user_keypair.private;
         let b = t * c + cdd_claim.claim_o_1_hat;
 
@@ -55,13 +64,20 @@ impl ScopeClaim {
         let hashed_asset =
             RistrettoPoint::from_hash(Sha3_512::default().chain(self.scope_did.as_bytes()));
 
-        // TODO: compute challenge c using fiat-shamir
-        let c = Scalar::default();
+        // Compute challenge c using fiat-shamir from the input data
+        let c = Scalar::from_hash(
+            Sha3_512::default()
+                .chain(self.scope_did.as_bytes())
+                .chain(self.claim.compress().as_bytes())
+                .chain(self.proof_ss.compress().as_bytes())
+                .chain(self.proof_tt.compress().as_bytes())
+                .chain(hashed_asset.compress().as_bytes()),
+        );
         if statement_1 + self.proof_ss * c != hashed_asset * self.proof_a {
             return Err("First check failed!".into());
         }
 
-        if statement_2 + self.proof_tt * c == get_g() * self.proof_a + get_g1() * self.proof_b {
+        if statement_2 + self.proof_tt * c != get_g() * self.proof_a + get_g1() * self.proof_b {
             return Err("Second check failed!".into());
         }
 
