@@ -1,6 +1,6 @@
 # Confidential Identity Library V2
 
-TODO: rewrite base on the new scheme
+TODO: rewrite it based on the new scheme.
 
 This library implements the Confidential Identity Library protocol, as described
 [here][wiki_main_design]. The cryptographic building blocks are described
