@@ -37,7 +37,7 @@
 //!
 //! ```
 //! use confidential_identity_v2::{
-//!     UserKeys, IssuerKeys,
+//!     UserKeys, IssuerKeys, verify_user_public_key_zkp_sig,
 //!     cdd_claim::CddClaim,
 //!     scope_claim::ScopeClaim,
 //!     sign::{IdentitySignature, step1, step2, step3, step4}
@@ -52,7 +52,7 @@
 //! // Send `identity_proof` to issuer (PUIS)
 //!
 //! // ---------------- Done by issuer (PUIS)
-//! let verified_identity = identity_proof.verify().expect("Identity verification must pass");
+//! verify_user_public_key_zkp_sig(keys.public, &identity_proof).expect("Identity verification failed");
 //!
 //! let user_keypair = UserKeys::new(&mut rng);
 //! let user_public_key = user_keypair.public;
@@ -105,17 +105,40 @@
 //!
 //! ```
 
-use cryptography_core::{cdd_claim::PedersenGenerators, RistrettoPoint, Scalar};
+use cryptography_core::{
+    cdd_claim::PedersenGenerators, CompressedRistretto, RistrettoPoint, Scalar,
+};
 use rand_core::{CryptoRng, RngCore};
+use sha3::{digest::FixedOutput, Digest, Sha3_512};
+use zeroize::Zeroize;
+
+/// That `ensure` does not transform into a string representation like `failure::ensure` is doing.
+#[allow(unused_macros)]
+macro_rules! ensure {
+    ($predicate:expr, $context_selector:expr) => {
+        if !$predicate {
+            return Err($context_selector.into());
+        }
+    };
+}
 
 pub mod cdd_claim;
 pub mod errors;
 pub mod scope_claim;
 pub mod sign;
 
+const PUBLIC_KEY_ZKP_SIG_MSG: &str = "Polymath ZKP Fixed Message Proof";
+
 pub struct UserKeys {
     pub public: RistrettoPoint,
-    private: Scalar,
+    private: PrivateKey,
+}
+
+#[derive(Zeroize)]
+#[zeroize(drop)] // Overwrite secret key material with null bytes when it goes out of scope.
+pub struct PrivateKey {
+    pub(crate) key: Scalar,
+    pub(crate) nonce: [u8; 32],
 }
 
 pub struct IssuerKeys {
@@ -124,18 +147,21 @@ pub struct IssuerKeys {
 }
 
 #[derive(Clone)]
-pub struct IdentityZkClaim {}
-
-pub struct IdentityZkVerifiedClaim {}
-
+#[allow(non_snake_case)]
 pub struct IdentityZkProof {
-    claim: IdentityZkClaim,
+    R: CompressedRistretto,
+    s: Scalar,
 }
 
 impl UserKeys {
     pub fn new<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        let private = Scalar::random(rng);
-        let public = private * get_g1();
+        let key = Scalar::random(rng);
+        let public = key * get_g1();
+        let nonce_from_secret = Sha3_512::default().chain(&key.as_bytes()).fixed_result();
+        let mut nonce = [0u8; 32];
+        nonce[..].copy_from_slice(&nonce_from_secret[32..]);
+
+        let private = PrivateKey { key, nonce };
         Self { private, public }
     }
 
@@ -154,10 +180,53 @@ impl UserKeys {
     ///
     /// # Panics
     /// * if there is any
+    #[allow(non_snake_case)]
     pub fn generate_identity_proof(&self) -> IdentityZkProof {
         // generate zkp prove
-        IdentityZkProof::new()
+        let mut h = Sha3_512::new();
+        let R: CompressedRistretto;
+        let r: Scalar;
+        let s: Scalar;
+        let k: Scalar;
+
+        h.input(&self.private.nonce);
+        h.input(PUBLIC_KEY_ZKP_SIG_MSG);
+
+        r = Scalar::from_hash(h);
+        R = (r * get_g1()).compress();
+
+        h = Sha3_512::new();
+        h.input(R.as_bytes());
+        h.input(self.public.compress().as_bytes());
+        h.input(PUBLIC_KEY_ZKP_SIG_MSG);
+
+        k = Scalar::from_hash(h);
+        s = (k * self.private.key) + r;
+
+        IdentityZkProof { R, s }
     }
+}
+
+#[allow(non_snake_case)]
+pub fn verify_user_public_key_zkp_sig(
+    user_public_key: RistrettoPoint,
+    signature: &IdentityZkProof,
+) -> Result<(), String> {
+    let mut h = Sha3_512::new();
+    let R: RistrettoPoint;
+    let k: Scalar;
+    let minus_A = -user_public_key;
+
+    h.input(signature.R.as_bytes());
+    h.input(user_public_key.compress().as_bytes());
+    h.input(PUBLIC_KEY_ZKP_SIG_MSG);
+
+    k = Scalar::from_hash(h);
+    R = k * minus_A + signature.s * get_g1();
+
+    ensure!(R.compress() == signature.R, "ZKP verification error");
+
+    Ok(())
 }
 
 impl IssuerKeys {
@@ -166,26 +235,6 @@ impl IssuerKeys {
         // The only difference between this and UserKey is the base generator.
         let public = private * get_g();
         Self { private, public }
-    }
-}
-
-impl IdentityZkProof {
-    pub fn new() -> Self {
-        // Create the non-interactive proof
-        Self {
-            claim: IdentityZkClaim {},
-        }
-    }
-
-    pub fn verify(&self) -> Result<IdentityZkVerifiedClaim, ()> {
-        // Verify the proov
-        Ok(IdentityZkVerifiedClaim::from(self.claim.clone()))
-    }
-}
-
-impl From<IdentityZkClaim> for IdentityZkVerifiedClaim {
-    fn from(_claim: IdentityZkClaim) -> Self {
-        Self {}
     }
 }
 
@@ -199,4 +248,22 @@ pub fn get_g1() -> RistrettoPoint {
 
 pub fn get_g2() -> RistrettoPoint {
     PedersenGenerators::default().generators[2]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{rngs::StdRng, SeedableRng};
+
+    const SEED: [u8; 32] = [42u8; 32];
+
+    #[test]
+    fn test_signature_scheme() {
+        let mut rng = StdRng::from_seed(SEED);
+        let user_keypair = UserKeys::new(&mut rng);
+
+        let identity_zkp_proof = user_keypair.generate_identity_proof();
+
+        assert!(verify_user_public_key_zkp_sig(user_keypair.public, &identity_zkp_proof).is_ok());
+    }
 }

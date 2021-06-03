@@ -50,7 +50,7 @@ impl CddClaim {
 
         let a =
             Scalar::from_hash(Sha3_512::default().chain((h * w0 + g1 * w1).compress().as_bytes()));
-        let c_1_hat = g2 * user_did + g * user_keypair.private + g1 * o_1_hat;
+        let c_1_hat = g2 * user_did + g * user_keypair.private.key + g1 * o_1_hat;
         let a_1_hat = Scalar::from_hash(
             Sha3_512::default().chain((g * w1 + g1 * w_1_hat).compress().as_bytes()),
         );
@@ -62,7 +62,7 @@ impl CddClaim {
                 .chain(user_did.as_bytes()),
         );
         let r0 = identity_signature_private_key.0 * c + w0;
-        let r1 = w1 - c * user_keypair.private;
+        let r1 = w1 - c * user_keypair.private.key;
         let r_1_hat = w_1_hat - c * o_1_hat;
         Self {
             claim_c_1_hat: c_1_hat,
@@ -98,11 +98,10 @@ impl CddClaim {
             ),
         );
 
-        // TODO: use `ensure!` with proper Error names.
-        if a != self.proof_a {
-            return Err("Failed to prove the knowlegde of user's private key.".into());
-        }
-
+        ensure!(
+            a == self.proof_a,
+            "Failed to prove the knowlegde of user's private key."
+        );
         let a_1_hat = Scalar::from_hash(
             Sha3_512::default().chain(
                 (get_g() * self.proof_r1
@@ -113,13 +112,10 @@ impl CddClaim {
             ),
         );
 
-        // TODO: use `ensure!` with proper Error names.
-        if a_1_hat != self.claim_a_1_hat {
-            return Err(
-                "Failed to prove that the CDD Claim and the certificate use the same private key."
-                    .into(),
-            );
-        }
+        ensure!(
+            a_1_hat == self.claim_a_1_hat,
+            "Failed to prove that the CDD Claim and the certificate use the same private key."
+        );
 
         Ok(())
     }

@@ -26,7 +26,7 @@ impl ScopeClaim {
     ) -> Self {
         let hashed_asset =
             RistrettoPoint::from_hash(Sha3_512::default().chain(scope_did.as_bytes()));
-        let claim = hashed_asset * user_keypair.private;
+        let claim = hashed_asset * user_keypair.private.key;
 
         let s = Scalar::random(rng);
         let t = Scalar::random(rng);
@@ -45,7 +45,7 @@ impl ScopeClaim {
                 .chain(tt.compress().as_bytes())
                 .chain(hashed_asset.compress().as_bytes()),
         );
-        let a = s * c + user_keypair.private;
+        let a = s * c + user_keypair.private.key;
         let b = t * c + cdd_claim.claim_o_1_hat;
 
         Self {

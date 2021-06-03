@@ -151,10 +151,7 @@ pub fn step4(
     let lhs = sigma_a_prime + sigma_b_prime;
     let rhs = (get_g() + h) * sigma_r_prime - (issuer_public_key + sigma_z_prime) * sigma_c_prime;
 
-    if lhs != rhs {
-        // TODO: use `ensure!`
-        return Err("LHS neq RHS".into());
-    }
+    ensure!(lhs == rhs, "LHS neq RHS");
 
     Ok((
         IdentitySignature {
