@@ -4,38 +4,15 @@
 //! amount of information about a user which preserves the privacy of the users even further.
 //!
 //!
-//! The confidential identity libary v2 (CIL2) has the following actors.
+//! The confidential identity libary v2 (CIL2) has the following actors and has four main phases.
 //! 1. User
 //! 2. Issuer: The PUIS system
 //! 3. Identity verifier: The CDD Provider
 //! 4. Claim verifier: The PolyMesh chain
 //!
 //!
-//! The CIL2 has four main phases:
-//! 1. The user communicates with an external identity verifier and obtains a
-//!    fingerprint. This is done outside of this library.
-//! 2. The user creates a private/public key pair using the APIs provided by this library and
-//!    registers the public key with the issuer along with the fingerprint and obtains a certificate.
-//!    This certificate is an attestation of the the identity of the user. This library provides an
-//!    API for creating this certificate. The following apis are related to this phase:
-//!    
-//!    - TODO: list the APIs
-//!    - TODO: instead of listing the APIs, it might be a better idea to merge these descriptions
-//!    into the code below.
 //!
-//! 3. The user creates a CDD Claim and submits it to the chain for verification.
-//!    This library provides an API for creating and verifying the cdd claim. The following apis are
-//!    related to this phase:
-//!    
-//!    - TODO: list the APIs
-//!
-//! 4. The user then creates a SCOPE claim and submits it to the chain for verification.
-//!    This library provides an API for creating and verifying the scope claim. The following apis are
-//!    related to this phase:
-//!    
-//!    - TODO: list the APIs
-//!
-//! Example workflow:
+//! Example workflow, which describes different phases:
 //!
 //! ```
 //! use confidential_identity_v2::{
@@ -47,38 +24,64 @@
 //! use cryptography_core::{RistrettoPoint, Scalar};
 //! use rand::{thread_rng, Rng};
 //!
-//! // ---------------- Done by the user
+//! // ========================= PHASE 1 ============================
+//! // The user communicates with an external identity verifier and obtains a
+//! // fingerprint. This is done OUTSIDE of this library.
+//!
+//! // ========================= PHASE 2 ============================
+//! // The user creates a private/public key pair using the APIs provided by this library and
+//! // registers the public key with the issuer along with the fingerprint and obtains a certificate.
+//! // This certificate is an attestation of the the identity of the user. This library provides an
+//! // API for creating this certificate as shown below.
+//!    
+//! // ---------------- Done by the User.
 //! let mut rng = thread_rng();
-//! let keys = UserKeys::new(&mut rng);
-//! let identity_proof = keys.generate_identity_proof();
-//! // Send `identity_proof` to issuer (PUIS)
-//!
-//! // ---------------- Done by issuer (PUIS)
-//! verify_user_public_key_zkp_sig(keys.public, &identity_proof).expect("Identity verification failed");
-//!
 //! let user_keypair = UserKeys::new(&mut rng);
 //! let user_public_key = user_keypair.public;
+//! let identity_proof = user_keypair.generate_identity_proof();
 //!
-//! // ---------------- Done by the Issuer.
+//! // Send `identity_proof` and `user_public_key` to the Issuer (PUIS).
+//!
+//! // ---------------- Done by the Issuer (PUIS).
+//! verify_user_public_key_zkp_sig(user_public_key, &identity_proof).expect("Identity verification failed.");
+//!
 //! let issuer_keypair = IssuerKeys::new(&mut rng);
 //! let issuer_public_key = issuer_keypair.public;
 //!
+//! // This is the start of a multi-step interactive protocol.
+//! // Issuer side:
 //! let (step1_public, step1_secret) = step1(user_public_key, &issuer_keypair, &mut rng);
+//!
+//! // User side:
 //! let (step2_public, step2_secret) =
 //!     step2(user_public_key, issuer_public_key, step1_public, &mut rng);
+//!
+//! // Issuer side:
 //! let step3_public = step3(step2_public, step1_secret, &issuer_keypair.private);
+//!
+//! // User side:
 //! let (identity_signature, identity_signature_private_key) =
 //!     step4(step3_public, step2_secret, &issuer_public_key).expect("Verification failed!");
 //!
+//! // When needed, PolyMesh can verify the signature using the following.
 //! assert!(
 //!     identity_signature.verify(&issuer_public_key),
 //!     "Signature verification failed!"
 //! );
-//! // Send the `identity_signature` back to the user.
+//! // At this point, `identity_signature` can be used safely by the user and is NOT linked to the
+//! // user's public key.
 //!
-//! // ---------------- Done by the user
+//! // ========================= PHASE 3 ============================
+//! // The user creates a CDD Claim and submits it to the chain for verification.
+//! // This library provides an API for creating and verifying the cdd claim. The following apis are
+//! // related to this phase as shown below.
+//!
+//!    
+//! // ---------------- Done by PolyMesh.
 //! let user_did = Scalar::random(&mut rng);
 //!
+//!
+//! // ---------------- Done by the User.
 //! let cdd_claim = CddClaim::new(
 //!     &identity_signature,
 //!     &identity_signature_private_key,
@@ -87,20 +90,27 @@
 //!     &mut rng,
 //! );
 //!
-//! // send `cdd_claim` to PolMesh
+//! // Send `cdd_claim` to PolyMesh.
 //!
 //! // ---------------- Done by the PolyMesh
 //! cdd_claim
 //!     .verify(&identity_signature, user_did, issuer_public_key)
 //!     .expect("CDD Claim verification failed!");
 //!
-//! //// ---------------- Done by the user
+//! // ========================= PHASE 4 ============================
+//! // The user then creates a SCOPE claim and submits it to the chain for verification.
+//! // This library provides an API for creating and verifying the scope claim. The following apis are
+//! // related to this phase as shown below.
+//!
+//! // ---------------- Done by PolyMesh.
 //! let scope_did = Scalar::random(&mut rng);
 //!
-//! //// send `scope_claim` to PolyMesh
+//! // ---------------- Done by the User.
 //! let scope_claim = ScopeClaim::new(&cdd_claim, scope_did, &user_keypair, &mut rng);
 //!
-//! //// ---------------- Done by the PolyMesh
+//! // Send `scope_claim` to PolyMesh.
+//!
+//! // ---------------- Done by PolyMesh.
 //! scope_claim
 //!     .verify(&cdd_claim, user_did)
 //!     .expect("SCOPE Claim verification failed!");
