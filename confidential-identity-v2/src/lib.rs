@@ -1,5 +1,5 @@
 //! This library is the implementation of the 2nd iteration of the confidential identity system.
-//! The goal of this version is to enable users to create claim with minimal interaction with the
+//! The goal of this version is to enable users to create claims with minimal interaction with the
 //! PUIS and CDD providers. Moreover, in this version PUIS and CDD providers will store the least
 //! amount of information about a user which preserves the privacy of the users even further.
 //!
@@ -8,27 +8,29 @@
 //! 1. User
 //! 2. Issuer: The PUIS system
 //! 3. Identity verifier: The CDD Provider
-//! 4. Claim verifier: PolyMesh chain
+//! 4. Claim verifier: The PolyMesh chain
 //!
 //!
-//! The CIL2 has three main phases:
+//! The CIL2 has four main phases:
 //! 1. The user communicates with an external identity verifier and obtains a
 //!    fingerprint. This is done outside of this library.
-//! 2. The user creates a private/public key pair using the APIs provided by the is library and
-//!    registers the public key with the issuer along with the fingerprint.
-//! 2. [TODO: this should probably be merged into the above] The user then sends the fingerprint
-//!    to the issuer and obtains a certificate, which is an attestation of the the identity of the
-//!    user. This library provides an API for creating this certificate. The following apis are
+//! 2. The user creates a private/public key pair using the APIs provided by this library and
+//!    registers the public key with the issuer along with the fingerprint and obtains a certificate.
+//!    This certificate is an attestation of the the identity of the user. This library provides an
+//!    API for creating this certificate. The following apis are related to this phase:
+//!    
+//!    - TODO: list the APIs
+//!    - TODO: instead of listing the APIs, it might be a better idea to merge these descriptions
+//!    into the code below.
+//!
+//! 3. The user creates a CDD Claim and submits it to the chain for verification.
+//!    This library provides an API for creating and verifying the cdd claim. The following apis are
 //!    related to this phase:
 //!    
 //!    - TODO: list the APIs
-//! 3. The uer creates a CDD Claim and submits it to the chain for verification.
-//!    This library provides an API for creating this certificate. The following apis are
-//!    related to this phase:
-//!    
-//!    - TODO: list the APIs
-//! 4. The user creates a SCOPE claim and submits it to the chain for verification.
-//!    This library provides an API for creating this certificate. The following apis are
+//!
+//! 4. The user then creates a SCOPE claim and submits it to the chain for verification.
+//!    This library provides an API for creating and verifying the scope claim. The following apis are
 //!    related to this phase:
 //!    
 //!    - TODO: list the APIs
@@ -165,6 +167,7 @@ impl UserKeys {
         Self { private, public }
     }
 
+    /// TODO: document all the APIs using the following format.
     /// Hook desc.
     ///
     /// Detailed aoesuthaoesh `arg1` aontseuhonsetahus `arg2`. `out1`
