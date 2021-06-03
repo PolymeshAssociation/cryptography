@@ -10,7 +10,11 @@
 //! folder under `cryptography_core`. The same way that the current types are located at
 //! `cryptography-core/src/cdd_claim/`
 
-use cryptography_core::{RistrettoPoint, Scalar};
+use codec::{Decode, Encode, Error as CodecError, Input, Output};
+use cryptography_core::{
+    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
+    RistrettoPoint, Scalar,
+};
 use rand_core::{CryptoRng, RngCore};
 use sha3::{Digest, Sha3_512};
 
@@ -28,6 +32,51 @@ pub struct CddClaim {
     proof_a: Scalar,
     proof_r0: Scalar,
     proof_r1: Scalar,
+}
+
+impl Encode for CddClaim {
+    #[inline]
+    fn size_hint(&self) -> usize {
+        RistrettoPointEncoder(&self.claim_c_1_hat).size_hint()
+            + ScalarEncoder(&self.claim_o_1_hat).size_hint()
+            + ScalarEncoder(&self.claim_a_1_hat).size_hint()
+            + ScalarEncoder(&self.claim_r_1_hat).size_hint()
+            + ScalarEncoder(&self.proof_a).size_hint()
+            + ScalarEncoder(&self.proof_r0).size_hint()
+            + ScalarEncoder(&self.proof_r1).size_hint()
+    }
+
+    fn encode_to<W: Output>(&self, dest: &mut W) {
+        RistrettoPointEncoder(&self.claim_c_1_hat).encode_to(dest);
+        ScalarEncoder(&self.claim_o_1_hat).encode_to(dest);
+        ScalarEncoder(&self.claim_a_1_hat).encode_to(dest);
+        ScalarEncoder(&self.claim_r_1_hat).encode_to(dest);
+        ScalarEncoder(&self.proof_a).encode_to(dest);
+        ScalarEncoder(&self.proof_r0).encode_to(dest);
+        ScalarEncoder(&self.proof_r1).encode_to(dest);
+    }
+}
+
+impl Decode for CddClaim {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
+        let claim_c_1_hat = <RistrettoPointDecoder>::decode(input)?;
+        let claim_o_1_hat = <ScalarDecoder>::decode(input)?;
+        let claim_a_1_hat = <ScalarDecoder>::decode(input)?;
+        let claim_r_1_hat = <ScalarDecoder>::decode(input)?;
+        let proof_a = <ScalarDecoder>::decode(input)?;
+        let proof_r0 = <ScalarDecoder>::decode(input)?;
+        let proof_r1 = <ScalarDecoder>::decode(input)?;
+
+        Ok(Self {
+            claim_c_1_hat: claim_c_1_hat.0,
+            claim_o_1_hat: claim_o_1_hat.0,
+            claim_a_1_hat: claim_a_1_hat.0,
+            claim_r_1_hat: claim_r_1_hat.0,
+            proof_a: proof_a.0,
+            proof_r0: proof_r0.0,
+            proof_r1: proof_r1.0,
+        })
+    }
 }
 
 impl CddClaim {

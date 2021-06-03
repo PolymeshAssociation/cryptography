@@ -112,7 +112,7 @@
 //!
 //! // ---------------- Done by PolyMesh.
 //! scope_claim
-//!     .verify(&cdd_claim, user_did)
+//!     .verify(&cdd_claim, user_public_key, user_did)
 //!     .expect("SCOPE Claim verification failed!");
 //!
 //! ```

@@ -4,6 +4,7 @@
 //! TODO: double check the `rng`s in the tests and make sure that they are passed mutable.
 
 use crate::{cdd_claim::CddClaim, get_g, get_g1, get_g2, UserKeys};
+use codec::Encode;
 use cryptography_core::{RistrettoPoint, Scalar};
 use rand_core::{CryptoRng, RngCore};
 use sha3::{Digest, Sha3_512};
@@ -35,10 +36,11 @@ impl ScopeClaim {
 
         // Compute challenge c using fiat-shamir from the input data
         // TODO: Very important: Carefully think about what needs to contribute to this challenge.
-        //       1. Should `ccd_claim`, `user_keypair.public` also be added?
-        //       2. Should we use Merlin transcript and have a history of full protocol?
+        //       To remove any guess work, I suggest using  Should we use Merlin transcript and have a history of full protocol?
         let c = Scalar::from_hash(
             Sha3_512::default()
+                .chain(cdd_claim.encode())
+                .chain(user_keypair.public.compress().as_bytes())
                 .chain(scope_did.as_bytes())
                 .chain(claim.compress().as_bytes())
                 .chain(ss.compress().as_bytes())
@@ -58,7 +60,12 @@ impl ScopeClaim {
         }
     }
 
-    pub fn verify(&self, cdd_claim: &CddClaim, user_did: Scalar) -> Result<(), String> {
+    pub fn verify(
+        &self,
+        cdd_claim: &CddClaim,
+        user_public_key: RistrettoPoint,
+        user_did: Scalar,
+    ) -> Result<(), String> {
         let statement_1 = self.claim;
         let statement_2 = cdd_claim.claim_c_1_hat - (get_g2() * user_did);
         let hashed_asset =
@@ -67,6 +74,8 @@ impl ScopeClaim {
         // Compute challenge c using fiat-shamir from the input data
         let c = Scalar::from_hash(
             Sha3_512::default()
+                .chain(cdd_claim.encode())
+                .chain(user_public_key.compress().as_bytes())
                 .chain(self.scope_did.as_bytes())
                 .chain(self.claim.compress().as_bytes())
                 .chain(self.proof_ss.compress().as_bytes())
@@ -150,7 +159,7 @@ mod tests {
         let scope_claim = ScopeClaim::new(&cdd_claim, scope_did, &user_keypair, &mut rng);
 
         scope_claim
-            .verify(&cdd_claim, user_did)
+            .verify(&cdd_claim, user_keypair.public, user_did)
             .expect("SCOPE Claim verification failed!");
     }
 }
