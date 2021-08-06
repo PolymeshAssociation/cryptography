@@ -24,15 +24,15 @@ byteorder = { version = "^1.2.3", default-features = false, features = ["i128"] 
 criterion = { version = "0.3", optional = true }
 
 # Crypto
-sha3 = { version = "0.8", default-features = false }
-blake2 = { version = "0.9.0", default-features = false }
+sha3 = { version = "0.9", default-features = false }
+blake2 = { version = "0.9", default-features = false }
 
 rand_core = { version = "0.5", default-features = false, features = ["alloc"] }
 rand = { version = "0.7", default-features = false, features = ["alloc"] }
 getrandom = { version = "0.1.14", default-features = false, optional = true }
 
-curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly", "alloc"] }
-schnorrkel = { git = "https://github.com/PolymathNetwork/schnorrkel.git", branch = "fix-simd-issue", default-features = false }
+curve25519-dalek = { version = "3.2", default-features = false, features = ["nightly", "alloc"] }
+schnorrkel = { version = "0.10", default-features = false }
 
 merlin = { version = "2.0.0", default-features = false }
 

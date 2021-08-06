@@ -100,7 +100,7 @@ impl Decode for CipherTextWithHint {
 // Generate a one-time-pad from Hash(key) and byte-wise xor it with the data.
 fn xor_with_one_time_pad(key: RistrettoPoint, data: &[u8; 32]) -> [u8; 32] {
     let key_bytes: [u8; 32] = key.compress().to_bytes();
-    let hashed_key = Sha3_256::default().chain(key_bytes).fixed_result();
+    let hashed_key = Sha3_256::default().chain(key_bytes).finalize_fixed();
 
     let mut result = [0u8; 32];
     for index in 0..32 {

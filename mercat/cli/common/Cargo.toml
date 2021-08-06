@@ -24,7 +24,7 @@ regex = { version = "1.3.9" }
 
 # Crypto
 rand = { version = "0.7.3", features = ["getrandom", "alloc"] }
-curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly", "u64_backend", "alloc", "serde"] }
+curve25519-dalek = { version = "3.2", default-features = false, features = ["nightly", "alloc"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.10"

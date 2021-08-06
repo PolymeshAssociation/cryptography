@@ -199,7 +199,7 @@ impl From<ScopeClaimProofData> for ProofKeyPair {
         let nonce = Sha3_256::default()
             .chain("nonce")
             .chain(&secret_key_scalar.as_bytes())
-            .fixed_result();
+            .finalize_fixed();
 
         let mut exported_private_key = [0u8; 64];
         exported_private_key[..32].copy_from_slice(secret_key_scalar.as_bytes());
