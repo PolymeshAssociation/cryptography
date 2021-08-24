@@ -24,4 +24,4 @@ failure = { version = "0.1.7" }
 
 # Crypto
 rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
-curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly", "u64_backend", "alloc", "serde"] }
+curve25519-dalek = { version = "3.2", default-features = false, features = ["nightly", "alloc"] }

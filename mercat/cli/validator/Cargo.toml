@@ -22,6 +22,6 @@ serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 # Crypto
-curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly", "u64_backend"] }
+curve25519-dalek = { version = "3.2", default-features = false, features = ["nightly", "alloc"] }
 rand_core = { version = "0.5", default-features = false }
 rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }

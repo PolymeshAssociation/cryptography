@@ -19,7 +19,7 @@ path = ".."
 
 [dependencies]
 libc = "^0.2"
-curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek.git", branch = "v2-packed-simd", default-features = false, features = ["nightly", "u64_backend"] }
+curve25519-dalek = { version = "3.2", default-features = false, features = ["nightly", "alloc"] }
 rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
 rand_core = { version = "0.5", default-features = false}
 

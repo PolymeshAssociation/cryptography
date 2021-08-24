@@ -35,7 +35,7 @@ impl SecretKey {
     ///
     /// Here, we do the same for the nonce, but use the secret key as is.
     pub fn new(key: Scalar) -> Self {
-        let nonce_from_secret = Sha3_512::default().chain(&key.as_bytes()).fixed_result();
+        let nonce_from_secret = Sha3_512::default().chain(&key.as_bytes()).finalize_fixed();
 
         let mut nonce = [0u8; 32];
         nonce[..].copy_from_slice(&nonce_from_secret[32..]);
@@ -102,16 +102,16 @@ impl SecretKey {
         let s: Scalar;
         let k: Scalar;
 
-        h.input(&self.nonce);
-        h.input(&message);
+        h.update(&self.nonce);
+        h.update(&message);
 
         r = Scalar::from_hash(h);
         R = (r * base_point).compress();
 
         h = Sha3_512::new();
-        h.input(R.as_bytes());
-        h.input(public_key.key.compress().as_bytes());
-        h.input(&message);
+        h.update(R.as_bytes());
+        h.update(public_key.key.compress().as_bytes());
+        h.update(&message);
 
         k = Scalar::from_hash(h);
         s = (k * self.key) + r;
@@ -138,9 +138,9 @@ impl PublicKey {
         let k: Scalar;
         let minus_A = -self.key;
 
-        h.input(signature.R.as_bytes());
-        h.input(self.key.compress().as_bytes());
-        h.input(&message);
+        h.update(signature.R.as_bytes());
+        h.update(self.key.compress().as_bytes());
+        h.update(&message);
 
         k = Scalar::from_hash(h);
         R = k * minus_A + signature.s * base_point;
