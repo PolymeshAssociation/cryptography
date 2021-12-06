@@ -48,6 +48,7 @@ use cryptography_core::{
 };
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_core::{CryptoRng, RngCore};
+use scale_info::{build::Fields, Path, Type, TypeInfo};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sp_std::prelude::*;
@@ -108,6 +109,54 @@ pub struct ScopeClaimProof {
     pub proof_scope_id_wellformed: Signature,
     pub proof_scope_id_cdd_id_match: ZkProofData,
     pub scope_id: RistrettoPoint,
+}
+
+impl TypeInfo for ScopeClaimProof {
+    type Identity = Self;
+    fn type_info() -> Type {
+        #![allow(dead_code, non_snake_case)]
+
+        #[derive(TypeInfo)]
+        struct FieldElement([u64; 5]);
+        #[derive(TypeInfo)]
+        struct EdwardsPoint {
+            X: FieldElement,
+            Y: FieldElement,
+            Z: FieldElement,
+            T: FieldElement,
+        }
+        #[derive(TypeInfo)]
+        struct RistrettoPoint(EdwardsPoint);
+
+        #[derive(TypeInfo)]
+        struct CompressedRistretto([u8; 32]);
+        #[derive(TypeInfo)]
+        struct Scalar {
+            bytes: [u8; 32],
+        }
+
+        #[derive(TypeInfo)]
+        struct Signature {
+            R: CompressedRistretto,
+            s: Scalar,
+        }
+
+        const ZK_PROOF_DATA_CHG_RESPONSES: usize = 2;
+        #[derive(TypeInfo)]
+        struct ZkProofData {
+            challenge_responses: [Scalar; ZK_PROOF_DATA_CHG_RESPONSES],
+            subtract_expressions_res: RistrettoPoint,
+            blinded_scope_did_hash: RistrettoPoint,
+        }
+
+        Type::builder()
+            .path(Path::new("ScopeClaimProof", module_path!()))
+            .composite(Fields::named()
+                .field(|f| f.ty::<Signature>().name("proof_scope_id_wellformed").type_name("Signature"))
+                .field(|f| f.ty::<ZkProofData>().name("proof_scope_id_cdd_id_match").type_name("ZkProofData"))
+                .field(|f| f.ty::<RistrettoPoint>().name("scope_id").type_name("RistrettoPoint"))
+            )
+    }
 }
 
 impl Encode for ScopeClaimProof {
