@@ -10,8 +10,8 @@ exclude = [".gitignore"]
 
 [dependencies]
 # Substrate
-sp-std = { version = "4.0.0-dev", default-features = false }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+sp-std = { version = "4.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 
 # Common
 serde = { version = "1.0.105", default-features = false, features = ["derive"], optional = true }

@@ -20,6 +20,6 @@ members = [
 [patch.crates-io]
 blake2 = { git = "https://github.com/PolymathNetwork/hashes", branch = "master" }
 schnorrkel = { git = "https://github.com/PolymathNetwork/schnorrkel", branch = "rebase-head" }
-sp-io = { git = "https://github.com/PolymathNetwork/substrate", branch = "polymesh-develop" }
-sp-std = { git = "https://github.com/PolymathNetwork/substrate", branch = "polymesh-develop" }
+sp-io = { git = "https://github.com/PolymathNetwork/substrate", branch = "polymesh-monthly-2022-05" }
+sp-std = { git = "https://github.com/PolymathNetwork/substrate", branch = "polymesh-monthly-2022-05" }
 curve25519-dalek = { git = "https://github.com/PolymathNetwork/curve25519-dalek", branch = "master" }
