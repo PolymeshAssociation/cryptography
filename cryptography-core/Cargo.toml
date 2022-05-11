@@ -31,7 +31,7 @@ getrandom = { version = "0.2.6", default-features = false, optional = true}
 curve25519-dalek = { version = "3.2", default-features = false, features = ["nightly", "alloc"] }
 bulletproofs = { git = "https://github.com/PolymathNetwork/bulletproofs.git", branch = "bump-dalek", default-features = false, features = ["zeroize"] }
 
-merlin = { version = "2.0.0", default-features = false }
+merlin = { version = "3.0.0", default-features = false }
 
 [dev-dependencies]
 wasm-bindgen-test = { version = "0.3.10"}
@@ -72,6 +72,7 @@ std = [
 	# Crypto
 	"rand_core/std",
 	"rand/std",
+	"rand/std_rng",
 	"bulletproofs/std",
 	# Other
 	"codec/std",
