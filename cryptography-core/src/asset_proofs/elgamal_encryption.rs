@@ -11,6 +11,7 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
+#[cfg(feature = "std")]
 use rand::rngs::StdRng;
 use rand_core::{CryptoRng, RngCore};
 
@@ -50,6 +51,7 @@ impl CommitmentWitness {
     }
 }
 
+#[cfg(feature = "std")]
 impl From<(Scalar, &mut StdRng)> for CommitmentWitness {
     fn from(v: (Scalar, &mut StdRng)) -> Self {
         CommitmentWitness {
