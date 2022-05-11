@@ -73,6 +73,7 @@ std = [
 	"cryptography_core/std",
 	"rand_core/std",
 	"rand/std",
+	"rand/std_rng",
 	"blake2/std",
 	"blake2/simd",
 	# Other
