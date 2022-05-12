@@ -23,7 +23,7 @@ criterion = { version = "0.3", optional = true }
 
 # Crypto
 sha3 = { version = "0.9", default-features = false }
-blake2 = { version = "0.9", default-features = false }
+blake2 = { version = "0.10.2", default-features = false }
 
 rand_core = { version = "0.6", default-features = false}
 rand = { version = "0.8", default-features = false }

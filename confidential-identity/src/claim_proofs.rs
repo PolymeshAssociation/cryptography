@@ -55,14 +55,12 @@ use sp_std::prelude::*;
 
 /// Create a scalar from a slice of data.
 pub fn slice_to_scalar(data: &[u8]) -> Scalar {
-    let mut hash = [0u8; 64];
-    hash.copy_from_slice(Blake2b::digest(data).as_slice());
+    let hash = Blake2b::digest(data).into();
     Scalar::from_bytes_mod_order_wide(&hash)
 }
 
 pub fn slice_to_ristretto_point(data: &[u8]) -> RistrettoPoint {
-    let mut hash = [0u8; 64];
-    hash.copy_from_slice(Blake2b::digest(data).as_slice());
+    let hash = Blake2b::digest(data).into();
     RistrettoPoint::from_uniform_bytes(&hash)
 }
 
@@ -296,9 +294,9 @@ fn gen_zkp<R: RngCore + CryptoRng>(
     let blinded_scope_did_hash = rands[0] * (g[1] - scope_did_hash) + rands[1] * g[2];
 
     let challenge: [u8; 32] = Blake2s::default()
-        .chain(blinded_scope_did_hash.compress().to_bytes())
-        .chain(scope_id.compress().to_bytes())
-        .chain(expr2.compress().to_bytes())
+        .chain_update(blinded_scope_did_hash.compress().to_bytes())
+        .chain_update(scope_id.compress().to_bytes())
+        .chain_update(expr2.compress().to_bytes())
         .finalize()
         .into();
     let challenge = slice_to_scalar(&challenge);
@@ -327,9 +325,9 @@ fn verify_zkp(
     let expr2 = cdd_id - investor_did * g[0];
 
     let challenge: [u8; 32] = Blake2s::default()
-        .chain(proof.blinded_scope_did_hash.compress().to_bytes())
-        .chain(scope_id.compress().to_bytes())
-        .chain(expr2.compress().to_bytes())
+        .chain_update(proof.blinded_scope_did_hash.compress().to_bytes())
+        .chain_update(scope_id.compress().to_bytes())
+        .chain_update(expr2.compress().to_bytes())
         .finalize()
         .into();
     let challenge = slice_to_scalar(&challenge);
