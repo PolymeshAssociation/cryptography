@@ -59,8 +59,7 @@ lazy_static! {
 /// Create a scalar from a slice of data.
 fn slice_to_scalar(data: &[u8]) -> Scalar {
     use blake2::{Blake2b, Digest};
-    let mut hash = [0u8; 64];
-    hash.copy_from_slice(Blake2b::digest(data).as_slice());
+    let hash = Blake2b::digest(data).into();
     Scalar::from_bytes_mod_order_wide(&hash)
 }
 
