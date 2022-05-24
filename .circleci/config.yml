@@ -26,7 +26,7 @@ jobs:
             - v2-cli-cache-{{ checksum "./rust.version" }}
       - run:
           name: Build nightly
-          command: cargo +nightly build
+          command: cargo build
           no_output_timeout: 4h
       - save_cache:
           key: v2-nightly-cache-{{ checksum "./rust.version" }}
@@ -49,7 +49,7 @@ jobs:
       - run:
           name: Run tests
           command: >-
-            RUST_LOG=info cargo +nightly test
+            RUST_LOG=info cargo test
           no_output_timeout: 30m
       - save_cache:
           key: v6-test-cache-{{ checksum "./rust.version" }}
@@ -74,15 +74,15 @@ jobs:
           command: >-
             cd cryptography-core &&
             echo "Wasm build (features 'no_std' & 'u32_backend')"  &&
-            cargo +nightly build --target wasm32-unknown-unknown --bench elgamal_decryption &&
-            cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
+            cargo build --target wasm32-unknown-unknown --bench elgamal_decryption &&
+            cargo build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
 
             cd ../mercat &&
             echo "Wasm build (features 'no_std' & 'u32_backend')"  &&
-            cargo +nightly build --target wasm32-unknown-unknown --bench mercat_account &&
-            cargo +nightly build --target wasm32-unknown-unknown --bench mercat_asset &&
-            cargo +nightly build --target wasm32-unknown-unknown --bench mercat_transaction &&
-            cargo +nightly build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
+            cargo build --target wasm32-unknown-unknown --bench mercat_account &&
+            cargo build --target wasm32-unknown-unknown --bench mercat_asset &&
+            cargo build --target wasm32-unknown-unknown --bench mercat_transaction &&
+            cargo build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&
 
             echo "TODO: add wasm tests"
           no_output_timeout: 30m
@@ -106,7 +106,7 @@ jobs:
             - v6-bench-cache-{{ checksum "./rust.version" }}
       - run:
           name: Run tests
-          command: cargo +nightly bench
+          command: cargo bench
           no_output_timeout: 30m
       - save_cache:
           key: v6-bench-cache-{{ checksum "./rust.version" }}
