@@ -2,7 +2,7 @@ version: 2
 jobs:
   lint:
     docker:
-      - image: maxsam4/rust
+      - image: polymathnet/rust:debian-nightly-2022-05-10
     environment:
       VERBOSE: "1"
     steps:
@@ -12,7 +12,7 @@ jobs:
           command: ./scripts/lint
   build:
     docker:
-      - image: maxsam4/rust
+      - image: polymathnet/rust:debian-nightly-2022-05-10
     environment:
       VERBOSE: "1"
     steps:
@@ -22,7 +22,6 @@ jobs:
           command: rustc --version > rust.version
       - restore_cache:
           keys:
-            - v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
             - v2-nightly-cache-{{ checksum "./rust.version" }}
             - v2-cli-cache-{{ checksum "./rust.version" }}
       - run:
@@ -30,13 +29,13 @@ jobs:
           command: cargo +nightly build
           no_output_timeout: 4h
       - save_cache:
-          key: v2-nightly-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+          key: v2-nightly-cache-{{ checksum "./rust.version" }}
           paths:
             - "~/.cargo"
             - "./target"
   test:
     docker:
-      - image: maxsam4/rust
+      - image: polymathnet/rust:debian-nightly-2022-05-10
     environment:
       VERBOSE: "1"
     steps:
@@ -46,7 +45,6 @@ jobs:
           command: rustc --version > rust.version
       - restore_cache:
           keys:
-            - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
             - v6-test-cache-{{ checksum "./rust.version" }}
       - run:
           name: Run tests
@@ -63,13 +61,13 @@ jobs:
             
           no_output_timeout: 30m
       - save_cache:
-          key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+          key: v6-test-cache-{{ checksum "./rust.version" }}
           paths:
             - "~/.cargo"
             - "./target"
   build_wasm:
     docker:
-      - image: maxsam4/rust
+      - image: polymathnet/rust:debian-nightly-2022-05-10
     environment:
       VERBOSE: "1"
     steps:
@@ -79,7 +77,6 @@ jobs:
           command: rustc --version > rust.version
       - restore_cache:
           keys:
-            - v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
             - v6-test-cache-{{ checksum "./rust.version" }}
       - run:
           name: Run tests
@@ -99,13 +96,13 @@ jobs:
             echo "TODO: add wasm tests"
           no_output_timeout: 30m
       - save_cache:
-          key: v6-test-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+          key: v6-test-cache-{{ checksum "./rust.version" }}
           paths:
             - "~/.cargo"
             - "./target"
   bench:
     docker:
-      - image: maxsam4/rust
+      - image: polymathnet/rust:debian-nightly-2022-05-10
     environment:
       VERBOSE: "1"
     steps:
@@ -115,14 +112,13 @@ jobs:
           command: rustc --version > rust.version
       - restore_cache:
           keys:
-            - v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
             - v6-bench-cache-{{ checksum "./rust.version" }}
       - run:
           name: Run tests
           command: cargo +nightly bench
           no_output_timeout: 30m
       - save_cache:
-          key: v6-bench-cache-{{ checksum "./rust.version" }}-{{ checksum "./Cargo.lock" }}
+          key: v6-bench-cache-{{ checksum "./rust.version" }}
           paths:
             - "~/.cargo"
             - "./target"
