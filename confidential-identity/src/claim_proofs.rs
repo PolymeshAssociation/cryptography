@@ -44,11 +44,17 @@ use blake2::{Blake2b, Blake2s, Digest};
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use cryptography_core::{
     cdd_claim::pedersen_commitments::{generate_blinding_factor, PedersenGenerators},
-    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
+    codec_wrapper::{
+        RISTRETTO_POINT_SIZE, SCALAR_SIZE,
+        RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder,
+    },
 };
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_core::{CryptoRng, RngCore};
-use scale_info::TypeInfo;
+use scale_info::{
+    build::Fields,
+    Path, Type, TypeInfo,
+};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sp_std::prelude::*;
@@ -101,7 +107,7 @@ pub struct ScopeClaimProofData {
 /// Contains the Zero Knowledge proof and the proof of wellformedness.
 /// This is the construct that the investors will use to generate
 /// claim proofs.
-#[derive(Debug, Clone, PartialEq, Copy, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ScopeClaimProof {
     pub proof_scope_id_wellformed: Signature,
@@ -138,10 +144,23 @@ impl Decode for ScopeClaimProof {
     }
 }
 
+impl TypeInfo for ScopeClaimProof {
+    type Identity = Self;
+    fn type_info() -> Type {
+        Type::builder()
+            .path(Path::new("ScopeClaimProof", module_path!()))
+            .composite(Fields::named()
+                .field(|f| f.ty::<Signature>().name("proof_scope_id_wellformed").type_name("Signature"))
+                .field(|f| f.ty::<ZkProofData>().name("proof_scope_id_cdd_id_match").type_name("ZkProofData"))
+                .field(|f| f.ty::<[u8; RISTRETTO_POINT_SIZE]>().name("scope_id").type_name("CompressedRistretto"))
+            )
+    }
+}
+
 const ZK_PROOF_DATA_CHG_RESPONSES: usize = 2;
 
 /// Stores the zero knowlegde proof data for scope_id and cdd_id matching.
-#[derive(Debug, Clone, PartialEq, Copy, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ZkProofData {
     challenge_responses: [Scalar; ZK_PROOF_DATA_CHG_RESPONSES],
@@ -178,6 +197,19 @@ impl Decode for ZkProofData {
             subtract_expressions_res: subtract_expressions_res_decoder.0,
             blinded_scope_did_hash: blinded_scope_did_hash_decoder.0,
         })
+    }
+}
+
+impl TypeInfo for ZkProofData {
+    type Identity = Self;
+    fn type_info() -> Type {
+        Type::builder()
+            .path(Path::new("ZkProofData", module_path!()))
+            .composite(Fields::named()
+                .field(|f| f.ty::<[[u8; SCALAR_SIZE]; ZK_PROOF_DATA_CHG_RESPONSES]>().name("challenge_responses").type_name("[Scalar; ZK_PROOF_DATA_CHG_RESPONSES]"))
+                .field(|f| f.ty::<[u8; RISTRETTO_POINT_SIZE]>().name("subtract_expressions_res").type_name("CompressedRistretto"))
+                .field(|f| f.ty::<[u8; RISTRETTO_POINT_SIZE]>().name("blinded_scope_did_hash").type_name("CompressedRistretto"))
+            )
     }
 }
 

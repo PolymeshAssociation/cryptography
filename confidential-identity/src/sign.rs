@@ -3,6 +3,7 @@
 
 use crate::{
     cryptography_core::codec_wrapper::{
+        RISTRETTO_POINT_SIZE, SCALAR_SIZE,
         CompressedRistrettoDecoder, CompressedRistrettoEncoder, ScalarDecoder, ScalarEncoder,
     },
     errors::{ErrorKind, Fallible},
@@ -11,6 +12,10 @@ use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
+};
+use scale_info::{
+    build::Fields,
+    Path, Type, TypeInfo,
 };
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -51,7 +56,7 @@ pub struct PublicKey {
 }
 
 /// Stores the Schnorr signature for verifying the wellformedness of scope_id.
-#[derive(Debug, Clone, PartialEq, Copy, scale_info::TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[allow(non_snake_case)]
 pub struct Signature {
@@ -80,6 +85,18 @@ impl Decode for Signature {
             R: r_decoder.0,
             s: s_decoder.0,
         })
+    }
+}
+
+impl TypeInfo for Signature {
+    type Identity = Self;
+    fn type_info() -> Type {
+        Type::builder()
+            .path(Path::new("Signature", module_path!()))
+            .composite(Fields::named()
+                .field(|f| f.ty::<[u8; RISTRETTO_POINT_SIZE]>().name("r").type_name("CompressedRistretto"))
+                .field(|f| f.ty::<[u8; SCALAR_SIZE]>().name("s").type_name("Scalar"))
+            )
     }
 }
 
