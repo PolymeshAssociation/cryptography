@@ -3,8 +3,8 @@
 
 use crate::{
     cryptography_core::codec_wrapper::{
-        RISTRETTO_POINT_SIZE, SCALAR_SIZE,
         CompressedRistrettoDecoder, CompressedRistrettoEncoder, ScalarDecoder, ScalarEncoder,
+        RISTRETTO_POINT_SIZE, SCALAR_SIZE,
     },
     errors::{ErrorKind, Fallible},
 };
@@ -13,10 +13,7 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
 };
-use scale_info::{
-    build::Fields,
-    Path, Type, TypeInfo,
-};
+use scale_info::{build::Fields, Path, Type, TypeInfo};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sha3::{digest::FixedOutput, Digest, Sha3_512};
@@ -93,9 +90,14 @@ impl TypeInfo for Signature {
     fn type_info() -> Type {
         Type::builder()
             .path(Path::new("Signature", module_path!()))
-            .composite(Fields::named()
-                .field(|f| f.ty::<[u8; RISTRETTO_POINT_SIZE]>().name("r").type_name("CompressedRistretto"))
-                .field(|f| f.ty::<[u8; SCALAR_SIZE]>().name("s").type_name("Scalar"))
+            .composite(
+                Fields::named()
+                    .field(|f| {
+                        f.ty::<[u8; RISTRETTO_POINT_SIZE]>()
+                            .name("r")
+                            .type_name("CompressedRistretto")
+                    })
+                    .field(|f| f.ty::<[u8; SCALAR_SIZE]>().name("s").type_name("Scalar")),
             )
     }
 }

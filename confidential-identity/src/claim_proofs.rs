@@ -45,16 +45,13 @@ use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use cryptography_core::{
     cdd_claim::pedersen_commitments::{generate_blinding_factor, PedersenGenerators},
     codec_wrapper::{
-        RISTRETTO_POINT_SIZE, SCALAR_SIZE,
         RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder,
+        RISTRETTO_POINT_SIZE, SCALAR_SIZE,
     },
 };
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 use rand_core::{CryptoRng, RngCore};
-use scale_info::{
-    build::Fields,
-    Path, Type, TypeInfo,
-};
+use scale_info::{build::Fields, Path, Type, TypeInfo};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use sp_std::prelude::*;
@@ -149,10 +146,23 @@ impl TypeInfo for ScopeClaimProof {
     fn type_info() -> Type {
         Type::builder()
             .path(Path::new("ScopeClaimProof", module_path!()))
-            .composite(Fields::named()
-                .field(|f| f.ty::<Signature>().name("proof_scope_id_wellformed").type_name("Signature"))
-                .field(|f| f.ty::<ZkProofData>().name("proof_scope_id_cdd_id_match").type_name("ZkProofData"))
-                .field(|f| f.ty::<[u8; RISTRETTO_POINT_SIZE]>().name("scope_id").type_name("CompressedRistretto"))
+            .composite(
+                Fields::named()
+                    .field(|f| {
+                        f.ty::<Signature>()
+                            .name("proof_scope_id_wellformed")
+                            .type_name("Signature")
+                    })
+                    .field(|f| {
+                        f.ty::<ZkProofData>()
+                            .name("proof_scope_id_cdd_id_match")
+                            .type_name("ZkProofData")
+                    })
+                    .field(|f| {
+                        f.ty::<[u8; RISTRETTO_POINT_SIZE]>()
+                            .name("scope_id")
+                            .type_name("CompressedRistretto")
+                    }),
             )
     }
 }
@@ -205,10 +215,23 @@ impl TypeInfo for ZkProofData {
     fn type_info() -> Type {
         Type::builder()
             .path(Path::new("ZkProofData", module_path!()))
-            .composite(Fields::named()
-                .field(|f| f.ty::<[[u8; SCALAR_SIZE]; ZK_PROOF_DATA_CHG_RESPONSES]>().name("challenge_responses").type_name("[Scalar; ZK_PROOF_DATA_CHG_RESPONSES]"))
-                .field(|f| f.ty::<[u8; RISTRETTO_POINT_SIZE]>().name("subtract_expressions_res").type_name("CompressedRistretto"))
-                .field(|f| f.ty::<[u8; RISTRETTO_POINT_SIZE]>().name("blinded_scope_did_hash").type_name("CompressedRistretto"))
+            .composite(
+                Fields::named()
+                    .field(|f| {
+                        f.ty::<[[u8; SCALAR_SIZE]; ZK_PROOF_DATA_CHG_RESPONSES]>()
+                            .name("challenge_responses")
+                            .type_name("[Scalar; ZK_PROOF_DATA_CHG_RESPONSES]")
+                    })
+                    .field(|f| {
+                        f.ty::<[u8; RISTRETTO_POINT_SIZE]>()
+                            .name("subtract_expressions_res")
+                            .type_name("CompressedRistretto")
+                    })
+                    .field(|f| {
+                        f.ty::<[u8; RISTRETTO_POINT_SIZE]>()
+                            .name("blinded_scope_did_hash")
+                            .type_name("CompressedRistretto")
+                    }),
             )
     }
 }
