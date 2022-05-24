@@ -17,7 +17,7 @@ hex = { version = "0.4.2" }
 # Crypto
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
 rand_core = { version = "0.6", default-features = false}
-curve25519-dalek = { version = "3.2", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
 
 # Only binaries
 structopt = { version = "0.3", default-features = false }

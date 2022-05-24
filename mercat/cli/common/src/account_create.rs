@@ -38,7 +38,7 @@ pub fn process_create_account(
     if cheat {
         // To simplify the cheating selection process, we randomly choose a cheating strategy,
         // instead of requiring the caller to know of all the different cheating strategies.
-        let n: u32 = rng.gen_range(0, 2);
+        let n: u32 = rng.gen_range(0..2);
         match n {
             0 => {
                 info!("CLI log: tx-{}: Cheating by overwriting the asset id of the account. Correct ticker: {} and asset id: {:?}",

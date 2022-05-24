@@ -23,6 +23,6 @@ base64 = { version = "0.12.1" }
 failure = { version = "0.1.7" }
 
 # Crypto
-rand = { version = "0.7.3", features = ["wasm-bindgen", "getrandom", "alloc"], default-features = false }
+rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
 hex = { version = "0.4.2" }
-curve25519-dalek = { version = "3.2", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
