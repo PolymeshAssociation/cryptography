@@ -69,7 +69,7 @@ pub fn process_issue_asset(
     let mut amount = amount;
     // To simplify the cheating selection process, we randomly choose a cheating strategy,
     // instead of requiring the caller to know of all the different cheating strategies.
-    let cheating_strategy: u32 = rng.gen_range(1, 2); // TODO: CRYP-111: see below
+    let cheating_strategy: u32 = rng.gen_range(1..2); // TODO: CRYP-111: see below
 
     // The first cheating strategies make changes to the input, while the 2nd one
     // changes the output.

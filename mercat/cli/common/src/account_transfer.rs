@@ -115,7 +115,7 @@ pub fn process_create_tx(
     let mut amount = amount;
     // To simplify the cheating selection process, we randomly choose a cheating strategy,
     // instead of requiring the caller to know of all the different cheating strategies.
-    let cheating_strategy: u32 = rng.gen_range(0, 2);
+    let cheating_strategy: u32 = rng.gen_range(0..2);
 
     // The first cheating strategies make changes to the input, while the subsequent ones
     // changes the output.
@@ -276,7 +276,7 @@ pub fn process_finalize_tx(
     let mut amount = amount;
     // To simplify the cheating selection process, we randomly choose a cheating strategy,
     // instead of requiring the caller to know of all the different cheating strategies.
-    let cheating_strategy: u32 = rng.gen_range(0, 2);
+    let cheating_strategy: u32 = rng.gen_range(0..2);
 
     // The first cheating strategies make changes to the input, while the 2nd one
     // changes the output.

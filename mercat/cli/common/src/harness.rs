@@ -539,7 +539,7 @@ impl TransactionMode {
                 let mut seq: Vec<StepFunc> = vec![];
 
                 while seqs.len() != 0 {
-                    let next = rng.gen_range(0, seqs.len());
+                    let next = rng.gen_range(0..seqs.len());
                     if seqs[next].len() == 0 {
                         seqs.remove(next);
                         continue;

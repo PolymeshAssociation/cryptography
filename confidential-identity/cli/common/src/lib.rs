@@ -27,8 +27,8 @@ pub struct Proof {
 /// Returns the message used for checking the proof.
 pub fn make_message(investor_did: &InvestorDID, scope_did: &ScopeDID) -> [u8; 32] {
     Blake2s::default()
-        .chain(investor_did)
-        .chain(scope_did)
+        .chain_update(investor_did)
+        .chain_update(scope_did)
         .finalize()
         .into()
 }
