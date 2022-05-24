@@ -19,7 +19,7 @@ path = ".."
 
 [dependencies]
 libc = "^0.2"
-curve25519-dalek = { version = "3.2", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
 schnorrkel = { version = "0.10", default-features = false }
 
 [build-dependencies]

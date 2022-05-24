@@ -11,5 +11,5 @@ serde = { version = "1.0.105", features = ["derive"] }
 serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]}
 
 # Crypto
-curve25519-dalek = { version = "3.2", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
 blake2 = { version = "0.10.2", default-features = false }
