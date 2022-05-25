@@ -53,7 +53,7 @@ jobs:
 
             cd confidential-identity/wasm &&
             cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack &&
-            rustup run nightly wasm-pack build --release --target nodejs &&
+            wasm-pack build --release --target nodejs &&
 
             cd examples &&
             npm install &&

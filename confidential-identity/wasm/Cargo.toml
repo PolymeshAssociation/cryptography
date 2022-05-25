@@ -14,6 +14,7 @@ crate-type = ["cdylib"]
 confidential_identity = { path = ".." }
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
 rand_core = { version = "0.6", default-features = false}
+getrandom = { version = "0.2.6", default-features = false, features = ["js"] }
 curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
 blake2 = { version = "0.10.2", default-features = false }
 serde = { version = "1.0.105", features = ["derive"] }
