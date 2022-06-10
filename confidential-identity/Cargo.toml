@@ -29,6 +29,7 @@ blake2 = { version = "0.10.2", default-features = false }
 
 rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 rand = { version = "0.8", default-features = false, features = ["alloc"] }
+rand_chacha = { version = "0.3.1", default-features = false }
 getrandom = { version = "0.2.6", default-features = false, optional = true }
 
 curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
@@ -72,6 +73,7 @@ std = [
 	"rand_core/std",
 	"rand/std",
 	"rand/std_rng",
+	"rand_chacha/std",
 	"blake2/std",
 	"blake2/simd",
 	# Other
