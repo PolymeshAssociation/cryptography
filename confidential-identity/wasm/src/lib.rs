@@ -3,7 +3,8 @@ use confidential_identity::{
     claim_proofs::{Investor, Provider},
     mocked, CddClaimData, InvestorTrait, ProviderTrait, ScopeClaimData,
 };
-use rand::{rngs::StdRng, SeedableRng};
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
 
 use wasm_bindgen::prelude::*;
@@ -93,7 +94,7 @@ pub fn create_scope_claim_proof(
 
     let seed: [u8; 32] = serde_json::from_str(&seed)
         .map_err(|error| format!("Failed to deserialize the seed: {}", error))?;
-    let mut rng = StdRng::from_seed(seed);
+    let mut rng = ChaCha20Rng::from_seed(seed);
 
     let cdd_claim = CddClaimData::new(
         &raw_cdd_claim.investor_did,
