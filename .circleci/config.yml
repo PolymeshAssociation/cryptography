@@ -48,16 +48,16 @@ jobs:
             - v6-test-cache-{{ checksum "./rust.version" }}
       - run:
           name: Run tests
-          command: >-
-            #RUST_LOG=info cargo test &&
+          command: |
+            #RUST_LOG=info cargo test
 
-            cd confidential-identity/wasm &&
-            #cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack &&
-            apt install libc6-dev-i386 &&
-            wasm-pack build --release --target nodejs &&
+            cd confidential-identity/wasm
+            #cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack
+            apt install libc6-dev-i386
+            wasm-pack build --release --target nodejs
 
-            cd examples &&
-            npm install &&
+            cd examples
+            npm install
             npm run test
             
           no_output_timeout: 30m
