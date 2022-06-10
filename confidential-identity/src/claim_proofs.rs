@@ -276,8 +276,8 @@ impl ProofPublicKey {
 mod tests {
     use super::*;
     use rand::SeedableRng;
-    use rand_core::RngCore;
     use rand_chacha::ChaCha20Rng as StdRng;
+    use rand_core::RngCore;
 
     const SEED_1: [u8; 32] = [42u8; 32];
     const SEED_2: [u8; 32] = [43u8; 32];
