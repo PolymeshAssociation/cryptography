@@ -15,9 +15,7 @@ impl Error {
 impl From<ErrorKind> for Error {
     #[inline]
     fn from(kind: ErrorKind) -> Error {
-        Error {
-            kind,
-        }
+        Error { kind }
     }
 }
 
@@ -26,11 +24,17 @@ impl fmt::Display for Error {
         use ErrorKind::*;
         match &self.kind {
             ZkpError => {
-                write!(f, "Scope claim does not match cdd claim: Zero Knowledge Proof failed.")
-            },
+                write!(
+                    f,
+                    "Scope claim does not match cdd claim: Zero Knowledge Proof failed."
+                )
+            }
             SignatureError => {
-                write!(f, "Scope id is not wellformed: signature verification failed.")
-            },
+                write!(
+                    f,
+                    "Scope id is not wellformed: signature verification failed."
+                )
+            }
         }
     }
 }
