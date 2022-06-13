@@ -119,15 +119,3 @@ workflows:
             branches:
               only:
                 - develop
-                - master
-  benchmark:
-    triggers:
-      - schedule:
-          cron: "0 0 * * *"
-          filters:
-            branches:
-              only:
-                - develop
-                - master
-    jobs:
-      - bench
