@@ -19,7 +19,6 @@ serde_json = { version = "1.0", default-features = false, features = ["alloc"], 
 serde_bytes = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
 zeroize = { version = "1.1", default-features = false }
 lazy_static = { version = "1.4.0", default-features = false, features = ["spin_no_std"] }
-failure = { version = "0.1.7", default-features = false, features = ["derive"] }
 byteorder = { version = "^1.2.3", default-features = false, features = ["i128"] }
 criterion = { version = "0.3", optional = true }
 
@@ -79,7 +78,6 @@ std = [
 	# Other
 	"sp-std/std",
 	"sp-io/std",
-	"failure/std",
 	"criterion",
 ]
 
