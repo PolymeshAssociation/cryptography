@@ -51,7 +51,7 @@ jobs:
           command: |
             RUST_LOG=info cargo test
 
-            cd confidential-identity/wasm
+            cd confidential-identity-v2/wasm
             # install wasm-pack
             cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack
             # install clang v11 and npm

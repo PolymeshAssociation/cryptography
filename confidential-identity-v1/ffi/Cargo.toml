@@ -1,0 +1,29 @@
+[package]
+name = "confidential_identity_v1_ffi"
+version = "1.0.0"
+authors = [ "Polymath Inc" ]
+readme = "README.md"
+edition = "2018"
+description = "FFI bindings for the confidential identity crate"
+
+[lib]
+name = "confidential_identity_v1_ffi"
+crate-type = ["cdylib"]
+
+[features]
+default = ["cbindgen"]
+no_std = []
+
+[dependencies.confidential_identity_v1]
+path = ".."
+
+[dependencies]
+libc = "^0.2"
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+schnorrkel = { version = "0.10", default-features = false }
+
+[build-dependencies]
+cbindgen = { version = "^0.13", optional = true }
+
+[package.metadata.docs.rs]
+no-default-features = true

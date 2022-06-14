@@ -10,11 +10,16 @@ members = [
 	"mercat/cli/validator",
 	"mercat/cli/interactive",
 	"mercat/wasm",
-	"confidential-identity",
-	"confidential-identity/ffi",
-	"confidential-identity/cli/scp",
-	"confidential-identity/cli/scv",
-	"confidential-identity/wasm",
+	"confidential-identity-v1",
+	"confidential-identity-v1/ffi",
+	"confidential-identity-v1/cli/scp",
+	"confidential-identity-v1/cli/scv",
+	"confidential-identity-v1/wasm",
+	"confidential-identity-v2",
+	"confidential-identity-v2/ffi",
+	"confidential-identity-v2/cli/scp",
+	"confidential-identity-v2/cli/scv",
+	"confidential-identity-v2/wasm",
 ]
 
 [patch.crates-io]

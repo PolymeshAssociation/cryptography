@@ -1,0 +1,16 @@
+[package]
+name = "confidential_identity_v2_cli_common"
+version = "1.0.0"
+authors = [ "Polymath Inc" ]
+edition = "2018"
+repository = "https://github.com/PolymathNetwork/cryptography"
+description = "Confidential Identity Library: CLI common library"
+
+[dependencies]
+serde = { version = "1.0.105", features = ["derive"] }
+serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]}
+
+# Crypto
+confidential_identity_v2 = { path = "../../" }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+blake2 = { version = "0.10.2", default-features = false }
