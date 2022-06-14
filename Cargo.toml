@@ -23,5 +23,5 @@ members = [
 ]
 
 [patch.crates-io]
-sp-io = { git = "https://github.com/PolymathNetwork/substrate", branch = "polymesh-monthly-2022-05" }
-sp-std = { git = "https://github.com/PolymathNetwork/substrate", branch = "polymesh-monthly-2022-05" }
+sp-io = { git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-05" }
+sp-std = { git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-05" }

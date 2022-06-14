@@ -33,6 +33,6 @@ But, in order to properly publish the package, the name should be changed to
 `@polymathnetwork/mercat`.
 
 
-[cryptography-rust-lib]: https://github.com/PolymathNetwork/cryptography/tree/develop/README.md
-[mercat-rust-lib]: https://github.com/PolymathNetwork/cryptography/tree/develop/mercat
-[mercat-wasm-src]: https://github.com/PolymathNetwork/cryptography/blob/develop/mercat/wasm/src/lib.rs 
+[cryptography-rust-lib]: https://github.com/PolymeshAssociation/cryptography/tree/develop/README.md
+[mercat-rust-lib]: https://github.com/PolymeshAssociation/cryptography/tree/develop/mercat
+[mercat-wasm-src]: https://github.com/PolymeshAssociation/cryptography/blob/develop/mercat/wasm/src/lib.rs 

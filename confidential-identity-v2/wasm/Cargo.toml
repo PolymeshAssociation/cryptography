@@ -2,9 +2,9 @@
 name = "confidential-identity-v2-wasm"
 version = "1.1.2"
 license = "Apache-2.0"
-authors = ["Polymath Inc"]
+authors = ["Polymesh Association"]
 description = "The wasm library for confidential identity."
-repository = "https://github.com/PolymathNetwork/cryptography"
+repository = "https://github.com/PolymeshAssociation/cryptography"
 edition = "2018"
 
 [lib]

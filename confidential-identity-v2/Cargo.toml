@@ -1,9 +1,9 @@
 [package]
 name = "confidential_identity_v2"
 version = "2.0.0"
-authors = [ "Polymath Inc" ]
+authors = [ "Polymesh Association" ]
 readme = "README.md"
-repository = "https://github.com/PolymathNetwork/cryptography"
+repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "Confidential Identity Library"
 edition = "2018"
 exclude = [".gitignore"]

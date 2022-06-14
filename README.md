@@ -2,7 +2,7 @@
 
 Repository for cryptographic libraries used in Polymath products. While these libraries could in
 theory be used by other projects, the design and tradeoffs made are in many cases specifically
-tailored for Polymesh. See https://github.com/PolymathNetwork/Polymesh for more details about
+tailored for Polymesh. See https://github.com/PolymeshAssociation/Polymesh for more details about
 Polymesh.
 
 The libraries are divided as per the below headings.

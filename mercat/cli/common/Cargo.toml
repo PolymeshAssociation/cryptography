@@ -1,9 +1,9 @@
 [package]
 name = "mercat-common"
 version = "1.0.0"
-authors = [ "Polymath Inc" ]
+authors = [ "Polymesh Association" ]
 edition = "2018"
-repository = "https://github.com/PolymathNetwork/cryptography"
+repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "MERCAT CLI common library."
 
 [dependencies]

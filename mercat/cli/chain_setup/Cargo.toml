@@ -1,9 +1,9 @@
 [package]
 name = "mercat-chain-setup"
 version = "1.0.0"
-authors = [ "Polymath Inc" ]
+authors = [ "Polymesh Association" ]
 edition = "2018"
-repository = "https://github.com/PolymathNetwork/cryptography"
+repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "MERCAT CLI for preping the data on the \"chain\" for a successful run of other MERCAT CLIs"
 
 [dependencies]

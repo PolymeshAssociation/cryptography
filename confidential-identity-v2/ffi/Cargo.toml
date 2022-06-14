@@ -1,7 +1,7 @@
 [package]
 name = "confidential_identity_v2_ffi"
 version = "1.0.0"
-authors = [ "Polymath Inc" ]
+authors = [ "Polymesh Association" ]
 readme = "README.md"
 edition = "2018"
 description = "FFI bindings for the confidential identity crate"

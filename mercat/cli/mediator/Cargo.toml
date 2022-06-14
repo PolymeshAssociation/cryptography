@@ -1,8 +1,8 @@
 [package]
 name = "mercat-mediator"
 version = "1.0.0"
-authors = [ "Polymath Inc" ]
-repository = "https://github.com/PolymathNetwork/cryptography"
+authors = [ "Polymesh Association" ]
+repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "MERCAT Asset Mediator"
 edition = "2018"
 

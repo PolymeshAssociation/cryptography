@@ -87,5 +87,5 @@ that will serve as your blockchain storage. The path of this directory will be p
    ```
 
 
-[cryptography]: https://github.com/PolymathNetwork/cryptography
+[cryptography]: https://github.com/PolymeshAssociation/cryptography
 [harness]: cli/mercat/common

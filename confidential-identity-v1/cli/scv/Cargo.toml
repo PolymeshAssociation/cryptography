@@ -1,8 +1,8 @@
 [package]
 name = "polymath-scv-v1"
 version = "1.0.0"
-authors = [ "Polymath Inc" ]
-repository = "https://github.com/PolymathNetwork/cryptography"
+authors = [ "Polymesh Association" ]
+repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "Confidential Identity Library: Simple Claim Verifier"
 edition = "2018"
 

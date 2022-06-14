@@ -1,9 +1,9 @@
 [package]
 name = "confidential-identity-v1-wasm"
 version = "1.0.0"
-authors = ["Polymath Inc"]
+authors = ["Polymesh Association"]
 description = "The wasm library for confidential identity."
-repository = "https://github.com/PolymathNetwork/cryptography"
+repository = "https://github.com/PolymeshAssociation/cryptography"
 edition = "2018"
 
 [lib]

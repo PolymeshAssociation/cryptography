@@ -2,9 +2,9 @@
 name = "mercat-wasm"
 version = "0.1.0"
 license = "Apache-2.0"
-authors = ["Polymath Inc"]
+authors = ["Polymesh Association"]
 description = "The wasm library for MERCAT."
-repository = "https://github.com/PolymathNetwork/cryptography"
+repository = "https://github.com/PolymeshAssociation/cryptography"
 edition = "2018"
 
 [lib]

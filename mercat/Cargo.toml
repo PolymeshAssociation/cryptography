@@ -1,9 +1,9 @@
 [package]
 name = "mercat"
 version = "1.0.0"
-authors = [ "Polymath Inc" ]
+authors = [ "Polymesh Association" ]
 readme = "README.md"
-repository = "https://github.com/PolymathNetwork/cryptography"
+repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "The MERCAT library for confidential transactions."
 edition = "2018"
 exclude = [".gitignore"]

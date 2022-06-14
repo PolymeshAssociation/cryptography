@@ -1,9 +1,9 @@
 [package]
 name = "confidential_identity_v1_cli_common"
 version = "1.0.0"
-authors = [ "Polymath Inc" ]
+authors = [ "Polymesh Association" ]
 edition = "2018"
-repository = "https://github.com/PolymathNetwork/cryptography"
+repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "Confidential Identity Library: CLI common library"
 
 [dependencies]
