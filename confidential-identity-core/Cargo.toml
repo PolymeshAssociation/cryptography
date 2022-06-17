@@ -3,6 +3,7 @@ name = "confidential_identity_core"
 version = "1.0.0"
 authors = [ "Polymesh Association" ]
 readme = "README.md"
+license = "Apache-2.0"
 repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "The Repository for core cryptographic libraries used in Polymesh"
 edition = "2018"
