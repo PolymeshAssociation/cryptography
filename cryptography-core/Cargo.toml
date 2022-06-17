@@ -29,7 +29,7 @@ rand = { version = "0.8", default-features = false }
 getrandom = { version = "0.2.6", default-features = false, optional = true}
 
 curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
-bulletproofs = { git = "https://github.com/PolymeshAssociation/bulletproofs.git", branch = "bump-dalek", default-features = false, features = ["zeroize"] }
+bulletproofs = { version = "4.0.0", default-features = false }
 
 merlin = { version = "3.0.0", default-features = false }
 
@@ -43,11 +43,9 @@ default = ["std", "u64_backend"]
 # Backends
 u32_backend = [
 	"curve25519-dalek/u32_backend",
-	"bulletproofs/u32_backend"
 ]
 u64_backend = [
 	"curve25519-dalek/u64_backend",
-	"bulletproofs/u64_backend"
 ]
 avx2_backend = [
 	"curve25519-dalek/avx2_backend",
@@ -57,7 +55,6 @@ avx2_backend = [
 serde_all = [
 	"serde",
 	"curve25519-dalek/serde",
-	"bulletproofs/serde",
 ]
 
 alloc = [
