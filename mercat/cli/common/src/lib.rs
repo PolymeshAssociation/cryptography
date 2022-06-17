@@ -10,7 +10,7 @@ pub mod justify;
 pub mod validate;
 
 use codec::{Decode, Encode};
-use cryptography_core::asset_proofs::CipherText;
+use confidential_identity_core::asset_proofs::CipherText;
 use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
 use errors::Error;
 use log::{debug, error, info};

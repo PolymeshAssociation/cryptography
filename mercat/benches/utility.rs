@@ -1,4 +1,4 @@
-use cryptography_core::{
+use confidential_identity_core::{
     asset_proofs::{AssetId, CommitmentWitness, ElgamalSecretKey},
     Scalar,
 };

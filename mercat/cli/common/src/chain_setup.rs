@@ -1,7 +1,7 @@
 use crate::{
     errors::Error, save_to_file, AssetIdList, ASSET_ID_LIST_FILE, COMMON_OBJECTS_DIR, ON_CHAIN_DIR,
 };
-use cryptography_core::asset_proofs::{asset_id_from_ticker, AssetId};
+use confidential_identity_core::asset_proofs::{asset_id_from_ticker, AssetId};
 use mercat::account::convert_asset_ids;
 use metrics::timing;
 use std::{path::PathBuf, time::Instant};

@@ -1,5 +1,5 @@
 [package]
-name = "cryptography_core"
+name = "confidential_identity_core"
 version = "1.0.0"
 authors = [ "Polymesh Association" ]
 readme = "README.md"

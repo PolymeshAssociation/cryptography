@@ -5,7 +5,7 @@ use crate::{
     TransferTransactionSender, TransferTransactionVerifier, TransferTxMemo, TransferTxState,
     TxSubstate,
 };
-use cryptography_core::{
+use confidential_identity_core::{
     asset_proofs::{
         bulletproofs::PedersenGens,
         ciphertext_refreshment_proof::{
@@ -672,7 +672,7 @@ mod tests {
         EncryptedAmount, EncryptedAmountWithHint, EncryptedAssetId, EncryptionKeys,
         EncryptionPubKey, SecAccount, TransferTxMemo,
     };
-    use cryptography_core::{
+    use confidential_identity_core::{
         asset_proofs::{
             ciphertext_refreshment_proof::CipherEqualSamePubKeyProof,
             correctness_proof::CorrectnessProof,

@@ -2,7 +2,7 @@ use codec::{Decode, Encode};
 use mercat::{
     account::{convert_asset_ids, AccountCreator},
     asset::AssetIssuer,
-    cryptography_core::{
+    confidential_identity_core::{
         asset_proofs::{
             AssetId, CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
         },

@@ -23,7 +23,7 @@ byteorder = { version = "^1.2.3", default-features = false, features = ["i128"] 
 criterion = { version = "0.3", optional = true }
 
 # Crypto
-cryptography_core = { path = "../cryptography-core/", default_features = false }
+confidential_identity_core = { path = "../confidential-identity-core/", default_features = false }
 sha3 = { version = "0.9", default-features = false }
 blake2 = { version = "0.10.2", default-features = false }
 scale-info = { version = "2.0", default-features = false, features = ["derive"] }
@@ -43,33 +43,33 @@ default = ["std", "u64_backend"]
 # Backends
 u32_backend = [
 	"curve25519-dalek/u32_backend",
-	"cryptography_core/u32_backend",
+	"confidential_identity_core/u32_backend",
 ]
 u64_backend = [
 	"curve25519-dalek/u64_backend",
-	"cryptography_core/u64_backend",
+	"confidential_identity_core/u64_backend",
 ]
 avx2_backend = [
 	"curve25519-dalek/avx2_backend",
-	"cryptography_core/avx2_backend",
+	"confidential_identity_core/avx2_backend",
 ]
 
 serde_all = [
 	"serde",
 	"serde_json",
 	"curve25519-dalek/serde",
-	"cryptography_core/serde_all",
+	"confidential_identity_core/serde_all",
 ]
 
 no_std = [
-    "cryptography_core/no_std",
+    "confidential_identity_core/no_std",
 ]
 
 std = [
 	# General and optional
 	"serde_all",
 	# Crypto
-	"cryptography_core/std",
+	"confidential_identity_core/std",
 	"rand_core/std",
 	"rand/std",
 	"rand/std_rng",

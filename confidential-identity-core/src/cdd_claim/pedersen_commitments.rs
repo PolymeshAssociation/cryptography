@@ -12,7 +12,7 @@
 //! In this setup the entire system is using the same set of
 //! 3 Pedersen generators: G0, G1, and G2. To create these generators:
 //! ```
-//! use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
+//! use confidential_identity_core::cdd_claim::pedersen_commitments::PedersenGenerators;
 //!
 //! let pg = PedersenGenerators::default();
 //! ```
@@ -25,7 +25,7 @@
 //! ```
 //! use curve25519_dalek::scalar::Scalar;
 //! use curve25519_dalek::ristretto::RistrettoPoint;
-//! use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
+//! use confidential_identity_core::cdd_claim::pedersen_commitments::PedersenGenerators;
 //!
 //! let pg = PedersenGenerators::default();
 //! let values: [Scalar; 3] =
@@ -38,7 +38,7 @@
 //! use curve25519_dalek::scalar::Scalar;
 //! use curve25519_dalek::ristretto::RistrettoPoint;
 //! use curve25519_dalek::ristretto::CompressedRistretto;
-//! use cryptography_core::cdd_claim::pedersen_commitments::PedersenGenerators;
+//! use confidential_identity_core::cdd_claim::pedersen_commitments::PedersenGenerators;
 //!
 //! let pg = PedersenGenerators::default();
 //! let id_bytes: [u8; 32] = [

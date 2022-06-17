@@ -4,7 +4,7 @@
 mod input;
 
 use codec::{Decode, Encode};
-use cryptography_core::asset_proofs::{AssetId, CommitmentWitness, ElgamalSecretKey};
+use confidential_identity_core::asset_proofs::{AssetId, CommitmentWitness, ElgamalSecretKey};
 use curve25519_dalek::scalar::Scalar;
 
 use input::{parse_input, CLI};

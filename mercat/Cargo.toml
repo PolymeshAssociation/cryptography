@@ -24,7 +24,7 @@ criterion = { version = "0.3", optional = true }
 
 # Crypto
 sha3 = { version = "0.9", default-features = false }
-cryptography_core = { path = "../cryptography-core", default-features = false }
+confidential_identity_core = { path = "../confidential-identity-core", default-features = false }
 
 rand_core = { version = "0.6", default-features = false}
 rand = { version = "0.8", default-features = false }
@@ -37,26 +37,26 @@ wasm-bindgen-test = { version = "0.3.10" }
 default = ["std", "u64_backend"]
 
 # Backends
-u32_backend = [ "cryptography_core/u32_backend" ]
-u64_backend = [ "cryptography_core/u64_backend" ]
-avx2_backend = [ "cryptography_core/avx2_backend" ]
+u32_backend = [ "confidential_identity_core/u32_backend" ]
+u64_backend = [ "confidential_identity_core/u64_backend" ]
+avx2_backend = [ "confidential_identity_core/avx2_backend" ]
 
 serde_all = [
 	"serde",
 	"serde_json",
-	"cryptography_core/serde_all",
+	"confidential_identity_core/serde_all",
 ]
 
 alloc = [
-	"cryptography_core/alloc",
+	"confidential_identity_core/alloc",
 ]
 
-no_std = [ "cryptography_core/no_std" ]
+no_std = [ "confidential_identity_core/no_std" ]
 std = [
 	# General and optional
 	"serde_all",
 	# Crypto
-	"cryptography_core/std",
+	"confidential_identity_core/std",
 	"rand_core/std",
 	"rand/std",
 	# Other

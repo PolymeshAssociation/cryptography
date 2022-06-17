@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use cryptography_core::asset_proofs::{
+use confidential_identity_core::asset_proofs::{
     encryption_proofs::{single_property_prover, single_property_verifier},
     membership_proof::{
         MembershipProofFinalResponse, MembershipProofInitialMessage, MembershipProofVerifier,

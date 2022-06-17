@@ -86,7 +86,7 @@ jobs:
       - run:
           name: Run tests
           command: >-
-            cd cryptography-core &&
+            cd confidential-identity-core &&
             echo "Wasm build (features 'no_std' & 'u32_backend')"  &&
             cargo build --target wasm32-unknown-unknown --bench elgamal_decryption &&
             cargo build --target wasm32-unknown-unknown --no-default-features --features no_std --features u32_backend &&

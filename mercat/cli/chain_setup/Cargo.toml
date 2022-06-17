@@ -7,7 +7,7 @@ repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "MERCAT CLI for preping the data on the \"chain\" for a successful run of other MERCAT CLIs"
 
 [dependencies]
-cryptography_core = { path = "../../../cryptography-core" }
+confidential_identity_core = { path = "../../../confidential-identity-core" }
 mercat = { path = "../../../mercat" }
 mercat_common = { package = "mercat-common", path = "../common/" }
 serde = { version = "1.0.105", features = ["derive"] }

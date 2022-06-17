@@ -2,7 +2,7 @@
 //! custom base point instead of a default base point.
 
 use crate::{
-    cryptography_core::codec_wrapper::{
+    confidential_identity_core::codec_wrapper::{
         CompressedRistrettoDecoder, CompressedRistrettoEncoder, ScalarDecoder, ScalarEncoder,
         RISTRETTO_POINT_SIZE, SCALAR_SIZE,
     },
