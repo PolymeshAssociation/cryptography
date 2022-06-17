@@ -24,7 +24,7 @@ byteorder = { version = "^1.2.3", default-features = false, features = ["i128"] 
 criterion = { version = "0.3", optional = true }
 
 # Crypto
-confidential_identity_core = { path = "../confidential-identity-core/", default_features = false }
+confidential_identity_core = { version = "1.0.0", path = "../confidential-identity-core/", default_features = false }
 sha3 = { version = "0.9", default-features = false }
 blake2 = { version = "0.10.2", default-features = false }
 scale-info = { version = "2.0", default-features = false, features = ["derive"] }
