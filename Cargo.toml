@@ -21,7 +21,3 @@ members = [
 	"confidential-identity-v2/cli/scv",
 	"confidential-identity-v2/wasm",
 ]
-
-[patch.crates-io]
-sp-io = { git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-05" }
-sp-std = { git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-05" }
