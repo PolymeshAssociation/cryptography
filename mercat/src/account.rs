@@ -166,7 +166,9 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::EncryptionKeys;
-    use confidential_identity_core::{asset_proofs::ElgamalSecretKey, curve25519_dalek::scalar::Scalar};
+    use confidential_identity_core::{
+        asset_proofs::ElgamalSecretKey, curve25519_dalek::scalar::Scalar,
+    };
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
 

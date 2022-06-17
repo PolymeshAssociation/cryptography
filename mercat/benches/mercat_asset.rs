@@ -1,6 +1,6 @@
 mod utility;
-use criterion::{criterion_group, criterion_main, Criterion};
 use confidential_identity_core::asset_proofs::{AssetId, Balance};
+use criterion::{criterion_group, criterion_main, Criterion};
 use mercat::{
     account::convert_asset_ids,
     asset::{AssetIssuer, AssetValidator},
