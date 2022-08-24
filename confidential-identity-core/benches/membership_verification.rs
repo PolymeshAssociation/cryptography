@@ -1,5 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use cryptography_core::asset_proofs::{
+use confidential_identity_core::asset_proofs::{
     encryption_proofs::{single_property_prover, single_property_verifier},
     membership_proof::{
         MembershipProofFinalResponse, MembershipProofInitialMessage, MembershipProofVerifier,
@@ -7,6 +6,7 @@ use cryptography_core::asset_proofs::{
     },
     one_out_of_many_proof::OooNProofGenerators,
 };
+use criterion::{criterion_group, criterion_main, Criterion};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 
 use rand::{rngs::StdRng, SeedableRng};

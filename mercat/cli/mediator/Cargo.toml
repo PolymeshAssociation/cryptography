@@ -7,7 +7,7 @@ description = "MERCAT Asset Mediator"
 edition = "2018"
 
 [dependencies]
-cryptography_core = { path = "../../../cryptography-core" }
+confidential_identity_core = { path = "../../../confidential-identity-core" }
 mercat = { path = "../../../mercat" }
 mercat_common = { package = "mercat-common", path = "../common/" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }

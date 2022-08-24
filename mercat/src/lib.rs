@@ -8,8 +8,8 @@
 extern crate alloc;
 
 use codec::{Decode, Encode};
-pub use cryptography_core;
-use cryptography_core::{
+pub use confidential_identity_core;
+use confidential_identity_core::{
     asset_proofs::{
         ciphertext_refreshment_proof::CipherEqualSamePubKeyProof,
         correctness_proof::CorrectnessProof,

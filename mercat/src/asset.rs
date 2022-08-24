@@ -5,7 +5,7 @@ use crate::{
     AssetTransactionVerifier, AuditorPayload, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
     InitializedAssetTx, PubAccount,
 };
-use cryptography_core::asset_proofs::{
+use confidential_identity_core::asset_proofs::{
     bulletproofs::PedersenGens,
     correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
     encrypting_same_value_proof::{
@@ -330,7 +330,7 @@ mod tests {
         account::{convert_asset_ids, AccountCreator},
         AccountCreatorInitializer, EncryptionKeys, SecAccount,
     };
-    use cryptography_core::{
+    use confidential_identity_core::{
         asset_proofs::{errors::ErrorKind, AssetId, CommitmentWitness, ElgamalSecretKey},
         curve25519_dalek::scalar::Scalar,
     };

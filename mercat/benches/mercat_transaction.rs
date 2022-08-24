@@ -1,6 +1,6 @@
 mod utility;
+use confidential_identity_core::asset_proofs::AssetId;
 use criterion::{criterion_group, criterion_main, Criterion};
-use cryptography_core::asset_proofs::AssetId;
 use mercat::{
     account::convert_asset_ids,
     transaction::{CtxMediator, CtxReceiver, CtxSender, TransactionValidator},

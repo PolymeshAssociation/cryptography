@@ -2,7 +2,7 @@ use crate::{
     AccountCreatorInitializer, AccountCreatorVerifier, EncryptedAmount, PubAccount, PubAccountTx,
     SecAccount, BASE, EXPONENT,
 };
-use cryptography_core::{
+use confidential_identity_core::{
     asset_proofs::{
         bulletproofs::PedersenGens,
         correctness_proof::{CorrectnessProverAwaitingChallenge, CorrectnessVerifier},
@@ -166,7 +166,9 @@ mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
     use crate::EncryptionKeys;
-    use cryptography_core::{asset_proofs::ElgamalSecretKey, curve25519_dalek::scalar::Scalar};
+    use confidential_identity_core::{
+        asset_proofs::ElgamalSecretKey, curve25519_dalek::scalar::Scalar,
+    };
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
 

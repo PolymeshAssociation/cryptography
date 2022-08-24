@@ -1,7 +1,6 @@
 [workspace]
 
 members = [
-	"cryptography-core",
 	"mercat",
 	"mercat/cli/account",
 	"mercat/cli/chain_setup",
@@ -10,6 +9,7 @@ members = [
 	"mercat/cli/validator",
 	"mercat/cli/interactive",
 	"mercat/wasm",
+	"confidential-identity-core",
 	"confidential-identity-v1",
 	"confidential-identity-v1/ffi",
 	"confidential-identity-v1/cli/scp",

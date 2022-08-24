@@ -5,7 +5,9 @@ use crate::{
     ON_CHAIN_DIR,
 };
 use codec::Encode;
-use cryptography_core::asset_proofs::{asset_id_from_ticker, CommitmentWitness, ElgamalSecretKey};
+use confidential_identity_core::asset_proofs::{
+    asset_id_from_ticker, CommitmentWitness, ElgamalSecretKey,
+};
 use curve25519_dalek::scalar::Scalar;
 use log::{error, info};
 use mercat::{account::AccountCreator, AccountCreatorInitializer, EncryptionKeys, SecAccount};

@@ -42,7 +42,7 @@ use crate::{
 };
 use blake2::{Blake2b, Blake2s, Digest};
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
-use cryptography_core::{
+use confidential_identity_core::{
     cdd_claim::pedersen_commitments::{generate_blinding_factor, PedersenGenerators},
     codec_wrapper::{
         RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder,
@@ -68,10 +68,10 @@ pub fn slice_to_ristretto_point(data: &[u8]) -> RistrettoPoint {
 }
 
 /// The data needed to generate a CDD ID.
-pub type CddClaimData = cryptography_core::cdd_claim::CddClaimData;
+pub type CddClaimData = confidential_identity_core::cdd_claim::CddClaimData;
 
 /// The CDD ID type.
-pub type CddId = cryptography_core::cdd_claim::CddId;
+pub type CddId = confidential_identity_core::cdd_claim::CddId;
 
 /// The data needed to generate a SCOPE ID.
 #[derive(Debug, Copy, Clone)]
@@ -257,7 +257,7 @@ pub struct Provider;
 
 impl ProviderTrait for Provider {
     fn create_cdd_id(cdd_claim: &CddClaimData) -> CddId {
-        cryptography_core::cdd_claim::compute_cdd_id(cdd_claim)
+        confidential_identity_core::cdd_claim::compute_cdd_id(cdd_claim)
     }
 }
 
@@ -272,7 +272,7 @@ impl InvestorTrait for Investor {
     ) -> ScopeClaimProof {
         let scope_did_hash = slice_to_ristretto_point(scope_claim.scope_did.as_bytes());
         let scope_id = scope_claim.investor_unique_id * scope_did_hash;
-        let cdd_id = cryptography_core::cdd_claim::compute_cdd_id(cdd_claim);
+        let cdd_id = confidential_identity_core::cdd_claim::compute_cdd_id(cdd_claim);
 
         let public_key = PublicKey { key: scope_id };
         let signature = SecretKey::new(scope_claim.investor_unique_id).sign(

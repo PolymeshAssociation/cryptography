@@ -4,7 +4,7 @@ use crate::{
     OrderedPubAccount, OrderingState, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::Encode;
-use cryptography_core::asset_proofs::{asset_id_from_ticker, CommitmentWitness};
+use confidential_identity_core::asset_proofs::{asset_id_from_ticker, CommitmentWitness};
 use curve25519_dalek::scalar::Scalar;
 use log::info;
 use mercat::{asset::AssetIssuer, Account, AssetTransactionIssuer, AssetTxState, TxSubstate};

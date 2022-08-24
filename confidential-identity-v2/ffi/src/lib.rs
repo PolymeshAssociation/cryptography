@@ -6,7 +6,7 @@
 extern crate libc;
 use confidential_identity_v2::{
     claim_proofs::{Investor, Provider, Verifier},
-    cryptography_core::cdd_claim::cdd_claim_data::slice_to_scalar,
+    confidential_identity_core::cdd_claim::cdd_claim_data::slice_to_scalar,
     InvestorTrait, ProviderTrait, ScopeClaimProof, VerifierTrait,
 };
 use libc::size_t;

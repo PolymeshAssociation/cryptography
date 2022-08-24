@@ -125,7 +125,7 @@
 //! Here's a sample code:
 //!
 //! ```
-//! use cryptography_core::asset_proofs::{
+//! use confidential_identity_core::asset_proofs::{
 //!     encryption_proofs::{
 //!         AssetProofProverAwaitingChallenge, AssetProofProver, AssetProofVerifier
 //!     },
