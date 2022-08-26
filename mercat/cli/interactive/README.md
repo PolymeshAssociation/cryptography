@@ -92,7 +92,6 @@ export PATH=$(pwd)/target/release:$PATH
    - Submit the proofs to (confidentialAsset -> mintConfidentialAsset)
 
        ```bash
-       mkdir chain_dir/on-chain/common # TODO: Fix code so that it is done automatically
        mercat-interactive mint --db-dir chain_dir --amount 1000 --issuer alice --account-id-from-ticker 01
        ```
 
