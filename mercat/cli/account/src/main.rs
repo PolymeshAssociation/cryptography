@@ -53,6 +53,7 @@ fn main() {
             cfg.tx_id,
             cfg.cheat,
         )
+        .map(drop)
         .unwrap(),
         CLI::CreateTransaction(cfg) => process_create_tx(
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),

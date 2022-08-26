@@ -7,8 +7,8 @@ repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "MERCAT CLI common library."
 
 [dependencies]
-confidential_identity_core = { path = "../../../confidential-identity-core" }
-mercat = { path = "../../../mercat" }
+confidential_identity_core = { path = "../../../confidential-identity-core", default-features = false }
+mercat = { path = "../../../mercat", default-features = false }
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", features = ["alloc"] }
 serde_bytes = { version = "0.11", features = ["alloc"] }

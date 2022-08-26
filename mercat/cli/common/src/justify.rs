@@ -34,7 +34,11 @@ fn generate_mediator_keys<R: RngCore + CryptoRng>(
     )
 }
 
-pub fn process_create_mediator(seed: String, db_dir: PathBuf, user: String) -> Result<(), Error> {
+pub fn process_create_mediator(
+    seed: String,
+    db_dir: PathBuf,
+    user: String,
+) -> Result<EncryptionPubKey, Error> {
     // Setup the rng.
     let mut rng = create_rng_from_seed(Some(seed))?;
 
@@ -75,7 +79,7 @@ pub fn process_create_mediator(seed: String, db_dir: PathBuf, user: String) -> R
         "tx_id" => "N/A"
     );
 
-    Ok(())
+    Ok(public_account)
 }
 
 pub fn justify_asset_transfer_transaction(

@@ -57,6 +57,7 @@ fn main() {
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.user,
         )
+        .map(drop)
         .unwrap(),
         CLI::Mint(cfg) => process_issue_asset(
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),
@@ -68,6 +69,7 @@ fn main() {
             TX_ID,
             false,
         )
+        .map(drop)
         .unwrap(),
         CLI::CreateTransaction(cfg) => process_create_tx(
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),

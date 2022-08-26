@@ -25,8 +25,8 @@ export PATH=$(pwd)/target/release:$PATH
    - Transfer some POLYX to Charlie so he can pay for the transaction fees
    - Keep note of the identity ids for future use. For example,
 
-       - Alice did: `0x0000000000000000000000000000000006000000000000000000000000000000`
-       - Bob did: `0xe68edc3585d89142240bca208e51b774f5400570119b9d3120f2f3b567b37015`
+       - Alice did: `0x0600000000000000000000000000000000000000000000000000000000000000`
+       - Bob did: `0xe68edc3585d89142240bca208e51b774f5400570119b9d3120f2f3b567b37095`
        - Charlie did: `0x8b74d850dcf9676d49d3f514603d4fd15b7d794afe75ed01eaf60277bcc6ec3c`
 
 2. Alice creates a confidential asset (confidentialAsset -> createConfidentialAsset)
