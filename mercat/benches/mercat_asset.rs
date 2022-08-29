@@ -1,6 +1,6 @@
 mod utility;
 use confidential_identity_core::asset_proofs::{AssetId, Balance};
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use mercat::{
     account::convert_asset_ids,
     asset::{AssetIssuer, AssetValidator},
@@ -25,27 +25,20 @@ fn bench_transaction_issuer(
     issuer_account: Account,
     amounts: Vec<Balance>,
 ) -> Vec<InitializedAssetTx> {
-    let label = "MERCAT Transaction: Issuer".to_string();
     let mut rng = thread_rng();
-    let issuer_account_cloned = issuer_account.clone();
 
-    c.bench_function_over_inputs(
-        &label,
-        move |b, &amount| {
+    let mut group = c.benchmark_group("MERCAT Transaction");
+    for amount in &amounts {
+        group.bench_with_input(BenchmarkId::new("Issuer", *amount), amount, |b, &amount| {
             b.iter(|| {
                 let issuer = AssetIssuer;
                 issuer
-                    .initialize_asset_transaction(
-                        &issuer_account_cloned.clone(),
-                        &[],
-                        amount,
-                        &mut rng,
-                    )
+                    .initialize_asset_transaction(&issuer_account, &[], amount, &mut rng)
                     .unwrap()
             })
-        },
-        amounts.clone(),
-    );
+        });
+    }
+    group.finish();
 
     amounts
         .iter()
@@ -64,8 +57,6 @@ fn bench_transaction_validator(
     issuer_account: PubAccount,
     issuer_init_balance: EncryptedAmount,
 ) {
-    let label = "MERCAT Transaction: Validator".to_string();
-
     let indexed_transaction: Vec<((String, u32), InitializedAssetTx)> = (MIN_ISSUED_AMOUNT_ORDER
         ..MAX_ISSUED_AMOUNT_ORDER)
         .map(|i| {
@@ -75,24 +66,28 @@ fn bench_transaction_validator(
         .zip(transactions)
         .collect();
 
-    c.bench_function_over_inputs(
-        &label,
-        move |b, ((_label, amount), tx)| {
-            b.iter(|| {
-                let validator = AssetValidator;
-                validator
-                    .verify_asset_transaction(
-                        *amount,
-                        &tx,
-                        &issuer_account,
-                        &issuer_init_balance,
-                        &[],
-                    )
-                    .unwrap()
-            })
-        },
-        indexed_transaction,
-    );
+    let mut group = c.benchmark_group("MERCAT Transaction");
+    for ((label, amount), tx) in &indexed_transaction {
+        group.bench_with_input(
+            BenchmarkId::new("Validator", label),
+            &(amount, tx),
+            |b, (&amount, tx)| {
+                b.iter(|| {
+                    let validator = AssetValidator;
+                    validator
+                        .verify_asset_transaction(
+                            amount,
+                            &tx,
+                            &issuer_account,
+                            &issuer_init_balance,
+                            &[],
+                        )
+                        .unwrap()
+                })
+            },
+        );
+    }
+    group.finish();
 }
 
 fn bench_asset_transaction(c: &mut Criterion) {

@@ -1,36 +1,31 @@
 use blake2::{Blake2b, Digest};
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use curve25519_dalek::scalar::Scalar;
 use rand::{thread_rng, Rng};
 
 fn bench_scalar_from_hash(c: &mut Criterion) {
-    let label = "scalar from bits bench".to_string();
     let mut input = [0u8; 32];
     thread_rng().fill(&mut input);
     let inputs = vec![input];
 
-    c.bench_function_over_inputs(
-        &label,
-        move |b, &input| {
+    let mut group = c.benchmark_group("Scalar from: ");
+    for (idx, input) in inputs.iter().enumerate() {
+        group.bench_with_input(BenchmarkId::new("bits", idx), input, |b, input| {
             b.iter(|| {
-                Scalar::from_bits(input);
+                Scalar::from_bits(*input);
             })
-        },
-        inputs.clone(),
-    );
+        });
+    }
 
-    let label = "scalar from Blake2 hash bench".to_string();
-    c.bench_function_over_inputs(
-        &label,
-        move |b, &input| {
+    for (idx, input) in inputs.iter().enumerate() {
+        group.bench_with_input(BenchmarkId::new("Blake2b hash", idx), input, |b, input| {
             b.iter(|| {
-                let mut hash = [0u8; 64];
-                hash.copy_from_slice(Blake2b::default().chain(input).finalize().as_slice());
+                let hash = Blake2b::digest(input).into();
                 Scalar::from_bytes_mod_order_wide(&hash)
             })
-        },
-        inputs,
-    );
+        });
+    }
+    group.finish();
 }
 
 criterion_group! {

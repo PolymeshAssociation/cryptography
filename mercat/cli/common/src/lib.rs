@@ -827,10 +827,14 @@ pub fn all_unverified_tx_files(db_dir: PathBuf) -> Result<Vec<String>, Error> {
     dir.push(COMMON_OBJECTS_DIR);
 
     let mut files = vec![];
-    for entry in std::fs::read_dir(dir.clone()).map_err(|error| Error::FileReadError {
-        error,
-        path: dir.clone(),
-    })? {
+    let entries = match std::fs::read_dir(dir.clone()) {
+        Ok(e) => e,
+        Err(err) => {
+            log::warn!("Directory doesn't exist: {err:?}");
+            return Ok(files);
+        }
+    };
+    for entry in entries {
         let entry = entry.map_err(|error| Error::FileReadError {
             error,
             path: dir.clone(),

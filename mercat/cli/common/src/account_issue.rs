@@ -1,7 +1,8 @@
 use crate::{
     asset_transaction_file, create_rng_from_seed, errors::Error, last_ordering_state, load_object,
-    save_object, user_public_account_file, user_secret_account_file, OrderedAssetInstruction,
-    OrderedPubAccount, OrderingState, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    save_object, user_public_account_file, user_secret_account_file, InitializedAssetTx,
+    OrderedAssetInstruction, OrderedPubAccount, OrderingState, COMMON_OBJECTS_DIR, OFF_CHAIN_DIR,
+    ON_CHAIN_DIR,
 };
 use codec::Encode;
 use confidential_identity_core::asset_proofs::{asset_id_from_ticker, CommitmentWitness};
@@ -21,7 +22,7 @@ pub fn process_issue_asset(
     stdout: bool,
     tx_id: u32,
     cheat: bool,
-) -> Result<(), Error> {
+) -> Result<InitializedAssetTx, Error> {
     let mut rng = create_rng_from_seed(Some(seed))?;
 
     let load_from_file_timer = Instant::now();
@@ -151,5 +152,5 @@ pub fn process_issue_asset(
         "tx_id" => tx_id.to_string()
     );
 
-    Ok(())
+    Ok(asset_tx)
 }

@@ -1,9 +1,9 @@
 mod utility;
 use confidential_identity_core::asset_proofs::AssetId;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use mercat::{
     account::{convert_asset_ids, AccountCreator, AccountValidator},
-    AccountCreatorInitializer, AccountCreatorVerifier, PubAccountTx, SecAccount,
+    AccountCreatorInitializer, AccountCreatorVerifier,
 };
 use rand::thread_rng;
 
@@ -21,50 +21,42 @@ fn bench_account_creation(c: &mut Criterion) {
 
     let mut rng = thread_rng();
 
-    let label = "MERCAT Transaction: Creator".to_string();
-    let secret_accounts: Vec<(String, SecAccount)> = ASSET_IDS
-        .iter()
-        .map(|&id| {
-            (
-                format!("asset_id: {:?}", id),
-                utility::gen_keys(&mut rng, &AssetId::from(id)),
-            )
-        })
-        .collect();
-    c.bench_function_over_inputs(
-        &label,
-        move |b, (_label, secret_account)| {
-            b.iter(|| {
-                let account_creator = AccountCreator;
-                account_creator
-                    .create(&secret_account, &valid_asset_ids, &mut rng)
-                    .unwrap();
-            })
-        },
-        secret_accounts,
-    );
+    let mut group = c.benchmark_group("MERCAT Transaction");
 
-    let public_accounts: Vec<(String, PubAccountTx)> = ASSET_IDS
-        .iter()
-        .map(|&id| {
-            (
-                format!("asset_id: {:?}", id),
-                utility::create_account(&mut rng, &AssetId::from(id), &valid_asset_ids_cloned),
-            )
-        })
-        .collect();
+    for id in ASSET_IDS {
+        let label = format!("asset_id: {:?}", id);
+        let secret_account = utility::gen_keys(&mut rng, &AssetId::from(id));
+        group.bench_with_input(
+            BenchmarkId::new("Creator", label),
+            &secret_account,
+            |b, secret_account| {
+                b.iter(|| {
+                    let account_creator = AccountCreator;
+                    account_creator
+                        .create(&secret_account, &valid_asset_ids, &mut rng)
+                        .unwrap();
+                })
+            },
+        );
+    }
 
-    let label = "MERCAT Transaction: Validator".to_string();
-    c.bench_function_over_inputs(
-        &label,
-        move |b, (_label, account)| {
-            b.iter(|| {
-                let validator = AccountValidator;
-                validator.verify(account, &valid_asset_ids_cloned).unwrap()
-            })
-        },
-        public_accounts,
-    );
+    for id in ASSET_IDS {
+        let label = format!("asset_id: {:?}", id);
+        let account =
+            utility::create_account(&mut rng, &AssetId::from(id), &valid_asset_ids_cloned);
+        group.bench_with_input(
+            BenchmarkId::new("Validator", label),
+            &account,
+            |b, account| {
+                b.iter(|| {
+                    let validator = AccountValidator;
+                    validator.verify(account, &valid_asset_ids_cloned).unwrap()
+                })
+            },
+        );
+    }
+
+    group.finish();
 }
 
 criterion_group! {

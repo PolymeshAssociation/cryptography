@@ -6,7 +6,7 @@ use confidential_identity_core::asset_proofs::{
     },
     one_out_of_many_proof::OooNProofGenerators,
 };
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
 
 use rand::{rngs::StdRng, SeedableRng};
@@ -22,14 +22,13 @@ fn bench_membership_verify(
     secret_element_com: RistrettoPoint,
     proofs: Vec<(MembershipProofInitialMessage, MembershipProofFinalResponse)>,
 ) {
-    let label = "membership verification".to_string();
-
     let generators = OooNProofGenerators::new(EXPONENT, BASE);
     let elements: Vec<Scalar> = (0..SET_SIZE as u32).map(Scalar::from).collect();
 
-    c.bench_function_over_inputs(
-        &label,
-        move |b, proof| {
+    let mut group = c.benchmark_group("membership");
+
+    for (idx, proof) in proofs.into_iter().enumerate() {
+        group.bench_with_input(BenchmarkId::new("verification", idx), &proof, |b, proof| {
             b.iter(|| {
                 single_property_verifier(
                     &MembershipProofVerifier {
@@ -41,9 +40,9 @@ fn bench_membership_verify(
                 )
                 .unwrap()
             })
-        },
-        proofs,
-    );
+        });
+    }
+    group.finish();
 }
 
 fn bench_membership_proof(c: &mut Criterion) {

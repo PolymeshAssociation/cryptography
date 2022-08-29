@@ -1,26 +1,8 @@
-use confidential_identity_core::asset_proofs::{CipherText, ElgamalSecretKey};
-use criterion::{criterion_group, criterion_main, Criterion};
+use confidential_identity_core::asset_proofs::ElgamalSecretKey;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use curve25519_dalek::scalar::Scalar;
 
 use rand::{rngs::StdRng, SeedableRng};
-
-fn bench_elgamal_decrypt(
-    c: &mut Criterion,
-    elg_secret: ElgamalSecretKey,
-    ciphers: Vec<(String, CipherText)>,
-) {
-    let label = "elgamal enc/dec bench".to_string();
-
-    c.bench_function_over_inputs(
-        &label,
-        move |b, (_label, cipher)| {
-            b.iter(|| {
-                elg_secret.decrypt(cipher).unwrap();
-            })
-        },
-        ciphers,
-    );
-}
 
 fn bench_elgamal(c: &mut Criterion) {
     let mut rng = StdRng::from_seed([42u8; 32]);
@@ -28,15 +10,29 @@ fn bench_elgamal(c: &mut Criterion) {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
     let elg_pub = elg_secret.get_public_key();
 
-    let encrypted_values: Vec<(String, CipherText)> = (0..6)
-        .map(|i| {
-            let value = 10u32.pow(i);
-            let encryptd_value = elg_pub.encrypt_value(value.into(), &mut rng).1;
-            (format!("value ({:?})", value), encryptd_value)
-        })
-        .collect();
+    let mut group = c.benchmark_group("elgamal");
 
-    bench_elgamal_decrypt(c, elg_secret, encrypted_values);
+    for i in 0..6 {
+        let value = 10u32.pow(i);
+        group.bench_with_input(BenchmarkId::new("encrypt", value), &value, |b, &value| {
+            b.iter(|| elg_pub.encrypt_value(value.into(), &mut rng))
+        });
+    }
+
+    for i in 0..6 {
+        let value = 10u32.pow(i);
+        let enc_value = elg_pub.encrypt_value(value.into(), &mut rng).1;
+        group.bench_with_input(
+            BenchmarkId::new("decrypt", value),
+            &enc_value,
+            |b, enc_value| {
+                b.iter(|| {
+                    elg_secret.decrypt(enc_value).unwrap();
+                })
+            },
+        );
+    }
+    group.finish();
 }
 
 criterion_group! {

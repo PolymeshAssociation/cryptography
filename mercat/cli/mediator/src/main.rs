@@ -30,6 +30,7 @@ fn main() {
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.user,
         )
+        .map(drop)
         .unwrap(),
         CLI::JustifyTransferTransaction(cfg) => justify_asset_transfer_transaction(
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
