@@ -1,6 +1,6 @@
 mod utility;
 use confidential_identity_core::asset_proofs::AssetId;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use mercat::{
     account::convert_asset_ids,
     transaction::{CtxMediator, CtxReceiver, CtxSender, TransactionValidator},
@@ -32,38 +32,37 @@ fn bench_transaction_sender(
     rcvr_pub_account: PubAccount,
     mediator_pub_key: EncryptionPubKey,
 ) -> Vec<InitializedTransferTx> {
-    let label = "MERCAT Transaction: Sender".to_string();
     let mut rng = thread_rng();
-    let rcvr_pub_account = rcvr_pub_account;
-    let rcvr_pub_account_cloned = rcvr_pub_account.clone();
-    let sender_account_cloned = sender_account.clone();
-
     let indexed_transaction: Vec<(u32, EncryptedAmount)> = (MIN_SENDER_BALANCE_ORDER
         ..MAX_SENDER_BALANCE_ORDER)
         .map(|i| 10u32.pow(i))
         .zip(sender_balances)
         .collect();
 
-    c.bench_function_over_inputs(
-        &label,
-        move |b, (amount, sender_balance)| {
-            b.iter(|| {
-                let sender = CtxSender;
-                sender
-                    .create_transaction(
-                        &sender_account_cloned,
-                        sender_balance,
-                        &rcvr_pub_account_cloned,
-                        &mediator_pub_key.clone(),
-                        &[],
-                        *amount,
-                        &mut rng,
-                    )
-                    .unwrap()
-            })
-        },
-        indexed_transaction.clone(),
-    );
+    let mut group = c.benchmark_group("MERCAT Transaction");
+    for (amount, sender_balance) in &indexed_transaction {
+        group.bench_with_input(
+            BenchmarkId::new("Sender", *amount),
+            &(amount, sender_balance),
+            |b, (&amount, sender_balance)| {
+                b.iter(|| {
+                    let sender = CtxSender;
+                    sender
+                        .create_transaction(
+                            &sender_account,
+                            sender_balance,
+                            &rcvr_pub_account,
+                            &mediator_pub_key.clone(),
+                            &[],
+                            amount,
+                            &mut rng,
+                        )
+                        .unwrap()
+                })
+            },
+        );
+    }
+    group.finish();
 
     indexed_transaction
         .iter()
@@ -71,10 +70,10 @@ fn bench_transaction_sender(
             let ctx_sender = CtxSender;
             ctx_sender
                 .create_transaction(
-                    &sender_account.clone(),
+                    &sender_account,
                     sender_balance,
                     &rcvr_pub_account,
-                    &mediator_pub_key.clone(),
+                    &mediator_pub_key,
                     &[],
                     *amount,
                     &mut rng,
@@ -89,9 +88,7 @@ fn bench_transaction_receiver(
     receiver_account: Account,
     transactions: Vec<InitializedTransferTx>,
 ) -> Vec<FinalizedTransferTx> {
-    let label = "MERCAT Transaction: Receiver".to_string();
     let mut rng = thread_rng();
-    let receiver_account_cloned = receiver_account.clone();
 
     let indexed_transaction: Vec<(u32, InitializedTransferTx)> = (MIN_SENDER_BALANCE_ORDER
         ..MAX_SENDER_BALANCE_ORDER)
@@ -99,30 +96,34 @@ fn bench_transaction_receiver(
         .zip(transactions)
         .collect();
 
-    c.bench_function_over_inputs(
-        &label,
-        move |b, (amount, tx)| {
-            b.iter(|| {
-                let receiver = CtxReceiver;
-                receiver
-                    .finalize_transaction(tx.clone(), receiver_account.clone(), *amount, &mut rng)
-                    .unwrap()
-            })
-        },
-        indexed_transaction.clone(),
-    );
+    let mut group = c.benchmark_group("MERCAT Transaction");
+    for (amount, tx) in &indexed_transaction {
+        group.bench_with_input(
+            BenchmarkId::new("Receiver", *amount),
+            &(amount, tx.clone()),
+            |b, (&amount, tx)| {
+                b.iter(|| {
+                    let receiver = CtxReceiver;
+                    receiver
+                        .finalize_transaction(
+                            tx.clone(),
+                            receiver_account.clone(),
+                            amount,
+                            &mut rng,
+                        )
+                        .unwrap()
+                })
+            },
+        );
+    }
+    group.finish();
 
     indexed_transaction
         .iter()
         .map(|(amount, tx)| {
             let receiver = CtxReceiver;
             receiver
-                .finalize_transaction(
-                    tx.clone(),
-                    receiver_account_cloned.clone(),
-                    *amount,
-                    &mut rng,
-                )
+                .finalize_transaction(tx.clone(), receiver_account.clone(), *amount, &mut rng)
                 .unwrap()
         })
         .collect()
@@ -137,12 +138,7 @@ fn bench_transaction_mediator(
     transactions: Vec<FinalizedTransferTx>,
     asset_id: AssetId,
 ) -> Vec<JustifiedTransferTx> {
-    let label = "MERCAT Transaction: Mediator".to_string();
     let mut rng = thread_rng();
-    let mediator_account_cloned = mediator_account.clone();
-    let receiver_pub_account_cloned = receiver_pub_account.clone();
-    let sender_pub_account_cloned = sender_pub_account.clone();
-    let asset_id_cloned = asset_id.clone();
 
     let indexed_transaction: Vec<((String, EncryptedAmount), FinalizedTransferTx)> =
         (MIN_SENDER_BALANCE_ORDER..MAX_SENDER_BALANCE_ORDER)
@@ -150,40 +146,43 @@ fn bench_transaction_mediator(
             .zip(sender_pub_balances)
             .zip(transactions)
             .collect();
-    let indexed_transaction_cloned = indexed_transaction.clone();
 
-    c.bench_function_over_inputs(
-        &label,
-        move |b, ((_label, sender_balance), tx)| {
-            b.iter(|| {
-                let mediator = CtxMediator;
-                mediator
-                    .justify_transaction(
-                        tx.clone(),
-                        &mediator_account_cloned.encryption_key,
-                        &sender_pub_account_cloned,
-                        sender_balance,
-                        &receiver_pub_account_cloned,
-                        &[],
-                        asset_id_cloned.clone(),
-                        &mut rng,
-                    )
-                    .unwrap();
-            })
-        },
-        indexed_transaction_cloned,
-    );
+    let mut group = c.benchmark_group("MERCAT Transaction");
+    for ((label, sender_balance), tx) in &indexed_transaction {
+        group.bench_with_input(
+            BenchmarkId::new("Mediator", label),
+            &(sender_balance, tx.clone()),
+            |b, (sender_balance, tx)| {
+                b.iter(|| {
+                    let mediator = CtxMediator;
+                    mediator
+                        .justify_transaction(
+                            tx.clone(),
+                            &mediator_account.encryption_key,
+                            &sender_pub_account,
+                            sender_balance,
+                            &receiver_pub_account,
+                            &[],
+                            asset_id.clone(),
+                            &mut rng,
+                        )
+                        .unwrap();
+                })
+            },
+        );
+    }
+    group.finish();
 
     indexed_transaction
-        .iter()
+        .into_iter()
         .map(|((_, sender_balance), tx)| {
             let mediator = CtxMediator;
             mediator
                 .justify_transaction(
-                    tx.clone(),
+                    tx,
                     &mediator_account.encryption_key,
                     &sender_pub_account,
-                    sender_balance,
+                    &sender_balance,
                     &receiver_pub_account,
                     &[],
                     asset_id.clone(),
@@ -201,7 +200,6 @@ fn bench_transaction_validator(
     receiver_pub_account: PubAccount,
     transactions: Vec<JustifiedTransferTx>,
 ) {
-    let label = "MERCAT Transaction: Validator".to_string();
     let mut rng = thread_rng();
 
     let indexed_transaction: Vec<((String, EncryptedAmount), JustifiedTransferTx)> =
@@ -211,25 +209,29 @@ fn bench_transaction_validator(
             .zip(transactions)
             .collect();
 
-    c.bench_function_over_inputs(
-        &label,
-        move |b, ((_label, sender_balance), tx)| {
-            b.iter(|| {
-                let validator = TransactionValidator;
-                validator
-                    .verify_transaction(
-                        &tx,
-                        &sender_pub_account,
-                        sender_balance,
-                        &receiver_pub_account,
-                        &[],
-                        &mut rng,
-                    )
-                    .unwrap();
-            })
-        },
-        indexed_transaction,
-    );
+    let mut group = c.benchmark_group("MERCAT Transaction");
+    for ((label, sender_balance), tx) in indexed_transaction {
+        group.bench_with_input(
+            BenchmarkId::new("Validator", label),
+            &(sender_balance, tx.clone()),
+            |b, (sender_balance, tx)| {
+                b.iter(|| {
+                    let validator = TransactionValidator;
+                    validator
+                        .verify_transaction(
+                            &tx,
+                            &sender_pub_account,
+                            sender_balance,
+                            &receiver_pub_account,
+                            &[],
+                            &mut rng,
+                        )
+                        .unwrap();
+                })
+            },
+        );
+    }
+    group.finish();
 }
 
 fn bench_transaction(c: &mut Criterion) {

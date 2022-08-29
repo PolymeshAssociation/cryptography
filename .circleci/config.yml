@@ -119,7 +119,7 @@ jobs:
           keys:
             - v6-bench-cache-{{ checksum "./rust.version" }}
       - run:
-          name: Run tests
+          name: Run benchmarks
           command: cargo bench
           no_output_timeout: 30m
       - save_cache:
