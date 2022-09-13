@@ -24,6 +24,11 @@ base64 = { version = "0.12.1" }
 failure = { version = "0.1.7" }
 
 # Crypto
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 rand_core = { version = "0.6", default-features = false }
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
+
+[features]
+default = []
+
+nightly = ["curve25519-dalek/nightly"]

@@ -1,6 +1,6 @@
 [package]
 name = "confidential_identity_v1"
-version = "1.0.0"
+version = "1.0.1"
 authors = [ "Polymesh Association" ]
 readme = "README.md"
 license = "Apache-2.0"
@@ -32,7 +32,7 @@ rand = { version = "0.8", default-features = false, features = ["alloc"] }
 rand_chacha = { version = "0.3.1", default-features = false }
 getrandom = { version = "0.2.6", default-features = false, optional = true }
 
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 schnorrkel = { version = "0.10", default-features = false }
 
 merlin = { version = "3.0.0", default-features = false }
@@ -42,6 +42,7 @@ wasm-bindgen-test = { version = "0.3.10" }
 
 [features]
 default = ["std", "u64_backend"]
+nightly = ["curve25519-dalek/nightly"]
 
 # Backends
 u32_backend = [
@@ -55,6 +56,7 @@ u64_backend = [
 avx2_backend = [
 	"curve25519-dalek/avx2_backend",
 	"schnorrkel/avx2_backend",
+	"blake2/simd",
 ]
 
 serde_all = [
@@ -75,7 +77,6 @@ std = [
 	"rand/std_rng",
 	"rand_chacha/std",
 	"blake2/std",
-	"blake2/simd",
 	# Other
 	"sp-std/std",
 	"sp-core/std",

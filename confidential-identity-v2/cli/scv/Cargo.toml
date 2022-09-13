@@ -14,7 +14,12 @@ serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 # Crypto
 schnorrkel = { version = "0.10", default-features = false }
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 
 # Only binaries
 structopt = { version = "0.3", default-features = false }
+
+[features]
+default = []
+
+nightly = ["curve25519-dalek/nightly"]

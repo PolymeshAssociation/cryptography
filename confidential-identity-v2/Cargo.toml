@@ -1,6 +1,6 @@
 [package]
 name = "confidential_identity_v2"
-version = "2.0.0"
+version = "2.0.1"
 authors = [ "Polymesh Association" ]
 readme = "README.md"
 license = "Apache-2.0"
@@ -24,7 +24,7 @@ byteorder = { version = "^1.2.3", default-features = false, features = ["i128"] 
 criterion = { version = "0.3", optional = true }
 
 # Crypto
-confidential_identity_core = { version = "1.0.0", path = "../confidential-identity-core/", default_features = false }
+confidential_identity_core = { version = "1.0.1", path = "../confidential-identity-core/", default_features = false }
 sha3 = { version = "0.9", default-features = false }
 blake2 = { version = "0.10.2", default-features = false }
 scale-info = { version = "2.0", default-features = false, features = ["derive"] }
@@ -33,13 +33,14 @@ rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
 rand = { version = "0.8", default-features = false, features = ["alloc"] }
 getrandom = { version = "0.2.6", default-features = false, optional = true }
 
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 wasm-bindgen-test = { version = "0.3.10" }
 
 [features]
 default = ["std", "u64_backend"]
+nightly = ["curve25519-dalek/nightly"]
 
 # Backends
 u32_backend = [
@@ -53,6 +54,7 @@ u64_backend = [
 avx2_backend = [
 	"curve25519-dalek/avx2_backend",
 	"confidential_identity_core/avx2_backend",
+	"blake2/simd",
 ]
 
 serde_all = [
@@ -75,7 +77,6 @@ std = [
 	"rand/std",
 	"rand/std_rng",
 	"blake2/std",
-	"blake2/simd",
 	# Other
 	"sp-std/std",
 	"sp-core/std",

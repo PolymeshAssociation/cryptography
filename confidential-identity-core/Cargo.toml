@@ -1,6 +1,6 @@
 [package]
 name = "confidential_identity_core"
-version = "1.0.0"
+version = "1.0.1"
 authors = [ "Polymesh Association" ]
 readme = "README.md"
 license = "Apache-2.0"
@@ -29,7 +29,7 @@ rand_core = { version = "0.6", default-features = false}
 rand = { version = "0.8", default-features = false }
 getrandom = { version = "0.2.6", default-features = false, optional = true}
 
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 bulletproofs = { version = "4.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/bulletproofs", branch = "polymesh" }
 
 merlin = { version = "3.0.0", default-features = false }
@@ -40,6 +40,7 @@ hex = {version = "0.4.2" }
 
 [features]
 default = ["std", "u64_backend"]
+nightly = ["curve25519-dalek/nightly"]
 
 # Backends
 u32_backend = [
