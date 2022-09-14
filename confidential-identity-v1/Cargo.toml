@@ -9,7 +9,6 @@ description = "Confidential Identity Library"
 edition = "2018"
 exclude = [
 	".gitignore",
-	"benches/*",
 	"cli/*",
 ]
 
