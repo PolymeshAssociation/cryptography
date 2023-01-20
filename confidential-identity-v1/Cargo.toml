@@ -75,7 +75,6 @@ std = [
 	"rand/std_rng",
 	"rand_chacha/std",
 	"blake2/std",
-	"blake2/simd",
 	# Other
 	"sp-std/std",
 	"sp-core/std",
