@@ -1,6 +1,6 @@
 use crate::uuid;
 
-use sp_core::hashing::blake2_128;
+use sp_io::hashing::blake2_128;
 
 /// Create an mocked version of InvestorUid using a DID as input.
 ///
