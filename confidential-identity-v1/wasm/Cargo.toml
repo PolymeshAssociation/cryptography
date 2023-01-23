@@ -13,7 +13,7 @@ crate-type = ["cdylib"]
 confidential_identity_v1 = { path = ".." }
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
 rand_core = { version = "0.6", default-features = false}
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 blake2 = { version = "0.10.2", default-features = false }
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

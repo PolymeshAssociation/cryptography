@@ -24,7 +24,7 @@ regex = { version = "1.6" }
 
 # Crypto
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.10"

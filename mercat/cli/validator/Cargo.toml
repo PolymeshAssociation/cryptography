@@ -22,6 +22,6 @@ serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 # Crypto
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 rand_core = { version = "0.6", default-features = false }
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }

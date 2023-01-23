@@ -32,7 +32,7 @@ rand = { version = "0.8", default-features = false, features = ["alloc"] }
 rand_chacha = { version = "0.3.1", default-features = false }
 getrandom = { version = "0.2.6", default-features = false, optional = true }
 
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["nightly", "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 schnorrkel = { version = "0.10", default-features = false }
 
 merlin = { version = "3.0.0", default-features = false }
