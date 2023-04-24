@@ -200,6 +200,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 
 #[macro_use]
 pub(crate) mod macros;
@@ -258,7 +259,7 @@ const ASSET_ID_LEN: usize = 12;
 /// decrypting an encrypted asset id we have a guess as what the
 /// asset id should be, use `ElgamalSecretKey`'s `verify()`
 /// to verify that the encrypted value is the same as the hinted value.
-#[derive(Default, Debug, Clone, PartialEq, Zeroize, Encode, Decode)]
+#[derive(Default, Debug, Clone, PartialEq, Zeroize, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[zeroize(drop)]
 pub struct AssetId {
