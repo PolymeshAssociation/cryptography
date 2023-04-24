@@ -11,23 +11,35 @@ edition = "2018"
 crate-type = ["cdylib"]
 
 [dependencies]
-confidential_identity_v2 = { path = ".." }
-rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
-rand_chacha = { version = "0.3.1", default-features = false }
-rand_core = { version = "0.6", default-features = false}
-getrandom = { version = "0.2.6", default-features = false, features = ["js"] }
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
-blake2 = { version = "0.10.2", default-features = false }
-serde = { version = "1.0.105", features = ["derive"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+wasm-bindgen = "0.2"
+
+rand = { version = "0.8", default-features = false, features = ["alloc"] }
+rand_chacha = { version = "0.3", default-features = false }
+rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
+
+serde = { version = "1.0.105", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]}
-hex = { version = "0.4.2", default-features = false }
-wasm-bindgen = "0.2"
+
+# Crypto
+confidential_identity_v2 = { path = "..", default-features = false, features = ["serde_all"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
+blake2 = { version = "0.10.2", default-features = false }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz", "--enable-mutable-globals"]
 
 [features]
-default = []
+default = ["no_std"]
 
 nightly = ["curve25519-dalek/nightly"]
+
+no_std = [
+  "confidential_identity_v2/no_std",
+  "confidential_identity_v2/wasm",
+]
+
+std = [
+  "confidential_identity_v2/std",
+]

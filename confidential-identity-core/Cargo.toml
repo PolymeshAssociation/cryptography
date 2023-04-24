@@ -37,7 +37,7 @@ merlin = { version = "3.0.0", default-features = false }
 
 [dev-dependencies]
 wasm-bindgen-test = { version = "0.3.10"}
-hex = {version = "0.4.2" }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 
 [features]
 default = ["std", "u64_backend"]
@@ -58,6 +58,7 @@ avx2_backend = [
 serde_all = [
 	"serde",
 	"curve25519-dalek/serde",
+	"bulletproofs/serde"
 ]
 
 alloc = [

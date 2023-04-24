@@ -19,7 +19,7 @@ base64 = { version = "0.12.1" }
 
 # Crypto
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
-hex = { version = "0.4.2" }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 
 [features]

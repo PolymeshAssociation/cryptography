@@ -11,15 +11,31 @@ edition = "2018"
 crate-type = ["cdylib"]
 
 [dependencies]
-mercat = { path = ".." }
-rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
-rand_core = { version = "0.6", default-features = false}
-serde = { version = "1.0.105", features = ["derive"] }
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
-hex = { version = "0.4.2" }
+mercat = { path = "..", default-features = false }
+
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 base64 = { version = "0.12.1" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"]}
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+
+rand = { version = "0.8", default-features = false, features = ["alloc"] }
+rand_chacha = { version = "0.3", default-features = false }
+rand_core = { version = "0.6", default-features = false, features = ["alloc"] }
+
+serde = { version = "1.0.105", default-features = false, features = ["alloc", "derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]}
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz", "--enable-mutable-globals"]
+
+[features]
+default = ["no_std"]
+
+no_std = [
+  "mercat/no_std",
+]
+
+std = [
+  "mercat/std",
+]

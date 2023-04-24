@@ -15,7 +15,8 @@ exclude = [
 [dependencies]
 # Substrate
 sp-std = { version = "5.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12" }
-sp-io = { version = "7.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12" }
+sp-core-hashing = { version = "5.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12", optional = true }
+sp-io = { version = "7.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12", optional = true }
 
 # Common
 serde = { version = "1.0.105", default-features = false, features = ["derive"], optional = true }
@@ -47,6 +48,10 @@ wasm-bindgen-test = { version = "0.3.10" }
 default = ["std", "u64_backend"]
 nightly = ["curve25519-dalek/nightly"]
 
+wasm = [
+  "sp-core-hashing"
+]
+
 # Backends
 u32_backend = [
 	"curve25519-dalek/u32_backend",
@@ -69,7 +74,9 @@ serde_all = [
 	"schnorrkel/serde",
 ]
 
-no_std = [ ]
+no_std = [
+  "u64_backend",
+]
 std = [
 	# General and optional
 	"serde_all",
