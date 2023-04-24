@@ -15,9 +15,9 @@ use mercat::{
     SecAccount, TransferTransactionMediator, TransferTransactionReceiver,
     TransferTransactionSender,
 };
-use rand_core::{CryptoRng, RngCore};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
+use rand_core::{CryptoRng, RngCore};
 use serde::Serialize;
 use serde_json;
 use std::convert::Into;
@@ -541,7 +541,10 @@ fn ticker_id_to_asset_id(ticker_id: String) -> Fallible<AssetId> {
     Ok(AssetId { id: asset_id })
 }
 
-fn create_secret_account<R: RngCore + CryptoRng>(rng: &mut R, ticker_id: String) -> Fallible<SecAccount> {
+fn create_secret_account<R: RngCore + CryptoRng>(
+    rng: &mut R,
+    ticker_id: String,
+) -> Fallible<SecAccount> {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
