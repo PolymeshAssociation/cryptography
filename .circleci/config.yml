@@ -2,7 +2,7 @@ version: 2
 jobs:
   lint:
     docker:
-      - image: polymeshassociation/rust:debian-nightly-2022-09-15
+      - image: polymeshassociation/rust:debian-nightly-2022-11-02
     environment:
       VERBOSE: "1"
     steps:
@@ -12,7 +12,7 @@ jobs:
           command: ./scripts/lint
   build:
     docker:
-      - image: polymeshassociation/rust:debian-nightly-2022-09-15
+      - image: polymeshassociation/rust:debian-nightly-2022-11-02
     environment:
       VERBOSE: "1"
     steps:
@@ -35,7 +35,7 @@ jobs:
             - "./target"
   test:
     docker:
-      - image: polymeshassociation/rust:debian-nightly-2022-09-15
+      - image: polymeshassociation/rust:debian-nightly-2022-11-02
     environment:
       VERBOSE: "1"
     steps:
@@ -72,7 +72,7 @@ jobs:
             - "./target"
   build_wasm:
     docker:
-      - image: polymeshassociation/rust:debian-nightly-2022-09-15
+      - image: polymeshassociation/rust:debian-nightly-2022-11-02
     environment:
       VERBOSE: "1"
     steps:
@@ -107,7 +107,7 @@ jobs:
             - "./target"
   bench:
     docker:
-      - image: polymeshassociation/rust:debian-nightly-2022-09-15
+      - image: polymeshassociation/rust:debian-nightly-2022-11-02
     environment:
       VERBOSE: "1"
     steps:
