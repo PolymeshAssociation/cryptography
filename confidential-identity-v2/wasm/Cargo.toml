@@ -25,6 +25,7 @@ serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]
 # Crypto
 confidential_identity_v2 = { path = "..", default-features = false, features = ["serde_all"] }
 curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
+bulletproofs = { version = "4.0.0", default-features = false, features = ["serde"] }
 blake2 = { version = "0.10.2", default-features = false }
 
 [package.metadata.wasm-pack.profile.release]
