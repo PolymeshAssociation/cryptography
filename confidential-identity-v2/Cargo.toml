@@ -1,6 +1,6 @@
 [package]
 name = "confidential_identity_v2"
-version = "2.0.1"
+version = "2.1.0"
 authors = [ "Polymesh Association" ]
 readme = "README.md"
 license = "Apache-2.0"
@@ -14,8 +14,8 @@ exclude = [
 
 [dependencies]
 # Substrate
-sp-std = { version = "4.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-05" }
-sp-io = { version = "6.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-05" }
+sp-std = { version = "5.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12" }
+sp-io = { version = "7.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 
 # Common
@@ -27,7 +27,7 @@ byteorder = { version = "^1.2.3", default-features = false, features = ["i128"] 
 criterion = { version = "0.3", optional = true }
 
 # Crypto
-confidential_identity_core = { version = "1.0.1", path = "../confidential-identity-core/", default_features = false }
+confidential_identity_core = { version = "1.1.0", path = "../confidential-identity-core/", default_features = false }
 sha3 = { version = "0.9", default-features = false }
 blake2 = { version = "0.10.2", default-features = false }
 scale-info = { version = "2.0", default-features = false, features = ["derive"] }
