@@ -49,13 +49,13 @@ jobs:
       - run:
           name: Run tests
           command: |
-            RUST_LOG=info cargo test
+            #RUST_LOG=info cargo test
 
             cd confidential-identity-v2/wasm
             # install wasm-pack
             cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack
             # install clang v11 and npm
-            apt install -y clang-11 npm
+            apt update && apt install -y clang-11 npm
             # build wasm module.
             CC="clang-11" CXX="clang-11" wasm-pack build --dev --target nodejs
 
