@@ -49,7 +49,7 @@ jobs:
       - run:
           name: Run tests
           command: |
-            #RUST_LOG=info cargo test
+            RUST_LOG=info cargo test
 
             cd confidential-identity-v2/wasm
             # install wasm-pack
