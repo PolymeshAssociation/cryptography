@@ -1,6 +1,6 @@
 use crate::uuid;
 
-#[cfg(feature = "sp-core-hashing")]
+#[cfg(not(feature = "sp-io"))]
 use sp_core_hashing::blake2_128;
 #[cfg(feature = "sp-io")]
 use sp_io::hashing::blake2_128;

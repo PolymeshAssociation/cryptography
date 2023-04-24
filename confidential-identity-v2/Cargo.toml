@@ -1,6 +1,6 @@
 [package]
 name = "confidential_identity_v2"
-version = "2.1.0"
+version = "2.1.1"
 authors = [ "Polymesh Association" ]
 readme = "README.md"
 license = "Apache-2.0"
