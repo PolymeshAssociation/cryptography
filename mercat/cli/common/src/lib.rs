@@ -182,7 +182,6 @@ impl ValidationResult {
 /// Used in processing of pending transactions.
 #[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", derive(Debug))]
 pub struct OrderingState {
     pub last_processed_tx_counter: Option<u32>,
     pub last_pending_tx_counter: u32,
