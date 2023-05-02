@@ -63,7 +63,7 @@ pub unsafe extern "C" fn cdd_claim_data_free(ptr: *mut CddClaimData) {
     if ptr.is_null() {
         return;
     }
-    Box::from_raw(ptr);
+    drop(Box::from_raw(ptr));
 }
 
 /// Create a new `ScopeClaimData` object.
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn scope_claim_data_free(ptr: *mut ScopeClaimData) {
     if ptr.is_null() {
         return;
     }
-    Box::from_raw(ptr);
+    drop(Box::from_raw(ptr));
 }
 
 // ------------------------------------------------------------------------
@@ -164,7 +164,7 @@ pub unsafe extern "C" fn scope_claim_proof_free(ptr: *mut ScopeClaimProof) {
     if ptr.is_null() {
         return;
     }
-    Box::from_raw(ptr);
+    drop(Box::from_raw(ptr));
 }
 
 // ------------------------------------------------------------------------
