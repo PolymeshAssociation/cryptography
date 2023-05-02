@@ -11,6 +11,7 @@ use curve25519_dalek::scalar::Scalar;
 use log::info;
 use mercat::{
     transaction::CtxMediator, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
+    InitializedTransferTx,
     FinalizedTransferTx, MediatorAccount, TransferTransactionMediator, TransferTxState, TxSubstate,
 };
 use metrics::timing;
@@ -110,7 +111,7 @@ pub fn justify_asset_transfer_transaction(
         &instruction_path,
     )?;
 
-    let asset_tx = FinalizedTransferTx::decode(&mut &instruction.data[..]).map_err(|error| {
+    let (mut init_tx, finalized_tx) = <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..]).map_err(|error| {
         Error::ObjectLoadError {
             error,
             path: construct_path(
@@ -178,9 +179,10 @@ pub fn justify_asset_transfer_transaction(
     )?;
 
     let asset_id = asset_id_from_ticker(&ticker).map_err(|error| Error::LibraryError { error })?;
-    let mut justified_tx = CtxMediator
+    let justified_tx = CtxMediator
         .justify_transaction(
-            asset_tx.clone(),
+            &init_tx,
+            &finalized_tx,
             &mediator_account.encryption_key,
             &sender_ordered_pub_account.pub_account,
             &pending_balance,
@@ -197,7 +199,7 @@ pub fn justify_asset_transfer_transaction(
             tx_id
         );
 
-        justified_tx.finalized_data.init_data.memo.sender_account_id += non_empty_account_id();
+        init_tx.memo.sender_account_id += non_empty_account_id();
     }
 
     timing!(
@@ -213,7 +215,7 @@ pub fn justify_asset_transfer_transaction(
     if reject {
         let rejected_state = TransferTxState::Justification(TxSubstate::Rejected);
         next_instruction = TransferInstruction {
-            data: asset_tx.encode().to_vec(),
+            data: (&init_tx, &finalized_tx).encode().to_vec(),
             state: rejected_state,
         };
 
@@ -228,14 +230,14 @@ pub fn justify_asset_transfer_transaction(
             info!(
                 "CLI log: tx-{}: Transaction as base64:\n{}\n",
                 tx_id,
-                base64::encode(asset_tx.encode())
+                base64::encode(finalized_tx.encode())
             );
         }
     } else {
         let new_state = TransferTxState::Justification(TxSubstate::Started);
         // Save the updated_issuer_account, and the justified transaction.
         next_instruction = TransferInstruction {
-            data: justified_tx.encode().to_vec(),
+            data: (&init_tx, &finalized_tx).encode().to_vec(),
             state: new_state,
         };
 

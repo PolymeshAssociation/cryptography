@@ -16,7 +16,7 @@ use errors::Error;
 use log::{debug, error, info};
 use mercat::{
     Account, AssetTxState, EncryptedAmount, EncryptedAssetId, FinalizedTransferTx,
-    InitializedAssetTx, InitializedTransferTx, JustifiedTransferTx, PubAccount, PubAccountTx,
+    InitializedAssetTx, InitializedTransferTx, PubAccount, PubAccountTx,
     SecAccount, TransferTxState, TxSubstate,
 };
 use metrics::Recorder;
@@ -70,13 +70,15 @@ pub enum CoreTransaction {
         tx_id: u32,
     },
     TransferFinalize {
-        tx: FinalizedTransferTx,
+        init_tx: InitializedTransferTx,
+        finalized_tx: FinalizedTransferTx,
         receiver: String,
         ordering_state: OrderingState,
         tx_id: u32,
     },
     TransferJustify {
-        tx: JustifiedTransferTx,
+        init_tx: InitializedTransferTx,
+        finalized_tx: FinalizedTransferTx,
         mediator: String,
         tx_id: u32,
     },
@@ -88,21 +90,13 @@ impl CoreTransaction {
     fn is_ready_for_validation(&self) -> bool {
         match self {
             CoreTransaction::Account {
-                account_tx: _,
-                ordering_state: _,
-                tx_id: _,
+                ..
             } => true,
             CoreTransaction::IssueInit {
-                issue_tx: _,
-                issuer: _,
-                tx_id: _,
-                ordering_state: _,
-                amount: _,
+                ..
             } => true,
             CoreTransaction::TransferJustify {
-                tx: _,
-                mediator: _,
-                tx_id: _,
+                ..
             } => true,
             _ => false,
         }
@@ -113,10 +107,7 @@ impl CoreTransaction {
         matches!(
             self,
             CoreTransaction::TransferInit {
-                tx: _,
-                sender: _,
-                ordering_state: _,
-                tx_id: _,
+                ..
             }
         )
     }
@@ -124,28 +115,20 @@ impl CoreTransaction {
     pub fn ordering_state(&self) -> OrderingState {
         match self {
             CoreTransaction::Account {
-                account_tx: _,
-                tx_id: _,
                 ordering_state,
+                ..
             } => ordering_state.clone(),
             CoreTransaction::IssueInit {
-                issue_tx: _,
-                issuer: _,
                 ordering_state,
-                tx_id: _,
-                amount: _,
+                ..
             } => ordering_state.clone(),
             CoreTransaction::TransferInit {
-                tx: _,
-                sender: _,
                 ordering_state,
-                tx_id: _,
+                ..
             } => ordering_state.clone(),
             CoreTransaction::TransferFinalize {
-                tx: _,
-                receiver: _,
                 ordering_state,
-                tx_id: _,
+                ..
             } => ordering_state.clone(),
             _ => OrderingState::new(0),
         }
@@ -802,9 +785,7 @@ pub fn compute_enc_pending_balance(
     for core_tx in transfer_inits {
         if let CoreTransaction::TransferInit {
             tx,
-            sender: _,
-            ordering_state: _,
-            tx_id: _,
+            ..
         } = core_tx
         {
             pending_balance -= tx.memo.enc_amount_using_sender;
@@ -916,18 +897,22 @@ pub fn load_tx_file(
     } else if state == TransferTxState::Finalization(TxSubstate::Started).to_string() {
         let instruction: OrderedTransferInstruction =
             load_object_from(PathBuf::from(tx_file_path))?;
+        let (init_tx, finalized_tx) = <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..])
+                .map_err(|_| Error::DecodeError)?;
         CoreTransaction::TransferFinalize {
-            tx: FinalizedTransferTx::decode(&mut &instruction.data[..])
-                .map_err(|_| Error::DecodeError)?,
+            init_tx,
+            finalized_tx,
             receiver: user,
             ordering_state: instruction.ordering_state,
             tx_id,
         }
     } else if state == TransferTxState::Justification(TxSubstate::Started).to_string() {
         let instruction: TransferInstruction = load_object_from(PathBuf::from(tx_file_path))?;
+        let (init_tx, finalized_tx) = <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..])
+                .map_err(|_| Error::DecodeError)?;
         CoreTransaction::TransferJustify {
-            tx: JustifiedTransferTx::decode(&mut &instruction.data[..])
-                .map_err(|_| Error::DecodeError)?,
+            init_tx,
+            finalized_tx,
             mediator: user,
             tx_id,
         }
@@ -947,7 +932,7 @@ pub fn load_tx_file(
 
 /// Use only for debugging purposes.
 #[inline]
-fn debug_decrypt(
+pub fn debug_decrypt(
     account_id: EncryptedAssetId,
     enc_balance: EncryptedAmount,
     db_dir: PathBuf,

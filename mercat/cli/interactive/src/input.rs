@@ -270,6 +270,10 @@ pub struct JustifyTransferInfo {
     )]
     pub seed: Option<String>,
 
+    /// Initialized tx as base64.
+    #[structopt(short, long, help = "Initialized tx as base64.")]
+    pub init_tx: String,
+
     /// Finalized tx as base64.
     #[structopt(short, long, help = "Finalized tx as base64.")]
     pub finalized_tx: String,
@@ -458,6 +462,7 @@ pub fn parse_input() -> CLI {
                 receiver: cfg.receiver,
                 mediator: cfg.mediator,
                 seed,
+                init_tx: cfg.init_tx,
                 finalized_tx: cfg.finalized_tx,
             };
 

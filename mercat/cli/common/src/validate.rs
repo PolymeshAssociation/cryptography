@@ -12,7 +12,7 @@ use log::{debug, error, info};
 use mercat::{
     account::AccountValidator, asset::AssetValidator, transaction::TransactionValidator,
     AccountCreatorVerifier, AssetTransactionVerifier, AssetTxState, EncryptedAmount,
-    EncryptedAssetId, InitializedAssetTx, JustifiedTransferTx, PubAccount,
+    EncryptedAssetId, InitializedAssetTx, InitializedTransferTx, FinalizedTransferTx, PubAccount,
     TransferTransactionVerifier, TransferTxState, TxSubstate,
 };
 use metrics::timing;
@@ -55,11 +55,12 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                 last_tx_id = Some(std::cmp::max(last_tx_id.unwrap_or_default(), tx_id));
             }
             CoreTransaction::TransferJustify {
-                tx,
+                init_tx,
+                finalized_tx,
                 tx_id,
                 mediator,
             } => {
-                let account_id = tx.finalized_data.init_data.memo.sender_account_id;
+                let account_id = init_tx.memo.sender_account_id;
                 let (sender, ticker, _) = get_user_ticker_from(account_id, db_dir.clone())?;
                 let sender_ordered_pub_account: OrderedPubAccount = load_object(
                     db_dir.clone(),
@@ -92,7 +93,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                     debug_decrypt(account_id, pending_balance, db_dir.clone())?
                 );
                 let (sender_result, receiver_result) =
-                    validate_transaction(db_dir.clone(), tx, mediator, pending_balance, tx_id);
+                    validate_transaction(db_dir.clone(), init_tx, finalized_tx, mediator, pending_balance, tx_id);
                 results.push(sender_result);
                 results.push(receiver_result);
                 last_tx_id = Some(std::cmp::max(last_tx_id.unwrap_or_default(), tx_id));
@@ -423,11 +424,12 @@ fn process_transaction(
     pending_balance: EncryptedAmount,
 ) -> Result<(), Error> {
     let mut rng = OsRng::default();
-    let tx = JustifiedTransferTx::decode(&mut &instruction.data[..]).unwrap();
+    let (init_tx, finalized_tx) = <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..]).unwrap();
     let validator = TransactionValidator;
     validator
         .verify_transaction(
-            &tx,
+            &init_tx,
+            &finalized_tx,
             &sender_pub_account,
             &pending_balance,
             &receiver_pub_account,
@@ -439,7 +441,8 @@ fn process_transaction(
 
 pub fn validate_transaction(
     db_dir: PathBuf,
-    tx: JustifiedTransferTx,
+    init_tx: InitializedTransferTx,
+    _finalized_tx: FinalizedTransferTx,
     mediator: String,
     pending_balance: EncryptedAmount,
     tx_id: u32,
@@ -448,7 +451,7 @@ pub fn validate_transaction(
     // Load the transaction, mediator's account, and issuer's public account.
 
     let (sender, _, _) = match get_user_ticker_from(
-        tx.finalized_data.init_data.memo.sender_account_id,
+        init_tx.memo.sender_account_id,
         db_dir.clone(),
     ) {
         Err(error) => {
@@ -462,7 +465,7 @@ pub fn validate_transaction(
     };
 
     let (receiver, ticker, _) = match get_user_ticker_from(
-        tx.finalized_data.init_data.memo.receiver_account_id,
+        init_tx.memo.receiver_account_id,
         db_dir.clone(),
     ) {
         Err(error) => {
@@ -589,13 +592,13 @@ pub fn validate_transaction(
             user: sender,
             ticker: ticker.clone(),
             direction: Direction::Outgoing,
-            amount: Some(tx.finalized_data.init_data.memo.enc_amount_using_sender),
+            amount: Some(init_tx.memo.enc_amount_using_sender),
         },
         ValidationResult {
             user: receiver,
             ticker,
             direction: Direction::Incoming,
-            amount: Some(tx.finalized_data.init_data.memo.enc_amount_using_receiver),
+            amount: Some(init_tx.memo.enc_amount_using_receiver),
         },
     )
 }

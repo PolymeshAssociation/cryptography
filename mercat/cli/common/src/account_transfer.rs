@@ -136,7 +136,7 @@ pub fn process_create_tx(
             owner_enc_pub_key: sender_account.public.owner_enc_pub_key,
         },
     };
-    let mut asset_tx = ctx_sender
+    let mut init_tx = ctx_sender
         .create_transaction(
             &pending_account,
             &pending_balance,
@@ -161,7 +161,7 @@ pub fn process_create_tx(
             tx_id,
             PrintableAccountId(pending_account.public.enc_asset_id.encode())
         );
-        asset_tx.memo.sender_account_id += non_empty_account_id();
+        init_tx.memo.sender_account_id += non_empty_account_id();
     }
 
     // Save the artifacts to file.
@@ -170,7 +170,7 @@ pub fn process_create_tx(
     let instruction = OrderedTransferInstruction {
         state: new_state,
         ordering_state,
-        data: asset_tx.encode().to_vec(),
+        data: init_tx.encode().to_vec(),
     };
 
     save_object(
@@ -185,7 +185,7 @@ pub fn process_create_tx(
         info!(
             "CLI log: tx-{}: Transaction as base64:\n{}\n",
             tx_id,
-            base64::encode(asset_tx.encode())
+            base64::encode(init_tx.encode())
         );
     }
 
@@ -236,7 +236,7 @@ pub fn process_finalize_tx(
         &confidential_transaction_file(tx_id, &sender, state),
     )?;
 
-    let tx = InitializedTransferTx::decode(&mut &instruction.data[..]).map_err(|error| {
+    let mut init_tx = InitializedTransferTx::decode(&mut &instruction.data[..]).map_err(|error| {
         Error::ObjectLoadError {
             error,
             path: construct_path(
@@ -290,8 +290,8 @@ pub fn process_finalize_tx(
     // Finalize the transaction.
     let finalize_by_receiver_timer = Instant::now();
     let receiver = CtxReceiver {};
-    let mut asset_tx = receiver
-        .finalize_transaction(tx, receiver_account.clone(), amount, &mut rng)
+    let finalized_tx = receiver
+        .finalize_transaction(&init_tx, receiver_account.clone(), amount, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     let ordering_state = OrderingState {
@@ -305,7 +305,7 @@ pub fn process_finalize_tx(
             "CLI log: tx-{}: Cheating by changing the receiver's account id. Correct account id: {}",
             tx_id, PrintableAccountId(receiver_account.public.enc_asset_id.encode())
         );
-        asset_tx.init_data.memo.receiver_account_id += non_empty_account_id();
+        init_tx.memo.receiver_account_id += non_empty_account_id();
     }
 
     timing!(
@@ -321,7 +321,7 @@ pub fn process_finalize_tx(
     let instruction = OrderedTransferInstruction {
         state,
         ordering_state,
-        data: asset_tx.encode().to_vec(),
+        data: (&init_tx, &finalized_tx).encode().to_vec(),
     };
 
     save_object(
@@ -336,7 +336,7 @@ pub fn process_finalize_tx(
         info!(
             "CLI log: tx-{}: Transaction as base64:\n{}\n",
             tx_id,
-            base64::encode(asset_tx.encode())
+            base64::encode(finalized_tx.encode())
         );
     }
 

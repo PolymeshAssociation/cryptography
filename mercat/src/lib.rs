@@ -346,14 +346,12 @@ pub struct InitializedTransferTx {
 #[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FinalizedTransferTx {
-    pub init_data: InitializedTransferTx,
     pub asset_id_from_sender_equal_to_receiver_proof: CipherEqualSamePubKeyProof,
 }
 
 /// Wrapper for the contents and auditors' payload.
 #[derive(Clone, Encode, Decode, Debug)]
 pub struct JustifiedTransferTx {
-    pub finalized_data: FinalizedTransferTx,
 }
 
 /// The interface for confidential transaction.
@@ -379,7 +377,7 @@ pub trait TransferTransactionReceiver {
     /// of the MERCAT paper.
     fn finalize_transaction<T: RngCore + CryptoRng>(
         &self,
-        initialized_transaction: InitializedTransferTx,
+        initialized_transaction: &InitializedTransferTx,
         receiver_account: Account,
         amount: Balance,
         rng: &mut T,
@@ -390,7 +388,8 @@ pub trait TransferTransactionMediator {
     /// Justify the transaction by mediator.
     fn justify_transaction<R: RngCore + CryptoRng>(
         &self,
-        finalized_transaction: FinalizedTransferTx,
+        init_tx: &InitializedTransferTx,
+        finalized_tx: &FinalizedTransferTx,
         mediator_enc_keys: &EncryptionKeys,
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
@@ -405,7 +404,8 @@ pub trait TransferTransactionVerifier {
     /// Verify the initialized, finalized, and justified transactions.
     fn verify_transaction<R: RngCore + CryptoRng>(
         &self,
-        justified_transaction: &JustifiedTransferTx,
+        init_tx: &InitializedTransferTx,
+        finalized_tx: &FinalizedTransferTx,
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
@@ -419,7 +419,8 @@ pub trait TransferTransactionAuditor {
     /// Audit the sender's encrypted amount.
     fn audit_transaction(
         &self,
-        justified_transaction: &JustifiedTransferTx,
+        init_tx: &InitializedTransferTx,
+        finalized_tx: &FinalizedTransferTx,
         sender_account: &PubAccount,
         receiver_account: &PubAccount,
         auditor_enc_keys: &(u32, EncryptionKeys),

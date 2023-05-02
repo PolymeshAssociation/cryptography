@@ -99,6 +99,7 @@ fn main() {
             cfg.receiver,
             cfg.mediator,
             cfg.ticker,
+            cfg.init_tx,
             cfg.finalized_tx,
         )
         .unwrap(),
@@ -309,7 +310,7 @@ pub fn process_finalize_tx(
     // Finalize the transaction.
     let receiver = CtxReceiver {};
     let asset_tx = receiver
-        .finalize_transaction(tx, receiver_account, amount, &mut rng)
+        .finalize_transaction(&tx, receiver_account, amount, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     // Save the artifacts to file.
@@ -329,13 +330,16 @@ pub fn justify_asset_transfer_transaction(
     receiver: Vec<String>,
     mediator: String,
     ticker: String,
+    init_tx: String,
     finalized_tx: String,
 ) -> Result<(), Error> {
     // Load the transaction, mediator's credentials, and issuer's public account.
     let mut rng = create_rng_from_seed(Some(seed))?;
 
+    let mut data: &[u8] = &base64::decode(&init_tx).unwrap();
+    let init_tx = InitializedTransferTx::decode(&mut data).unwrap();
     let mut data: &[u8] = &base64::decode(&finalized_tx).unwrap();
-    let asset_tx = FinalizedTransferTx::decode(&mut data).unwrap();
+    let finalized_tx = FinalizedTransferTx::decode(&mut data).unwrap();
 
     let mediator_account: MediatorAccount =
         load_object(db_dir, OFF_CHAIN_DIR, &mediator, SECRET_ACCOUNT_FILE)?;
@@ -366,7 +370,8 @@ pub fn justify_asset_transfer_transaction(
 
     let justified_tx = CtxMediator {}
         .justify_transaction(
-            asset_tx,
+            &init_tx,
+            &finalized_tx,
             &mediator_account.encryption_key,
             &sender_pub_account,
             &sender_balance,

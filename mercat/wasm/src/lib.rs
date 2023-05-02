@@ -432,9 +432,10 @@ pub fn finalize_transaction(
 ) -> Fallible<FinalizedTransactionOutput> {
     let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
+    let init_tx = decode::<InitializedTransferTx>(init_tx)?;
     let finalized_tx = CtxReceiver
         .finalize_transaction(
-            decode::<InitializedTransferTx>(init_tx)?,
+            &init_tx,
             receiver_account.to_mercat()?,
             amount,
             &mut rng,
@@ -470,6 +471,7 @@ pub fn finalize_transaction(
 /// * `TransactionJustificationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn justify_transaction(
+    init_tx: Base64,
     finalized_tx: Base64,
     mediator_account: MediatorAccount,
     sender_public_account: PubAccount,
@@ -479,9 +481,12 @@ pub fn justify_transaction(
 ) -> Fallible<JustifiedTransactionOutput> {
     let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
+    let init_tx = decode::<InitializedTransferTx>(init_tx)?;
+    let finalized_tx = decode::<FinalizedTransferTx>(finalized_tx)?;
     let justified_tx = CtxMediator
         .justify_transaction(
-            decode::<FinalizedTransferTx>(finalized_tx)?,
+            &init_tx,
+            &finalized_tx,
             &mediator_account.to_mercat()?.encryption_key,
             &sender_public_account.to_mercat()?,
             &decode::<EncryptedAmount>(sender_encrypted_pending_balance)?,
