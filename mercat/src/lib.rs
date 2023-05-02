@@ -351,8 +351,7 @@ pub struct FinalizedTransferTx {
 
 /// Wrapper for the contents and auditors' payload.
 #[derive(Clone, Encode, Decode, Debug)]
-pub struct JustifiedTransferTx {
-}
+pub struct JustifiedTransferTx {}
 
 /// The interface for confidential transaction.
 pub trait TransferTransactionSender {

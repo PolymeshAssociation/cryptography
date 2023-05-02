@@ -16,8 +16,8 @@ use errors::Error;
 use log::{debug, error, info};
 use mercat::{
     Account, AssetTxState, EncryptedAmount, EncryptedAssetId, FinalizedTransferTx,
-    InitializedAssetTx, InitializedTransferTx, PubAccount, PubAccountTx,
-    SecAccount, TransferTxState, TxSubstate,
+    InitializedAssetTx, InitializedTransferTx, PubAccount, PubAccountTx, SecAccount,
+    TransferTxState, TxSubstate,
 };
 use metrics::Recorder;
 use metrics_core::Key;
@@ -89,47 +89,24 @@ impl CoreTransaction {
     /// Returns true for transactions that can be verified by the network validators.
     fn is_ready_for_validation(&self) -> bool {
         match self {
-            CoreTransaction::Account {
-                ..
-            } => true,
-            CoreTransaction::IssueInit {
-                ..
-            } => true,
-            CoreTransaction::TransferJustify {
-                ..
-            } => true,
+            CoreTransaction::Account { .. } => true,
+            CoreTransaction::IssueInit { .. } => true,
+            CoreTransaction::TransferJustify { .. } => true,
             _ => false,
         }
     }
 
     /// Returns true for outgoing transactions.
     fn decreases_account_balance(&self) -> bool {
-        matches!(
-            self,
-            CoreTransaction::TransferInit {
-                ..
-            }
-        )
+        matches!(self, CoreTransaction::TransferInit { .. })
     }
 
     pub fn ordering_state(&self) -> OrderingState {
         match self {
-            CoreTransaction::Account {
-                ordering_state,
-                ..
-            } => ordering_state.clone(),
-            CoreTransaction::IssueInit {
-                ordering_state,
-                ..
-            } => ordering_state.clone(),
-            CoreTransaction::TransferInit {
-                ordering_state,
-                ..
-            } => ordering_state.clone(),
-            CoreTransaction::TransferFinalize {
-                ordering_state,
-                ..
-            } => ordering_state.clone(),
+            CoreTransaction::Account { ordering_state, .. } => ordering_state.clone(),
+            CoreTransaction::IssueInit { ordering_state, .. } => ordering_state.clone(),
+            CoreTransaction::TransferInit { ordering_state, .. } => ordering_state.clone(),
+            CoreTransaction::TransferFinalize { ordering_state, .. } => ordering_state.clone(),
             _ => OrderingState::new(0),
         }
     }
@@ -783,11 +760,7 @@ pub fn compute_enc_pending_balance(
 
     let mut pending_balance = enc_balance_in_account;
     for core_tx in transfer_inits {
-        if let CoreTransaction::TransferInit {
-            tx,
-            ..
-        } = core_tx
-        {
+        if let CoreTransaction::TransferInit { tx, .. } = core_tx {
             pending_balance -= tx.memo.enc_amount_using_sender;
             let account_id = tx.memo.sender_account_id;
             debug!(
@@ -897,7 +870,8 @@ pub fn load_tx_file(
     } else if state == TransferTxState::Finalization(TxSubstate::Started).to_string() {
         let instruction: OrderedTransferInstruction =
             load_object_from(PathBuf::from(tx_file_path))?;
-        let (init_tx, finalized_tx) = <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..])
+        let (init_tx, finalized_tx) =
+            <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..])
                 .map_err(|_| Error::DecodeError)?;
         CoreTransaction::TransferFinalize {
             init_tx,
@@ -908,7 +882,8 @@ pub fn load_tx_file(
         }
     } else if state == TransferTxState::Justification(TxSubstate::Started).to_string() {
         let instruction: TransferInstruction = load_object_from(PathBuf::from(tx_file_path))?;
-        let (init_tx, finalized_tx) = <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..])
+        let (init_tx, finalized_tx) =
+            <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..])
                 .map_err(|_| Error::DecodeError)?;
         CoreTransaction::TransferJustify {
             init_tx,

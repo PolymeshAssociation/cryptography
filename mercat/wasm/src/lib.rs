@@ -434,12 +434,7 @@ pub fn finalize_transaction(
 
     let init_tx = decode::<InitializedTransferTx>(init_tx)?;
     let finalized_tx = CtxReceiver
-        .finalize_transaction(
-            &init_tx,
-            receiver_account.to_mercat()?,
-            amount,
-            &mut rng,
-        )
+        .finalize_transaction(&init_tx, receiver_account.to_mercat()?, amount, &mut rng)
         .map_err(|_| WasmError::TransactionFinalizationError)?;
 
     Ok(FinalizedTransactionOutput {

@@ -361,7 +361,7 @@ impl TransferTransactionMediator for CtxMediator {
             init_tx.asset_id_correctness_proof,
         )?;
 
-        Ok(JustifiedTransferTx { })
+        Ok(JustifiedTransferTx {})
     }
 }
 
@@ -385,17 +385,11 @@ impl TransferTransactionVerifier for TransactionValidator {
         rng: &mut R,
     ) -> Fallible<()> {
         ensure!(
-            sender_account.enc_asset_id
-                == init_tx
-                    .memo
-                    .sender_account_id,
+            sender_account.enc_asset_id == init_tx.memo.sender_account_id,
             ErrorKind::AccountIdMismatch
         );
         ensure!(
-            receiver_account.enc_asset_id
-                == init_tx
-                    .memo
-                    .receiver_account_id,
+            receiver_account.enc_asset_id == init_tx.memo.receiver_account_id,
             ErrorKind::AccountIdMismatch
         );
         verify_initialized_transaction(
@@ -598,17 +592,11 @@ impl TransferTransactionAuditor for CtxAuditor {
         auditor_enc_key: &(u32, EncryptionKeys),
     ) -> Fallible<()> {
         ensure!(
-            sender_account.enc_asset_id
-                == init_tx
-                    .memo
-                    .sender_account_id,
+            sender_account.enc_asset_id == init_tx.memo.sender_account_id,
             ErrorKind::AccountIdMismatch
         );
         ensure!(
-            receiver_account.enc_asset_id
-                == init_tx
-                    .memo
-                    .receiver_account_id,
+            receiver_account.enc_asset_id == init_tx.memo.receiver_account_id,
             ErrorKind::AccountIdMismatch
         );
 
@@ -910,17 +898,19 @@ mod tests {
         let ctx_finalized_data = result.unwrap();
 
         // Justify the transaction
-        let _result = mediator.justify_transaction(
-            &ctx_init_data,
-            &ctx_finalized_data,
-            &mediator_enc_keys,
-            &sender_account.public,
-            &sender_init_balance,
-            &receiver_account.public,
-            &[],
-            asset_id,
-            &mut rng,
-        ).unwrap();
+        let _result = mediator
+            .justify_transaction(
+                &ctx_init_data,
+                &ctx_finalized_data,
+                &mediator_enc_keys,
+                &sender_account.public,
+                &sender_init_balance,
+                &receiver_account.public,
+                &[],
+                asset_id,
+                &mut rng,
+            )
+            .unwrap();
 
         assert!(tx_validator
             .verify_transaction(
@@ -939,15 +929,11 @@ mod tests {
         // and subtracted from sender's balance.
         let updated_sender_balance = withdraw(
             &sender_init_balance,
-            &ctx_init_data
-                .memo
-                .enc_amount_using_sender,
+            &ctx_init_data.memo.enc_amount_using_sender,
         );
         let updated_receiver_balance = deposit(
             &receiver_init_balance,
-            &ctx_init_data
-                .memo
-                .enc_amount_using_receiver,
+            &ctx_init_data.memo.enc_amount_using_receiver,
         );
 
         assert!(sender_enc_keys
@@ -1073,17 +1059,11 @@ mod tests {
         // ----------------------- Processing
         // Check that the transferred amount is added to the receiver's account balance
         // and subtracted from sender's balance.
-        let updated_sender_balance = withdraw(
-            &sender_init_balance,
-            &ctx_init
-                .memo
-                .enc_amount_using_sender,
-        );
+        let updated_sender_balance =
+            withdraw(&sender_init_balance, &ctx_init.memo.enc_amount_using_sender);
         let updated_receiver_balance = deposit(
             &receiver_init_balance,
-            &ctx_init
-                .memo
-                .enc_amount_using_receiver,
+            &ctx_init.memo.enc_amount_using_receiver,
         );
 
         assert!(sender_account

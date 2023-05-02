@@ -236,17 +236,18 @@ pub fn process_finalize_tx(
         &confidential_transaction_file(tx_id, &sender, state),
     )?;
 
-    let mut init_tx = InitializedTransferTx::decode(&mut &instruction.data[..]).map_err(|error| {
-        Error::ObjectLoadError {
-            error,
-            path: construct_path(
-                db_dir.clone(),
-                ON_CHAIN_DIR,
-                &sender.clone(),
-                &confidential_transaction_file(tx_id, &sender, state),
-            ),
-        }
-    })?;
+    let mut init_tx =
+        InitializedTransferTx::decode(&mut &instruction.data[..]).map_err(|error| {
+            Error::ObjectLoadError {
+                error,
+                path: construct_path(
+                    db_dir.clone(),
+                    ON_CHAIN_DIR,
+                    &sender.clone(),
+                    &confidential_transaction_file(tx_id, &sender, state),
+                ),
+            }
+        })?;
 
     timing!(
         "account.finalize_tx.load_from_file",

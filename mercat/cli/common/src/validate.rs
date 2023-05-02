@@ -12,7 +12,7 @@ use log::{debug, error, info};
 use mercat::{
     account::AccountValidator, asset::AssetValidator, transaction::TransactionValidator,
     AccountCreatorVerifier, AssetTransactionVerifier, AssetTxState, EncryptedAmount,
-    EncryptedAssetId, InitializedAssetTx, InitializedTransferTx, FinalizedTransferTx, PubAccount,
+    EncryptedAssetId, FinalizedTransferTx, InitializedAssetTx, InitializedTransferTx, PubAccount,
     TransferTransactionVerifier, TransferTxState, TxSubstate,
 };
 use metrics::timing;
@@ -92,8 +92,14 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                     tx_id,
                     debug_decrypt(account_id, pending_balance, db_dir.clone())?
                 );
-                let (sender_result, receiver_result) =
-                    validate_transaction(db_dir.clone(), init_tx, finalized_tx, mediator, pending_balance, tx_id);
+                let (sender_result, receiver_result) = validate_transaction(
+                    db_dir.clone(),
+                    init_tx,
+                    finalized_tx,
+                    mediator,
+                    pending_balance,
+                    tx_id,
+                );
                 results.push(sender_result);
                 results.push(receiver_result);
                 last_tx_id = Some(std::cmp::max(last_tx_id.unwrap_or_default(), tx_id));
@@ -424,7 +430,8 @@ fn process_transaction(
     pending_balance: EncryptedAmount,
 ) -> Result<(), Error> {
     let mut rng = OsRng::default();
-    let (init_tx, finalized_tx) = <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..]).unwrap();
+    let (init_tx, finalized_tx) =
+        <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..]).unwrap();
     let validator = TransactionValidator;
     validator
         .verify_transaction(
@@ -450,10 +457,8 @@ pub fn validate_transaction(
     let load_objects_timer = Instant::now();
     // Load the transaction, mediator's account, and issuer's public account.
 
-    let (sender, _, _) = match get_user_ticker_from(
-        init_tx.memo.sender_account_id,
-        db_dir.clone(),
-    ) {
+    let (sender, _, _) = match get_user_ticker_from(init_tx.memo.sender_account_id, db_dir.clone())
+    {
         Err(error) => {
             error!("Error in validation of tx-{}: {:#?}", tx_id, error);
             return (
@@ -464,19 +469,17 @@ pub fn validate_transaction(
         Ok(ok) => ok,
     };
 
-    let (receiver, ticker, _) = match get_user_ticker_from(
-        init_tx.memo.receiver_account_id,
-        db_dir.clone(),
-    ) {
-        Err(error) => {
-            error!("Error in validation of tx-{}: {:#?}", tx_id, error);
-            return (
-                ValidationResult::error("n/a", "n/a"),
-                ValidationResult::error("n/a", "n/a"),
-            );
-        }
-        Ok(ok) => ok,
-    };
+    let (receiver, ticker, _) =
+        match get_user_ticker_from(init_tx.memo.receiver_account_id, db_dir.clone()) {
+            Err(error) => {
+                error!("Error in validation of tx-{}: {:#?}", tx_id, error);
+                return (
+                    ValidationResult::error("n/a", "n/a"),
+                    ValidationResult::error("n/a", "n/a"),
+                );
+            }
+            Ok(ok) => ok,
+        };
 
     info!(
         "Validating asset transfer{{tx_id: {}, sender: {}, receiver: {}, ticker:{}, mediator: {}}}",

@@ -11,8 +11,8 @@ use curve25519_dalek::scalar::Scalar;
 use log::info;
 use mercat::{
     transaction::CtxMediator, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
-    InitializedTransferTx,
-    FinalizedTransferTx, MediatorAccount, TransferTransactionMediator, TransferTxState, TxSubstate,
+    FinalizedTransferTx, InitializedTransferTx, MediatorAccount, TransferTransactionMediator,
+    TransferTxState, TxSubstate,
 };
 use metrics::timing;
 use rand::{CryptoRng, RngCore};
@@ -111,17 +111,17 @@ pub fn justify_asset_transfer_transaction(
         &instruction_path,
     )?;
 
-    let (mut init_tx, finalized_tx) = <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..]).map_err(|error| {
-        Error::ObjectLoadError {
-            error,
-            path: construct_path(
-                db_dir.clone(),
-                ON_CHAIN_DIR,
-                COMMON_OBJECTS_DIR,
-                &instruction_path,
-            ),
-        }
-    })?;
+    let (mut init_tx, finalized_tx) =
+        <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..])
+            .map_err(|error| Error::ObjectLoadError {
+                error,
+                path: construct_path(
+                    db_dir.clone(),
+                    ON_CHAIN_DIR,
+                    COMMON_OBJECTS_DIR,
+                    &instruction_path,
+                ),
+            })?;
 
     let mediator_account: MediatorAccount = load_object(
         db_dir.clone(),
