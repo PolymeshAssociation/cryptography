@@ -4,18 +4,17 @@
 mod input;
 
 use codec::{Decode, Encode};
-use confidential_identity_core::asset_proofs::{AssetId, CommitmentWitness, ElgamalSecretKey};
+use confidential_identity_core::asset_proofs::{AssetId, ElgamalSecretKey};
 use curve25519_dalek::scalar::Scalar;
 
 use input::{parse_input, CLI};
 use log::info;
 use mercat::{
-    account::{convert_asset_ids, AccountCreator},
+    account::AccountCreator,
     transaction::{CtxMediator, CtxReceiver, CtxSender},
-    Account, AccountCreatorInitializer, EncryptedAmount, EncryptedAssetId, EncryptionKeys,
-    EncryptionPubKey, FinalizedTransferTx, InitializedTransferTx, MediatorAccount, PubAccount,
-    SecAccount, TransferTransactionMediator, TransferTransactionReceiver,
-    TransferTransactionSender,
+    Account, AccountCreatorInitializer, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
+    FinalizedTransferTx, InitializedTransferTx, MediatorAccount, PubAccount, SecAccount,
+    TransferTransactionMediator, TransferTransactionReceiver, TransferTransactionSender,
 };
 use mercat_common::{
     account_issue::process_issue_asset, create_rng_from_seed, debug_decrypt_base64_account_balance,
@@ -43,14 +42,7 @@ fn main() {
     match args {
         CLI::CreateUserAccount(cfg) => {
             let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap();
-            process_create_account(
-                cfg.seed,
-                db_dir,
-                cfg.user,
-                cfg.ticker,
-                cfg.valid_ticker_names,
-            )
-            .unwrap()
+            process_create_account(cfg.seed, db_dir, cfg.user, cfg.ticker).unwrap()
         }
         CLI::CreateMediatorAccount(cfg) => process_create_mediator(
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),
@@ -83,7 +75,6 @@ fn main() {
         )
         .unwrap(),
         CLI::FinalizeTransaction(cfg) => process_finalize_tx(
-            cfg.seed.ok_or(Error::EmptySeed).unwrap(),
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.receiver,
             cfg.account_id_from_ticker,
@@ -98,7 +89,6 @@ fn main() {
             cfg.sender_balance,
             cfg.receiver,
             cfg.mediator,
-            cfg.ticker,
             cfg.init_tx,
             cfg.finalized_tx,
         )
@@ -127,26 +117,14 @@ fn process_create_account(
     db_dir: PathBuf,
     user: String,
     ticker: String,
-    ticker_names: Vec<String>,
 ) -> Result<(), Error> {
     let mut rng = create_rng_from_seed(seed)?;
-
-    let valid_asset_ids: Vec<AssetId> = ticker_names
-        .into_iter()
-        .map(|ticker_name| {
-            let mut asset_id = [0u8; 12];
-            let decoded = hex::decode(ticker_name).unwrap();
-            asset_id[..decoded.len()].copy_from_slice(&decoded);
-            Ok(AssetId { id: asset_id })
-        })
-        .collect::<Result<Vec<AssetId>, Error>>()?;
-    let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
     // Create the account.
     let secret_account = create_secret_account(&mut rng, ticker.clone())?;
 
     let account_tx = AccountCreator
-        .create(&secret_account, &valid_asset_ids, &mut rng)
+        .create(&secret_account, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
 
     // Save the artifacts to file.
@@ -158,12 +136,12 @@ fn process_create_account(
         &secret_account,
     )?;
 
-    let account_id = account_tx.pub_account.enc_asset_id;
+    let asset_id = account_tx.pub_account.asset_id;
 
     info!(
-        "CLI log: tx-{}:\n\nAccount ID as base64:\n{}\n\nAccount Transaction as base64:\n{}\n",
+        "CLI log: tx-{}:\n\nAsset ID as base64:\n{}\n\nAccount Transaction as base64:\n{}\n",
         TX_ID,
-        base64::encode(account_id.encode()),
+        base64::encode(asset_id.encode()),
         base64::encode(account_tx.encode())
     );
 
@@ -198,12 +176,8 @@ fn create_secret_account<R: RngCore + CryptoRng>(
     asset_id[..decoded.len()].copy_from_slice(&decoded);
 
     let asset_id = AssetId { id: asset_id };
-    let asset_id_witness = CommitmentWitness::new(asset_id.into(), Scalar::random(rng));
 
-    Ok(SecAccount {
-        enc_keys,
-        asset_id_witness,
-    })
+    Ok(SecAccount { asset_id, enc_keys })
 }
 
 pub fn process_create_tx(
@@ -241,7 +215,7 @@ pub fn process_create_tx(
     let mut data0: &[u8] = &base64::decode(&receiver[0]).unwrap();
     let mut data1: &[u8] = &base64::decode(&receiver[1]).unwrap();
     let receiver_pub_account = PubAccount {
-        enc_asset_id: EncryptedAssetId::decode(&mut data0).unwrap(),
+        asset_id: AssetId::decode(&mut data0).unwrap(),
         owner_enc_pub_key: EncryptionPubKey::decode(&mut data1).unwrap(),
     };
 
@@ -253,7 +227,7 @@ pub fn process_create_tx(
     let pending_account = Account {
         secret: sender_account.secret,
         public: PubAccount {
-            enc_asset_id: sender_account.public.enc_asset_id,
+            asset_id: sender_account.public.asset_id,
             owner_enc_pub_key: sender_account.public.owner_enc_pub_key,
         },
     };
@@ -278,15 +252,12 @@ pub fn process_create_tx(
 }
 
 pub fn process_finalize_tx(
-    seed: String,
     db_dir: PathBuf,
     receiver: String,
     ticker: String,
     amount: u32,
     init_tx: String,
 ) -> Result<(), Error> {
-    let mut rng = create_rng_from_seed(Some(seed))?;
-
     let receiver_ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
@@ -310,7 +281,7 @@ pub fn process_finalize_tx(
     // Finalize the transaction.
     let receiver = CtxReceiver {};
     let asset_tx = receiver
-        .finalize_transaction(&tx, receiver_account, amount, &mut rng)
+        .finalize_transaction(&tx, receiver_account, amount)
         .map_err(|error| Error::LibraryError { error })?;
 
     // Save the artifacts to file.
@@ -329,7 +300,6 @@ pub fn justify_asset_transfer_transaction(
     sender_balance: String,
     receiver: Vec<String>,
     mediator: String,
-    ticker: String,
     init_tx: String,
     finalized_tx: String,
 ) -> Result<(), Error> {
@@ -347,7 +317,7 @@ pub fn justify_asset_transfer_transaction(
     let mut data0: &[u8] = &base64::decode(&sender[0]).unwrap();
     let mut data1: &[u8] = &base64::decode(&sender[1]).unwrap();
     let sender_pub_account = PubAccount {
-        enc_asset_id: EncryptedAssetId::decode(&mut data0).unwrap(),
+        asset_id: AssetId::decode(&mut data0).unwrap(),
         owner_enc_pub_key: EncryptionPubKey::decode(&mut data1).unwrap(),
     };
 
@@ -357,16 +327,11 @@ pub fn justify_asset_transfer_transaction(
     let mut data0: &[u8] = &base64::decode(&receiver[0]).unwrap();
     let mut data1: &[u8] = &base64::decode(&receiver[1]).unwrap();
     let receiver_pub_account = PubAccount {
-        enc_asset_id: EncryptedAssetId::decode(&mut data0).unwrap(),
+        asset_id: AssetId::decode(&mut data0).unwrap(),
         owner_enc_pub_key: EncryptionPubKey::decode(&mut data1).unwrap(),
     };
 
     // Justification.
-
-    let mut asset_id = [0u8; 12];
-    let decoded = hex::decode(&ticker).unwrap();
-    asset_id[..decoded.len()].copy_from_slice(&decoded);
-    let asset_id = AssetId { id: asset_id };
 
     let justified_tx = CtxMediator {}
         .justify_transaction(
@@ -377,7 +342,6 @@ pub fn justify_asset_transfer_transaction(
             &sender_balance,
             &receiver_pub_account,
             &[],
-            asset_id,
             &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })?;

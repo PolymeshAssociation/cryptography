@@ -160,7 +160,7 @@ impl AssetTransactionIssuer for AssetIssuer {
 
         // Bundle the issuance data.
         Ok(InitializedAssetTx {
-            account_id: issr_account.public.enc_asset_id,
+            account: issr_account.public.clone(),
             memo,
             balance_wellformedness_proof: memo_wellformedness_proof,
             balance_correctness_proof: memo_correctness_proof,
@@ -326,12 +326,9 @@ impl AssetTransactionAuditor for AssetAuditor {
 mod tests {
     extern crate wasm_bindgen_test;
     use super::*;
-    use crate::{
-        account::{convert_asset_ids, AccountCreator},
-        AccountCreatorInitializer, EncryptionKeys, SecAccount,
-    };
+    use crate::{account::AccountCreator, AccountCreatorInitializer, EncryptionKeys, SecAccount};
     use confidential_identity_core::{
-        asset_proofs::{errors::ErrorKind, AssetId, CommitmentWitness, ElgamalSecretKey},
+        asset_proofs::{errors::ErrorKind, AssetId, ElgamalSecretKey},
         curve25519_dalek::scalar::Scalar,
     };
     use rand::rngs::StdRng;
@@ -354,17 +351,13 @@ mod tests {
         let asset_id = AssetId::from(1);
 
         let issuer_secret_account = SecAccount {
+            asset_id,
             enc_keys: issuer_enc_key.clone(),
-            asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
         };
-
-        let valid_asset_ids: Vec<AssetId> =
-            vec![1, 2, 3].iter().map(|id| AssetId::from(*id)).collect();
-        let valid_asset_ids = convert_asset_ids(valid_asset_ids);
 
         let account_creator = AccountCreator;
         let issuer_account_tx = account_creator
-            .create(&issuer_secret_account, &valid_asset_ids, &mut rng)
+            .create(&issuer_secret_account, &mut rng)
             .unwrap();
         let issuer_public_account = issuer_account_tx.pub_account;
         let issuer_init_balance = issuer_account_tx.initial_balance;
@@ -421,17 +414,13 @@ mod tests {
         let asset_id = AssetId::from(1);
 
         let issuer_secret_account = SecAccount {
+            asset_id,
             enc_keys: issuer_enc_key.clone(),
-            asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
         };
-
-        let pub_account_enc_asset_id = issuer_enc_key
-            .public
-            .encrypt(&issuer_secret_account.asset_id_witness);
 
         // Note that we use default proof values since we don't reverify these proofs during asset issuance.
         let issuer_public_account = PubAccount {
-            enc_asset_id: pub_account_enc_asset_id,
+            asset_id,
             owner_enc_pub_key: issuer_enc_key.public,
         };
         // Set the initial encrypted balance to 0.

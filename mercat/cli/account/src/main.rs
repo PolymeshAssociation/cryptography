@@ -69,7 +69,6 @@ fn main() {
         )
         .unwrap(),
         CLI::FinalizeTransaction(cfg) => process_finalize_tx(
-            cfg.seed.ok_or(Error::EmptySeed).unwrap(),
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.sender,
             cfg.receiver,

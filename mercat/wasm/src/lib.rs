@@ -1,11 +1,9 @@
 use codec::{Decode, Encode};
 use mercat::{
-    account::{convert_asset_ids, AccountCreator},
+    account::AccountCreator,
     asset::AssetIssuer,
     confidential_identity_core::{
-        asset_proofs::{
-            AssetId, CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
-        },
+        asset_proofs::{AssetId, CipherText, ElgamalPublicKey, ElgamalSecretKey},
         curve25519_dalek::scalar::Scalar,
     },
     transaction::{CtxMediator, CtxReceiver, CtxSender},
@@ -36,7 +34,7 @@ pub type Base64 = String;
 pub struct CreateAccountOutput {
     secret_account: Base64,
     public_key: Base64,
-    account_id: Base64,
+    asset_id: Base64,
     account_tx: Base64,
 }
 
@@ -54,10 +52,10 @@ impl CreateAccountOutput {
         self.public_key.clone()
     }
 
-    /// The account id. The account id is the same as the encrypted ticker id.
+    /// The account id is the same as the ticker.
     #[wasm_bindgen(getter)]
-    pub fn account_id(&self) -> Base64 {
-        self.account_id.clone()
+    pub fn asset_id(&self) -> Base64 {
+        self.asset_id.clone()
     }
 
     /// The Zero Knowledge proofs of the account creation.
@@ -69,7 +67,7 @@ impl CreateAccountOutput {
     pub fn account(&self) -> Account {
         Account::new(
             self.secret_account(),
-            PubAccount::new(self.account_id(), self.public_key()),
+            PubAccount::new(self.asset_id(), self.public_key()),
         )
     }
 }
@@ -204,16 +202,16 @@ impl Account {
 /// A wrapper around base64 encoding of mercat public account.
 #[wasm_bindgen]
 pub struct PubAccount {
-    account_id: Base64,
+    asset_id: Base64,
     public_key: Base64,
 }
 
 #[wasm_bindgen]
 impl PubAccount {
     #[wasm_bindgen(constructor)]
-    pub fn new(account_id: Base64, public_key: Base64) -> Self {
+    pub fn new(asset_id: Base64, public_key: Base64) -> Self {
         Self {
-            account_id,
+            asset_id,
             public_key,
         }
     }
@@ -221,7 +219,7 @@ impl PubAccount {
     fn to_mercat(&self) -> Fallible<MercatPubAccount> {
         Ok(MercatPubAccount {
             owner_enc_pub_key: decode::<ElgamalPublicKey>(self.public_key.clone())?,
-            enc_asset_id: decode::<CipherText>(self.account_id.clone())?,
+            asset_id: decode::<AssetId>(self.asset_id.clone())?,
         })
     }
 }
@@ -278,30 +276,19 @@ type Fallible<T> = Result<T, JsValue>;
 /// * `HexDecodingError`: If `ticker_id` or `valid_ticker_ids`s are not a proper Hex values.
 /// * `AccountCreationError`: If mercat library throws an error while creating the account.
 #[wasm_bindgen]
-pub fn create_account(
-    valid_ticker_ids: JsValue,
-    ticker_id: String,
-) -> Fallible<CreateAccountOutput> {
+pub fn create_account(ticker_id: String) -> Fallible<CreateAccountOutput> {
     let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
-    let valid_ticker_ids: Vec<String> = valid_ticker_ids
-        .into_serde()
-        .map_err(|_| WasmError::PlainTickerIdsError)?;
 
     let secret_account = create_secret_account(&mut rng, ticker_id)?;
-    let valid_asset_ids: Vec<AssetId> = valid_ticker_ids
-        .into_iter()
-        .map(ticker_id_to_asset_id)
-        .collect::<Fallible<Vec<AssetId>>>()?;
-    let valid_asset_ids = convert_asset_ids(valid_asset_ids);
     let account_tx: PubAccountTx = AccountCreator
-        .create(&secret_account, &valid_asset_ids, &mut rng)
+        .create(&secret_account, &mut rng)
         .map_err(|_| WasmError::AccountCreationError)?;
-    let account_id = account_tx.pub_account.enc_asset_id;
+    let asset_id = account_tx.pub_account.asset_id;
 
     Ok(CreateAccountOutput {
         secret_account: base64::encode(secret_account.encode()),
         public_key: base64::encode(secret_account.enc_keys.public.encode()),
-        account_id: base64::encode(account_id.encode()),
+        asset_id: base64::encode(asset_id.encode()),
         account_tx: base64::encode(account_tx.encode()),
     })
 }
@@ -430,11 +417,9 @@ pub fn finalize_transaction(
     init_tx: Base64,
     receiver_account: Account,
 ) -> Fallible<FinalizedTransactionOutput> {
-    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
-
     let init_tx = decode::<InitializedTransferTx>(init_tx)?;
     let finalized_tx = CtxReceiver
-        .finalize_transaction(&init_tx, receiver_account.to_mercat()?, amount, &mut rng)
+        .finalize_transaction(&init_tx, receiver_account.to_mercat()?, amount)
         .map_err(|_| WasmError::TransactionFinalizationError)?;
 
     Ok(FinalizedTransactionOutput {
@@ -472,7 +457,6 @@ pub fn justify_transaction(
     sender_public_account: PubAccount,
     sender_encrypted_pending_balance: Base64,
     receiver_public_account: PubAccount,
-    ticker_id: String,
 ) -> Fallible<JustifiedTransactionOutput> {
     let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
@@ -487,7 +471,6 @@ pub fn justify_transaction(
             &decode::<EncryptedAmount>(sender_encrypted_pending_balance)?,
             &receiver_public_account.to_mercat()?,
             &[],
-            ticker_id_to_asset_id(ticker_id)?,
             &mut rng,
         )
         .map_err(|_| WasmError::TransactionJustificationError)?;
@@ -534,13 +517,6 @@ fn decode<T: Decode>(data: Base64) -> Fallible<T> {
     T::decode(&mut &decoded[..]).map_err(|_| WasmError::DeserializationError.into())
 }
 
-fn ticker_id_to_asset_id(ticker_id: String) -> Fallible<AssetId> {
-    let mut asset_id = [0u8; 12];
-    let decoded = hex::decode(ticker_id).map_err(|_| WasmError::HexDecodingError)?;
-    asset_id[..decoded.len()].copy_from_slice(&decoded);
-    Ok(AssetId { id: asset_id })
-}
-
 fn create_secret_account<R: RngCore + CryptoRng>(
     rng: &mut R,
     ticker_id: String,
@@ -557,10 +533,6 @@ fn create_secret_account<R: RngCore + CryptoRng>(
     asset_id[..decoded.len()].copy_from_slice(&decoded);
 
     let asset_id = AssetId { id: asset_id };
-    let asset_id_witness = CommitmentWitness::new(asset_id.into(), Scalar::random(rng));
 
-    Ok(SecAccount {
-        enc_keys,
-        asset_id_witness,
-    })
+    Ok(SecAccount { asset_id, enc_keys })
 }

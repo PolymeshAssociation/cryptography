@@ -20,7 +20,7 @@ use confidential_identity_core::{
         encryption_proofs::single_property_verifier,
         errors::{ErrorKind, Fallible},
         range_proof::{prove_within_range, verify_within_range},
-        AssetId, Balance, CommitmentWitness, BALANCE_RANGE,
+        Balance, CommitmentWitness, BALANCE_RANGE,
     },
     curve25519_dalek::scalar::Scalar,
 };
@@ -50,7 +50,6 @@ impl TransferTransactionSender for CtxSender {
         rng: &mut T,
     ) -> Fallible<InitializedTransferTx> {
         let sender_enc_keys = &sender_account.secret.enc_keys;
-        let asset_id = sender_account.secret.asset_id_witness.value();
         let sender_pub_account = &sender_account.public;
         let receiver_pub_key = receiver_pub_account.owner_enc_pub_key;
 
@@ -107,60 +106,11 @@ impl TransferTransactionSender for CtxSender {
         let enough_fund_proof =
             prove_within_range((balance - amount).into(), blinding, BALANCE_RANGE, rng)?;
 
-        // Refresh the encrypted asset id of the sender account and prove that the
-        // refreshment was done correctly.
-        let asset_id_refresh_enc_blinding = Scalar::random(rng);
-        let refreshed_enc_asset_id = sender_pub_account.enc_asset_id.refresh_with_hint(
-            &sender_enc_keys.secret,
-            asset_id_refresh_enc_blinding,
-            &asset_id.clone(),
-        )?;
-
-        let asset_id_refreshed_same_proof = single_property_prover(
-            CipherTextRefreshmentProverAwaitingChallenge::new(
-                sender_enc_keys.secret.clone(),
-                sender_pub_account.enc_asset_id,
-                refreshed_enc_asset_id,
-                &gens,
-            ),
-            rng,
-        )?;
-
-        // Prove the new refreshed encrypted asset id is the same as the one
-        // encrypted by the receiver's pub key.
-        let asset_id_witness_for_receiver =
-            CommitmentWitness::new(asset_id, asset_id_refresh_enc_blinding);
-        let enc_asset_id_using_receiver = receiver_pub_key.encrypt(&asset_id_witness_for_receiver);
-        let asset_id_equal_cipher_with_sender_receiver_keys_proof = single_property_prover(
-            EncryptingSameValueProverAwaitingChallenge {
-                pub_key1: sender_enc_keys.public,
-                pub_key2: receiver_pub_key,
-                w: Zeroizing::new(asset_id_witness_for_receiver.clone()),
-                pc_gens: &gens,
-            },
-            rng,
-        )?;
-
-        // Prepare the correctness proofs for the mediator.
-        let asset_id_witness_blinding_for_mediator = Scalar::random(rng);
-        let asset_id_witness_for_mediator =
-            CommitmentWitness::new(asset_id, asset_id_witness_blinding_for_mediator);
-        let enc_asset_id_for_mediator = mediator_pub_key.encrypt(&asset_id_witness_for_mediator);
-
         let amount_witness_blinding_for_mediator = Scalar::random(rng);
         let amount_witness_for_mediator =
             CommitmentWitness::new(amount.into(), amount_witness_blinding_for_mediator);
         let enc_amount_for_mediator =
             mediator_pub_key.const_time_encrypt(&amount_witness_for_mediator, rng);
-
-        let asset_id_correctness_proof = single_property_prover(
-            CorrectnessProverAwaitingChallenge {
-                pub_key: receiver_pub_key,
-                w: asset_id_witness_for_receiver,
-                pc_gens: &gens,
-            },
-            rng,
-        )?;
 
         let amount_correctness_proof = single_property_prover(
             CorrectnessProverAwaitingChallenge {
@@ -183,20 +133,14 @@ impl TransferTransactionSender for CtxSender {
             amount_equal_cipher_proof,
             non_neg_amount_proof,
             enough_fund_proof,
-            asset_id_equal_cipher_with_sender_receiver_keys_proof,
             balance_refreshed_same_proof,
-            asset_id_refreshed_same_proof,
-            asset_id_correctness_proof,
             amount_correctness_proof,
             memo: TransferTxMemo {
-                sender_account_id: sender_pub_account.enc_asset_id,
-                receiver_account_id: receiver_pub_account.enc_asset_id,
+                sender_account: sender_pub_account.clone(),
+                receiver_account: receiver_pub_account.clone(),
                 enc_amount_using_sender: sender_new_enc_amount,
                 enc_amount_using_receiver: receiver_new_enc_amount,
                 refreshed_enc_balance,
-                refreshed_enc_asset_id,
-                enc_asset_id_using_receiver,
-                enc_asset_id_for_mediator,
                 enc_amount_for_mediator,
             },
             auditors_payload,
@@ -255,42 +199,27 @@ fn add_transaction_auditor<T: RngCore + CryptoRng>(
 pub struct CtxReceiver;
 
 impl TransferTransactionReceiver for CtxReceiver {
-    fn finalize_transaction<T: RngCore + CryptoRng>(
+    fn finalize_transaction(
         &self,
-        initialized_transaction: &InitializedTransferTx,
+        init_tx: &InitializedTransferTx,
         receiver_account: Account,
         amount: Balance,
-        rng: &mut T,
     ) -> Fallible<FinalizedTransferTx> {
-        let receiver_enc_sec = &receiver_account.secret.enc_keys.secret;
-        let receiver_pub_account = &receiver_account.public;
-
+        ensure!(
+            receiver_account.public == init_tx.memo.receiver_account,
+            ErrorKind::AccountIdMismatch
+        );
         // Check that the amount is correct.
-        receiver_enc_sec
-            .verify(
-                &initialized_transaction.memo.enc_amount_using_receiver,
-                &amount.into(),
-            )
+        receiver_account
+            .secret
+            .enc_keys
+            .secret
+            .verify(&init_tx.memo.enc_amount_using_receiver, &amount.into())
             .map_err(|_| ErrorKind::TransactionAmountMismatch {
                 expected_amount: amount,
             })?;
 
-        // Generate proof of equality of asset ids.
-        let enc_asset_id_from_sender = initialized_transaction.memo.enc_asset_id_using_receiver;
-        let enc_asset_id_from_receiver_acc = receiver_pub_account.enc_asset_id;
-        let gens = PedersenGens::default();
-        let prover = CipherTextRefreshmentProverAwaitingChallenge::new(
-            receiver_enc_sec.clone(),
-            enc_asset_id_from_receiver_acc,
-            enc_asset_id_from_sender,
-            &gens,
-        );
-
-        let proof = single_property_prover(prover, rng)?;
-
-        Ok(FinalizedTransferTx {
-            asset_id_from_sender_equal_to_receiver_proof: proof,
-        })
+        Ok(FinalizedTransferTx {})
     }
 }
 
@@ -311,9 +240,12 @@ impl TransferTransactionMediator for CtxMediator {
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
-        asset_id_hint: AssetId,
         rng: &mut R,
     ) -> Fallible<JustifiedTransferTx> {
+        ensure!(
+            sender_account.asset_id == receiver_account.asset_id,
+            ErrorKind::AccountIdMismatch
+        );
         // Verify receiver's part of the transaction.
         let _ = verify_finalized_transaction(&init_tx, &finalized_tx, receiver_account)?;
 
@@ -344,23 +276,6 @@ impl TransferTransactionMediator for CtxMediator {
             init_tx.amount_correctness_proof,
         )?;
 
-        // Verify that the encrypted asset_id is correct.
-        mediator_enc_keys.secret.verify(
-            &init_tx.memo.enc_asset_id_for_mediator,
-            &asset_id_hint.clone().into(),
-        )?;
-
-        let asset_id = asset_id_hint;
-        single_property_verifier(
-            &CorrectnessVerifier {
-                value: asset_id.into(),
-                pub_key: receiver_account.owner_enc_pub_key,
-                cipher: init_tx.memo.enc_asset_id_using_receiver,
-                pc_gens: &gens,
-            },
-            init_tx.asset_id_correctness_proof,
-        )?;
-
         Ok(JustifiedTransferTx {})
     }
 }
@@ -385,11 +300,15 @@ impl TransferTransactionVerifier for TransactionValidator {
         rng: &mut R,
     ) -> Fallible<()> {
         ensure!(
-            sender_account.enc_asset_id == init_tx.memo.sender_account_id,
+            sender_account.asset_id == receiver_account.asset_id,
             ErrorKind::AccountIdMismatch
         );
         ensure!(
-            receiver_account.enc_asset_id == init_tx.memo.receiver_account_id,
+            sender_account == &init_tx.memo.sender_account,
+            ErrorKind::AccountIdMismatch
+        );
+        ensure!(
+            receiver_account == &init_tx.memo.receiver_account,
             ErrorKind::AccountIdMismatch
         );
         verify_initialized_transaction(
@@ -429,23 +348,13 @@ pub fn verify_initialized_transaction<R: RngCore + CryptoRng>(
 
 pub fn verify_finalized_transaction(
     init_tx: &InitializedTransferTx,
-    finalized_tx: &FinalizedTransferTx,
+    _finalized_tx: &FinalizedTransferTx,
     receiver_account: &PubAccount,
 ) -> Fallible<TransferTxState> {
-    let memo = &init_tx.memo;
-
-    // In the initial transaction, the sender has encrypted the asset id
-    // using the receiver pub key. We verify that this encrypted asset id
-    // is the same as the one in the receiver account
-    single_property_verifier(
-        &CipherTextRefreshmentVerifier::new(
-            receiver_account.owner_enc_pub_key,
-            receiver_account.enc_asset_id,
-            memo.enc_asset_id_using_receiver,
-            &PedersenGens::default(),
-        ),
-        finalized_tx.asset_id_from_sender_equal_to_receiver_proof,
-    )?;
+    ensure!(
+        receiver_account == &init_tx.memo.receiver_account,
+        ErrorKind::AccountIdMismatch
+    );
 
     Ok(TransferTxState::Finalization(TxSubstate::Validated))
 }
@@ -490,31 +399,6 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
 
     // Verify that the balance has enough fund.
     verify_within_range(&init_data.enough_fund_proof, rng)?;
-
-    // Verify that the asset id refreshment was done correctly.
-    single_property_verifier(
-        &CipherTextRefreshmentVerifier::new(
-            sender_account.owner_enc_pub_key,
-            sender_account.enc_asset_id,
-            memo.refreshed_enc_asset_id,
-            &gens,
-        ),
-        init_data.asset_id_refreshed_same_proof,
-    )?;
-
-    // In the initial transaction, the sender has encrypted the asset id
-    // using the receiver pub key. We verify that this encrypted asset id
-    // is the same as the one in the sender account.
-    single_property_verifier(
-        &EncryptingSameValueVerifier {
-            pub_key1: sender_account.owner_enc_pub_key,
-            pub_key2: receiver_account.owner_enc_pub_key,
-            cipher1: memo.refreshed_enc_asset_id,
-            cipher2: memo.enc_asset_id_using_receiver,
-            pc_gens: &gens,
-        },
-        init_data.asset_id_equal_cipher_with_sender_receiver_keys_proof,
-    )?;
 
     // Verify that all auditors' payload is included, and
     // that the auditors' ciphertexts encrypt the same amount as sender's ciphertext.
@@ -592,11 +476,11 @@ impl TransferTransactionAuditor for CtxAuditor {
         auditor_enc_key: &(u32, EncryptionKeys),
     ) -> Fallible<()> {
         ensure!(
-            sender_account.enc_asset_id == init_tx.memo.sender_account_id,
+            sender_account == &init_tx.memo.sender_account,
             ErrorKind::AccountIdMismatch
         );
         ensure!(
-            receiver_account.enc_asset_id == init_tx.memo.receiver_account_id,
+            receiver_account == &init_tx.memo.receiver_account,
             ErrorKind::AccountIdMismatch
         );
 
@@ -644,8 +528,8 @@ mod tests {
     use super::*;
     use crate::{
         account::{deposit, withdraw},
-        EncryptedAmount, EncryptedAmountWithHint, EncryptedAssetId, EncryptionKeys,
-        EncryptionPubKey, SecAccount, TransferTxMemo,
+        EncryptedAmount, EncryptedAmountWithHint, EncryptionKeys, EncryptionPubKey, SecAccount,
+        TransferTxMemo,
     };
     use confidential_identity_core::{
         asset_proofs::{
@@ -679,17 +563,20 @@ mod tests {
         asset_id: AssetId,
         rng: &mut R,
     ) -> TransferTxMemo {
+        let sender_enc_keys = mock_gen_enc_key_pair(18u8);
         let (_, enc_amount_using_receiver) = receiver_pub_key.encrypt_value(amount.into(), rng);
-        let (_, enc_asset_id_using_receiver) = receiver_pub_key.encrypt_value(asset_id.into(), rng);
         TransferTxMemo {
-            sender_account_id: EncryptedAssetId::default(),
-            receiver_account_id: EncryptedAssetId::default(),
+            sender_account: PubAccount {
+                asset_id,
+                owner_enc_pub_key: sender_enc_keys.public,
+            },
+            receiver_account: PubAccount {
+                asset_id,
+                owner_enc_pub_key: receiver_pub_key,
+            },
             enc_amount_using_sender: EncryptedAmount::default(),
             enc_amount_using_receiver,
             refreshed_enc_balance: EncryptedAmount::default(),
-            refreshed_enc_asset_id: EncryptedAssetId::default(),
-            enc_asset_id_using_receiver,
-            enc_asset_id_for_mediator: EncryptedAssetId::default(),
             enc_amount_for_mediator: EncryptedAmountWithHint::default(),
         }
     }
@@ -700,12 +587,11 @@ mod tests {
         balance: Balance,
         rng: &mut R,
     ) -> Fallible<(PubAccount, EncryptedAmount)> {
-        let (_, enc_asset_id) = receiver_enc_pub_key.encrypt_value(asset_id.into(), rng);
         let (_, enc_balance) = receiver_enc_pub_key.encrypt_value(Scalar::from(balance), rng);
 
         Ok((
             PubAccount {
-                enc_asset_id,
+                asset_id,
                 owner_enc_pub_key: receiver_enc_pub_key,
             },
             enc_balance,
@@ -720,15 +606,11 @@ mod tests {
     ) -> InitializedTransferTx {
         InitializedTransferTx {
             memo: mock_ctx_init_memo(receiver_pub_key, expected_amount, asset_id, rng),
-            asset_id_equal_cipher_with_sender_receiver_keys_proof:
-                CipherEqualDifferentPubKeyProof::default(),
             amount_equal_cipher_proof: CipherEqualDifferentPubKeyProof::default(),
             non_neg_amount_proof: InRangeProof::build(rng),
             enough_fund_proof: InRangeProof::build(rng),
             balance_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
-            asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof::default(),
             amount_correctness_proof: CorrectnessProof::default(),
-            asset_id_correctness_proof: CorrectnessProof::default(),
             auditors_payload: [].to_vec(),
         }
     }
@@ -752,27 +634,18 @@ mod tests {
             asset_id.clone(),
             &mut rng,
         );
-        let (pub_account, _enc_balance) = mock_gen_account(
-            receiver_enc_keys.public,
-            asset_id.clone(),
-            balance,
-            &mut rng,
-        )
-        .unwrap();
+        let (pub_account, _enc_balance) =
+            mock_gen_account(receiver_enc_keys.public, asset_id, balance, &mut rng).unwrap();
         let receiver_account = Account {
             public: pub_account,
             secret: SecAccount {
+                asset_id,
                 enc_keys: receiver_enc_keys,
-                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
 
-        let result = ctx_receiver.finalize_transaction(
-            &ctx_init_data,
-            receiver_account,
-            expected_amount,
-            &mut rng,
-        );
+        let result =
+            ctx_receiver.finalize_transaction(&ctx_init_data, receiver_account, expected_amount);
 
         result.unwrap();
         // Correctness of the proof will be verified in the verify function
@@ -793,30 +666,21 @@ mod tests {
         let ctx_init_data = mock_ctx_init_data(
             receiver_enc_keys.public,
             received_amount,
-            asset_id.clone(),
+            asset_id,
             &mut rng,
         );
         let receiver_account = Account {
-            public: mock_gen_account(
-                receiver_enc_keys.public,
-                asset_id.clone(),
-                balance,
-                &mut rng,
-            )
-            .unwrap()
-            .0,
+            public: mock_gen_account(receiver_enc_keys.public, asset_id, balance, &mut rng)
+                .unwrap()
+                .0,
             secret: SecAccount {
+                asset_id,
                 enc_keys: receiver_enc_keys,
-                asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
             },
         };
 
-        let result = ctx_receiver.finalize_transaction(
-            &ctx_init_data,
-            receiver_account,
-            expected_amount,
-            &mut rng,
-        );
+        let result =
+            ctx_receiver.finalize_transaction(&ctx_init_data, receiver_account, expected_amount);
 
         assert_err!(
             result,
@@ -848,7 +712,7 @@ mod tests {
 
         let (receiver_pub_account, receiver_init_balance) = mock_gen_account(
             receiver_enc_keys.public,
-            asset_id.clone(),
+            asset_id,
             receiver_balance,
             &mut rng,
         )
@@ -856,23 +720,18 @@ mod tests {
         let receiver_account = Account {
             public: receiver_pub_account,
             secret: SecAccount {
+                asset_id,
                 enc_keys: receiver_enc_keys.clone(),
-                asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
             },
         };
 
-        let (sender_pub_account, sender_init_balance) = mock_gen_account(
-            sender_enc_keys.public,
-            asset_id.clone(),
-            sender_balance,
-            &mut rng,
-        )
-        .unwrap();
+        let (sender_pub_account, sender_init_balance) =
+            mock_gen_account(sender_enc_keys.public, asset_id, sender_balance, &mut rng).unwrap();
         let sender_account = Account {
             public: sender_pub_account,
             secret: SecAccount {
+                asset_id,
                 enc_keys: sender_enc_keys.clone(),
-                asset_id_witness: CommitmentWitness::from((asset_id.clone().into(), &mut rng)),
             },
         };
 
@@ -889,12 +748,8 @@ mod tests {
         let ctx_init_data = result.unwrap();
 
         // Finalize the transaction and check its state.
-        let result = receiver.finalize_transaction(
-            &ctx_init_data,
-            receiver_account.clone(),
-            amount,
-            &mut rng,
-        );
+        let result =
+            receiver.finalize_transaction(&ctx_init_data, receiver_account.clone(), amount);
         let ctx_finalized_data = result.unwrap();
 
         // Justify the transaction
@@ -907,7 +762,6 @@ mod tests {
                 &sender_init_balance,
                 &receiver_account.public,
                 &[],
-                asset_id,
                 &mut rng,
             )
             .unwrap();
@@ -961,15 +815,12 @@ mod tests {
         let enc_keys = mock_gen_enc_key_pair(seed1);
 
         let (pub_account, init_balance) =
-            mock_gen_account(enc_keys.public, asset_id.clone(), balance, &mut rng).unwrap();
+            mock_gen_account(enc_keys.public, asset_id, balance, &mut rng).unwrap();
 
         (
             Account {
                 public: pub_account,
-                secret: SecAccount {
-                    enc_keys,
-                    asset_id_witness: CommitmentWitness::from((asset_id.into(), &mut rng)),
-                },
+                secret: SecAccount { asset_id, enc_keys },
             },
             init_balance,
         )
@@ -997,10 +848,10 @@ mod tests {
         let mediator_enc_keys = mock_gen_enc_key_pair(140u8);
 
         let (receiver_account, receiver_init_balance) =
-            account_create_helper([18u8; 32], 120u8, receiver_balance, asset_id.clone());
+            account_create_helper([18u8; 32], 120u8, receiver_balance, asset_id);
 
         let (sender_account, sender_init_balance) =
-            account_create_helper([17u8; 32], 100u8, sender_balance, asset_id.clone());
+            account_create_helper([17u8; 32], 100u8, sender_balance, asset_id);
 
         // Create the transaction and check its result and state
         let ctx_init = sender
@@ -1017,7 +868,7 @@ mod tests {
 
         // Finalize the transaction and check its state
         let ctx_final = receiver
-            .finalize_transaction(&ctx_init, receiver_account.clone(), amount, &mut rng)
+            .finalize_transaction(&ctx_init, receiver_account.clone(), amount)
             .unwrap();
 
         // Justify the transaction
@@ -1029,7 +880,6 @@ mod tests {
             &sender_init_balance,
             &receiver_account.public,
             mediator_auditor_list,
-            asset_id,
             &mut rng,
         );
 

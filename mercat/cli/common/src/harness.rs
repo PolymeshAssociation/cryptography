@@ -2,7 +2,6 @@ use crate::{
     account_create::process_create_account,
     account_issue::process_issue_asset,
     account_transfer::{process_create_tx, process_finalize_tx},
-    chain_setup::process_asset_id_creation,
     create_rng_from_seed, debug_decrypt_account_balance,
     errors::Error,
     gen_seed, gen_seed_from,
@@ -310,7 +309,6 @@ impl Transfer {
         Box::new(move || {
             info!("Running: {}", value.clone());
             process_finalize_tx(
-                seed.clone(),
                 chain_db_dir.clone(),
                 sender.clone(),
                 receiver.clone(),
@@ -344,7 +342,6 @@ impl Transfer {
         let mediator = self.mediator.name.clone();
         let tx_id = self.tx_id;
         let reject = !self.mediator_approves;
-        let cheat = self.mediator.cheater;
 
         Box::new(move || {
             info!("Running: {}", value.clone());
@@ -358,7 +355,6 @@ impl Transfer {
                 false, // Do not print the transaction data to stdout.
                 tx_id,
                 reject,
-                cheat,
             )?;
             Ok(value.clone())
         })
@@ -565,7 +561,6 @@ impl TestCase {
         info!("Using seed {}, for testcase: {}.", seed, self.title);
         let mut rng = create_rng_from_seed(Some(seed))?;
 
-        self.chain_setup()?;
         info!(
             "tx-N/A: $ mercat-chain-setup --ticker-names {} --db-dir {}",
             self.ticker_names.join(" "),
@@ -586,10 +581,6 @@ impl TestCase {
         }
 
         self.resulting_accounts()
-    }
-
-    fn chain_setup(&self) -> Result<(), Error> {
-        process_asset_id_creation(self.chain_db_dir.clone(), self.ticker_names.clone())
     }
 
     /// Reads the contents of all the accounts from the on-chain directory and decrypts

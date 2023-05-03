@@ -119,10 +119,10 @@ pub enum Error {
 
     /// Could not find account id in the validators local map.
     #[fail(
-        display = "Could not find account id {} in the validator's local map.",
-        account_id
+        display = "Could not find asset id {} in the validator's local map.",
+        asset_id
     )]
-    AccountIdNotFound { account_id: String },
+    AccountIdNotFound { asset_id: String },
 
     /// Invalid transaction file
     #[fail(display = "Invalid transaction file: {}.", path)]

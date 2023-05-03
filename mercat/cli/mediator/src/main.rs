@@ -42,7 +42,6 @@ fn main() {
             cfg.stdout,
             cfg.tx_id,
             cfg.reject,
-            cfg.cheat,
         )
         .unwrap(),
     };

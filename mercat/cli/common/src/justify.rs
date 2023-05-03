@@ -1,12 +1,12 @@
 use crate::{
     compute_enc_pending_balance, confidential_transaction_file, construct_path,
-    create_rng_from_seed, errors::Error, last_ordering_state, load_object, non_empty_account_id,
-    save_object, user_public_account_balance_file, user_public_account_file, OrderedPubAccount,
+    create_rng_from_seed, errors::Error, last_ordering_state, load_object, save_object,
+    user_public_account_balance_file, user_public_account_file, OrderedPubAccount,
     OrderedTransferInstruction, TransferInstruction, COMMON_OBJECTS_DIR,
     MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
 };
 use codec::{Decode, Encode};
-use confidential_identity_core::asset_proofs::{asset_id_from_ticker, ElgamalSecretKey};
+use confidential_identity_core::asset_proofs::ElgamalSecretKey;
 use curve25519_dalek::scalar::Scalar;
 use log::info;
 use mercat::{
@@ -93,7 +93,6 @@ pub fn justify_asset_transfer_transaction(
     stdout: bool,
     tx_id: u32,
     reject: bool,
-    cheat: bool,
 ) -> Result<(), Error> {
     // Load the transaction, mediator's credentials, and issuer's public account.
     let justify_load_objects_timer = Instant::now();
@@ -111,7 +110,7 @@ pub fn justify_asset_transfer_transaction(
         &instruction_path,
     )?;
 
-    let (mut init_tx, finalized_tx) =
+    let (init_tx, finalized_tx) =
         <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..])
             .map_err(|error| Error::ObjectLoadError {
                 error,
@@ -178,7 +177,6 @@ pub fn justify_asset_transfer_transaction(
         db_dir.clone(),
     )?;
 
-    let asset_id = asset_id_from_ticker(&ticker).map_err(|error| Error::LibraryError { error })?;
     let justified_tx = CtxMediator
         .justify_transaction(
             &init_tx,
@@ -188,19 +186,9 @@ pub fn justify_asset_transfer_transaction(
             &pending_balance,
             &receiver_ordered_pub_account.pub_account,
             &[],
-            asset_id,
             &mut rng,
         )
         .map_err(|error| Error::LibraryError { error })?;
-
-    if cheat {
-        info!(
-            "CLI log: tx-{}: Cheating by overwriting the sender's account id.",
-            tx_id
-        );
-
-        init_tx.memo.sender_account_id += non_empty_account_id();
-    }
 
     timing!(
         "mediator.justify_tx.library",

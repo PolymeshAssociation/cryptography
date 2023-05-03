@@ -6,7 +6,6 @@ bulletproofs = { version = "4.0.0", git = "https://github.com/PolymeshAssociatio
 members = [
 	"mercat",
 	"mercat/cli/account",
-	"mercat/cli/chain_setup",
 	"mercat/cli/common",
 	"mercat/cli/mediator",
 	"mercat/cli/validator",

@@ -3,21 +3,19 @@
 pub mod account_create;
 pub mod account_issue;
 pub mod account_transfer;
-pub mod chain_setup;
 pub mod errors;
 mod harness;
 pub mod justify;
 pub mod validate;
 
 use codec::{Decode, Encode};
-use confidential_identity_core::asset_proofs::CipherText;
-use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
+use confidential_identity_core::asset_proofs::AssetId;
+use curve25519_dalek::scalar::Scalar;
 use errors::Error;
 use log::{debug, error, info};
 use mercat::{
-    Account, AssetTxState, EncryptedAmount, EncryptedAssetId, FinalizedTransferTx,
-    InitializedAssetTx, InitializedTransferTx, PubAccount, PubAccountTx, SecAccount,
-    TransferTxState, TxSubstate,
+    Account, AssetTxState, EncryptedAmount, FinalizedTransferTx, InitializedAssetTx,
+    InitializedTransferTx, PubAccount, PubAccountTx, SecAccount, TransferTxState, TxSubstate,
 };
 use metrics::Recorder;
 use metrics_core::Key;
@@ -41,7 +39,6 @@ pub const MEDIATOR_PUBLIC_ACCOUNT_FILE: &str = "mediator_public_account";
 pub const VALIDATED_PUBLIC_ACCOUNT_FILE: &str = "validated_public_account";
 pub const VALIDATED_PUBLIC_ACCOUNT_BALANCE_FILE: &str = "validated_public_account_balance";
 pub const SECRET_ACCOUNT_FILE: &str = "secret_account";
-pub const ASSET_ID_LIST_FILE: &str = "valid_asset_ids.json";
 pub const COMMON_OBJECTS_DIR: &str = "common";
 pub const USER_ACCOUNT_MAP: &str = "user_ticker_to_account_id.json";
 pub const LAST_VALIDATED_TX_ID_FILE: &str = "last_validated_tx_id_file.json";
@@ -253,15 +250,6 @@ pub fn user_secret_account_file(ticker: &str) -> String {
     format!("{}_{}", ticker, SECRET_ACCOUNT_FILE)
 }
 
-/// This is used for simulating cheating by increasing the account id.
-#[inline]
-pub fn non_empty_account_id() -> EncryptedAssetId {
-    CipherText {
-        x: RISTRETTO_BASEPOINT_POINT,
-        y: RISTRETTO_BASEPOINT_POINT,
-    }
-}
-
 /// Parses the transaction file name and returns: (tx_id, user_name, state, the_input_file_path).
 #[inline]
 pub fn parse_tx_name(tx_file_path: String) -> Result<(u32, String, String, String), Error> {
@@ -422,23 +410,6 @@ pub fn remove_file(
 #[derive(Serialize, Deserialize)]
 pub struct AssetIdList(pub Vec<Scalar>);
 
-/// Utility function to read the asset ids from the database directory.
-#[inline]
-pub fn get_asset_ids(db_dir: PathBuf) -> Result<Vec<Scalar>, Error> {
-    let file_path = construct_path(db_dir, ON_CHAIN_DIR, COMMON_OBJECTS_DIR, ASSET_ID_LIST_FILE);
-    let file = File::open(file_path).map_err(|error| Error::FileReadError {
-        error,
-        path: ASSET_ID_LIST_FILE.into(),
-    })?;
-    let mut de = serde_json::Deserializer::from_reader(file);
-
-    let valid_asset_ids =
-        AssetIdList::deserialize(&mut de).map_err(|_| Error::AssetIdListDeserializeError {
-            path: ASSET_ID_LIST_FILE.into(),
-        })?;
-    Ok(valid_asset_ids.0)
-}
-
 /// Utility function to save an object that implements the Decode trait to file.
 #[inline]
 pub fn save_object<T: Encode>(
@@ -556,12 +527,12 @@ pub fn update_account_map(
     db_dir: PathBuf,
     user: String,
     ticker: String,
-    account_id: EncryptedAssetId,
+    asset_id: AssetId,
     tx_id: u32,
 ) -> Result<(), Error> {
     let mut mapping = load_account_map(db_dir.clone());
     mapping.insert(
-        PrintableAccountId(account_id.encode()).to_string(),
+        PrintableAccountId(asset_id.encode()).to_string(),
         (user, ticker, tx_id),
     );
     save_to_file(
@@ -576,14 +547,14 @@ pub fn update_account_map(
 /// Reads the account mapping file and returns (user_name, ticker, tx_id) of the given account id.
 #[inline]
 pub fn get_user_ticker_from(
-    account_id: EncryptedAssetId,
+    asset_id: AssetId,
     db_dir: PathBuf,
 ) -> Result<(String, String, u32), Error> {
     let mapping = load_account_map(db_dir);
     let (user, ticker, tx_id) = mapping
-        .get(&PrintableAccountId(account_id.encode()).to_string())
+        .get(&PrintableAccountId(asset_id.encode()).to_string())
         .ok_or(Error::AccountIdNotFound {
-            account_id: PrintableAccountId(account_id.encode()).to_string(),
+            asset_id: PrintableAccountId(asset_id.encode()).to_string(),
         })?;
     Ok((user.clone(), ticker.clone(), *tx_id))
 }
@@ -762,10 +733,10 @@ pub fn compute_enc_pending_balance(
     for core_tx in transfer_inits {
         if let CoreTransaction::TransferInit { tx, .. } = core_tx {
             pending_balance -= tx.memo.enc_amount_using_sender;
-            let account_id = tx.memo.sender_account_id;
+            let asset_id = tx.memo.sender_account.asset_id;
             debug!(
                 "------> decremented by {}.",
-                debug_decrypt(account_id, tx.memo.enc_amount_using_sender, db_dir.clone())?
+                debug_decrypt(asset_id, tx.memo.enc_amount_using_sender, db_dir.clone())?
             );
         }
     }
@@ -908,11 +879,11 @@ pub fn load_tx_file(
 /// Use only for debugging purposes.
 #[inline]
 pub fn debug_decrypt(
-    account_id: EncryptedAssetId,
+    asset_id: AssetId,
     enc_balance: EncryptedAmount,
     db_dir: PathBuf,
 ) -> Result<u32, Error> {
-    let (user, ticker, _) = get_user_ticker_from(account_id, db_dir.clone())?;
+    let (user, ticker, _) = get_user_ticker_from(asset_id, db_dir.clone())?;
     let ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,

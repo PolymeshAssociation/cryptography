@@ -1,10 +1,9 @@
 use crate::{
     compute_enc_pending_balance, confidential_transaction_file, construct_path,
     create_rng_from_seed, debug_decrypt, errors::Error, last_ordering_state, load_object,
-    non_empty_account_id, save_object, user_public_account_balance_file, user_public_account_file,
+    save_object, user_public_account_balance_file, user_public_account_file,
     user_secret_account_file, OrderedPubAccount, OrderedTransferInstruction, OrderingState,
-    PrintableAccountId, COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR,
-    ON_CHAIN_DIR,
+    COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
 use log::{debug, info};
@@ -14,7 +13,6 @@ use mercat::{
     TransferTransactionReceiver, TransferTransactionSender, TransferTxState, TxSubstate,
 };
 use metrics::timing;
-use rand::Rng;
 use std::{path::PathBuf, time::Instant};
 
 pub fn process_create_tx(
@@ -97,7 +95,7 @@ pub fn process_create_tx(
         "------------> initiating transfer tx: {}, pending_balance: {}",
         tx_id,
         debug_decrypt(
-            sender_account.public.enc_asset_id,
+            sender_account.public.asset_id,
             pending_balance,
             db_dir.clone()
         )?
@@ -112,13 +110,10 @@ pub fn process_create_tx(
     );
 
     let mut amount = amount;
-    // To simplify the cheating selection process, we randomly choose a cheating strategy,
-    // instead of requiring the caller to know of all the different cheating strategies.
-    let cheating_strategy: u32 = rng.gen_range(0..2);
 
     // The first cheating strategies make changes to the input, while the subsequent ones
     // changes the output.
-    if cheat && cheating_strategy == 0 {
+    if cheat {
         info!(
             "CLI log: tx-{}: Cheating by changing the agreed upon amount. Correct amount: {}",
             tx_id, amount
@@ -132,11 +127,11 @@ pub fn process_create_tx(
     let pending_account = Account {
         secret: sender_account.secret,
         public: PubAccount {
-            enc_asset_id: sender_account.public.enc_asset_id,
+            asset_id: sender_account.public.asset_id,
             owner_enc_pub_key: sender_account.public.owner_enc_pub_key,
         },
     };
-    let mut init_tx = ctx_sender
+    let init_tx = ctx_sender
         .create_transaction(
             &pending_account,
             &pending_balance,
@@ -154,15 +149,6 @@ pub fn process_create_tx(
         tx_id,
     };
     timing!("account.create_tx.create", create_tx_timer, Instant::now());
-
-    if cheat && cheating_strategy == 1 {
-        info!(
-            "CLI log: tx-{}: Cheating by changing the sender's account id. Correct account id: {}",
-            tx_id,
-            PrintableAccountId(pending_account.public.enc_asset_id.encode())
-        );
-        init_tx.memo.sender_account_id += non_empty_account_id();
-    }
 
     // Save the artifacts to file.
     let new_state = TransferTxState::Initialization(TxSubstate::Started);
@@ -199,7 +185,6 @@ pub fn process_create_tx(
 }
 
 pub fn process_finalize_tx(
-    seed: String,
     db_dir: PathBuf,
     sender: String,
     receiver: String,
@@ -209,7 +194,6 @@ pub fn process_finalize_tx(
     tx_id: u32,
     cheat: bool,
 ) -> Result<(), Error> {
-    let mut rng = create_rng_from_seed(Some(seed))?;
     let load_from_file_timer = Instant::now();
     let state = TransferTxState::Initialization(TxSubstate::Started);
 
@@ -236,18 +220,17 @@ pub fn process_finalize_tx(
         &confidential_transaction_file(tx_id, &sender, state),
     )?;
 
-    let mut init_tx =
-        InitializedTransferTx::decode(&mut &instruction.data[..]).map_err(|error| {
-            Error::ObjectLoadError {
-                error,
-                path: construct_path(
-                    db_dir.clone(),
-                    ON_CHAIN_DIR,
-                    &sender.clone(),
-                    &confidential_transaction_file(tx_id, &sender, state),
-                ),
-            }
-        })?;
+    let init_tx = InitializedTransferTx::decode(&mut &instruction.data[..]).map_err(|error| {
+        Error::ObjectLoadError {
+            error,
+            path: construct_path(
+                db_dir.clone(),
+                ON_CHAIN_DIR,
+                &sender.clone(),
+                &confidential_transaction_file(tx_id, &sender, state),
+            ),
+        }
+    })?;
 
     timing!(
         "account.finalize_tx.load_from_file",
@@ -274,13 +257,10 @@ pub fn process_finalize_tx(
     );
 
     let mut amount = amount;
-    // To simplify the cheating selection process, we randomly choose a cheating strategy,
-    // instead of requiring the caller to know of all the different cheating strategies.
-    let cheating_strategy: u32 = rng.gen_range(0..2);
 
     // The first cheating strategies make changes to the input, while the 2nd one
     // changes the output.
-    if cheat && cheating_strategy == 0 {
+    if cheat {
         info!(
             "CLI log: tx-{}: Cheating by changing the agreed upon amount. Correct amount: {}",
             tx_id, amount
@@ -292,7 +272,7 @@ pub fn process_finalize_tx(
     let finalize_by_receiver_timer = Instant::now();
     let receiver = CtxReceiver {};
     let finalized_tx = receiver
-        .finalize_transaction(&init_tx, receiver_account.clone(), amount, &mut rng)
+        .finalize_transaction(&init_tx, receiver_account.clone(), amount)
         .map_err(|error| Error::LibraryError { error })?;
 
     let ordering_state = OrderingState {
@@ -300,14 +280,6 @@ pub fn process_finalize_tx(
         last_pending_tx_counter: next_pending_tx_counter,
         tx_id,
     };
-
-    if cheat && cheating_strategy == 1 {
-        info!(
-            "CLI log: tx-{}: Cheating by changing the receiver's account id. Correct account id: {}",
-            tx_id, PrintableAccountId(receiver_account.public.enc_asset_id.encode())
-        );
-        init_tx.memo.receiver_account_id += non_empty_account_id();
-    }
 
     timing!(
         "account.finalize_tx.finalize_by_receiver",

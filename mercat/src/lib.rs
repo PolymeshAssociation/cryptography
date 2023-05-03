@@ -8,16 +8,11 @@ extern crate alloc;
 
 use codec::{Decode, Encode};
 pub use confidential_identity_core;
-use confidential_identity_core::{
-    asset_proofs::{
-        ciphertext_refreshment_proof::CipherEqualSamePubKeyProof,
-        correctness_proof::CorrectnessProof,
-        encrypting_same_value_proof::CipherEqualDifferentPubKeyProof, errors::Fallible,
-        membership_proof::MembershipProof, range_proof::InRangeProof,
-        wellformedness_proof::WellformednessProof, AssetId, Balance, CipherText,
-        CipherTextWithHint, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
-    },
-    curve25519_dalek::scalar::Scalar,
+use confidential_identity_core::asset_proofs::{
+    ciphertext_refreshment_proof::CipherEqualSamePubKeyProof, correctness_proof::CorrectnessProof,
+    encrypting_same_value_proof::CipherEqualDifferentPubKeyProof, errors::Fallible,
+    range_proof::InRangeProof, wellformedness_proof::WellformednessProof, AssetId, Balance,
+    CipherText, CipherTextWithHint, ElgamalPublicKey, ElgamalSecretKey,
 };
 use rand_core::{CryptoRng, RngCore};
 
@@ -44,13 +39,6 @@ macro_rules! assert_err {
 }
 
 // -------------------------------------------------------------------------------------
-// -                                  Constants                                        -
-// -------------------------------------------------------------------------------------
-
-const EXPONENT: u32 = 8;
-const BASE: u32 = 4;
-
-// -------------------------------------------------------------------------------------
 // -                                 New Type Def                                      -
 // -------------------------------------------------------------------------------------
 
@@ -67,9 +55,6 @@ pub struct EncryptionKeys {
     pub public: EncryptionPubKey,
     pub secret: EncryptionSecKey,
 }
-
-/// New type for Twisted ElGamal ciphertext of asset ids.
-pub type EncryptedAssetId = CipherText;
 
 /// New type for Twisted ElGamal ciphertext of account amounts/balances.
 pub type EncryptedAmount = CipherText;
@@ -90,8 +75,7 @@ pub struct MediatorAccount {
 #[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAccount {
-    // enc_asset_id acts as the account id.
-    pub enc_asset_id: EncryptedAssetId,
+    pub asset_id: AssetId,
     pub owner_enc_pub_key: EncryptionPubKey,
 }
 
@@ -101,8 +85,6 @@ pub struct PubAccount {
 pub struct PubAccountTx {
     pub pub_account: PubAccount,
     pub initial_balance: EncryptedAmount,
-    pub asset_wellformedness_proof: WellformednessProof,
-    pub asset_membership_proof: MembershipProof,
     pub initial_balance_correctness_proof: CorrectnessProof,
 }
 
@@ -110,8 +92,8 @@ pub struct PubAccountTx {
 #[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecAccount {
+    pub asset_id: AssetId,
     pub enc_keys: EncryptionKeys,
-    pub asset_id_witness: CommitmentWitness,
 }
 
 /// Wrapper for both the secret and public account info
@@ -129,7 +111,6 @@ pub trait AccountCreatorInitializer {
     fn create<T: RngCore + CryptoRng>(
         &self,
         secret: &SecAccount,
-        valid_asset_ids: &[Scalar],
         rng: &mut T,
     ) -> Fallible<PubAccountTx>;
 }
@@ -137,7 +118,7 @@ pub trait AccountCreatorInitializer {
 /// The interface for the verifying the account creation.
 pub trait AccountCreatorVerifier {
     /// Called by the validators to ensure that the account was created correctly.
-    fn verify(&self, account: &PubAccountTx, valid_asset_ids: &[Scalar]) -> Fallible<()>;
+    fn verify(&self, account: &PubAccountTx) -> Fallible<()>;
 }
 
 // -------------------------------------------------------------------------------------
@@ -254,7 +235,7 @@ pub struct AssetMemo {
 #[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct InitializedAssetTx {
-    pub account_id: EncryptedAssetId,
+    pub account: PubAccount,
     pub memo: AssetMemo,
     pub balance_wellformedness_proof: WellformednessProof,
     pub balance_correctness_proof: CorrectnessProof,
@@ -311,17 +292,14 @@ pub struct AuditorPayload {
 }
 
 /// Holds the memo for confidential transaction sent by the sender.
-#[derive(Default, Clone, Copy, Encode, Decode, Debug)]
+#[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TransferTxMemo {
-    pub sender_account_id: EncryptedAssetId,
-    pub receiver_account_id: EncryptedAssetId,
+    pub sender_account: PubAccount,
+    pub receiver_account: PubAccount,
     pub enc_amount_using_sender: EncryptedAmount,
     pub enc_amount_using_receiver: EncryptedAmount,
     pub refreshed_enc_balance: EncryptedAmount,
-    pub refreshed_enc_asset_id: EncryptedAssetId,
-    pub enc_asset_id_using_receiver: EncryptedAssetId,
-    pub enc_asset_id_for_mediator: EncryptedAssetId,
     pub enc_amount_for_mediator: EncryptedAmountWithHint,
 }
 
@@ -333,21 +311,15 @@ pub struct InitializedTransferTx {
     pub non_neg_amount_proof: InRangeProof,
     pub enough_fund_proof: InRangeProof,
     pub memo: TransferTxMemo,
-    pub asset_id_equal_cipher_with_sender_receiver_keys_proof: CipherEqualDifferentPubKeyProof,
     pub balance_refreshed_same_proof: CipherEqualSamePubKeyProof,
-    pub asset_id_refreshed_same_proof: CipherEqualSamePubKeyProof,
-    pub asset_id_correctness_proof: CorrectnessProof,
     pub amount_correctness_proof: CorrectnessProof,
     pub auditors_payload: Vec<AuditorPayload>,
 }
 
-/// Holds the initial transaction data and the proof of equality of asset ids
-/// prepared by the receiver.
+/// TODO: remove, not needed.
 #[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct FinalizedTransferTx {
-    pub asset_id_from_sender_equal_to_receiver_proof: CipherEqualSamePubKeyProof,
-}
+pub struct FinalizedTransferTx {}
 
 /// Wrapper for the contents and auditors' payload.
 #[derive(Clone, Encode, Decode, Debug)]
@@ -374,12 +346,11 @@ pub trait TransferTransactionReceiver {
     /// This function is called the receiver of the transaction to finalize and process
     /// the transaction. It corresponds to `FinalizeCTX` and `ProcessCTX` functions
     /// of the MERCAT paper.
-    fn finalize_transaction<T: RngCore + CryptoRng>(
+    fn finalize_transaction(
         &self,
         initialized_transaction: &InitializedTransferTx,
         receiver_account: Account,
         amount: Balance,
-        rng: &mut T,
     ) -> Fallible<FinalizedTransferTx>;
 }
 
@@ -394,7 +365,6 @@ pub trait TransferTransactionMediator {
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
-        asset_id_hint: AssetId,
         rng: &mut R,
     ) -> Fallible<JustifiedTransferTx>;
 }
@@ -424,44 +394,6 @@ pub trait TransferTransactionAuditor {
         receiver_account: &PubAccount,
         auditor_enc_keys: &(u32, EncryptionKeys),
     ) -> Fallible<()>;
-}
-
-// -------------------------------------------------------------------------------------
-// -                         Reversal Confidential Transaction                         -
-// -------------------------------------------------------------------------------------
-
-/// Holds the public portion of the reversal transaction.
-pub struct ReversedTransferTx {
-    _final_data: InitializedTransferTx,
-    _memo: ReversedTransferTxMemo,
-}
-
-/// Holds the memo for reversal of the confidential transaction sent by the mediator.
-pub struct ReversedTransferTxMemo {
-    _enc_amount_using_receiver: EncryptedAmount,
-    _enc_refreshed_amount: EncryptedAmount,
-    _enc_asset_id_using_receiver: EncryptedAssetId,
-}
-
-pub trait ReversedTransferTransactionMediator {
-    /// This function is called by the mediator to reverse and process the reversal of
-    /// the transaction. It corresponds to `ReverseCTX` of the MERCAT paper.
-    fn create(
-        &self,
-        transaction_final_data: FinalizedTransferTx,
-        mediator_enc_keys: EncryptionSecKey,
-        state: TransferTxState,
-    ) -> Fallible<(ReversedTransferTx, TransferTxState)>;
-}
-
-pub trait ReversedTransferTransactionVerifier {
-    /// This function is called by validators to verify the reversal and processing of the
-    /// reversal transaction.
-    fn verify(
-        &self,
-        reverse_transaction_data: ReversedTransferTx,
-        state: TransferTxState,
-    ) -> Fallible<TransferTxState>;
 }
 
 pub mod account;

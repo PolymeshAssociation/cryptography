@@ -1,18 +1,19 @@
 use crate::{
     account_create_transaction_file, all_unverified_tx_files, asset_transaction_file,
     compute_enc_pending_balance, confidential_transaction_file, debug_decrypt, errors::Error,
-    get_asset_ids, get_user_ticker_from, last_ordering_state, load_object, load_tx_file,
-    parse_tx_name, save_object, save_to_file, user_public_account_balance_file,
-    user_public_account_file, AssetInstruction, CoreTransaction, Direction, OrderedPubAccount,
-    OrderedPubAccountTx, PrintableAccountId, TransferInstruction, ValidationResult,
-    COMMON_OBJECTS_DIR, LAST_VALIDATED_TX_ID_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    get_user_ticker_from, last_ordering_state, load_object, load_tx_file, parse_tx_name,
+    save_object, save_to_file, user_public_account_balance_file, user_public_account_file,
+    AssetInstruction, CoreTransaction, Direction, OrderedPubAccount, OrderedPubAccountTx,
+    PrintableAccountId, TransferInstruction, ValidationResult, COMMON_OBJECTS_DIR,
+    LAST_VALIDATED_TX_ID_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
+use confidential_identity_core::asset_proofs::AssetId;
 use log::{debug, error, info};
 use mercat::{
     account::AccountValidator, asset::AssetValidator, transaction::TransactionValidator,
     AccountCreatorVerifier, AssetTransactionVerifier, AssetTxState, EncryptedAmount,
-    EncryptedAssetId, FinalizedTransferTx, InitializedAssetTx, InitializedTransferTx, PubAccount,
+    FinalizedTransferTx, InitializedAssetTx, InitializedTransferTx, PubAccount,
     TransferTransactionVerifier, TransferTxState, TxSubstate,
 };
 use metrics::timing;
@@ -60,8 +61,8 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                 tx_id,
                 mediator,
             } => {
-                let account_id = init_tx.memo.sender_account_id;
-                let (sender, ticker, _) = get_user_ticker_from(account_id, db_dir.clone())?;
+                let asset_id = init_tx.memo.sender_account.asset_id;
+                let (sender, ticker, _) = get_user_ticker_from(asset_id, db_dir.clone())?;
                 let sender_ordered_pub_account: OrderedPubAccount = load_object(
                     db_dir.clone(),
                     ON_CHAIN_DIR,
@@ -90,7 +91,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                 debug!(
                     "------------> validating tx: {}, pending transfer balance: {}",
                     tx_id,
-                    debug_decrypt(account_id, pending_balance, db_dir.clone())?
+                    debug_decrypt(asset_id, pending_balance, db_dir.clone())?
                 );
                 let (sender_result, receiver_result) = validate_transaction(
                     db_dir.clone(),
@@ -110,7 +111,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                 ordering_state: _,
             } => {
                 if let Err(error) =
-                    validate_account(db_dir.clone(), account_tx.pub_account.enc_asset_id)
+                    validate_account(db_dir.clone(), account_tx.pub_account.asset_id)
                 {
                     error!("Error in validation of tx-{}: {:#?}", tx_id, error);
                     error!("tx-{}: Ignoring the validation error and continuing the with rest of the validations.", tx_id);
@@ -160,7 +161,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
             &user,
             &ticker,
             debug_decrypt(
-                ordered_pub_account.pub_account.enc_asset_id,
+                ordered_pub_account.pub_account.asset_id,
                 new_balance,
                 db_dir.clone()
             )?
@@ -175,7 +176,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                                 &user,
                                 &ticker,
                                 debug_decrypt(
-                                    ordered_pub_account.pub_account.enc_asset_id,
+                                    ordered_pub_account.pub_account.asset_id,
                                     amount,
                                     db_dir.clone()
                                 )?
@@ -193,7 +194,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                                 &user,
                                 &ticker,
                                 debug_decrypt(
-                                    ordered_pub_account.pub_account.enc_asset_id,
+                                    ordered_pub_account.pub_account.asset_id,
                                     amount,
                                     db_dir.clone()
                                 )?
@@ -215,7 +216,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
             &OrderedPubAccount {
                 last_processed_tx_counter: last_tx_id,
                 pub_account: PubAccount {
-                    enc_asset_id: ordered_pub_account.pub_account.enc_asset_id,
+                    asset_id: ordered_pub_account.pub_account.asset_id,
                     owner_enc_pub_key: ordered_pub_account.pub_account.owner_enc_pub_key,
                 },
             },
@@ -247,8 +248,8 @@ pub fn validate_asset_issuance(
 ) -> ValidationResult {
     let load_objects_timer = Instant::now();
 
-    let issuer_account_id = asset_tx.account_id;
-    let res = get_user_ticker_from(issuer_account_id, db_dir.clone());
+    let issuer_asset_id = asset_tx.account.asset_id;
+    let res = get_user_ticker_from(issuer_asset_id, db_dir.clone());
     if let Err(error) = res {
         error!("Error in validation of tx-{}: {:#?}", tx_id, error);
         return ValidationResult::error("n/a", "n/a");
@@ -351,15 +352,13 @@ pub fn validate_asset_issuance(
     }
 }
 
-pub fn validate_account(db_dir: PathBuf, account_id: EncryptedAssetId) -> Result<(), Error> {
+pub fn validate_account(db_dir: PathBuf, asset_id: AssetId) -> Result<(), Error> {
     // Load the user's public account.
-    let load_objects_timer = Instant::now();
-
-    let (user, ticker, tx_id) = get_user_ticker_from(account_id, db_dir.clone())?;
+    let (user, ticker, tx_id) = get_user_ticker_from(asset_id, db_dir.clone())?;
     info!(
-        "Validating account{{tx_id: {}, account_id: {}, user: {}, ticker: {}}}",
+        "Validating account{{tx_id: {}, asset_id: {}, user: {}, ticker: {}}}",
         tx_id,
-        PrintableAccountId(account_id.encode()),
+        PrintableAccountId(asset_id.encode()),
         user,
         ticker
     );
@@ -370,19 +369,11 @@ pub fn validate_account(db_dir: PathBuf, account_id: EncryptedAssetId) -> Result
         &account_create_transaction_file(tx_id, &user, &ticker),
     )?;
 
-    let valid_asset_ids = get_asset_ids(db_dir.clone())?;
-    timing!(
-        "validator.account.load_objects",
-        load_objects_timer,
-        Instant::now(),
-        "tx_id" => tx_id.to_string()
-    );
-
     // Validate the account.
     let validate_account_timer = Instant::now();
     let account_validator = AccountValidator {};
     account_validator
-        .verify(&ordered_user_account_tx.account_tx, &valid_asset_ids)
+        .verify(&ordered_user_account_tx.account_tx)
         .map_err(|error| Error::LibraryError { error })?;
 
     timing!(
@@ -457,20 +448,20 @@ pub fn validate_transaction(
     let load_objects_timer = Instant::now();
     // Load the transaction, mediator's account, and issuer's public account.
 
-    let (sender, _, _) = match get_user_ticker_from(init_tx.memo.sender_account_id, db_dir.clone())
-    {
-        Err(error) => {
-            error!("Error in validation of tx-{}: {:#?}", tx_id, error);
-            return (
-                ValidationResult::error("n/a", "n/a"),
-                ValidationResult::error("n/a", "n/a"),
-            );
-        }
-        Ok(ok) => ok,
-    };
+    let (sender, _, _) =
+        match get_user_ticker_from(init_tx.memo.sender_account.asset_id, db_dir.clone()) {
+            Err(error) => {
+                error!("Error in validation of tx-{}: {:#?}", tx_id, error);
+                return (
+                    ValidationResult::error("n/a", "n/a"),
+                    ValidationResult::error("n/a", "n/a"),
+                );
+            }
+            Ok(ok) => ok,
+        };
 
     let (receiver, ticker, _) =
-        match get_user_ticker_from(init_tx.memo.receiver_account_id, db_dir.clone()) {
+        match get_user_ticker_from(init_tx.memo.receiver_account.asset_id, db_dir.clone()) {
             Err(error) => {
                 error!("Error in validation of tx-{}: {:#?}", tx_id, error);
                 return (
