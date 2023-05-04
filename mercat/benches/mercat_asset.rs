@@ -1,8 +1,7 @@
 mod utility;
-use confidential_identity_core::asset_proofs::{AssetId, Balance};
+use confidential_identity_core::asset_proofs::Balance;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use mercat::{
-    account::convert_asset_ids,
     asset::{AssetIssuer, AssetValidator},
     Account, AssetTransactionIssuer, AssetTransactionVerifier, EncryptedAmount, InitializedAssetTx,
     PubAccount,
@@ -13,12 +12,6 @@ use rand::thread_rng;
 // [10^MIN_ISSUER_AMOUNT_ORDER, 10^(MIN_ISSUER_AMOUNT_ORDER+1), ..., 10^MAX_ISSUER_AMOUNT_ORDER]
 const MIN_ISSUED_AMOUNT_ORDER: u32 = 1;
 const MAX_ISSUED_AMOUNT_ORDER: u32 = 7;
-
-// The size of the valid asset id set.
-const MAX_ASSET_ID_INDEX: u32 = 1000000;
-// The asset id to use for transactions.
-// Must be in [0, MAX_ASSET_ID_INDEX)
-const ASSET_ID: u32 = 1;
 
 fn bench_transaction_issuer(
     c: &mut Criterion,
@@ -91,13 +84,8 @@ fn bench_transaction_validator(
 }
 
 fn bench_asset_transaction(c: &mut Criterion) {
-    let asset_id = AssetId::from(ASSET_ID);
-    let valid_asset_ids: Vec<AssetId> = (0..MAX_ASSET_ID_INDEX).map(AssetId::from).collect();
-    let valid_asset_ids = convert_asset_ids(valid_asset_ids);
-
     let mut rng = thread_rng();
-    let (issuer_account, issuer_init_balance) =
-        utility::create_account_with_amount(&mut rng, &asset_id, &valid_asset_ids, 0);
+    let (issuer_account, issuer_init_balance) = utility::create_account_with_amount(&mut rng, 0);
 
     let issued_amounts: Vec<u32> = (MIN_ISSUED_AMOUNT_ORDER..MAX_ISSUED_AMOUNT_ORDER)
         .map(|i| 10u32.pow(i))

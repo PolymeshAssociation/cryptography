@@ -328,7 +328,7 @@ mod tests {
     use super::*;
     use crate::{account::AccountCreator, AccountCreatorInitializer, EncryptionKeys, SecAccount};
     use confidential_identity_core::{
-        asset_proofs::{errors::ErrorKind, AssetId, ElgamalSecretKey},
+        asset_proofs::{errors::ErrorKind, ElgamalSecretKey},
         curve25519_dalek::scalar::Scalar,
     };
     use rand::rngs::StdRng;
@@ -348,10 +348,8 @@ mod tests {
             public: issuer_elg_secret_key.get_public_key(),
             secret: issuer_elg_secret_key,
         };
-        let asset_id = AssetId::from(1);
 
         let issuer_secret_account = SecAccount {
-            asset_id,
             enc_keys: issuer_enc_key.clone(),
         };
 
@@ -411,16 +409,13 @@ mod tests {
             public: issuer_elg_secret_key.get_public_key(),
             secret: issuer_elg_secret_key,
         };
-        let asset_id = AssetId::from(1);
 
         let issuer_secret_account = SecAccount {
-            asset_id,
             enc_keys: issuer_enc_key.clone(),
         };
 
         // Note that we use default proof values since we don't reverify these proofs during asset issuance.
         let issuer_public_account = PubAccount {
-            asset_id,
             owner_enc_pub_key: issuer_enc_key.public,
         };
         // Set the initial encrypted balance to 0.

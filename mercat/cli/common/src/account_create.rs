@@ -4,7 +4,7 @@ use crate::{
     COMMON_OBJECTS_DIR, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::Encode;
-use confidential_identity_core::asset_proofs::{asset_id_from_ticker, ElgamalSecretKey};
+use confidential_identity_core::asset_proofs::ElgamalSecretKey;
 use curve25519_dalek::scalar::Scalar;
 use log::info;
 use mercat::{account::AccountCreator, AccountCreatorInitializer, EncryptionKeys, SecAccount};
@@ -24,7 +24,7 @@ pub fn process_create_account(
     let mut rng = create_rng_from_seed(seed)?;
 
     // Create the account.
-    let secret_account = create_secret_account(&mut rng, ticker.clone())?;
+    let secret_account = create_secret_account(&mut rng)?;
 
     let create_account_timer = Instant::now();
     let account_creator = AccountCreator;
@@ -42,8 +42,6 @@ pub fn process_create_account(
         &user_secret_account_file(&ticker),
         &secret_account,
     )?;
-
-    let asset_id = account_tx.pub_account.asset_id;
 
     let instruction = OrderedPubAccountTx {
         account_tx,
@@ -65,24 +63,14 @@ pub fn process_create_account(
         );
     }
 
-    update_account_map(
-        db_dir,
-        user,
-        &secret_account.enc_keys.public,
-        ticker,
-        asset_id,
-        tx_id,
-    )?;
+    update_account_map(db_dir, user, &secret_account.enc_keys.public, ticker, tx_id)?;
 
     timing!("account.save_output", save_to_file_timer, Instant::now(), "tx_id" => tx_id.to_string());
 
     Ok(())
 }
 
-fn create_secret_account<R: RngCore + CryptoRng>(
-    rng: &mut R,
-    ticker_id: String,
-) -> Result<SecAccount, Error> {
+fn create_secret_account<R: RngCore + CryptoRng>(rng: &mut R) -> Result<SecAccount, Error> {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
@@ -90,8 +78,5 @@ fn create_secret_account<R: RngCore + CryptoRng>(
         secret: elg_secret,
     };
 
-    let asset_id =
-        asset_id_from_ticker(&ticker_id).map_err(|error| Error::LibraryError { error })?;
-
-    Ok(SecAccount { asset_id, enc_keys })
+    Ok(SecAccount { enc_keys })
 }

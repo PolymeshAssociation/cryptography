@@ -39,10 +39,6 @@ pub struct CreateUserAccountInfo {
         help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
-
-    /// Space separated list of ticker names.
-    #[structopt(short, long, help = "Space separated list of a ticker names.")]
-    pub valid_ticker_names: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
@@ -157,9 +153,9 @@ pub struct CreateTransactionInfo {
     #[structopt(
         short,
         long,
-        help = "The receiver's base64 public account (encrypted asset id, followed by encryption public key)."
+        help = "The receiver's base64 public account encryption public key."
     )]
-    pub receiver: Vec<String>,
+    pub receiver: String,
 
     /// The mediator's base64 public encryption key.
     #[structopt(short, long, help = "The mediator's base64 public encryption key.")]
@@ -239,23 +235,23 @@ pub struct JustifyTransferInfo {
     )]
     pub ticker: String,
 
-    /// The sender's base64 public account (encrypted asset id, followed by encryption public key).
+    /// The sender's base64 public account encryption public key.
     #[structopt(
         long,
-        help = "The sender's base64 public account (encrypted asset id, followed by encryption public key)."
+        help = "The sender's base64 public account encryption public key."
     )]
-    pub sender: Vec<String>,
+    pub sender: String,
 
     /// The sender's base64 balance.
     #[structopt(long, help = "The sender's base64 balance.")]
     pub sender_balance: String,
 
-    /// The receiver's base64 public account (encrypted asset id, followed by encryption public key).
+    /// The receiver's base64 public account encryption public key.
     #[structopt(
         long,
-        help = "The receiver's base64 public account (encrypted asset id, followed by encryption public key)."
+        help = "The receiver's base64 public account encryption public key."
     )]
-    pub receiver: Vec<String>,
+    pub receiver: String,
 
     /// The name of the mediator.
     #[structopt(short, long, help = "The name of the mediator.")]
@@ -349,7 +345,6 @@ pub fn parse_input() -> CLI {
                 user: cfg.user,
                 db_dir: cfg.db_dir,
                 ticker: cfg.ticker,
-                valid_ticker_names: cfg.valid_ticker_names,
             };
 
             info!(

@@ -11,8 +11,8 @@ pub use confidential_identity_core;
 use confidential_identity_core::asset_proofs::{
     ciphertext_refreshment_proof::CipherEqualSamePubKeyProof, correctness_proof::CorrectnessProof,
     encrypting_same_value_proof::CipherEqualDifferentPubKeyProof, errors::Fallible,
-    range_proof::InRangeProof, wellformedness_proof::WellformednessProof, AssetId, Balance,
-    CipherText, CipherTextWithHint, ElgamalPublicKey, ElgamalSecretKey,
+    range_proof::InRangeProof, wellformedness_proof::WellformednessProof, Balance, CipherText,
+    CipherTextWithHint, ElgamalPublicKey, ElgamalSecretKey,
 };
 use rand_core::{CryptoRng, RngCore};
 
@@ -75,7 +75,6 @@ pub struct MediatorAccount {
 #[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PubAccount {
-    pub asset_id: AssetId,
     pub owner_enc_pub_key: EncryptionPubKey,
 }
 
@@ -92,7 +91,6 @@ pub struct PubAccountTx {
 #[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SecAccount {
-    pub asset_id: AssetId,
     pub enc_keys: EncryptionKeys,
 }
 

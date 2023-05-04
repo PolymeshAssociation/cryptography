@@ -123,7 +123,6 @@ pub fn process_create_tx(
     let pending_account = Account {
         secret: sender_account.secret,
         public: PubAccount {
-            asset_id: sender_account.public.asset_id,
             owner_enc_pub_key: sender_account.public.owner_enc_pub_key,
         },
     };

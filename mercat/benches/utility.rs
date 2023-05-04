@@ -1,7 +1,4 @@
-use confidential_identity_core::{
-    asset_proofs::{AssetId, CommitmentWitness, ElgamalSecretKey},
-    Scalar,
-};
+use confidential_identity_core::{asset_proofs::ElgamalSecretKey, Scalar};
 use mercat::{
     account::{deposit, AccountCreator},
     Account, AccountCreatorInitializer, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
@@ -42,16 +39,12 @@ pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
 #[allow(dead_code)]
 pub fn create_account_with_amount<R: RngCore + CryptoRng>(
     rng: &mut R,
-    asset_id: &AssetId,
-    valid_asset_ids: &Vec<Scalar>,
     initial_amount: u32,
 ) -> (Account, EncryptedAmount) {
-    let secret_account = gen_keys(rng, asset_id);
+    let secret_account = gen_keys(rng);
 
     let account_creator = AccountCreator;
-    let pub_account_tx = account_creator
-        .create(&secret_account, valid_asset_ids, rng)
-        .unwrap();
+    let pub_account_tx = account_creator.create(&secret_account, rng).unwrap();
     let account = Account {
         secret: secret_account,
         public: pub_account_tx.pub_account,
@@ -71,20 +64,14 @@ pub fn create_account_with_amount<R: RngCore + CryptoRng>(
 }
 
 #[allow(dead_code)]
-pub fn create_account<R: RngCore + CryptoRng>(
-    rng: &mut R,
-    asset_id: &AssetId,
-    valid_asset_ids: &Vec<Scalar>,
-) -> PubAccountTx {
-    let secret_account = gen_keys(rng, asset_id);
+pub fn create_account<R: RngCore + CryptoRng>(rng: &mut R) -> PubAccountTx {
+    let secret_account = gen_keys(rng);
 
     let account_creator = AccountCreator;
-    account_creator
-        .create(&secret_account, valid_asset_ids, rng)
-        .unwrap()
+    account_creator.create(&secret_account, rng).unwrap()
 }
 
-pub fn gen_keys<R: RngCore + CryptoRng>(rng: &mut R, asset_id: &AssetId) -> SecAccount {
+pub fn gen_keys<R: RngCore + CryptoRng>(rng: &mut R) -> SecAccount {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
@@ -92,10 +79,5 @@ pub fn gen_keys<R: RngCore + CryptoRng>(rng: &mut R, asset_id: &AssetId) -> SecA
         secret: elg_secret,
     };
 
-    let asset_id_witness = CommitmentWitness::new(asset_id.clone().into(), Scalar::random(rng));
-
-    SecAccount {
-        enc_keys,
-        asset_id_witness,
-    }
+    SecAccount { enc_keys }
 }

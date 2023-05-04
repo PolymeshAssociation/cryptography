@@ -3,7 +3,7 @@ use mercat::{
     account::AccountCreator,
     asset::AssetIssuer,
     confidential_identity_core::{
-        asset_proofs::{AssetId, CipherText, ElgamalPublicKey, ElgamalSecretKey},
+        asset_proofs::{CipherText, ElgamalPublicKey, ElgamalSecretKey},
         curve25519_dalek::scalar::Scalar,
     },
     transaction::{CtxMediator, CtxReceiver, CtxSender},
@@ -34,7 +34,6 @@ pub type Base64 = String;
 pub struct CreateAccountOutput {
     secret_account: Base64,
     public_key: Base64,
-    asset_id: Base64,
     account_tx: Base64,
 }
 
@@ -52,12 +51,6 @@ impl CreateAccountOutput {
         self.public_key.clone()
     }
 
-    /// The account id is the same as the ticker.
-    #[wasm_bindgen(getter)]
-    pub fn asset_id(&self) -> Base64 {
-        self.asset_id.clone()
-    }
-
     /// The Zero Knowledge proofs of the account creation.
     #[wasm_bindgen(getter)]
     pub fn account_tx(&self) -> Base64 {
@@ -65,10 +58,7 @@ impl CreateAccountOutput {
     }
 
     pub fn account(&self) -> Account {
-        Account::new(
-            self.secret_account(),
-            PubAccount::new(self.asset_id(), self.public_key()),
-        )
+        Account::new(self.secret_account(), PubAccount::new(self.public_key()))
     }
 }
 
@@ -202,24 +192,19 @@ impl Account {
 /// A wrapper around base64 encoding of mercat public account.
 #[wasm_bindgen]
 pub struct PubAccount {
-    asset_id: Base64,
     public_key: Base64,
 }
 
 #[wasm_bindgen]
 impl PubAccount {
     #[wasm_bindgen(constructor)]
-    pub fn new(asset_id: Base64, public_key: Base64) -> Self {
-        Self {
-            asset_id,
-            public_key,
-        }
+    pub fn new(public_key: Base64) -> Self {
+        Self { public_key }
     }
 
     fn to_mercat(&self) -> Fallible<MercatPubAccount> {
         Ok(MercatPubAccount {
             owner_enc_pub_key: decode::<ElgamalPublicKey>(self.public_key.clone())?,
-            asset_id: decode::<AssetId>(self.asset_id.clone())?,
         })
     }
 }
@@ -257,38 +242,26 @@ type Fallible<T> = Result<T, JsValue>;
 // -                                     Public API                                   -
 // ------------------------------------------------------------------------------------
 
-/// Creates a mercat account for a given `ticker_id`. It is the responsibility of the caller
+/// Creates a mercat account. It is the responsibility of the caller
 /// to properly store and safeguard the secret values returned by this function.
-///
-/// # Arguments
-/// * `valid_ticker_ids`: The list of all valid confidential ticker ids. These values can be
-///                       obtained from the chain. The values are expected to be a list of
-///                       hex strings (without the 0x).
-///
-/// * `ticker_id`: The ticker id of this account.
 ///
 /// # Outputs
 /// * `CreateAccountOutput`: Contains both the public and secret account information.
 ///
 /// # Errors
-/// * `PlainTickerIdsError`: If the `valid_ticker_ids` is not a list of hex strings (without the
-/// 0x)
-/// * `HexDecodingError`: If `ticker_id` or `valid_ticker_ids`s are not a proper Hex values.
 /// * `AccountCreationError`: If mercat library throws an error while creating the account.
 #[wasm_bindgen]
-pub fn create_account(ticker_id: String) -> Fallible<CreateAccountOutput> {
+pub fn create_account() -> Fallible<CreateAccountOutput> {
     let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
-    let secret_account = create_secret_account(&mut rng, ticker_id)?;
+    let secret_account = create_secret_account(&mut rng)?;
     let account_tx: PubAccountTx = AccountCreator
         .create(&secret_account, &mut rng)
         .map_err(|_| WasmError::AccountCreationError)?;
-    let asset_id = account_tx.pub_account.asset_id;
 
     Ok(CreateAccountOutput {
         secret_account: base64::encode(secret_account.encode()),
         public_key: base64::encode(secret_account.enc_keys.public.encode()),
-        asset_id: base64::encode(asset_id.encode()),
         account_tx: base64::encode(account_tx.encode()),
     })
 }
@@ -517,10 +490,7 @@ fn decode<T: Decode>(data: Base64) -> Fallible<T> {
     T::decode(&mut &decoded[..]).map_err(|_| WasmError::DeserializationError.into())
 }
 
-fn create_secret_account<R: RngCore + CryptoRng>(
-    rng: &mut R,
-    ticker_id: String,
-) -> Fallible<SecAccount> {
+fn create_secret_account<R: RngCore + CryptoRng>(rng: &mut R) -> Fallible<SecAccount> {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
@@ -528,11 +498,5 @@ fn create_secret_account<R: RngCore + CryptoRng>(
         secret: elg_secret,
     };
 
-    let mut asset_id = [0u8; 12];
-    let decoded = hex::decode(ticker_id).map_err(|_| WasmError::HexDecodingError)?;
-    asset_id[..decoded.len()].copy_from_slice(&decoded);
-
-    let asset_id = AssetId { id: asset_id };
-
-    Ok(SecAccount { asset_id, enc_keys })
+    Ok(SecAccount { enc_keys })
 }

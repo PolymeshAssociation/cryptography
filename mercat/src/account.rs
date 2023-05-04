@@ -46,7 +46,6 @@ impl AccountCreatorInitializer for AccountCreator {
 
         Ok(PubAccountTx {
             pub_account: PubAccount {
-                asset_id: secret.asset_id,
                 owner_enc_pub_key: secret.enc_keys.public,
             },
             initial_balance,
@@ -102,8 +101,7 @@ mod tests {
     use super::*;
     use crate::EncryptionKeys;
     use confidential_identity_core::{
-        asset_proofs::{AssetId, ElgamalSecretKey},
-        curve25519_dalek::scalar::Scalar,
+        asset_proofs::ElgamalSecretKey, curve25519_dalek::scalar::Scalar,
     };
     use rand::{rngs::StdRng, SeedableRng};
     use wasm_bindgen_test::*;
@@ -119,8 +117,7 @@ mod tests {
             public: elg_pub,
             secret: elg_secret,
         };
-        let asset_id = AssetId::from(1);
-        let secret_account = SecAccount { asset_id, enc_keys };
+        let secret_account = SecAccount { enc_keys };
 
         // ----------------------- test
         let account_creator = AccountCreator;
@@ -149,8 +146,7 @@ mod tests {
             public: elg_pub,
             secret: elg_secret,
         };
-        let asset_id = AssetId::from(1);
-        let secret_account = SecAccount { asset_id, enc_keys };
+        let secret_account = SecAccount { enc_keys };
 
         // ----------------------- test
         let account_creator = AccountCreator;

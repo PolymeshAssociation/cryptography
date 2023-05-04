@@ -4,7 +4,7 @@
 mod input;
 
 use codec::{Decode, Encode};
-use confidential_identity_core::asset_proofs::{AssetId, ElgamalSecretKey};
+use confidential_identity_core::asset_proofs::ElgamalSecretKey;
 use curve25519_dalek::scalar::Scalar;
 
 use input::{parse_input, CLI};
@@ -121,7 +121,7 @@ fn process_create_account(
     let mut rng = create_rng_from_seed(seed)?;
 
     // Create the account.
-    let secret_account = create_secret_account(&mut rng, ticker.clone())?;
+    let secret_account = create_secret_account(&mut rng)?;
 
     let account_tx = AccountCreator
         .create(&secret_account, &mut rng)
@@ -136,12 +136,9 @@ fn process_create_account(
         &secret_account,
     )?;
 
-    let asset_id = account_tx.pub_account.asset_id;
-
     info!(
-        "CLI log: tx-{}:\n\nAsset ID as base64:\n{}\n\nAccount Transaction as base64:\n{}\n",
+        "CLI log: tx-{}:\n\nAccount Transaction as base64:\n{}\n",
         TX_ID,
-        base64::encode(asset_id.encode()),
         base64::encode(account_tx.encode())
     );
 
@@ -160,10 +157,7 @@ fn process_create_account(
     Ok(())
 }
 
-fn create_secret_account<R: RngCore + CryptoRng>(
-    rng: &mut R,
-    ticker_id: String,
-) -> Result<SecAccount, Error> {
+fn create_secret_account<R: RngCore + CryptoRng>(rng: &mut R) -> Result<SecAccount, Error> {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {
@@ -171,20 +165,14 @@ fn create_secret_account<R: RngCore + CryptoRng>(
         secret: elg_secret,
     };
 
-    let mut asset_id = [0u8; 12];
-    let decoded = hex::decode(ticker_id).unwrap();
-    asset_id[..decoded.len()].copy_from_slice(&decoded);
-
-    let asset_id = AssetId { id: asset_id };
-
-    Ok(SecAccount { asset_id, enc_keys })
+    Ok(SecAccount { enc_keys })
 }
 
 pub fn process_create_tx(
     seed: String,
     db_dir: PathBuf,
     sender: String,
-    receiver: Vec<String>,
+    receiver: String,
     mediator: String,
     ticker: String,
     amount: u32,
@@ -212,10 +200,8 @@ pub fn process_create_tx(
     let mut data: &[u8] = &base64::decode(pending_balance).unwrap();
     let pending_balance = EncryptedAmount::decode(&mut data).unwrap(); // For now the same as initial balance
 
-    let mut data0: &[u8] = &base64::decode(&receiver[0]).unwrap();
-    let mut data1: &[u8] = &base64::decode(&receiver[1]).unwrap();
+    let mut data1: &[u8] = &base64::decode(&receiver).unwrap();
     let receiver_pub_account = PubAccount {
-        asset_id: AssetId::decode(&mut data0).unwrap(),
         owner_enc_pub_key: EncryptionPubKey::decode(&mut data1).unwrap(),
     };
 
@@ -227,7 +213,6 @@ pub fn process_create_tx(
     let pending_account = Account {
         secret: sender_account.secret,
         public: PubAccount {
-            asset_id: sender_account.public.asset_id,
             owner_enc_pub_key: sender_account.public.owner_enc_pub_key,
         },
     };
@@ -296,9 +281,9 @@ pub fn process_finalize_tx(
 pub fn justify_asset_transfer_transaction(
     seed: String,
     db_dir: PathBuf,
-    sender: Vec<String>,
+    sender: String,
     sender_balance: String,
-    receiver: Vec<String>,
+    receiver: String,
     mediator: String,
     init_tx: String,
     finalized_tx: String,
@@ -314,20 +299,16 @@ pub fn justify_asset_transfer_transaction(
     let mediator_account: MediatorAccount =
         load_object(db_dir, OFF_CHAIN_DIR, &mediator, SECRET_ACCOUNT_FILE)?;
 
-    let mut data0: &[u8] = &base64::decode(&sender[0]).unwrap();
-    let mut data1: &[u8] = &base64::decode(&sender[1]).unwrap();
+    let mut data1: &[u8] = &base64::decode(&sender).unwrap();
     let sender_pub_account = PubAccount {
-        asset_id: AssetId::decode(&mut data0).unwrap(),
         owner_enc_pub_key: EncryptionPubKey::decode(&mut data1).unwrap(),
     };
 
     let mut data: &[u8] = &base64::decode(&sender_balance).unwrap();
     let sender_balance = EncryptedAmount::decode(&mut data).unwrap();
 
-    let mut data0: &[u8] = &base64::decode(&receiver[0]).unwrap();
-    let mut data1: &[u8] = &base64::decode(&receiver[1]).unwrap();
+    let mut data1: &[u8] = &base64::decode(&receiver).unwrap();
     let receiver_pub_account = PubAccount {
-        asset_id: AssetId::decode(&mut data0).unwrap(),
         owner_enc_pub_key: EncryptionPubKey::decode(&mut data1).unwrap(),
     };
 

@@ -9,7 +9,6 @@ pub mod justify;
 pub mod validate;
 
 use codec::{Decode, Encode};
-use confidential_identity_core::asset_proofs::AssetId;
 use curve25519_dalek::scalar::Scalar;
 use errors::Error;
 use log::{debug, error, info};
@@ -529,12 +528,10 @@ pub fn update_account_map(
     user: String,
     pub_key: &EncryptionPubKey,
     ticker: String,
-    asset_id: AssetId,
     tx_id: u32,
 ) -> Result<(), Error> {
     let mut mapping = load_account_map(db_dir.clone());
     let account = PubAccount {
-        asset_id,
         owner_enc_pub_key: pub_key.clone(),
     };
     mapping.insert(
@@ -557,12 +554,9 @@ pub fn get_user_from_account(
     db_dir: PathBuf,
 ) -> Result<(String, String, u32), Error> {
     let mapping = load_account_map(db_dir);
-    let asset_id = account.asset_id;
     let (user, ticker, tx_id) = mapping
         .get(&PrintableAccountId(account.encode()).to_string())
-        .ok_or(Error::AccountIdNotFound {
-            asset_id: PrintableAccountId(asset_id.encode()).to_string(),
-        })?;
+        .ok_or(Error::AccountIdNotFound)?;
     Ok((user.clone(), ticker.clone(), *tx_id))
 }
 

@@ -4,8 +4,8 @@ use crate::{
     get_user_from_account, last_ordering_state, load_object, load_tx_file, parse_tx_name,
     save_object, save_to_file, user_public_account_balance_file, user_public_account_file,
     AssetInstruction, CoreTransaction, Direction, OrderedPubAccount, OrderedPubAccountTx,
-    PrintableAccountId, TransferInstruction, ValidationResult, COMMON_OBJECTS_DIR,
-    LAST_VALIDATED_TX_ID_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    TransferInstruction, ValidationResult, COMMON_OBJECTS_DIR, LAST_VALIDATED_TX_ID_FILE,
+    OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
 use log::{debug, error, info};
@@ -217,7 +217,6 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
             &OrderedPubAccount {
                 last_processed_tx_counter: last_tx_id,
                 pub_account: PubAccount {
-                    asset_id: ordered_pub_account.pub_account.asset_id,
                     owner_enc_pub_key: ordered_pub_account.pub_account.owner_enc_pub_key,
                 },
             },
@@ -356,11 +355,8 @@ pub fn validate_account(db_dir: PathBuf, account: &PubAccount) -> Result<(), Err
     // Load the user's public account.
     let (user, ticker, tx_id) = get_user_from_account(account, db_dir.clone())?;
     info!(
-        "Validating account{{tx_id: {}, asset_id: {}, user: {}, ticker: {}}}",
-        tx_id,
-        PrintableAccountId(account.asset_id.encode()),
-        user,
-        ticker
+        "Validating account{{tx_id: {}, user: {}, ticker: {}}}",
+        tx_id, user, ticker
     );
     let ordered_user_account_tx: OrderedPubAccountTx = load_object(
         db_dir.clone(),

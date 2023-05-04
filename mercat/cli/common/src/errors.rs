@@ -118,11 +118,8 @@ pub enum Error {
     DecodeError,
 
     /// Could not find account id in the validators local map.
-    #[fail(
-        display = "Could not find asset id {} in the validator's local map.",
-        asset_id
-    )]
-    AccountIdNotFound { asset_id: String },
+    #[fail(display = "Could not find account in the validator's local map.")]
+    AccountIdNotFound,
 
     /// Invalid transaction file
     #[fail(display = "Invalid transaction file: {}.", path)]
