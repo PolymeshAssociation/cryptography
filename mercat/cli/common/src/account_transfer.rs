@@ -94,11 +94,7 @@ pub fn process_create_tx(
     debug!(
         "------------> initiating transfer tx: {}, pending_balance: {}",
         tx_id,
-        debug_decrypt(
-            sender_account.public.asset_id,
-            pending_balance,
-            db_dir.clone()
-        )?
+        debug_decrypt(&sender_account.public, pending_balance, db_dir.clone())?
     );
     let next_pending_tx_counter = ordering_state.last_pending_tx_counter + 1;
 

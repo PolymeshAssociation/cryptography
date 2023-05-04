@@ -14,8 +14,9 @@ use curve25519_dalek::scalar::Scalar;
 use errors::Error;
 use log::{debug, error, info};
 use mercat::{
-    Account, AssetTxState, EncryptedAmount, FinalizedTransferTx, InitializedAssetTx,
-    InitializedTransferTx, PubAccount, PubAccountTx, SecAccount, TransferTxState, TxSubstate,
+    Account, AssetTxState, EncryptedAmount, EncryptionPubKey, FinalizedTransferTx,
+    InitializedAssetTx, InitializedTransferTx, PubAccount, PubAccountTx, SecAccount,
+    TransferTxState, TxSubstate,
 };
 use metrics::Recorder;
 use metrics_core::Key;
@@ -526,13 +527,18 @@ pub fn load_account_map(db_dir: PathBuf) -> HashMap<String, (String, String, u32
 pub fn update_account_map(
     db_dir: PathBuf,
     user: String,
+    pub_key: &EncryptionPubKey,
     ticker: String,
     asset_id: AssetId,
     tx_id: u32,
 ) -> Result<(), Error> {
     let mut mapping = load_account_map(db_dir.clone());
+    let account = PubAccount {
+        asset_id,
+        owner_enc_pub_key: pub_key.clone(),
+    };
     mapping.insert(
-        PrintableAccountId(asset_id.encode()).to_string(),
+        PrintableAccountId(account.encode()).to_string(),
         (user, ticker, tx_id),
     );
     save_to_file(
@@ -544,15 +550,16 @@ pub fn update_account_map(
     )
 }
 
-/// Reads the account mapping file and returns (user_name, ticker, tx_id) of the given account id.
+/// Reads the account mapping file and returns (user_name, ticker, tx_id) of the given account.
 #[inline]
-pub fn get_user_ticker_from(
-    asset_id: AssetId,
+pub fn get_user_from_account(
+    account: &PubAccount,
     db_dir: PathBuf,
 ) -> Result<(String, String, u32), Error> {
     let mapping = load_account_map(db_dir);
+    let asset_id = account.asset_id;
     let (user, ticker, tx_id) = mapping
-        .get(&PrintableAccountId(asset_id.encode()).to_string())
+        .get(&PrintableAccountId(account.encode()).to_string())
         .ok_or(Error::AccountIdNotFound {
             asset_id: PrintableAccountId(asset_id.encode()).to_string(),
         })?;
@@ -733,10 +740,13 @@ pub fn compute_enc_pending_balance(
     for core_tx in transfer_inits {
         if let CoreTransaction::TransferInit { tx, .. } = core_tx {
             pending_balance -= tx.memo.enc_amount_using_sender;
-            let asset_id = tx.memo.sender_account.asset_id;
             debug!(
                 "------> decremented by {}.",
-                debug_decrypt(asset_id, tx.memo.enc_amount_using_sender, db_dir.clone())?
+                debug_decrypt(
+                    &tx.memo.sender_account,
+                    tx.memo.enc_amount_using_sender,
+                    db_dir.clone()
+                )?
             );
         }
     }
@@ -879,11 +889,11 @@ pub fn load_tx_file(
 /// Use only for debugging purposes.
 #[inline]
 pub fn debug_decrypt(
-    asset_id: AssetId,
+    account: &PubAccount,
     enc_balance: EncryptedAmount,
     db_dir: PathBuf,
 ) -> Result<u32, Error> {
-    let (user, ticker, _) = get_user_ticker_from(asset_id, db_dir.clone())?;
+    let (user, ticker, _) = get_user_from_account(account, db_dir.clone())?;
     let ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,

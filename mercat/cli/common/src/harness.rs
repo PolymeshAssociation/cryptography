@@ -383,17 +383,15 @@ impl Create {
         if let Some(ticker) = self.ticker.clone() {
             // create a normal account
             let value = format!(
-                "tx-{}: $ mercat-account create --ticker {} --user {} --seed {} --db-dir {} --tx-id {} {}",
+                "tx-{}: $ mercat-account create --ticker {} --user {} --seed {} --db-dir {} --tx-id {}",
                 self.tx_id,
                 ticker,
                 self.owner.name,
                 seed,
                 path_to_string(&chain_db_dir),
                 self.tx_id,
-                cheater_flag(self.owner.cheater)
             );
             let owner = self.owner.name.clone();
-            let cheat = self.owner.cheater;
             let tx_id = self.tx_id;
 
             Box::new(move || {
@@ -405,7 +403,6 @@ impl Create {
                     owner.clone(),
                     false, // Do not print the transaction data to stdout.
                     tx_id,
-                    cheat,
                 )?;
                 Ok(value.clone())
             })

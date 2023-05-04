@@ -29,7 +29,7 @@ fn main() {
         CLI::Create(cfg) => {
             let db_dir = cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap();
             process_create_account(
-                cfg.seed, db_dir, cfg.ticker, cfg.user, cfg.stdout, cfg.tx_id, cfg.cheat,
+                cfg.seed, db_dir, cfg.ticker, cfg.user, cfg.stdout, cfg.tx_id,
             )
             .unwrap()
         }

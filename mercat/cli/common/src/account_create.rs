@@ -19,7 +19,6 @@ pub fn process_create_account(
     user: String,
     stdout: bool,
     tx_id: u32,
-    cheat: bool,
 ) -> Result<(), Error> {
     // Setup the rng.
     let mut rng = create_rng_from_seed(seed)?;
@@ -29,17 +28,10 @@ pub fn process_create_account(
 
     let create_account_timer = Instant::now();
     let account_creator = AccountCreator;
-    let mut account_tx = account_creator
+    let account_tx = account_creator
         .create(&secret_account, &mut rng)
         .map_err(|error| Error::LibraryError { error })?;
     timing!("account.call_library", create_account_timer, Instant::now(), "tx_id" => tx_id.to_string());
-    if cheat {
-        info!("CLI log: tx-{}: Cheating by overwriting the asset id of the account. Correct ticker: {} and asset id: {:?}",
-              tx_id, ticker, secret_account.asset_id);
-        let cheat_asset_id =
-            asset_id_from_ticker("CHEAT").map_err(|error| Error::LibraryError { error })?;
-        account_tx.pub_account.asset_id = cheat_asset_id;
-    }
 
     // Save the artifacts to file.
     let save_to_file_timer = Instant::now();
@@ -73,7 +65,14 @@ pub fn process_create_account(
         );
     }
 
-    update_account_map(db_dir, user, ticker, asset_id, tx_id)?;
+    update_account_map(
+        db_dir,
+        user,
+        &secret_account.enc_keys.public,
+        ticker,
+        asset_id,
+        tx_id,
+    )?;
 
     timing!("account.save_output", save_to_file_timer, Instant::now(), "tx_id" => tx_id.to_string());
 
