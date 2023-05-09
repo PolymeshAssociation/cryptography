@@ -11,7 +11,7 @@ const IDS: [u32; 5] = [10, 20, 300, 4000, 65535];
 fn bench_account_creation(c: &mut Criterion) {
     let mut rng = thread_rng();
 
-    let mut group = c.benchmark_group("MERCAT Transaction");
+    let mut group = c.benchmark_group("MERCAT Account");
 
     for id in IDS {
         let label = format!("asset_id: {:?}", id);

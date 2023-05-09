@@ -20,7 +20,7 @@ fn bench_transaction_issuer(
 ) -> Vec<InitializedAssetTx> {
     let mut rng = thread_rng();
 
-    let mut group = c.benchmark_group("MERCAT Transaction");
+    let mut group = c.benchmark_group("MERCAT Asset");
     for amount in &amounts {
         group.bench_with_input(BenchmarkId::new("Issuer", *amount), amount, |b, &amount| {
             b.iter(|| {
@@ -59,7 +59,7 @@ fn bench_transaction_validator(
         .zip(transactions)
         .collect();
 
-    let mut group = c.benchmark_group("MERCAT Transaction");
+    let mut group = c.benchmark_group("MERCAT Asset");
     for ((label, amount), tx) in &indexed_transaction {
         group.bench_with_input(
             BenchmarkId::new("Validator", label),
