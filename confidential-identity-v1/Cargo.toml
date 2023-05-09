@@ -66,6 +66,11 @@ avx2_backend = [
 	"schnorrkel/avx2_backend",
 	"blake2/simd",
 ]
+simd_backend = [
+	"curve25519-dalek/simd_backend",
+	"schnorrkel/avx2_backend",
+	"blake2/simd",
+]
 
 serde_all = [
 	"serde",

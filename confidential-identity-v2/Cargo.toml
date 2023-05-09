@@ -64,6 +64,11 @@ avx2_backend = [
 	"confidential_identity_core/avx2_backend",
 	"blake2/simd",
 ]
+simd_backend = [
+	"curve25519-dalek/simd_backend",
+	"confidential_identity_core/simd_backend",
+	"blake2/simd",
+]
 
 serde_all = [
 	"serde",

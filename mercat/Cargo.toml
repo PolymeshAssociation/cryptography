@@ -41,6 +41,7 @@ default = ["std", "u64_backend"]
 u32_backend = [ "confidential_identity_core/u32_backend" ]
 u64_backend = [ "confidential_identity_core/u64_backend" ]
 avx2_backend = [ "confidential_identity_core/avx2_backend" ]
+simd_backend = [ "confidential_identity_core/simd_backend" ]
 
 serde_all = [
 	"serde",
