@@ -91,11 +91,11 @@ pub fn process_create_tx(
         last_processed_account_balance,
         db_dir.clone(),
     )?;
-    let pending_balance = debug_decrypt(&sender_account.public, pending_enc_balance, db_dir.clone())?;
+    let pending_balance =
+        debug_decrypt(&sender_account.public, pending_enc_balance, db_dir.clone())?;
     debug!(
         "------------> initiating transfer tx: {}, pending_balance: {}",
-        tx_id,
-        pending_balance
+        tx_id, pending_balance
     );
     let next_pending_tx_counter = ordering_state.last_pending_tx_counter + 1;
 

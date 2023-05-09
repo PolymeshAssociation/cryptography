@@ -199,7 +199,11 @@ pub fn process_create_tx(
     // Calculate the pending
     let mut data: &[u8] = &base64::decode(pending_enc_balance).unwrap();
     let pending_enc_balance = EncryptedAmount::decode(&mut data).unwrap(); // For now the same as initial balance
-    let pending_balance = sender_account.secret.enc_keys.secret.decrypt(&pending_enc_balance)
+    let pending_balance = sender_account
+        .secret
+        .enc_keys
+        .secret
+        .decrypt(&pending_enc_balance)
         .map_err(|error| Error::LibraryError { error })?;
 
     let mut data1: &[u8] = &base64::decode(&receiver).unwrap();

@@ -63,7 +63,9 @@ impl TransferTransactionSender for CtxSender {
             }
         );
         // Verify the sender's balance.
-        sender_enc_keys.secret.verify(sender_init_balance, &sender_balance.into())?;
+        sender_enc_keys
+            .secret
+            .verify(sender_init_balance, &sender_balance.into())?;
 
         // Prove that the amount is not negative.
         let witness = CommitmentWitness::new(amount.into(), Scalar::random(rng));
@@ -89,8 +91,11 @@ impl TransferTransactionSender for CtxSender {
         // Refresh the encrypted balance and prove that the refreshment was done
         // correctly.
         let balance_refresh_enc_blinding = Scalar::random(rng);
-        let refreshed_enc_balance =
-            sender_init_balance.refresh(&sender_enc_keys.secret, balance_refresh_enc_blinding)?;
+        let refreshed_enc_balance = sender_init_balance.refresh_with_hint(
+            &sender_enc_keys.secret,
+            balance_refresh_enc_blinding,
+            &sender_balance.into(),
+        )?;
 
         let balance_refreshed_same_proof = single_property_prover(
             CipherTextRefreshmentProverAwaitingChallenge::new(
@@ -104,8 +109,12 @@ impl TransferTransactionSender for CtxSender {
 
         // Prove that the sender has enough funds.
         let blinding = balance_refresh_enc_blinding - amount_enc_blinding;
-        let enough_fund_proof =
-            prove_within_range((sender_balance - amount).into(), blinding, BALANCE_RANGE, rng)?;
+        let enough_fund_proof = prove_within_range(
+            (sender_balance - amount).into(),
+            blinding,
+            BALANCE_RANGE,
+            rng,
+        )?;
 
         let amount_witness_blinding_for_mediator = Scalar::random(rng);
         let amount_witness_for_mediator =

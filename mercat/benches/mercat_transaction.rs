@@ -1,12 +1,35 @@
 mod utility;
+use confidential_identity_core::{
+    asset_proofs::{
+        bulletproofs::PedersenGens,
+        ciphertext_refreshment_proof::{
+            CipherEqualSamePubKeyProof, CipherTextRefreshmentProverAwaitingChallenge,
+        },
+        correctness_proof::{CorrectnessProof, CorrectnessProverAwaitingChallenge},
+        elgamal_encryption::encrypt_using_two_pub_keys,
+        encrypting_same_value_proof::{
+            CipherEqualDifferentPubKeyProof, EncryptingSameValueProverAwaitingChallenge,
+        },
+        encryption_proofs::single_property_prover,
+        errors::Fallible,
+        range_proof::{prove_within_range, InRangeProof},
+        Balance, CommitmentWitness, BALANCE_RANGE,
+    },
+    curve25519_dalek::scalar::Scalar,
+};
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use mercat::{
-    transaction::{verify_initialized_transaction, CtxMediator, CtxReceiver, CtxSender, TransactionValidator},
-    Account, EncryptedAmount, EncryptionPubKey, FinalizedTransferTx, InitializedTransferTx,
-    JustifiedTransferTx, MediatorAccount, PubAccount, TransferTransactionMediator,
-    TransferTransactionReceiver, TransferTransactionSender, TransferTransactionVerifier,
+    transaction::{
+        verify_initialized_transaction, CtxMediator, CtxReceiver, CtxSender, TransactionValidator,
+    },
+    Account, EncryptedAmount, EncryptedAmountWithHint, EncryptionPubKey, EncryptionSecKey,
+    FinalizedTransferTx, InitializedTransferTx, JustifiedTransferTx, MediatorAccount, PubAccount,
+    TransferTransactionMediator, TransferTransactionReceiver, TransferTransactionSender,
+    TransferTransactionVerifier,
 };
 use rand::thread_rng;
+use rand_core::{CryptoRng, RngCore};
+use zeroize::Zeroizing;
 
 // The sender's initial balance. Will be in:
 // [10^MIN_SENDER_BALANCE_ORDER, 10^(MIN_SENDER_BALANCE_ORDER+1), ..., 10^MAX_SENDER_BALANCE_ORDER]
@@ -16,6 +39,234 @@ const MAX_SENDER_BALANCE_ORDER: u32 = 7;
 
 // The receiver's initial balance.
 const RECEIVER_INIT_BALANCE: u32 = 10000;
+
+#[derive(Clone)]
+struct SenderProofGen {
+    // Inputs.
+    sender_sec: EncryptionSecKey,
+    sender_pub: EncryptionPubKey,
+    sender_init_balance: EncryptedAmount,
+    sender_balance: Balance,
+    receiver_pub: EncryptionPubKey,
+    mediator_pub: EncryptionPubKey,
+    pub amount: Balance,
+    // Temps.
+    last_stage: u32,
+    witness: CommitmentWitness,
+    gens: PedersenGens,
+    balance_refresh_enc_blinding: Scalar,
+    // Outputs.
+    amount_equal_cipher_proof: Option<CipherEqualDifferentPubKeyProof>,
+    non_neg_amount_proof: Option<InRangeProof>,
+    enough_fund_proof: Option<InRangeProof>,
+    enc_amount_using_sender: Option<EncryptedAmount>,
+    enc_amount_using_receiver: Option<EncryptedAmount>,
+    refreshed_enc_balance: Option<EncryptedAmount>,
+    enc_amount_for_mediator: Option<EncryptedAmountWithHint>,
+    balance_refreshed_same_proof: Option<CipherEqualSamePubKeyProof>,
+    amount_correctness_proof: Option<CorrectnessProof>,
+}
+
+impl SenderProofGen {
+    pub fn new<T: RngCore + CryptoRng>(
+        sender_account: &Account,
+        sender_init_balance: &EncryptedAmount,
+        sender_balance: Balance,
+        receiver_pub_account: &PubAccount,
+        mediator_pub_key: &EncryptionPubKey,
+        amount: Balance,
+        rng: &mut T,
+    ) -> Self {
+        Self {
+            // Inputs.
+            sender_sec: sender_account.secret.enc_keys.secret.clone(),
+            sender_pub: sender_account.secret.enc_keys.public.clone(),
+            sender_init_balance: sender_init_balance.clone(),
+            sender_balance,
+            receiver_pub: receiver_pub_account.owner_enc_pub_key.clone(),
+            mediator_pub: mediator_pub_key.clone(),
+            amount,
+
+            // Temps.
+            last_stage: 0,
+            witness: CommitmentWitness::new(amount.into(), Scalar::random(rng)),
+            gens: PedersenGens::default(),
+            balance_refresh_enc_blinding: Scalar::random(rng),
+
+            // Outputs.
+            amount_equal_cipher_proof: None,
+            non_neg_amount_proof: None,
+            enough_fund_proof: None,
+            enc_amount_using_sender: None,
+            enc_amount_using_receiver: None,
+            refreshed_enc_balance: None,
+            enc_amount_for_mediator: None,
+            balance_refreshed_same_proof: None,
+            amount_correctness_proof: None,
+        }
+    }
+
+    fn run_to_stage<T: RngCore + CryptoRng>(&mut self, to_stage: u32, rng: &mut T) -> Fallible<()> {
+        while self.last_stage < to_stage {
+            self.run_next_stage(rng)?;
+        }
+        Ok(())
+    }
+
+    fn run_next_stage<T: RngCore + CryptoRng>(&mut self, rng: &mut T) -> Fallible<()> {
+        match self.last_stage {
+            0 => {
+                // Ensure the sender has enough funds.
+                // Verify the sender's balance.
+                self.sender_sec
+                    .verify(&self.sender_init_balance, &self.sender_balance.into())?;
+            }
+            1 => {
+                // Prove that the amount is not negative.
+                let amount_enc_blinding = self.witness.blinding();
+                self.non_neg_amount_proof = Some(prove_within_range(
+                    self.amount.into(),
+                    amount_enc_blinding,
+                    BALANCE_RANGE,
+                    rng,
+                )?);
+            }
+            2 => {
+                // Prove that the amount encrypted under different public keys are the same.
+                let (sender_new_enc_amount, receiver_new_enc_amount) =
+                    encrypt_using_two_pub_keys(&self.witness, self.sender_pub, self.receiver_pub);
+                self.enc_amount_using_sender = Some(sender_new_enc_amount);
+                self.enc_amount_using_receiver = Some(receiver_new_enc_amount);
+            }
+            3 => {
+                self.amount_equal_cipher_proof = Some(single_property_prover(
+                    EncryptingSameValueProverAwaitingChallenge {
+                        pub_key1: self.sender_pub,
+                        pub_key2: self.receiver_pub,
+                        w: Zeroizing::new(self.witness.clone()),
+                        pc_gens: &self.gens,
+                    },
+                    rng,
+                )?);
+            }
+            4 => {
+                // Refresh the encrypted balance and prove that the refreshment was done
+                // correctly.
+                self.refreshed_enc_balance = Some(self.sender_init_balance.refresh_with_hint(
+                    &self.sender_sec,
+                    self.balance_refresh_enc_blinding,
+                    &self.sender_balance.into(),
+                )?);
+            }
+            5 => {
+                let refreshed_enc_balance = self.refreshed_enc_balance.unwrap();
+                self.balance_refreshed_same_proof = Some(single_property_prover(
+                    CipherTextRefreshmentProverAwaitingChallenge::new(
+                        self.sender_sec.clone(),
+                        self.sender_init_balance,
+                        refreshed_enc_balance,
+                        &self.gens,
+                    ),
+                    rng,
+                )?);
+            }
+            6 => {
+                // Prove that the sender has enough funds.
+                let amount_enc_blinding = self.witness.blinding();
+                let blinding = self.balance_refresh_enc_blinding - amount_enc_blinding;
+                self.enough_fund_proof = Some(prove_within_range(
+                    (self.sender_balance - self.amount).into(),
+                    blinding,
+                    BALANCE_RANGE,
+                    rng,
+                )?);
+            }
+            7 => {
+                let amount_witness_blinding_for_mediator = Scalar::random(rng);
+                let amount_witness_for_mediator = CommitmentWitness::new(
+                    self.amount.into(),
+                    amount_witness_blinding_for_mediator,
+                );
+                self.enc_amount_for_mediator = Some(
+                    self.mediator_pub
+                        .const_time_encrypt(&amount_witness_for_mediator, rng),
+                );
+            }
+            8 => {
+                self.amount_correctness_proof = Some(single_property_prover(
+                    CorrectnessProverAwaitingChallenge {
+                        pub_key: self.sender_pub,
+                        w: self.witness.clone(),
+                        pc_gens: &self.gens,
+                    },
+                    rng,
+                )?);
+            }
+            _ => {
+                return Ok(());
+            }
+        }
+        self.last_stage += 1;
+
+        Ok(())
+    }
+}
+
+fn bench_transaction_sender_proof_stage(
+    c: &mut Criterion,
+    sender_account: Account,
+    sender_balances: &[(u32, EncryptedAmount)],
+    rcvr_pub_account: PubAccount,
+    mediator_pub_key: EncryptionPubKey,
+    bench_stage: u32,
+) {
+    let mut rng = thread_rng();
+
+    let proof_gens: Vec<_> = sender_balances
+        .into_iter()
+        .map(|(amount, sender_balance)| {
+            let mut proof_gen = SenderProofGen::new(
+                &sender_account,
+                sender_balance,
+                *amount,
+                &rcvr_pub_account,
+                &mediator_pub_key,
+                *amount,
+                &mut rng,
+            );
+            if bench_stage > 1 {
+                proof_gen
+                    .run_to_stage(bench_stage - 1, &mut rng)
+                    .expect("Stages run ok");
+            }
+
+            proof_gen
+        })
+        .collect();
+
+    let mut group = c.benchmark_group("MERCAT Transaction");
+    for proof_gen in proof_gens {
+        // Skip benchmarking amounts > 1 Million.  They are too slow.
+        if proof_gen.amount > 1_000_000 {
+            continue;
+        }
+        group.bench_with_input(
+            BenchmarkId::new(
+                format!("Sender Proof Stage {bench_stage}"),
+                proof_gen.amount,
+            ),
+            &proof_gen,
+            |b, proof_gen: &SenderProofGen| {
+                b.iter(|| {
+                    let mut gen = proof_gen.clone();
+                    gen.run_to_stage(bench_stage, &mut rng).expect("Stage ok");
+                    gen
+                })
+            },
+        );
+    }
+    group.finish();
+}
 
 fn bench_transaction_sender(
     c: &mut Criterion,
@@ -28,10 +279,6 @@ fn bench_transaction_sender(
 
     let mut group = c.benchmark_group("MERCAT Transaction");
     for (amount, sender_balance) in &sender_balances {
-        // Skip benchmarking amounts > 1 Million.  They are too slow.
-        if *amount > 1_000_000 {
-          continue;
-        }
         group.bench_with_input(
             BenchmarkId::new("Sender", *amount),
             &(amount, sender_balance),
@@ -95,8 +342,14 @@ fn bench_transaction_verify_sender_proof(
             |b, (tx, sender_balance)| {
                 b.iter(|| {
                     verify_initialized_transaction(
-                      &tx, &sender_account, &sender_balance, &receiver_account, &[], &mut rng
-                    ).unwrap()
+                        &tx,
+                        &sender_account,
+                        &sender_balance,
+                        &receiver_account,
+                        &[],
+                        &mut rng,
+                    )
+                    .unwrap()
                 })
             },
         );
@@ -108,7 +361,12 @@ fn bench_transaction_receiver(
     c: &mut Criterion,
     receiver_account: Account,
     transactions: Vec<(u32, EncryptedAmount, InitializedTransferTx)>,
-) -> Vec<(u32, EncryptedAmount, InitializedTransferTx, FinalizedTransferTx)> {
+) -> Vec<(
+    u32,
+    EncryptedAmount,
+    InitializedTransferTx,
+    FinalizedTransferTx,
+)> {
     let mut group = c.benchmark_group("MERCAT Transaction");
     for (amount, _, tx) in &transactions {
         group.bench_with_input(
@@ -143,7 +401,12 @@ fn bench_transaction_mediator(
     mediator_account: MediatorAccount,
     sender_pub_account: PubAccount,
     receiver_pub_account: PubAccount,
-    transactions: Vec<(u32, EncryptedAmount, InitializedTransferTx, FinalizedTransferTx)>,
+    transactions: Vec<(
+        u32,
+        EncryptedAmount,
+        InitializedTransferTx,
+        FinalizedTransferTx,
+    )>,
 ) -> Vec<JustifiedTransferTx> {
     let mut rng = thread_rng();
 
@@ -198,7 +461,12 @@ fn bench_transaction_validator(
     c: &mut Criterion,
     sender_pub_account: PubAccount,
     receiver_pub_account: PubAccount,
-    transactions: Vec<(u32, EncryptedAmount, InitializedTransferTx, FinalizedTransferTx)>,
+    transactions: Vec<(
+        u32,
+        EncryptedAmount,
+        InitializedTransferTx,
+        FinalizedTransferTx,
+    )>,
 ) {
     let mut rng = thread_rng();
 
@@ -239,22 +507,46 @@ fn bench_transaction(c: &mut Criterion) {
     let (receiver_account, _receiver_balance) =
         utility::create_account_with_amount(&mut rng, RECEIVER_INIT_BALANCE);
 
+    // Sender proof gen. bench each stage.
+    let sender_balances: Vec<_> = [10u32, 1_000_000_000u32]
+        .iter()
+        .map(|&amount| {
+            (
+                amount,
+                utility::issue_assets(&mut rng, &sender_pub_account, &sender_init_balance, amount),
+            )
+        })
+        .collect();
+    for stage in 1..=9 {
+        bench_transaction_sender_proof_stage(
+            c,
+            sender_account.clone(),
+            &sender_balances,
+            receiver_account.public.clone(),
+            enc_pub_key.clone(),
+            stage,
+        );
+    }
+
     let mut amounts: Vec<u32> = Vec::new();
     // Make (Max - Min) sender accounts with initial balances of: [10^Min, 10^2, ..., 10^(Max-1)]
     for i in MIN_SENDER_BALANCE_ORDER..MAX_SENDER_BALANCE_ORDER {
-      let amount = 10u32.pow(i);
-      amounts.push(amount);
+        let amount = 10u32.pow(i);
+        amounts.push(amount);
     }
     // Add some very large amounts.
-    amounts.push(20_000_000); // About 6.97 seconds.
-    amounts.push(200_000_000); // About 68.79 seconds (About 1 minute).
-    // Very slow to generate sender proof.
-    //amounts.push(2_000_000_000); // Estimate 11.5 minutes?
-    //amounts.push(3_000_000_000); // Estimate 17.19 minutes?
-    //amounts.push(4_000_000_000); // Estimate 22.93 minutes?
-    let sender_balances: Vec<_> = amounts.into_iter()
+    amounts.push(20_000_000);
+    amounts.push(200_000_000);
+    amounts.push(2_000_000_000);
+    amounts.push(3_000_000_000);
+    amounts.push(4_000_000_000);
+    let sender_balances: Vec<_> = amounts
+        .into_iter()
         .map(|amount| {
-            (amount, utility::issue_assets(&mut rng, &sender_pub_account, &sender_init_balance, amount))
+            (
+                amount,
+                utility::issue_assets(&mut rng, &sender_pub_account, &sender_init_balance, amount),
+            )
         })
         .collect();
 
@@ -273,7 +565,8 @@ fn bench_transaction(c: &mut Criterion) {
         c,
         sender_pub_account.clone(),
         receiver_account.public.clone(),
-        &transactions);
+        &transactions,
+    );
 
     // Finalization
     let finalized_transactions =
