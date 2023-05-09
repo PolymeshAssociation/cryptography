@@ -43,6 +43,7 @@ impl TransferTransactionSender for CtxSender {
         &self,
         sender_account: &Account,
         sender_init_balance: &EncryptedAmount,
+        sender_balance: Balance,
         receiver_pub_account: &PubAccount,
         mediator_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
@@ -53,16 +54,16 @@ impl TransferTransactionSender for CtxSender {
         let sender_pub_account = &sender_account.public;
         let receiver_pub_key = receiver_pub_account.owner_enc_pub_key;
 
-        // NOTE: If this decryption ends up being too slow, we can pass in the balance
-        // as input.
-        let balance = sender_enc_keys.secret.decrypt(sender_init_balance)?;
+        // Ensure the sender has enough funds.
         ensure!(
-            balance >= amount,
+            sender_balance >= amount,
             ErrorKind::NotEnoughFund {
-                balance,
+                balance: sender_balance,
                 transaction_amount: amount
             }
         );
+        // Verify the sender's balance.
+        sender_enc_keys.secret.verify(sender_init_balance, &sender_balance.into())?;
 
         // Prove that the amount is not negative.
         let witness = CommitmentWitness::new(amount.into(), Scalar::random(rng));
@@ -104,7 +105,7 @@ impl TransferTransactionSender for CtxSender {
         // Prove that the sender has enough funds.
         let blinding = balance_refresh_enc_blinding - amount_enc_blinding;
         let enough_fund_proof =
-            prove_within_range((balance - amount).into(), blinding, BALANCE_RANGE, rng)?;
+            prove_within_range((sender_balance - amount).into(), blinding, BALANCE_RANGE, rng)?;
 
         let amount_witness_blinding_for_mediator = Scalar::random(rng);
         let amount_witness_for_mediator =
@@ -703,6 +704,7 @@ mod tests {
         let result = sender.create_transaction(
             &sender_account,
             &sender_init_balance,
+            sender_balance,
             &receiver_account.public,
             &mediator_enc_keys.public,
             &[],
@@ -820,6 +822,7 @@ mod tests {
             .create_transaction(
                 &sender_account,
                 &sender_init_balance,
+                sender_balance,
                 &receiver_account.public,
                 &mediator_enc_keys.public,
                 sender_auditor_list,

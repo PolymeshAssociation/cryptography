@@ -42,6 +42,7 @@ fn bench_transaction_sender(
                         .create_transaction(
                             &sender_account,
                             sender_balance,
+                            amount,
                             &rcvr_pub_account,
                             &mediator_pub_key.clone(),
                             &[],
@@ -65,6 +66,7 @@ fn bench_transaction_sender(
                 .create_transaction(
                     &sender_account,
                     &sender_balance,
+                    amount,
                     &rcvr_pub_account,
                     &mediator_pub_key,
                     &[],
@@ -244,12 +246,12 @@ fn bench_transaction(c: &mut Criterion) {
       amounts.push(amount);
     }
     // Add some very large amounts.
-    amounts.push(20_000_000); // About 13.2 seconds.
-    amounts.push(200_000_000); // About 132 seconds (2 minutes).
+    amounts.push(20_000_000); // About 6.97 seconds.
+    amounts.push(200_000_000); // About 68.79 seconds (About 1 minute).
     // Very slow to generate sender proof.
-    //amounts.push(2_000_000_000); // 21 minutes?
-    //amounts.push(3_000_000_000); // 32.5 minutes?
-    //amounts.push(4_000_000_000); // 43.3 minutes?
+    //amounts.push(2_000_000_000); // Estimate 11.5 minutes?
+    //amounts.push(3_000_000_000); // Estimate 17.19 minutes?
+    //amounts.push(4_000_000_000); // Estimate 22.93 minutes?
     let sender_balances: Vec<_> = amounts.into_iter()
         .map(|amount| {
             (amount, utility::issue_assets(&mut rng, &sender_pub_account, &sender_init_balance, amount))

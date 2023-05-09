@@ -31,7 +31,7 @@ wasm-bindgen-test = "0.3.10"
 env_logger = { version = "0.7.1" }
 
 [features]
-default = ["std"]
+default = ["std", "mercat/u64_backend"]
 
 nightly = ["curve25519-dalek/nightly"]
 

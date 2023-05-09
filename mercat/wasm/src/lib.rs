@@ -346,6 +346,7 @@ pub fn create_transaction(
     amount: u32,
     sender_account: Account,
     encrypted_pending_balance: Base64,
+    pending_balance: u32,
     receiver_public_account: PubAccount,
     mediator_public_key: Base64,
 ) -> Fallible<CreateTransactionOutput> {
@@ -355,6 +356,7 @@ pub fn create_transaction(
         .create_transaction(
             &sender_account.to_mercat()?,
             &decode::<CipherText>(encrypted_pending_balance)?,
+            pending_balance,
             &receiver_public_account.to_mercat()?,
             &decode::<ElgamalPublicKey>(mediator_public_key)?,
             &[],

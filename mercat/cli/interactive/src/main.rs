@@ -176,7 +176,7 @@ pub fn process_create_tx(
     mediator: String,
     ticker: String,
     amount: u32,
-    pending_balance: String,
+    pending_enc_balance: String,
 ) -> Result<(), Error> {
     let mut rng = create_rng_from_seed(Some(seed))?;
 
@@ -197,8 +197,10 @@ pub fn process_create_tx(
     };
 
     // Calculate the pending
-    let mut data: &[u8] = &base64::decode(pending_balance).unwrap();
-    let pending_balance = EncryptedAmount::decode(&mut data).unwrap(); // For now the same as initial balance
+    let mut data: &[u8] = &base64::decode(pending_enc_balance).unwrap();
+    let pending_enc_balance = EncryptedAmount::decode(&mut data).unwrap(); // For now the same as initial balance
+    let pending_balance = sender_account.secret.enc_keys.secret.decrypt(&pending_enc_balance)
+        .map_err(|error| Error::LibraryError { error })?;
 
     let mut data1: &[u8] = &base64::decode(&receiver).unwrap();
     let receiver_pub_account = PubAccount {
@@ -219,7 +221,8 @@ pub fn process_create_tx(
     let asset_tx = ctx_sender
         .create_transaction(
             &pending_account,
-            &pending_balance,
+            &pending_enc_balance,
+            pending_balance,
             &receiver_pub_account,
             &mediator_account,
             &[],

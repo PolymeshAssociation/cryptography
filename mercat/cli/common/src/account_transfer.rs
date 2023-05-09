@@ -84,17 +84,18 @@ pub fn process_create_tx(
         db_dir.clone(),
     )?;
 
-    let pending_balance = compute_enc_pending_balance(
+    let pending_enc_balance = compute_enc_pending_balance(
         &sender,
         ordering_state.clone(),
         last_processed_tx_counter,
         last_processed_account_balance,
         db_dir.clone(),
     )?;
+    let pending_balance = debug_decrypt(&sender_account.public, pending_enc_balance, db_dir.clone())?;
     debug!(
         "------------> initiating transfer tx: {}, pending_balance: {}",
         tx_id,
-        debug_decrypt(&sender_account.public, pending_balance, db_dir.clone())?
+        pending_balance
     );
     let next_pending_tx_counter = ordering_state.last_pending_tx_counter + 1;
 
@@ -129,7 +130,8 @@ pub fn process_create_tx(
     let init_tx = ctx_sender
         .create_transaction(
             &pending_account,
-            &pending_balance,
+            &pending_enc_balance,
+            pending_balance,
             &receiver_account.pub_account,
             &mediator_account,
             &[],

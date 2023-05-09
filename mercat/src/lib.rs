@@ -332,6 +332,7 @@ pub trait TransferTransactionSender {
         &self,
         sender_account: &Account,
         sender_init_balance: &EncryptedAmount,
+        sender_balance: Balance,
         receiver_pub_account: &PubAccount,
         mediator_pub_key: &EncryptionPubKey,
         auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
