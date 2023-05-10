@@ -1,5 +1,5 @@
 use log::info;
-use mercat_common::{gen_seed, save_config};
+use mercat_common::{gen_seed, save_config, Balance};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -117,7 +117,7 @@ pub struct IssueAssetInfo {
 
     /// Amount to issue.
     #[structopt(short, long, help = "The amount of assets to issue.")]
-    pub amount: u32,
+    pub amount: Balance,
 
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
@@ -180,7 +180,7 @@ pub struct CreateTransactionInfo {
 
     /// Amount to transfer.
     #[structopt(short, long, help = "The amount of assets to transfer.")]
-    pub amount: u32,
+    pub amount: Balance,
 
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the
@@ -252,7 +252,7 @@ pub struct FinalizeTransactionInfo {
 
     /// The expected amount to receive.
     #[structopt(short, long, help = "The expected amount to receive.")]
-    pub amount: u32,
+    pub amount: Balance,
 
     /// The directory that will serve as the database of the on/off-chain data and will be used
     /// to save and load the data that in a real execution would be written to the on/off the

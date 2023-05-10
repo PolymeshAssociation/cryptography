@@ -2,8 +2,8 @@
 
 use crate::{
     account::deposit, Account, AssetMemo, AssetTransactionAuditor, AssetTransactionIssuer,
-    AssetTransactionVerifier, AuditorPayload, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
-    InitializedAssetTx, PubAccount,
+    AssetTransactionVerifier, AuditorId, AuditorPayload, EncryptedAmount, EncryptionKeys,
+    EncryptionPubKey, InitializedAssetTx, PubAccount,
 };
 use confidential_identity_core::asset_proofs::{
     bulletproofs::PedersenGens,
@@ -45,7 +45,7 @@ fn asset_issuance_init_verify_proofs(
 fn asset_issuance_init_verify(
     asset_tx: &InitializedAssetTx,
     issr_pub_account: &PubAccount,
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
 ) -> Fallible<()> {
     asset_issuance_init_verify_proofs(asset_tx, issr_pub_account)?;
 
@@ -60,7 +60,7 @@ fn asset_issuance_init_verify(
 
 fn verify_auditor_payload(
     auditors_payload: &[AuditorPayload],
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
     issuer_enc_pub_key: EncryptionPubKey,
     issuer_enc_amount: EncryptedAmount,
 ) -> Fallible<()> {
@@ -114,7 +114,7 @@ impl AssetTransactionIssuer for AssetIssuer {
     fn initialize_asset_transaction<T: RngCore + CryptoRng>(
         &self,
         issr_account: &Account,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedAssetTx> {
@@ -170,7 +170,7 @@ impl AssetTransactionIssuer for AssetIssuer {
 }
 
 fn add_asset_transaction_auditor<T: RngCore + CryptoRng>(
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
     issuer_enc_pub_key: &EncryptionPubKey,
     amount_witness: &CommitmentWitness,
     rng: &mut T,
@@ -220,7 +220,7 @@ pub struct AssetValidator;
 fn verify_initialization(
     asset_tx: &InitializedAssetTx,
     issr_pub_account: &PubAccount,
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
 ) -> Fallible<()> {
     Ok(asset_issuance_init_verify(
         asset_tx,
@@ -233,11 +233,11 @@ impl AssetTransactionVerifier for AssetValidator {
     /// Called by validators to verify the justification and processing of the transaction.
     fn verify_asset_transaction(
         &self,
-        amount: u32,
+        amount: Balance,
         initialized_asset_tx: &InitializedAssetTx,
         issr_account: &PubAccount,
         issr_init_balance: &EncryptedAmount,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
     ) -> Fallible<EncryptedAmount> {
         let gens = PedersenGens::default();
 
@@ -280,7 +280,7 @@ impl AssetTransactionAuditor for AssetAuditor {
         &self,
         initialized_asset_tx: &InitializedAssetTx,
         issuer_account: &PubAccount,
-        auditor_enc_key: &(u32, EncryptionKeys),
+        auditor_enc_key: &(AuditorId, EncryptionKeys),
     ) -> Fallible<()> {
         let gens = PedersenGens::default();
 
@@ -340,7 +340,7 @@ mod tests {
     fn asset_issuance_and_validation() {
         // ----------------------- Setup
         let mut rng = StdRng::from_seed([10u8; 32]);
-        let issued_amount: Balance = 20u32;
+        let issued_amount: Balance = 20;
 
         // Generate keys for the issuer.
         let issuer_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
@@ -394,14 +394,14 @@ mod tests {
     }
 
     fn asset_issuance_auditing_helper(
-        issuer_auditor_list: &[(u32, EncryptionPubKey)],
-        validator_auditor_list: &[(u32, EncryptionPubKey)],
+        issuer_auditor_list: &[(AuditorId, EncryptionPubKey)],
+        validator_auditor_list: &[(AuditorId, EncryptionPubKey)],
         validator_check_fails: bool,
-        auditors_list: &[(u32, EncryptionKeys)],
+        auditors_list: &[(AuditorId, EncryptionKeys)],
     ) {
         // ----------------------- Setup
         let mut rng = StdRng::from_seed([10u8; 32]);
-        let issued_amount: Balance = 20u32;
+        let issued_amount: Balance = 20;
 
         // Generate keys for the issuer.
         let issuer_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
@@ -483,8 +483,8 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_asset_transaction_auditor() {
         // Make imaginary auditors.
-        let auditors_num = 5u32;
-        let auditors_secret_vec: Vec<(u32, EncryptionKeys)> = (0..auditors_num)
+        let auditors_num = 5;
+        let auditors_secret_vec: Vec<(AuditorId, EncryptionKeys)> = (0..auditors_num)
             .map(|index| {
                 let auditor_keys = gen_enc_key_pair(index as u8);
                 (index, auditor_keys)
@@ -492,7 +492,7 @@ mod tests {
             .collect();
         let auditors_secret_account_list = auditors_secret_vec.as_slice();
 
-        let auditors_vec: Vec<(u32, EncryptionPubKey)> = auditors_secret_vec
+        let auditors_vec: Vec<(AuditorId, EncryptionPubKey)> = auditors_secret_vec
             .iter()
             .map(|a| (a.0, a.1.public))
             .collect();

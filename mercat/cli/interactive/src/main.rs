@@ -19,7 +19,7 @@ use mercat::{
 use mercat_common::{
     account_issue::process_issue_asset, create_rng_from_seed, debug_decrypt_base64_account_balance,
     errors::Error, init_print_logger, justify::process_create_mediator, load_object, save_object,
-    user_public_account_file, user_secret_account_file, OrderedPubAccount, OFF_CHAIN_DIR,
+    user_public_account_file, user_secret_account_file, Balance, OrderedPubAccount, OFF_CHAIN_DIR,
     ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
 };
 use rand::{CryptoRng, RngCore};
@@ -175,7 +175,7 @@ pub fn process_create_tx(
     receiver: String,
     mediator: String,
     ticker: String,
-    amount: u32,
+    amount: Balance,
     pending_enc_balance: String,
 ) -> Result<(), Error> {
     let mut rng = create_rng_from_seed(Some(seed))?;
@@ -247,7 +247,7 @@ pub fn process_finalize_tx(
     db_dir: PathBuf,
     receiver: String,
     ticker: String,
-    amount: u32,
+    amount: Balance,
     init_tx: String,
 ) -> Result<(), Error> {
     let receiver_ordered_pub_account: OrderedPubAccount = load_object(

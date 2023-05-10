@@ -34,11 +34,10 @@ use zeroize::Zeroizing;
 // The sender's initial balance. Will be in:
 // [10^MIN_SENDER_BALANCE_ORDER, 10^(MIN_SENDER_BALANCE_ORDER+1), ..., 10^MAX_SENDER_BALANCE_ORDER]
 // The transferred amout on each iteration will be all the balance the sender has: 10^SENDER_BALANCE_ORDER
-const MIN_SENDER_BALANCE_ORDER: u32 = 1;
-const MAX_SENDER_BALANCE_ORDER: u32 = 7;
+use utility::balance_range::{MAX_SENDER_BALANCE_ORDER, MIN_SENDER_BALANCE_ORDER};
 
 // The receiver's initial balance.
-const RECEIVER_INIT_BALANCE: u32 = 10000;
+const RECEIVER_INIT_BALANCE: Balance = 10000;
 
 #[derive(Clone)]
 struct SenderProofGen {
@@ -215,7 +214,7 @@ impl SenderProofGen {
 fn bench_transaction_sender_proof_stage(
     c: &mut Criterion,
     sender_account: Account,
-    sender_balances: &[(u32, EncryptedAmount)],
+    sender_balances: &[(Balance, EncryptedAmount)],
     rcvr_pub_account: PubAccount,
     mediator_pub_key: EncryptionPubKey,
     bench_stage: u32,
@@ -271,10 +270,10 @@ fn bench_transaction_sender_proof_stage(
 fn bench_transaction_sender(
     c: &mut Criterion,
     sender_account: Account,
-    sender_balances: Vec<(u32, EncryptedAmount)>,
+    sender_balances: Vec<(Balance, EncryptedAmount)>,
     rcvr_pub_account: PubAccount,
     mediator_pub_key: EncryptionPubKey,
-) -> Vec<(u32, EncryptedAmount, InitializedTransferTx)> {
+) -> Vec<(Balance, EncryptedAmount, InitializedTransferTx)> {
     let mut rng = thread_rng();
 
     let mut group = c.benchmark_group("MERCAT Transaction");
@@ -331,7 +330,7 @@ fn bench_transaction_verify_sender_proof(
     c: &mut Criterion,
     sender_account: PubAccount,
     receiver_account: PubAccount,
-    transactions: &[(u32, EncryptedAmount, InitializedTransferTx)],
+    transactions: &[(Balance, EncryptedAmount, InitializedTransferTx)],
 ) {
     let mut rng = thread_rng();
     let mut group = c.benchmark_group("MERCAT Transaction");
@@ -360,9 +359,9 @@ fn bench_transaction_verify_sender_proof(
 fn bench_transaction_receiver(
     c: &mut Criterion,
     receiver_account: Account,
-    transactions: Vec<(u32, EncryptedAmount, InitializedTransferTx)>,
+    transactions: Vec<(Balance, EncryptedAmount, InitializedTransferTx)>,
 ) -> Vec<(
-    u32,
+    Balance,
     EncryptedAmount,
     InitializedTransferTx,
     FinalizedTransferTx,
@@ -402,7 +401,7 @@ fn bench_transaction_mediator(
     sender_pub_account: PubAccount,
     receiver_pub_account: PubAccount,
     transactions: Vec<(
-        u32,
+        Balance,
         EncryptedAmount,
         InitializedTransferTx,
         FinalizedTransferTx,
@@ -462,7 +461,7 @@ fn bench_transaction_validator(
     sender_pub_account: PubAccount,
     receiver_pub_account: PubAccount,
     transactions: Vec<(
-        u32,
+        Balance,
         EncryptedAmount,
         InitializedTransferTx,
         FinalizedTransferTx,
@@ -508,7 +507,7 @@ fn bench_transaction(c: &mut Criterion) {
         utility::create_account_with_amount(&mut rng, RECEIVER_INIT_BALANCE);
 
     // Sender proof gen. bench each stage.
-    let sender_balances: Vec<_> = [10u32, 1_000_000_000u32]
+    let sender_balances: Vec<_> = [10 as Balance, 1_000_000_000]
         .iter()
         .map(|&amount| {
             (
@@ -528,18 +527,12 @@ fn bench_transaction(c: &mut Criterion) {
         );
     }
 
-    let mut amounts: Vec<u32> = Vec::new();
+    let mut amounts: Vec<Balance> = Vec::new();
     // Make (Max - Min) sender accounts with initial balances of: [10^Min, 10^2, ..., 10^(Max-1)]
     for i in MIN_SENDER_BALANCE_ORDER..MAX_SENDER_BALANCE_ORDER {
-        let amount = 10u32.pow(i);
+        let amount = (10 as Balance).pow(i);
         amounts.push(amount);
     }
-    // Add some very large amounts.
-    amounts.push(20_000_000);
-    amounts.push(200_000_000);
-    amounts.push(2_000_000_000);
-    amounts.push(3_000_000_000);
-    amounts.push(4_000_000_000);
     let sender_balances: Vec<_> = amounts
         .into_iter()
         .map(|amount| {

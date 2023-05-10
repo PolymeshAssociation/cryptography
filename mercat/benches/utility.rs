@@ -1,4 +1,7 @@
-use confidential_identity_core::{asset_proofs::ElgamalSecretKey, Scalar};
+use confidential_identity_core::{
+    asset_proofs::{Balance, ElgamalSecretKey},
+    Scalar,
+};
 use mercat::{
     account::{deposit, AccountCreator},
     Account, AccountCreatorInitializer, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
@@ -6,11 +9,28 @@ use mercat::{
 };
 use rand::{CryptoRng, RngCore};
 
+#[cfg(not(feature = "balance_64"))]
+#[allow(dead_code)]
+pub mod balance_range {
+    pub const MIN_ISSUED_AMOUNT_ORDER: u32 = 5;
+    pub const MAX_ISSUED_AMOUNT_ORDER: u32 = 10;
+    pub const MIN_SENDER_BALANCE_ORDER: u32 = 5;
+    pub const MAX_SENDER_BALANCE_ORDER: u32 = 10;
+}
+#[cfg(feature = "balance_64")]
+#[allow(dead_code)]
+pub mod balance_range {
+    pub const MIN_ISSUED_AMOUNT_ORDER: u32 = 10;
+    pub const MAX_ISSUED_AMOUNT_ORDER: u32 = 20;
+    pub const MIN_SENDER_BALANCE_ORDER: u32 = 10;
+    pub const MAX_SENDER_BALANCE_ORDER: u32 = 20;
+}
+
 pub fn issue_assets<R: RngCore + CryptoRng>(
     rng: &mut R,
     pub_account: &PubAccount,
     init_balance: &EncryptedAmount,
-    amount: u32,
+    amount: Balance,
 ) -> EncryptedAmount {
     let (_, encrypted_amount) = pub_account
         .owner_enc_pub_key
@@ -39,7 +59,7 @@ pub fn generate_mediator_keys<R: RngCore + CryptoRng>(
 #[allow(dead_code)]
 pub fn create_account_with_amount<R: RngCore + CryptoRng>(
     rng: &mut R,
-    initial_amount: u32,
+    initial_amount: Balance,
 ) -> (Account, EncryptedAmount) {
     let secret_account = gen_keys(rng);
 

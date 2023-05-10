@@ -37,6 +37,9 @@ wasm-bindgen-test = { version = "0.3.10" }
 [features]
 default = ["std", "u64_backend"]
 
+# 64bit Balances. (default to 32bit)
+balance_64 = [ "confidential_identity_core/balance_64" ]
+
 # Backends
 u32_backend = [ "confidential_identity_core/u32_backend" ]
 u64_backend = [ "confidential_identity_core/u64_backend" ]

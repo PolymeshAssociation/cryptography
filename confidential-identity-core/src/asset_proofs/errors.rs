@@ -2,6 +2,8 @@ use bulletproofs::ProofError;
 
 use sp_std::{fmt, result::Result};
 
+use super::Balance;
+
 /// Represents an error resulted from asset value encryption,
 /// decryption, or proof generation.
 #[derive(Debug)]
@@ -215,7 +217,7 @@ pub enum ErrorKind {
     InvalidExponentParameter,
 
     /// The amount in the initial transaction does not match the amount that receiver expected.
-    TransactionAmountMismatch { expected_amount: u32 },
+    TransactionAmountMismatch { expected_amount: Balance },
 
     /// The public key in the memo of the initial transaction does not match the public key
     /// in the memo.
@@ -223,8 +225,8 @@ pub enum ErrorKind {
 
     /// The sender has attempted to send more that their balance.
     NotEnoughFund {
-        balance: u32,
-        transaction_amount: u32,
+        balance: Balance,
+        transaction_amount: Balance,
     },
 
     /// The account Id in the transaction does not match the input account info.

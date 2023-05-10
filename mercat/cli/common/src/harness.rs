@@ -10,6 +10,7 @@ use crate::{
     validate::validate_all_pending,
     COMMON_OBJECTS_DIR, ON_CHAIN_DIR,
 };
+use confidential_identity_core::asset_proofs::Balance;
 use linked_hash_map::LinkedHashMap;
 use log::{error, info, warn};
 use rand::Rng;
@@ -78,7 +79,7 @@ pub struct Transfer {
     pub receiver_approves: bool,
     pub mediator: Party,
     pub mediator_approves: bool,
-    pub amount: u32,
+    pub amount: Balance,
     pub ticker: String,
 }
 
@@ -106,9 +107,9 @@ impl TryFrom<(u32, String)> for Transfer {
             mediator_approves: caps[7].to_string() == "approve",
             amount: caps[2]
                 .to_string()
-                .parse::<u32>()
+                .parse::<Balance>()
                 .map_err(|_| Error::RegexError {
-                    reason: String::from("failed to convert amount to u32."),
+                    reason: String::from("failed to convert amount to Balance."),
                 })?,
             ticker,
         })
@@ -129,7 +130,7 @@ pub struct Issue {
     pub tx_id: u32,
     pub issuer: Party,
     pub ticker: String,
-    pub amount: u32,
+    pub amount: Balance,
 }
 
 impl TryFrom<(u32, String)> for Issue {
@@ -152,9 +153,9 @@ impl TryFrom<(u32, String)> for Issue {
             ticker,
             amount: caps[2]
                 .to_string()
-                .parse::<u32>()
+                .parse::<Balance>()
                 .map_err(|_| Error::RegexError {
-                    reason: String::from("failed to convert amount to u32."),
+                    reason: String::from("failed to convert amount to Balance."),
                 })?,
         })
     }
@@ -182,7 +183,7 @@ impl TryFrom<String> for Validate {
 pub struct InputAccount {
     owner: Party,
     ticker: Option<String>,
-    balance: u32,
+    balance: Balance,
 }
 
 /// Represents the various combinations of the transactions.
@@ -891,7 +892,7 @@ fn parse_config(path: PathBuf, chain_db_dir: PathBuf) -> Result<TestCase, Error>
                                 ticker.clone()
                             ),
                         })?;
-                    let balance = u32::try_from(balance).map_err(|_| Error::BalanceTooBig)?;
+                    let balance = Balance::try_from(balance).map_err(|_| Error::BalanceTooBig)?;
                     if ticker != "NONE" {
                         accounts_outcome.insert(InputAccount {
                             owner: Party::try_from(owner.as_str())?,

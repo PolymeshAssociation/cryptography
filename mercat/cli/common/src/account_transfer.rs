@@ -6,6 +6,7 @@ use crate::{
     COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
+use confidential_identity_core::asset_proofs::Balance;
 use log::{debug, info};
 use mercat::{
     transaction::{CtxReceiver, CtxSender},
@@ -22,7 +23,7 @@ pub fn process_create_tx(
     receiver: String,
     mediator: String,
     ticker: String,
-    amount: u32,
+    amount: Balance,
     stdout: bool,
     tx_id: u32,
     cheat: bool,
@@ -186,7 +187,7 @@ pub fn process_finalize_tx(
     sender: String,
     receiver: String,
     ticker: String,
-    amount: u32,
+    amount: Balance,
     stdout: bool,
     tx_id: u32,
     cheat: bool,

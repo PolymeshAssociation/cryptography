@@ -8,6 +8,7 @@ use crate::{
     OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
+use confidential_identity_core::asset_proofs::Balance;
 use log::{debug, error, info};
 use mercat::{
     account::AccountValidator, asset::AssetValidator, transaction::TransactionValidator,
@@ -242,7 +243,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
 
 pub fn validate_asset_issuance(
     db_dir: PathBuf,
-    amount: u32,
+    amount: Balance,
     asset_tx: InitializedAssetTx,
     tx_id: u32,
 ) -> ValidationResult {

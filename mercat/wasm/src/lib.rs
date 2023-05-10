@@ -3,7 +3,7 @@ use mercat::{
     account::AccountCreator,
     asset::AssetIssuer,
     confidential_identity_core::{
-        asset_proofs::{CipherText, ElgamalPublicKey, ElgamalSecretKey},
+        asset_proofs::{Balance, CipherText, ElgamalPublicKey, ElgamalSecretKey},
         curve25519_dalek::scalar::Scalar,
     },
     transaction::{CtxMediator, CtxReceiver, CtxSender},
@@ -311,7 +311,7 @@ pub fn create_mediator_account() -> CreateMediatorAccountOutput {
 /// * `Base64DecodingError`: If the `issuer_account` cannot be decoded from base64.
 /// * `DeserializationError`: If the `issuer_account` cannot be deserialized to a mercat account.
 #[wasm_bindgen]
-pub fn mint_asset(amount: u32, issuer_account: Account) -> Fallible<MintAssetOutput> {
+pub fn mint_asset(amount: Balance, issuer_account: Account) -> Fallible<MintAssetOutput> {
     let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
     let asset_tx: InitializedAssetTx = AssetIssuer
         .initialize_asset_transaction(&issuer_account.to_mercat()?, &[], amount, &mut rng)
@@ -343,10 +343,10 @@ pub fn mint_asset(amount: u32, issuer_account: Account) -> Fallible<MintAssetOut
 /// * `TransactionCreationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn create_transaction(
-    amount: u32,
+    amount: Balance,
     sender_account: Account,
     encrypted_pending_balance: Base64,
-    pending_balance: u32,
+    pending_balance: Balance,
     receiver_public_account: PubAccount,
     mediator_public_key: Base64,
 ) -> Fallible<CreateTransactionOutput> {
@@ -388,7 +388,7 @@ pub fn create_transaction(
 /// * `TransactionFinalizationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn finalize_transaction(
-    amount: u32,
+    amount: Balance,
     init_tx: Base64,
     receiver_account: Account,
 ) -> Fallible<FinalizedTransactionOutput> {
@@ -462,14 +462,14 @@ pub fn justify_transaction(
 /// * `account`: The mercat account. Can be obtained from `CreateAccountOutput.account`.
 ///
 /// # Outputs
-/// * `u32`: The decrypted value.
+/// * `Balance`: The decrypted value.
 ///
 /// # Errors
 /// * `Base64DecodingError`: If either of the inputs cannot be decoded from base64.
 /// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
 /// * `DecryptionError`: If the mercat library throws an error while decrypting the value.
 #[wasm_bindgen]
-pub fn decrypt(encrypted_value: Base64, account: Account) -> Fallible<u32> {
+pub fn decrypt(encrypted_value: Base64, account: Account) -> Fallible<Balance> {
     let enc_balance = decode::<EncryptedAmount>(encrypted_value)?;
     let account = account.to_mercat()?;
 

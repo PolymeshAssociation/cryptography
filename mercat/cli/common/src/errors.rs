@@ -97,8 +97,8 @@ pub enum Error {
     #[fail(display = "Failed to parse the regex: {:?}", reason)]
     RegexError { reason: String },
 
-    /// Balance great than u32
-    #[fail(display = "balance does not fit u32")]
+    /// Balance great than `Balance`.
+    #[fail(display = "balance does not fit `Balance`")]
     BalanceTooBig,
 
     /// There can be only one top level transaction

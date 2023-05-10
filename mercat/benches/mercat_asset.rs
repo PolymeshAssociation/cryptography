@@ -9,9 +9,8 @@ use mercat::{
 use rand::thread_rng;
 
 // The issued amount. Will be in:
-// [10^MIN_ISSUER_AMOUNT_ORDER, 10^(MIN_ISSUER_AMOUNT_ORDER+1), ..., 10^MAX_ISSUER_AMOUNT_ORDER]
-const MIN_ISSUED_AMOUNT_ORDER: u32 = 1;
-const MAX_ISSUED_AMOUNT_ORDER: u32 = 7;
+// [10^MIN_ISSUED_AMOUNT_ORDER, 10^(MIN_ISSUED_AMOUNT_ORDER+1), ..., 10^MAX_ISSUED_AMOUNT_ORDER]
+use utility::balance_range::{MAX_ISSUED_AMOUNT_ORDER, MIN_ISSUED_AMOUNT_ORDER};
 
 fn bench_transaction_issuer(
     c: &mut Criterion,
@@ -50,14 +49,14 @@ fn bench_transaction_validator(
     issuer_account: PubAccount,
     issuer_init_balance: EncryptedAmount,
 ) {
-    let indexed_transaction: Vec<((String, u32), InitializedAssetTx)> = (MIN_ISSUED_AMOUNT_ORDER
-        ..MAX_ISSUED_AMOUNT_ORDER)
-        .map(|i| {
-            let amount = 10u32.pow(i);
-            (format!("issued_amount ({:?})", amount), amount)
-        })
-        .zip(transactions)
-        .collect();
+    let indexed_transaction: Vec<((String, Balance), InitializedAssetTx)> =
+        (MIN_ISSUED_AMOUNT_ORDER..MAX_ISSUED_AMOUNT_ORDER)
+            .map(|i| {
+                let amount = (10 as Balance).pow(i);
+                (format!("issued_amount ({:?})", amount), amount)
+            })
+            .zip(transactions)
+            .collect();
 
     let mut group = c.benchmark_group("MERCAT Asset");
     for ((label, amount), tx) in &indexed_transaction {
@@ -87,8 +86,8 @@ fn bench_asset_transaction(c: &mut Criterion) {
     let mut rng = thread_rng();
     let (issuer_account, issuer_init_balance) = utility::create_account_with_amount(&mut rng, 0);
 
-    let issued_amounts: Vec<u32> = (MIN_ISSUED_AMOUNT_ORDER..MAX_ISSUED_AMOUNT_ORDER)
-        .map(|i| 10u32.pow(i))
+    let issued_amounts: Vec<Balance> = (MIN_ISSUED_AMOUNT_ORDER..MAX_ISSUED_AMOUNT_ORDER)
+        .map(|i| (10 as Balance).pow(i))
         .collect();
 
     // Initialization

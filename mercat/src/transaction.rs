@@ -1,5 +1,5 @@
 use crate::{
-    Account, AuditorPayload, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
+    Account, AuditorId, AuditorPayload, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
     FinalizedTransferTx, InitializedTransferTx, JustifiedTransferTx, PubAccount,
     TransferTransactionAuditor, TransferTransactionMediator, TransferTransactionReceiver,
     TransferTransactionSender, TransferTransactionVerifier, TransferTxMemo, TransferTxState,
@@ -46,7 +46,7 @@ impl TransferTransactionSender for CtxSender {
         sender_balance: Balance,
         receiver_pub_account: &PubAccount,
         mediator_pub_key: &EncryptionPubKey,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
     ) -> Fallible<InitializedTransferTx> {
@@ -159,7 +159,7 @@ impl TransferTransactionSender for CtxSender {
 }
 
 fn add_transaction_auditor<T: RngCore + CryptoRng>(
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
     sender_enc_pub_key: &EncryptionPubKey,
     amount_witness: &CommitmentWitness,
     rng: &mut T,
@@ -249,7 +249,7 @@ impl TransferTransactionMediator for CtxMediator {
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
         rng: &mut R,
     ) -> Fallible<JustifiedTransferTx> {
         // Verify receiver's part of the transaction.
@@ -302,7 +302,7 @@ impl TransferTransactionVerifier for TransactionValidator {
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
-        auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+        auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
         rng: &mut R,
     ) -> Fallible<()> {
         ensure!(
@@ -333,7 +333,7 @@ pub fn verify_initialized_transaction<R: RngCore + CryptoRng>(
     sender_account: &PubAccount,
     sender_init_balance: &EncryptedAmount,
     receiver_account: &PubAccount,
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
     rng: &mut R,
 ) -> Fallible<TransferTxState> {
     verify_initial_transaction_proofs(
@@ -366,7 +366,7 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
     sender_account: &PubAccount,
     sender_init_balance: &EncryptedAmount,
     receiver_account: &PubAccount,
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
     rng: &mut R,
 ) -> Fallible<()> {
     let memo = &transaction.memo;
@@ -416,7 +416,7 @@ fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
 
 fn verify_auditor_payload(
     auditors_payload: &[AuditorPayload],
-    auditors_enc_pub_keys: &[(u32, EncryptionPubKey)],
+    auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
     sender_enc_pub_key: EncryptionPubKey,
     sender_enc_amount: EncryptedAmount,
 ) -> Fallible<()> {
@@ -475,7 +475,7 @@ impl TransferTransactionAuditor for CtxAuditor {
         finalized_tx: &FinalizedTransferTx,
         sender_account: &PubAccount,
         receiver_account: &PubAccount,
-        auditor_enc_key: &(u32, EncryptionKeys),
+        auditor_enc_key: &(AuditorId, EncryptionKeys),
     ) -> Fallible<()> {
         ensure!(
             sender_account == &init_tx.memo.sender_account,
@@ -801,12 +801,12 @@ mod tests {
     }
 
     fn test_transaction_auditor_helper(
-        sender_auditor_list: &[(u32, EncryptionPubKey)],
-        mediator_auditor_list: &[(u32, EncryptionPubKey)],
+        sender_auditor_list: &[(AuditorId, EncryptionPubKey)],
+        mediator_auditor_list: &[(AuditorId, EncryptionPubKey)],
         mediator_check_fails: bool,
-        validator_auditor_list: &[(u32, EncryptionPubKey)],
+        validator_auditor_list: &[(AuditorId, EncryptionPubKey)],
         validator_check_fails: bool,
-        auditors_list: &[(u32, EncryptionKeys)],
+        auditors_list: &[(AuditorId, EncryptionKeys)],
     ) {
         let sender = CtxSender;
         let receiver = CtxReceiver;
@@ -925,8 +925,8 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_transaction_auditor() {
         // Make imaginary auditors.
-        let auditors_num = 5u32;
-        let auditors_secret_vec: Vec<(u32, EncryptionKeys)> = (0..auditors_num)
+        let auditors_num = 5;
+        let auditors_secret_vec: Vec<(AuditorId, EncryptionKeys)> = (0..auditors_num)
             .map(|index| {
                 let auditor_keys = mock_gen_enc_key_pair(index as u8);
                 (index, auditor_keys)
@@ -934,7 +934,7 @@ mod tests {
             .collect();
         let auditors_secret_list = auditors_secret_vec.as_slice();
 
-        let auditors_vec: Vec<(u32, EncryptionPubKey)> = auditors_secret_vec
+        let auditors_vec: Vec<(AuditorId, EncryptionPubKey)> = auditors_secret_vec
             .iter()
             .map(|a| (a.0, a.1.public))
             .collect();

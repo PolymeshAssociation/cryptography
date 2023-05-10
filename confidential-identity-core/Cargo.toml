@@ -43,6 +43,9 @@ hex = { version = "0.4", default-features = false, features = ["alloc"] }
 default = ["std", "u64_backend"]
 nightly = ["curve25519-dalek/nightly"]
 
+# 64bit Balances. (default to 32bit)
+balance_64 = []
+
 # Backends
 u32_backend = [
 	"curve25519-dalek/u32_backend",

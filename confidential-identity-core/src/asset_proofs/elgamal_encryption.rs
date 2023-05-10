@@ -5,6 +5,7 @@
 
 use crate::{
     asset_proofs::errors::{ErrorKind, Fallible},
+    asset_proofs::Balance,
     codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
 };
 
@@ -263,14 +264,14 @@ impl ElgamalSecretKey {
         }
     }
 
-    /// Decrypt a cipher text that is known to encrypt a u32.
-    pub fn decrypt(&self, cipher_text: &CipherText) -> Fallible<u32> {
+    /// Decrypt a cipher text that is known to encrypt a Balance.
+    pub fn decrypt(&self, cipher_text: &CipherText) -> Fallible<Balance> {
         let gens = PedersenGens::default();
         // value * h = Y - X / secret_key
         let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
         // Brute force all possible values to find the one that matches value * h.
         let mut result = Scalar::zero() * gens.B;
-        for v in 0..u32::max_value() {
+        for v in 0..Balance::max_value() {
             if result == value_h {
                 return Ok(v);
             }
@@ -370,7 +371,7 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
 
         // Test encrypting balance.
-        let balance: Balance = 256u32;
+        let balance: Balance = 256;
         let blinding = Scalar::random(&mut rng);
         let balance_witness = CommitmentWitness {
             value: balance.into(),
@@ -443,7 +444,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_two_encryptions() {
         let mut rng = StdRng::from_seed([17u8; 32]);
-        let value = 256u32;
+        let value = 256;
         let blinding = Scalar::random(&mut rng);
         let w = CommitmentWitness {
             value: value.into(),

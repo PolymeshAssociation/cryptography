@@ -244,8 +244,14 @@ pub use bulletproofs;
 ///    we won't need to decrypt the encrypted values very often.
 ///    We can recommend that applications use a different faster
 ///    encryption mechanism to store the confidentional values on disk.
+#[cfg(not(feature = "balance_64"))]
 pub type Balance = u32;
+#[cfg(not(feature = "balance_64"))]
 pub const BALANCE_RANGE: u32 = 32;
+#[cfg(feature = "balance_64")]
+pub type Balance = u64;
+#[cfg(feature = "balance_64")]
+pub const BALANCE_RANGE: u32 = 64;
 
 /// Asset ID length.
 /// Note that MERCAT's asset id corresponds to PolyMesh's asset ticker.

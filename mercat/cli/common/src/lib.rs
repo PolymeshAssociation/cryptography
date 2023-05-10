@@ -9,6 +9,7 @@ pub mod justify;
 pub mod validate;
 
 use codec::{Decode, Encode};
+pub use confidential_identity_core::asset_proofs::Balance;
 use curve25519_dalek::scalar::Scalar;
 use errors::Error;
 use log::{debug, error, info};
@@ -58,7 +59,7 @@ pub enum CoreTransaction {
         issuer: String,
         ordering_state: OrderingState,
         tx_id: u32,
-        amount: u32,
+        amount: Balance,
     },
     TransferInit {
         tx: InitializedTransferTx,
@@ -174,7 +175,7 @@ pub struct OrderedPubAccountTx {
 #[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
 pub struct OrderedAssetInstruction {
     pub state: AssetTxState,
-    pub amount: u32,
+    pub amount: Balance,
     pub ordering_state: OrderingState,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
@@ -886,7 +887,7 @@ pub fn debug_decrypt(
     account: &PubAccount,
     enc_balance: EncryptedAmount,
     db_dir: PathBuf,
-) -> Result<u32, Error> {
+) -> Result<Balance, Error> {
     let (user, ticker, _) = get_user_from_account(account, db_dir.clone())?;
     let ordered_pub_account: OrderedPubAccount = load_object(
         db_dir.clone(),
@@ -917,7 +918,7 @@ pub fn debug_decrypt_account_balance(
     user: String,
     ticker: String,
     db_dir: PathBuf,
-) -> Result<u32, Error> {
+) -> Result<Balance, Error> {
     let enc_balance: EncryptedAmount = load_object(
         db_dir.clone(),
         ON_CHAIN_DIR,
@@ -944,7 +945,7 @@ pub fn debug_decrypt_base64_account_balance(
     encrypted_value: String,
     ticker: String,
     db_dir: PathBuf,
-) -> Result<u32, Error> {
+) -> Result<Balance, Error> {
     let mut data: &[u8] = &base64::decode(encrypted_value).unwrap();
     let enc_balance = EncryptedAmount::decode(&mut data).unwrap();
     let scrt: SecAccount = load_object(

@@ -40,6 +40,7 @@ use crate::{
     asset_proofs::elgamal_encryption::{
         CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey,
     },
+    asset_proofs::Balance,
     codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder},
 };
 
@@ -147,19 +148,22 @@ impl ElgamalPublicKey {
 }
 
 impl ElgamalSecretKey {
-    /// Decrypt a cipher text that is known to encrypt a u32.
-    pub fn const_time_decrypt(&self, cipher_text: &CipherTextWithHint) -> Fallible<u32> {
+    /// Decrypt a cipher text that is known to encrypt a `Balance`.
+    pub fn const_time_decrypt(&self, cipher_text: &CipherTextWithHint) -> Fallible<Balance> {
         // random_2 * h = Y - X / secret_key
         let random_2_h = cipher_text.y - self.secret.invert() * cipher_text.elgamal_cipher.x;
 
         use byteorder::{ByteOrder, LittleEndian};
 
         let decrypted_msg = xor_with_one_time_pad(random_2_h, &cipher_text.z);
-        let decrypted_u32 = LittleEndian::read_u32(&decrypted_msg);
+        #[cfg(not(feature = "balance_64"))]
+        let decrypted_value = LittleEndian::read_u32(&decrypted_msg);
+        #[cfg(feature = "balance_64")]
+        let decrypted_value = LittleEndian::read_u64(&decrypted_msg);
 
         // Verify that the same value was encrypted using twisted Elgamal encryption.
-        self.verify(&cipher_text.elgamal_cipher, &decrypted_u32.into())?;
-        Ok(decrypted_u32)
+        self.verify(&cipher_text.elgamal_cipher, &decrypted_value.into())?;
+        Ok(decrypted_value)
     }
 }
 
@@ -183,7 +187,7 @@ mod tests {
         let elg_pub = elg_secret.get_public_key();
 
         // Test encrypt().
-        let values = vec![0u32, 1u32, 255u32, u32::MAX];
+        let values = vec![0 as Balance, 1 as Balance, 255 as Balance, Balance::MAX];
         let _ = values.iter().map(|v| {
             let (_, cipher) = elg_pub.const_time_encrypt_value(Scalar::from(*v), &mut rng);
             let decrypted_v = elg_secret.const_time_decrypt(&cipher).unwrap();

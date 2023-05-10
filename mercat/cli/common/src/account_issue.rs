@@ -5,7 +5,7 @@ use crate::{
     ON_CHAIN_DIR,
 };
 use codec::Encode;
-use confidential_identity_core::asset_proofs::{asset_id_from_ticker, CommitmentWitness};
+use confidential_identity_core::asset_proofs::{asset_id_from_ticker, Balance, CommitmentWitness};
 use curve25519_dalek::scalar::Scalar;
 use log::info;
 use mercat::{asset::AssetIssuer, Account, AssetTransactionIssuer, AssetTxState, TxSubstate};
@@ -18,7 +18,7 @@ pub fn process_issue_asset(
     db_dir: PathBuf,
     issuer: String,
     ticker: String,
-    amount: u32,
+    amount: Balance,
     stdout: bool,
     tx_id: u32,
     cheat: bool,
