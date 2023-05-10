@@ -292,6 +292,12 @@ pub enum AmountSource<'a> {
     Amount(Balance),
 }
 
+impl From<Balance> for AmountSource<'_> {
+    fn from(val: Balance) -> Self {
+        Self::Amount(val)
+    }
+}
+
 impl AmountSource<'_> {
     pub fn get_amount(&self, enc_amount: Option<&EncryptedAmountWithHint>) -> Fallible<Balance> {
         match (self, enc_amount) {
