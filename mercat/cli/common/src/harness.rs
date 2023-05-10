@@ -274,7 +274,7 @@ impl Transfer {
                 chain_db_dir.clone(),
                 sender.clone(),
                 receiver.clone(),
-                mediator.clone(),
+                Some(mediator.clone()),
                 ticker.clone(),
                 amount,
                 false, // Do not print the transaction data to stdout.
@@ -350,6 +350,7 @@ impl Transfer {
                 chain_db_dir.clone(),
                 sender.clone(),
                 receiver.clone(),
+                None,
                 mediator.clone(),
                 ticker.clone(),
                 seed.clone(),

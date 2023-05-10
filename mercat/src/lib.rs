@@ -9,10 +9,13 @@ extern crate alloc;
 use codec::{Decode, Encode};
 pub use confidential_identity_core;
 use confidential_identity_core::asset_proofs::{
-    ciphertext_refreshment_proof::CipherEqualSamePubKeyProof, correctness_proof::CorrectnessProof,
-    encrypting_same_value_proof::CipherEqualDifferentPubKeyProof, errors::Fallible,
-    range_proof::InRangeProof, wellformedness_proof::WellformednessProof, Balance, CipherText,
-    CipherTextWithHint, ElgamalPublicKey, ElgamalSecretKey,
+    ciphertext_refreshment_proof::CipherEqualSamePubKeyProof,
+    correctness_proof::CorrectnessProof,
+    encrypting_same_value_proof::CipherEqualDifferentPubKeyProof,
+    errors::{ErrorKind, Fallible},
+    range_proof::InRangeProof,
+    wellformedness_proof::WellformednessProof,
+    Balance, CipherText, CipherTextWithHint, ElgamalPublicKey, ElgamalSecretKey,
 };
 use rand_core::{CryptoRng, RngCore};
 
@@ -283,6 +286,24 @@ pub trait AssetTransactionAuditor {
 
 pub type AuditorId = u32;
 
+#[derive(Clone, Debug)]
+pub enum AmountSource<'a> {
+    Encrypted(&'a EncryptionKeys),
+    Amount(Balance),
+}
+
+impl AmountSource<'_> {
+    pub fn get_amount(&self, enc_amount: Option<&EncryptedAmountWithHint>) -> Fallible<Balance> {
+        match (self, enc_amount) {
+            (Self::Amount(amount), _) => Ok(*amount),
+            (Self::Encrypted(keys), Some(enc_amount)) => {
+                Ok(keys.secret.const_time_decrypt(enc_amount)?)
+            }
+            _ => Err(ErrorKind::CipherTextDecryptionError.into()),
+        }
+    }
+}
+
 #[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AuditorPayload {
@@ -300,7 +321,7 @@ pub struct TransferTxMemo {
     pub enc_amount_using_sender: EncryptedAmount,
     pub enc_amount_using_receiver: EncryptedAmount,
     pub refreshed_enc_balance: EncryptedAmount,
-    pub enc_amount_for_mediator: EncryptedAmountWithHint,
+    pub enc_amount_for_mediator: Option<EncryptedAmountWithHint>,
 }
 
 /// Holds the proofs and memo of the confidential transaction sent by the sender.
@@ -336,7 +357,7 @@ pub trait TransferTransactionSender {
         sender_init_balance: &EncryptedAmount,
         sender_balance: Balance,
         receiver_pub_account: &PubAccount,
-        mediator_pub_key: &EncryptionPubKey,
+        mediator_pub_key: Option<&EncryptionPubKey>,
         auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
@@ -361,7 +382,7 @@ pub trait TransferTransactionMediator {
         &self,
         init_tx: &InitializedTransferTx,
         finalized_tx: &FinalizedTransferTx,
-        mediator_enc_keys: &EncryptionKeys,
+        amount_source: AmountSource,
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,

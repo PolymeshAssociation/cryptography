@@ -60,7 +60,7 @@ fn main() {
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.sender,
             cfg.receiver,
-            cfg.mediator,
+            Some(cfg.mediator),
             cfg.account_id_from_ticker,
             cfg.amount,
             cfg.stdout,

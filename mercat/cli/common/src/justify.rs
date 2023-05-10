@@ -6,11 +6,11 @@ use crate::{
     MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
 };
 use codec::{Decode, Encode};
-use confidential_identity_core::asset_proofs::ElgamalSecretKey;
+use confidential_identity_core::asset_proofs::{Balance, ElgamalSecretKey};
 use curve25519_dalek::scalar::Scalar;
 use log::info;
 use mercat::{
-    transaction::CtxMediator, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
+    transaction::CtxMediator, AmountSource, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
     FinalizedTransferTx, InitializedTransferTx, MediatorAccount, TransferTransactionMediator,
     TransferTxState, TxSubstate,
 };
@@ -87,6 +87,7 @@ pub fn justify_asset_transfer_transaction(
     db_dir: PathBuf,
     sender: String,
     receiver: String,
+    amount: Option<Balance>,
     mediator: String,
     ticker: String,
     seed: String,
@@ -177,11 +178,16 @@ pub fn justify_asset_transfer_transaction(
         db_dir.clone(),
     )?;
 
+    let amount_source = match amount {
+        Some(amount) => AmountSource::Amount(amount),
+        None => AmountSource::Encrypted(&mediator_account.encryption_key),
+    };
+
     let justified_tx = CtxMediator
         .justify_transaction(
             &init_tx,
             &finalized_tx,
-            &mediator_account.encryption_key,
+            amount_source,
             &sender_ordered_pub_account.pub_account,
             &pending_balance,
             &receiver_ordered_pub_account.pub_account,

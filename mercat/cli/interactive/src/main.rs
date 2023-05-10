@@ -12,9 +12,10 @@ use log::info;
 use mercat::{
     account::AccountCreator,
     transaction::{CtxMediator, CtxReceiver, CtxSender},
-    Account, AccountCreatorInitializer, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
-    FinalizedTransferTx, InitializedTransferTx, MediatorAccount, PubAccount, SecAccount,
-    TransferTransactionMediator, TransferTransactionReceiver, TransferTransactionSender,
+    Account, AccountCreatorInitializer, AmountSource, EncryptedAmount, EncryptionKeys,
+    EncryptionPubKey, FinalizedTransferTx, InitializedTransferTx, MediatorAccount, PubAccount,
+    SecAccount, TransferTransactionMediator, TransferTransactionReceiver,
+    TransferTransactionSender,
 };
 use mercat_common::{
     account_issue::process_issue_asset, create_rng_from_seed, debug_decrypt_base64_account_balance,
@@ -228,7 +229,7 @@ pub fn process_create_tx(
             &pending_enc_balance,
             pending_balance,
             &receiver_pub_account,
-            &mediator_account,
+            Some(&mediator_account),
             &[],
             amount,
             &mut rng,
@@ -325,7 +326,7 @@ pub fn justify_asset_transfer_transaction(
         .justify_transaction(
             &init_tx,
             &finalized_tx,
-            &mediator_account.encryption_key,
+            AmountSource::Encrypted(&mediator_account.encryption_key),
             &sender_pub_account,
             &sender_balance,
             &receiver_pub_account,

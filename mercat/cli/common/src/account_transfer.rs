@@ -21,7 +21,7 @@ pub fn process_create_tx(
     db_dir: PathBuf,
     sender: String,
     receiver: String,
-    mediator: String,
+    mediator: Option<String>,
     ticker: String,
     amount: Balance,
     stdout: bool,
@@ -60,12 +60,15 @@ pub fn process_create_tx(
         &user_public_account_file(&ticker),
     )?;
 
-    let mediator_account: EncryptionPubKey = load_object(
-        db_dir.clone(),
-        ON_CHAIN_DIR,
-        &mediator,
-        MEDIATOR_PUBLIC_ACCOUNT_FILE,
-    )?;
+    let mediator_account = match mediator {
+        Some(mediator) => Some(load_object::<EncryptionPubKey>(
+            db_dir.clone(),
+            ON_CHAIN_DIR,
+            &mediator,
+            MEDIATOR_PUBLIC_ACCOUNT_FILE,
+        )?),
+        _ => None,
+    };
 
     timing!(
         "account.create_tx.load_from_file",
@@ -134,7 +137,7 @@ pub fn process_create_tx(
             &pending_enc_balance,
             pending_balance,
             &receiver_account.pub_account,
-            &mediator_account,
+            mediator_account.as_ref(),
             &[],
             amount,
             &mut rng,

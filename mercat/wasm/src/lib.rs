@@ -7,11 +7,11 @@ use mercat::{
         curve25519_dalek::scalar::Scalar,
     },
     transaction::{CtxMediator, CtxReceiver, CtxSender},
-    Account as MercatAccount, AccountCreatorInitializer, AssetTransactionIssuer, EncryptedAmount,
-    EncryptionKeys, FinalizedTransferTx, InitializedAssetTx, InitializedTransferTx,
-    MediatorAccount as MercatMediatorAccount, PubAccount as MercatPubAccount, PubAccountTx,
-    SecAccount, TransferTransactionMediator, TransferTransactionReceiver,
-    TransferTransactionSender,
+    Account as MercatAccount, AccountCreatorInitializer, AmountSource, AssetTransactionIssuer,
+    EncryptedAmount, EncryptionKeys, FinalizedTransferTx, InitializedAssetTx,
+    InitializedTransferTx, MediatorAccount as MercatMediatorAccount,
+    PubAccount as MercatPubAccount, PubAccountTx, SecAccount, TransferTransactionMediator,
+    TransferTransactionReceiver, TransferTransactionSender,
 };
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
@@ -348,17 +348,21 @@ pub fn create_transaction(
     encrypted_pending_balance: Base64,
     pending_balance: Balance,
     receiver_public_account: PubAccount,
-    mediator_public_key: Base64,
+    mediator_public_key: Option<Base64>,
 ) -> Fallible<CreateTransactionOutput> {
     let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
+    let mediator_public_key = match mediator_public_key {
+        Some(key) => Some(decode::<ElgamalPublicKey>(key)?),
+        _ => None,
+    };
     let init_tx = CtxSender
         .create_transaction(
             &sender_account.to_mercat()?,
             &decode::<CipherText>(encrypted_pending_balance)?,
             pending_balance,
             &receiver_public_account.to_mercat()?,
-            &decode::<ElgamalPublicKey>(mediator_public_key)?,
+            mediator_public_key.as_ref(),
             &[],
             amount,
             &mut rng,
@@ -432,16 +436,22 @@ pub fn justify_transaction(
     sender_public_account: PubAccount,
     sender_encrypted_pending_balance: Base64,
     receiver_public_account: PubAccount,
+    amount: Option<Balance>,
 ) -> Fallible<JustifiedTransactionOutput> {
     let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
+    let mediator_keys = mediator_account.to_mercat()?.encryption_key;
+    let amount_source = match amount {
+        Some(amount) => AmountSource::Amount(amount),
+        None => AmountSource::Encrypted(&mediator_keys),
+    };
     let init_tx = decode::<InitializedTransferTx>(init_tx)?;
     let finalized_tx = decode::<FinalizedTransferTx>(finalized_tx)?;
     let justified_tx = CtxMediator
         .justify_transaction(
             &init_tx,
             &finalized_tx,
-            &mediator_account.to_mercat()?.encryption_key,
+            amount_source,
             &sender_public_account.to_mercat()?,
             &decode::<EncryptedAmount>(sender_encrypted_pending_balance)?,
             &receiver_public_account.to_mercat()?,

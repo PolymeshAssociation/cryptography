@@ -1,6 +1,6 @@
 use crate::{
-    Account, AuditorId, AuditorPayload, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
-    FinalizedTransferTx, InitializedTransferTx, JustifiedTransferTx, PubAccount,
+    Account, AmountSource, AuditorId, AuditorPayload, EncryptedAmount, EncryptionKeys,
+    EncryptionPubKey, FinalizedTransferTx, InitializedTransferTx, JustifiedTransferTx, PubAccount,
     TransferTransactionAuditor, TransferTransactionMediator, TransferTransactionReceiver,
     TransferTransactionSender, TransferTransactionVerifier, TransferTxMemo, TransferTxState,
     TxSubstate,
@@ -45,7 +45,7 @@ impl TransferTransactionSender for CtxSender {
         sender_init_balance: &EncryptedAmount,
         sender_balance: Balance,
         receiver_pub_account: &PubAccount,
-        mediator_pub_key: &EncryptionPubKey,
+        mediator_pub_key: Option<&EncryptionPubKey>,
         auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
         amount: Balance,
         rng: &mut T,
@@ -116,11 +116,14 @@ impl TransferTransactionSender for CtxSender {
             rng,
         )?;
 
-        let amount_witness_blinding_for_mediator = Scalar::random(rng);
-        let amount_witness_for_mediator =
-            CommitmentWitness::new(amount.into(), amount_witness_blinding_for_mediator);
-        let enc_amount_for_mediator =
-            mediator_pub_key.const_time_encrypt(&amount_witness_for_mediator, rng);
+        let enc_amount_for_mediator = if let Some(mediator_pub_key) = mediator_pub_key {
+            let amount_witness_blinding_for_mediator = Scalar::random(rng);
+            let amount_witness_for_mediator =
+                CommitmentWitness::new(amount.into(), amount_witness_blinding_for_mediator);
+            Some(mediator_pub_key.const_time_encrypt(&amount_witness_for_mediator, rng))
+        } else {
+            None
+        };
 
         let amount_correctness_proof = single_property_prover(
             CorrectnessProverAwaitingChallenge {
@@ -245,7 +248,7 @@ impl TransferTransactionMediator for CtxMediator {
         &self,
         init_tx: &InitializedTransferTx,
         finalized_tx: &FinalizedTransferTx,
-        mediator_enc_keys: &EncryptionKeys,
+        amount_source: AmountSource,
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
@@ -269,9 +272,7 @@ impl TransferTransactionMediator for CtxMediator {
         let gens = &PedersenGens::default();
 
         // Verify that the encrypted amount is correct.
-        let amount = mediator_enc_keys
-            .secret
-            .const_time_decrypt(&init_tx.memo.enc_amount_for_mediator)?;
+        let amount = amount_source.get_amount(init_tx.memo.enc_amount_for_mediator.as_ref())?;
         single_property_verifier(
             &CorrectnessVerifier {
                 value: amount.into(),

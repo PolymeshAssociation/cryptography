@@ -36,6 +36,7 @@ fn main() {
             cfg.db_dir.ok_or(Error::EmptyDatabaseDir).unwrap(),
             cfg.sender,
             cfg.receiver,
+            None,
             cfg.mediator,
             cfg.ticker,
             cfg.seed.ok_or(Error::EmptySeed).unwrap(),
