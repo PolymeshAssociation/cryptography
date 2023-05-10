@@ -245,10 +245,6 @@ fn bench_transaction_sender_proof_stage(
 
     let mut group = c.benchmark_group("MERCAT Transaction");
     for proof_gen in proof_gens {
-        // Skip benchmarking amounts > 1 Million.  They are too slow.
-        if proof_gen.amount > 1_000_000 {
-            continue;
-        }
         group.bench_with_input(
             BenchmarkId::new(
                 format!("Sender Proof Stage {bench_stage}"),
