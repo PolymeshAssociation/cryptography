@@ -281,6 +281,81 @@ impl ElgamalSecretKey {
         Err(ErrorKind::CipherTextDecryptionError.into())
     }
 
+    /// Decrypt a cipher text that is known to encrypt a Balance.
+    pub fn decrypt_with_hint(
+        &self,
+        cipher_text: &CipherText,
+        min: Balance,
+        max: Balance,
+    ) -> Option<Balance> {
+        let gens = PedersenGens::default();
+        // value * h = Y - X / secret_key
+        let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
+        // Brute force all possible values to find the one that matches value * h.
+        let mut result = Scalar::from(min) * gens.B;
+        for v in min..max {
+            if result == value_h {
+                return Some(v);
+            }
+            result += gens.B;
+        }
+
+        None
+    }
+
+    /// Decrypt a cipher text that is known to encrypt a Balance.
+    #[cfg(feature = "rayon")]
+    pub fn decrypt_parallel(&self, cipher_text: &CipherText) -> Fallible<Balance> {
+        use rayon::prelude::*;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let gens = PedersenGens::default();
+        // value * h = Y - X / secret_key
+        let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
+
+        const CHUNK_SIZE: Balance = 64 * 1024; // Needs to be a power of two.
+        const CHUNK_COUNT: Balance = Balance::max_value() / CHUNK_SIZE;
+        let mut tmp = Scalar::zero() * gens.B;
+        // Search the first chunk.
+        for v in 0..CHUNK_SIZE {
+            if tmp == value_h {
+                return Ok(v);
+            }
+            tmp += gens.B;
+        }
+
+        let found = AtomicBool::new(false);
+        let chunk_b = tmp;
+        let res = (1..CHUNK_COUNT)
+            .into_iter()
+            .map(|chunk_idx| {
+                let chunk_start = tmp;
+                tmp += chunk_b;
+                (chunk_idx, chunk_start)
+            })
+            .par_bridge()
+            .find_map_any(|(chunk_idx, mut tmp)| {
+                let min = chunk_idx * CHUNK_SIZE;
+                let max = min + CHUNK_SIZE;
+                for v in min..max {
+                    if found.load(Ordering::Relaxed) {
+                        return None;
+                    }
+                    if tmp == value_h {
+                        found.store(true, Ordering::Relaxed);
+                        return Some(v);
+                    }
+                    tmp += gens.B;
+                }
+                None
+            });
+        if let Some(res) = res {
+            return Ok(res);
+        }
+
+        Err(ErrorKind::CipherTextDecryptionError.into())
+    }
+
     /// Verifies that a cipher text encrypts the given witness.
     /// This follows the same logic as decrypt(), except that it uses the `asset_id` as
     /// a hint as to what the message must be in order to avoid searching the entire
@@ -401,6 +476,41 @@ mod tests {
         // Test encrypt_value().
         let (_, cipher) = elg_pub.encrypt_value(asset_id_witness.value, &mut rng);
         assert!(elg_secret.verify(&cipher, &asset_id.into()).is_ok());
+    }
+
+    #[test]
+    #[wasm_bindgen_test]
+    fn decrypt_with_hint_test() {
+        let mut rng = StdRng::from_seed(SEED_1);
+        let elg_secret = ElgamalSecretKey::new(Scalar::random(&mut rng));
+        let elg_pub = elg_secret.get_public_key();
+
+        // Test encrypting balance.
+        let balance: Balance = 20_000;
+        let blinding = Scalar::random(&mut rng);
+        let balance_witness = CommitmentWitness {
+            value: balance.into(),
+            blinding,
+        };
+        // Test encrypt().
+        let cipher = elg_pub.encrypt(&balance_witness);
+        let balance1 = elg_secret
+            .decrypt_with_hint(&cipher, 5_000, 25_000)
+            .unwrap();
+        assert_eq!(balance1, balance);
+        // Wrong range.
+        let balance1 = elg_secret.decrypt_with_hint(&cipher, 5_000, 15_000);
+        assert!(balance1.is_none());
+
+        // Test encrypt_value().
+        let (_, cipher) = elg_pub.encrypt_value(balance_witness.value, &mut rng);
+        let balance2 = elg_secret
+            .decrypt_with_hint(&cipher, 5_000, 25_000)
+            .unwrap();
+        assert_eq!(balance2, balance);
+        // Wrong range.
+        let balance2 = elg_secret.decrypt_with_hint(&cipher, 5_000, 15_000);
+        assert!(balance2.is_none());
     }
 
     #[test]
