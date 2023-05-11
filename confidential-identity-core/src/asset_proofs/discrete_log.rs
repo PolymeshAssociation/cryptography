@@ -139,40 +139,37 @@ impl DiscreteLog {
 
     fn decode_range(mut target: RistrettoPoint, compression_batch_size: usize) -> Option<Balance> {
         let hashmap = &DECODE_PRECOMPUTATION_FOR_G;
-        let mut decoded = None;
+        let mut offset = 0;
+        let mut batch_points = Vec::with_capacity(compression_batch_size);
 
         for batch in &(0..TWO16)
             .into_iter()
-            .map(|idx| {
-                let point = target;
-                target += -G;
-                (point, idx as Balance)
-            })
             .chunks(compression_batch_size)
         {
             // batch compression currently errors if any point in the batch is the identity point
-            let (batch_points, batch_indices): (Vec<_>, Vec<_>) = batch
-                .filter(|(point, index)| {
-                    if point.is_identity() {
-                        decoded = Some(*index);
-                        return false;
-                    }
-                    true
-                })
-                .unzip();
+            batch_points.clear();
+            for idx in batch {
+                let point = target;
+                target += -G;
+                if point.is_identity() {
+                    return Some(idx as Balance);
+                }
+                batch_points.push(point);
+            }
 
             let batch_compressed = RistrettoPoint::double_and_compress_batch(&batch_points);
 
-            for (point, x_lo) in batch_compressed.iter().zip(batch_indices.iter()) {
+            for (x_lo, point) in batch_compressed.iter().enumerate() {
                 let key = point.to_bytes();
                 if hashmap.0.contains_key(&key) {
                     let x_hi = hashmap.0[&key];
-                    decoded = Some(x_lo + TWO16 * x_hi as Balance);
+                    return Some(offset + x_lo as Balance + TWO16 * x_hi as Balance);
                 }
             }
+            offset += compression_batch_size as Balance;
         }
 
-        decoded
+        None
     }
 }
 
