@@ -282,6 +282,20 @@ impl ElgamalSecretKey {
     }
 
     /// Decrypt a cipher text that is known to encrypt a Balance.
+    #[cfg(feature = "discrete_log")]
+    pub fn decrypt_discrete_log(&self, cipher_text: &CipherText) -> Fallible<Balance> {
+        let gens = PedersenGens::default();
+        // value * h = Y - X / secret_key
+        let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
+        let discrete_log = super::discrete_log::DiscreteLog::new(gens.B);
+        if let Some(v) = discrete_log.decode(value_h) {
+            return Ok(v as Balance);
+        }
+
+        Err(ErrorKind::CipherTextDecryptionError.into())
+    }
+
+    /// Decrypt a cipher text that is known to encrypt a Balance.
     pub fn decrypt_with_hint(
         &self,
         cipher_text: &CipherText,

@@ -1,0 +1,218 @@
+//! The discrete log implementation for the twisted ElGamal decryption.
+//!
+//! Copied from: https://github.com/solana-labs/solana/blob/master/zk-token-sdk/src/encryption/discrete_log.rs
+//! and modified to support decrypting values larger then 32bits.
+//!
+
+use crate::asset_proofs::Balance;
+use {
+    curve25519_dalek::{
+        constants::RISTRETTO_BASEPOINT_POINT as G,
+        ristretto::RistrettoPoint,
+        scalar::Scalar,
+        traits::{Identity, IsIdentity},
+    },
+    itertools::Itertools,
+    serde::{Deserialize, Serialize},
+    std::collections::HashMap,
+};
+
+const TWO16: Balance = 65536; // 2^16
+const TWO17: Balance = 131072; // 2^17
+
+/// Type that captures a discrete log challenge.
+///
+/// The goal of discrete log is to find x such that x * generator = target.
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, Eq, PartialEq)]
+pub struct DiscreteLog {
+    /// Generator point for discrete log
+    pub generator: RistrettoPoint,
+    /// Ristretto point compression batch size
+    compression_batch_size: usize,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct DecodePrecomputation(HashMap<[u8; 32], u16>);
+
+/// Builds a HashMap of 2^16 elements
+#[allow(dead_code)]
+fn decode_u32_precomputation(generator: RistrettoPoint) -> DecodePrecomputation {
+    let mut hashmap = HashMap::new();
+
+    let two17_scalar = Scalar::from(TWO17);
+    let mut point = RistrettoPoint::identity(); // 0 * G
+    let generator = two17_scalar * generator; // 2^17 * G
+
+    // iterator for 2^17*0G , 2^17*1G, 2^17*2G, ...
+    for x_hi in 0..TWO16 {
+        let key = point.compress().to_bytes();
+        hashmap.insert(key, x_hi as u16);
+        point += generator;
+    }
+
+    DecodePrecomputation(hashmap)
+}
+
+lazy_static::lazy_static! {
+    /// Pre-computed HashMap needed for decryption. The HashMap is independent of (works for) any key.
+    pub static ref DECODE_PRECOMPUTATION_FOR_G: DecodePrecomputation = {
+        static DECODE_PRECOMPUTATION_FOR_G_BINCODE: &[u8] =
+            include_bytes!("decode_u32_precomputation_for_G.bincode");
+        bincode::deserialize(DECODE_PRECOMPUTATION_FOR_G_BINCODE).unwrap_or_default()
+    };
+    pub static ref G_U32_MAX: RistrettoPoint = {
+        G * Scalar::from(u32::MAX)
+    };
+}
+
+/// Solves the discrete log instance using a 16/16 bit offline/online split
+impl DiscreteLog {
+    /// Discrete log instance constructor.
+    pub fn new(generator: RistrettoPoint) -> Self {
+        Self {
+            generator,
+            compression_batch_size: 32,
+        }
+    }
+
+    /// Adjusts inversion batch size in a discrete log instance.
+    pub fn set_compression_batch_size(
+        &mut self,
+        compression_batch_size: usize,
+    ) -> Result<(), &'static str> {
+        if compression_batch_size >= TWO16 as usize {
+            return Err("Invalid batch size");
+        }
+        self.compression_batch_size = compression_batch_size;
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "balance_64"))]
+    pub fn decode(self, starting_point: RistrettoPoint) -> Option<Balance> {
+        self.decode_u32(starting_point)
+    }
+
+    #[cfg(all(not(feature = "rayon"), feature = "balance_64"))]
+    pub fn decode(self, mut starting_point: RistrettoPoint) -> Option<Balance> {
+        if let Some(v) = self.decode_u32(starting_point) {
+            return Some(v);
+        }
+        let step: Balance = u32::MAX as Balance;
+        let mut offset = 0;
+        loop {
+            starting_point -= *G_U32_MAX;
+            offset += step;
+            if let Some(v) = self.decode_u32(starting_point) {
+                return Some(v + offset);
+            }
+        }
+    }
+
+    #[cfg(all(feature = "rayon", feature = "balance_64"))]
+    pub fn decode(self, mut starting_point: RistrettoPoint) -> Option<Balance> {
+        use rayon::prelude::*;
+
+        // Use a single thread to check the first 0-u32::MAX range.
+        if let Some(v) = self.decode_u32(starting_point) {
+            return Some(v);
+        }
+        const CHUNK_SIZE: Balance = u32::MAX as Balance;
+        const CHUNK_COUNT: Balance = Balance::max_value() / CHUNK_SIZE;
+        (1..CHUNK_COUNT)
+            .into_iter()
+            .map(|idx| {
+                starting_point -= *G_U32_MAX;
+                (idx * CHUNK_SIZE, starting_point)
+            })
+            .par_bridge()
+            .find_map_any(|(offset, starting_point)| {
+                self.decode_u32(starting_point).map(|v| v + offset)
+            })
+    }
+
+    /// Solves the discrete log problem under the assumption that the solution
+    /// is a positive 32-bit number.
+    pub fn decode_u32(&self, target: RistrettoPoint) -> Option<Balance> {
+        Self::decode_range(target, self.compression_batch_size)
+    }
+
+    fn decode_range(mut target: RistrettoPoint, compression_batch_size: usize) -> Option<Balance> {
+        let hashmap = &DECODE_PRECOMPUTATION_FOR_G;
+        let mut decoded = None;
+
+        for batch in &(0..TWO16)
+            .into_iter()
+            .map(|idx| {
+                let point = target;
+                target += -G;
+                (point, idx as Balance)
+            })
+            .chunks(compression_batch_size)
+        {
+            // batch compression currently errors if any point in the batch is the identity point
+            let (batch_points, batch_indices): (Vec<_>, Vec<_>) = batch
+                .filter(|(point, index)| {
+                    if point.is_identity() {
+                        decoded = Some(*index);
+                        return false;
+                    }
+                    true
+                })
+                .unzip();
+
+            let batch_compressed = RistrettoPoint::double_and_compress_batch(&batch_points);
+
+            for (point, x_lo) in batch_compressed.iter().zip(batch_indices.iter()) {
+                let key = point.to_bytes();
+                if hashmap.0.contains_key(&key) {
+                    let x_hi = hashmap.0[&key];
+                    decoded = Some(x_lo + TWO16 * x_hi as Balance);
+                }
+            }
+        }
+
+        decoded
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {super::*, std::time::Instant};
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_serialize_decode_u32_precomputation_for_G() {
+        let decode_u32_precomputation_for_G = decode_u32_precomputation(G);
+        // let decode_u32_precomputation_for_G = decode_u32_precomputation(G);
+
+        if decode_u32_precomputation_for_G.0 != DECODE_PRECOMPUTATION_FOR_G.0 {
+            use std::{fs::File, io::Write, path::PathBuf};
+            let mut f = File::create(PathBuf::from(
+                "src/encryption/decode_u32_precomputation_for_G.bincode",
+            ))
+            .unwrap();
+            f.write_all(&bincode::serialize(&decode_u32_precomputation_for_G).unwrap())
+                .unwrap();
+            panic!("Rebuild and run this test again");
+        }
+    }
+
+    #[test]
+    fn test_decode_correctness() {
+        // general case
+        let amount: Balance = 4294967295;
+
+        let instance = DiscreteLog::new(G);
+        let target = Scalar::from(amount) * G;
+
+        // Very informal measurements for now
+        let start_computation = Instant::now();
+        let decoded = instance.decode_u32(target);
+        let computation_secs = start_computation.elapsed().as_secs_f64();
+
+        assert_eq!(amount, decoded.unwrap());
+
+        println!("single thread discrete log computation secs: {computation_secs:?} sec");
+    }
+}
