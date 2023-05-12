@@ -186,7 +186,6 @@ pub fn justify_asset_transfer_transaction(
     let justified_tx = CtxMediator
         .justify_transaction(
             &init_tx,
-            &finalized_tx,
             amount_source,
             &sender_ordered_pub_account.pub_account,
             &pending_balance,

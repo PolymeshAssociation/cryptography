@@ -418,13 +418,12 @@ fn process_transaction(
     pending_balance: EncryptedAmount,
 ) -> Result<(), Error> {
     let mut rng = OsRng::default();
-    let (init_tx, finalized_tx) =
+    let (init_tx, _finalized_tx) =
         <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..]).unwrap();
     let validator = TransactionValidator;
     validator
         .verify_transaction(
             &init_tx,
-            &finalized_tx,
             &sender_pub_account,
             &pending_balance,
             &receiver_pub_account,

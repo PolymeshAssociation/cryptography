@@ -13,9 +13,8 @@ use mercat::{
     account::AccountCreator,
     transaction::{CtxMediator, CtxReceiver, CtxSender},
     Account, AccountCreatorInitializer, AmountSource, EncryptedAmount, EncryptionKeys,
-    EncryptionPubKey, FinalizedTransferTx, InitializedTransferTx, MediatorAccount, PubAccount,
-    SecAccount, TransferTransactionMediator, TransferTransactionReceiver,
-    TransferTransactionSender,
+    EncryptionPubKey, InitializedTransferTx, MediatorAccount, PubAccount, SecAccount,
+    TransferTransactionMediator, TransferTransactionReceiver, TransferTransactionSender,
 };
 use mercat_common::{
     account_issue::process_issue_asset, create_rng_from_seed, debug_decrypt_base64_account_balance,
@@ -91,7 +90,6 @@ fn main() {
             cfg.receiver,
             cfg.mediator,
             cfg.init_tx,
-            cfg.finalized_tx,
         )
         .unwrap(),
         CLI::Decrypt(cfg) => info!(
@@ -294,15 +292,12 @@ pub fn justify_asset_transfer_transaction(
     receiver: String,
     mediator: String,
     init_tx: String,
-    finalized_tx: String,
 ) -> Result<(), Error> {
     // Load the transaction, mediator's credentials, and issuer's public account.
     let mut rng = create_rng_from_seed(Some(seed))?;
 
     let mut data: &[u8] = &base64::decode(&init_tx).unwrap();
     let init_tx = InitializedTransferTx::decode(&mut data).unwrap();
-    let mut data: &[u8] = &base64::decode(&finalized_tx).unwrap();
-    let finalized_tx = FinalizedTransferTx::decode(&mut data).unwrap();
 
     let mediator_account: MediatorAccount =
         load_object(db_dir, OFF_CHAIN_DIR, &mediator, SECRET_ACCOUNT_FILE)?;
@@ -325,7 +320,6 @@ pub fn justify_asset_transfer_transaction(
     let justified_tx = CtxMediator {}
         .justify_transaction(
             &init_tx,
-            &finalized_tx,
             AmountSource::Encrypted(&mediator_account.encryption_key),
             &sender_pub_account,
             &sender_balance,

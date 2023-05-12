@@ -387,7 +387,6 @@ pub trait TransferTransactionMediator {
     fn justify_transaction<R: RngCore + CryptoRng>(
         &self,
         init_tx: &InitializedTransferTx,
-        finalized_tx: &FinalizedTransferTx,
         amount_source: AmountSource,
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
@@ -398,11 +397,11 @@ pub trait TransferTransactionMediator {
 }
 
 pub trait TransferTransactionVerifier {
-    /// Verify the initialized, finalized, and justified transactions.
+    /// Verify the transaction's ZK proofs.
+    /// The receiver and mediator need to verify the transaction amount.
     fn verify_transaction<R: RngCore + CryptoRng>(
         &self,
         init_tx: &InitializedTransferTx,
-        finalized_tx: &FinalizedTransferTx,
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
@@ -417,7 +416,6 @@ pub trait TransferTransactionAuditor {
     fn audit_transaction(
         &self,
         init_tx: &InitializedTransferTx,
-        finalized_tx: &FinalizedTransferTx,
         sender_account: &PubAccount,
         receiver_account: &PubAccount,
         auditor_enc_keys: &(AuditorId, EncryptionKeys),

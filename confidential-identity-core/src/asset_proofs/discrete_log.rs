@@ -142,10 +142,7 @@ impl DiscreteLog {
         let mut offset = 0;
         let mut batch_points = Vec::with_capacity(compression_batch_size);
 
-        for batch in &(0..TWO16)
-            .into_iter()
-            .chunks(compression_batch_size)
-        {
+        for batch in &(0..TWO16).into_iter().chunks(compression_batch_size) {
             // batch compression currently errors if any point in the batch is the identity point
             batch_points.clear();
             for idx in batch {

@@ -22,8 +22,8 @@ use mercat::{
     transaction::{
         verify_initialized_transaction, CtxMediator, CtxReceiver, CtxSender, TransactionValidator,
     },
-    Account, EncryptedAmount, EncryptedAmountWithHint, EncryptionPubKey, EncryptionSecKey,
-    FinalizedTransferTx, InitializedTransferTx, JustifiedTransferTx, MediatorAccount, PubAccount,
+    Account, AmountSource, EncryptedAmount, EncryptedAmountWithHint, EncryptionPubKey,
+    EncryptionSecKey, InitializedTransferTx, JustifiedTransferTx, MediatorAccount, PubAccount,
     TransferTransactionMediator, TransferTransactionReceiver, TransferTransactionSender,
     TransferTransactionVerifier,
 };
@@ -286,7 +286,7 @@ fn bench_transaction_sender(
                             sender_balance,
                             amount,
                             &rcvr_pub_account,
-                            &mediator_pub_key.clone(),
+                            Some(&mediator_pub_key.clone()),
                             &[],
                             amount,
                             &mut rng,
@@ -310,7 +310,7 @@ fn bench_transaction_sender(
                     &sender_balance,
                     amount,
                     &rcvr_pub_account,
-                    &mediator_pub_key,
+                    Some(&mediator_pub_key),
                     &[],
                     amount,
                     &mut rng,
@@ -356,12 +356,7 @@ fn bench_transaction_receiver(
     c: &mut Criterion,
     receiver_account: Account,
     transactions: Vec<(Balance, EncryptedAmount, InitializedTransferTx)>,
-) -> Vec<(
-    Balance,
-    EncryptedAmount,
-    InitializedTransferTx,
-    FinalizedTransferTx,
-)> {
+) -> Vec<(Balance, EncryptedAmount, InitializedTransferTx)> {
     let mut group = c.benchmark_group("MERCAT Transaction");
     for (amount, _, tx) in &transactions {
         group.bench_with_input(
@@ -383,10 +378,10 @@ fn bench_transaction_receiver(
         .into_iter()
         .map(|(amount, sender_balance, init_tx)| {
             let receiver = CtxReceiver;
-            let fin_tx = receiver
+            receiver
                 .finalize_transaction(&init_tx, receiver_account.clone(), amount)
                 .unwrap();
-            (amount, sender_balance, init_tx, fin_tx)
+            (amount, sender_balance, init_tx)
         })
         .collect()
 }
@@ -396,29 +391,23 @@ fn bench_transaction_mediator(
     mediator_account: MediatorAccount,
     sender_pub_account: PubAccount,
     receiver_pub_account: PubAccount,
-    transactions: Vec<(
-        Balance,
-        EncryptedAmount,
-        InitializedTransferTx,
-        FinalizedTransferTx,
-    )>,
+    transactions: Vec<(Balance, EncryptedAmount, InitializedTransferTx)>,
 ) -> Vec<JustifiedTransferTx> {
     let mut rng = thread_rng();
 
     let mut group = c.benchmark_group("MERCAT Transaction");
-    for (amount, sender_balance, init_tx, fin_tx) in &transactions {
+    for (amount, sender_balance, init_tx) in &transactions {
         let label = format!("initial_balance ({:?})", amount);
         group.bench_with_input(
             BenchmarkId::new("Mediator", label),
-            &(sender_balance, init_tx.clone(), fin_tx.clone()),
-            |b, (sender_balance, init_tx, fin_tx)| {
+            &(sender_balance, init_tx.clone()),
+            |b, (sender_balance, init_tx)| {
                 b.iter(|| {
                     let mediator = CtxMediator;
                     mediator
                         .justify_transaction(
                             init_tx,
-                            fin_tx,
-                            &mediator_account.encryption_key,
+                            AmountSource::Encrypted(&mediator_account.encryption_key),
                             &sender_pub_account,
                             sender_balance,
                             &receiver_pub_account,
@@ -434,13 +423,12 @@ fn bench_transaction_mediator(
 
     transactions
         .into_iter()
-        .map(|(_, sender_balance, init_tx, fin_tx)| {
+        .map(|(_, sender_balance, init_tx)| {
             let mediator = CtxMediator;
             mediator
                 .justify_transaction(
                     &init_tx,
-                    &fin_tx,
-                    &mediator_account.encryption_key,
+                    AmountSource::Encrypted(&mediator_account.encryption_key),
                     &sender_pub_account,
                     &sender_balance,
                     &receiver_pub_account,
@@ -456,28 +444,22 @@ fn bench_transaction_validator(
     c: &mut Criterion,
     sender_pub_account: PubAccount,
     receiver_pub_account: PubAccount,
-    transactions: Vec<(
-        Balance,
-        EncryptedAmount,
-        InitializedTransferTx,
-        FinalizedTransferTx,
-    )>,
+    transactions: Vec<(Balance, EncryptedAmount, InitializedTransferTx)>,
 ) {
     let mut rng = thread_rng();
 
     let mut group = c.benchmark_group("MERCAT Transaction");
-    for (amount, sender_balance, init_tx, fin_tx) in &transactions {
+    for (amount, sender_balance, init_tx) in &transactions {
         let label = format!("initial_balance ({:?})", amount);
         group.bench_with_input(
             BenchmarkId::new("Validator", label),
-            &(sender_balance, init_tx.clone(), fin_tx.clone()),
-            |b, (sender_balance, init_tx, fin_tx)| {
+            &(sender_balance, init_tx.clone()),
+            |b, (sender_balance, init_tx)| {
                 b.iter(|| {
                     let validator = TransactionValidator;
                     validator
                         .verify_transaction(
                             init_tx,
-                            fin_tx,
                             &sender_pub_account,
                             sender_balance,
                             &receiver_pub_account,

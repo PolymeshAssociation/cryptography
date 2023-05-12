@@ -247,7 +247,6 @@ impl TransferTransactionMediator for CtxMediator {
     fn justify_transaction<R: RngCore + CryptoRng>(
         &self,
         init_tx: &InitializedTransferTx,
-        finalized_tx: &FinalizedTransferTx,
         amount_source: AmountSource,
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
@@ -255,8 +254,14 @@ impl TransferTransactionMediator for CtxMediator {
         auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
         rng: &mut R,
     ) -> Fallible<JustifiedTransferTx> {
-        // Verify receiver's part of the transaction.
-        let _ = verify_finalized_transaction(&init_tx, &finalized_tx, receiver_account)?;
+        ensure!(
+            sender_account == &init_tx.memo.sender_account,
+            ErrorKind::AccountIdMismatch
+        );
+        ensure!(
+            receiver_account == &init_tx.memo.receiver_account,
+            ErrorKind::AccountIdMismatch
+        );
 
         // Verify sender's part of the transaction.
         // This includes checking the auditors' payload.
@@ -299,7 +304,6 @@ impl TransferTransactionVerifier for TransactionValidator {
     fn verify_transaction<R: RngCore + CryptoRng>(
         &self,
         init_tx: &InitializedTransferTx,
-        finalized_tx: &FinalizedTransferTx,
         sender_account: &PubAccount,
         sender_init_balance: &EncryptedAmount,
         receiver_account: &PubAccount,
@@ -323,8 +327,6 @@ impl TransferTransactionVerifier for TransactionValidator {
             rng,
         )?;
 
-        verify_finalized_transaction(init_tx, finalized_tx, receiver_account)?;
-
         Ok(())
     }
 }
@@ -347,19 +349,6 @@ pub fn verify_initialized_transaction<R: RngCore + CryptoRng>(
     )?;
 
     Ok(TransferTxState::Initialization(TxSubstate::Validated))
-}
-
-pub fn verify_finalized_transaction(
-    init_tx: &InitializedTransferTx,
-    _finalized_tx: &FinalizedTransferTx,
-    receiver_account: &PubAccount,
-) -> Fallible<TransferTxState> {
-    ensure!(
-        receiver_account == &init_tx.memo.receiver_account,
-        ErrorKind::AccountIdMismatch
-    );
-
-    Ok(TransferTxState::Finalization(TxSubstate::Validated))
 }
 
 fn verify_initial_transaction_proofs<R: RngCore + CryptoRng>(
@@ -468,12 +457,11 @@ fn verify_auditor_payload(
 pub struct CtxAuditor;
 
 impl TransferTransactionAuditor for CtxAuditor {
-    /// Verify the initialized, finalized, and justified transactions.
+    /// Verify the initialized transaction.
     /// Audit the sender's encrypted amount.
     fn audit_transaction(
         &self,
         init_tx: &InitializedTransferTx,
-        finalized_tx: &FinalizedTransferTx,
         sender_account: &PubAccount,
         receiver_account: &PubAccount,
         auditor_enc_key: &(AuditorId, EncryptionKeys),
@@ -488,8 +476,6 @@ impl TransferTransactionAuditor for CtxAuditor {
         );
 
         let gens = &PedersenGens::default();
-
-        verify_finalized_transaction(init_tx, finalized_tx, &receiver_account)?;
 
         // If all checks pass, decrypt the encrypted amount and verify sender's correctness proof.
         let _: Fallible<()> = init_tx
@@ -531,8 +517,7 @@ mod tests {
     use super::*;
     use crate::{
         account::{deposit, withdraw},
-        EncryptedAmount, EncryptedAmountWithHint, EncryptionKeys, EncryptionPubKey, SecAccount,
-        TransferTxMemo,
+        EncryptedAmount, EncryptionKeys, EncryptionPubKey, SecAccount, TransferTxMemo,
     };
     use confidential_identity_core::{
         asset_proofs::{
@@ -577,7 +562,7 @@ mod tests {
             enc_amount_using_sender: EncryptedAmount::default(),
             enc_amount_using_receiver,
             refreshed_enc_balance: EncryptedAmount::default(),
-            enc_amount_for_mediator: EncryptedAmountWithHint::default(),
+            enc_amount_for_mediator: None,
         }
     }
 
@@ -716,7 +701,7 @@ mod tests {
             &sender_init_balance,
             sender_balance,
             &receiver_account.public,
-            &mediator_enc_keys.public,
+            Some(&mediator_enc_keys.public),
             &[],
             amount,
             &mut rng,
@@ -724,16 +709,15 @@ mod tests {
         let ctx_init_data = result.unwrap();
 
         // Finalize the transaction and check its state.
-        let result =
-            receiver.finalize_transaction(&ctx_init_data, receiver_account.clone(), amount);
-        let ctx_finalized_data = result.unwrap();
+        receiver
+            .finalize_transaction(&ctx_init_data, receiver_account.clone(), amount)
+            .unwrap();
 
         // Justify the transaction
         let _result = mediator
             .justify_transaction(
                 &ctx_init_data,
-                &ctx_finalized_data,
-                &mediator_enc_keys,
+                AmountSource::Encrypted(&mediator_enc_keys),
                 &sender_account.public,
                 &sender_init_balance,
                 &receiver_account.public,
@@ -745,7 +729,6 @@ mod tests {
         assert!(tx_validator
             .verify_transaction(
                 &ctx_init_data,
-                &ctx_finalized_data,
                 &sender_account.public,
                 &sender_init_balance,
                 &receiver_account.public,
@@ -834,7 +817,7 @@ mod tests {
                 &sender_init_balance,
                 sender_balance,
                 &receiver_account.public,
-                &mediator_enc_keys.public,
+                Some(&mediator_enc_keys.public),
                 sender_auditor_list,
                 amount,
                 &mut rng,
@@ -842,15 +825,14 @@ mod tests {
             .unwrap();
 
         // Finalize the transaction and check its state
-        let ctx_final = receiver
+        receiver
             .finalize_transaction(&ctx_init, receiver_account.clone(), amount)
             .unwrap();
 
         // Justify the transaction
         let result = mediator.justify_transaction(
             &ctx_init,
-            &ctx_final,
-            &mediator_enc_keys,
+            AmountSource::Encrypted(&mediator_enc_keys),
             &sender_account.public,
             &sender_init_balance,
             &receiver_account.public,
@@ -866,7 +848,6 @@ mod tests {
         let _ctx_just = result.unwrap();
         let result = validator.verify_transaction(
             &ctx_init,
-            &ctx_final,
             &sender_account.public,
             &sender_init_balance,
             &receiver_account.public,
@@ -913,7 +894,6 @@ mod tests {
             assert!(transaction_auditor
                 .audit_transaction(
                     &ctx_init,
-                    &ctx_final,
                     &sender_account.public,
                     &receiver_account.public,
                     auditor,

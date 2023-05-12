@@ -8,10 +8,10 @@ use mercat::{
     },
     transaction::{CtxMediator, CtxReceiver, CtxSender},
     Account as MercatAccount, AccountCreatorInitializer, AmountSource, AssetTransactionIssuer,
-    EncryptedAmount, EncryptionKeys, FinalizedTransferTx, InitializedAssetTx,
-    InitializedTransferTx, MediatorAccount as MercatMediatorAccount,
-    PubAccount as MercatPubAccount, PubAccountTx, SecAccount, TransferTransactionMediator,
-    TransferTransactionReceiver, TransferTransactionSender,
+    EncryptedAmount, EncryptionKeys, InitializedAssetTx, InitializedTransferTx,
+    MediatorAccount as MercatMediatorAccount, PubAccount as MercatPubAccount, PubAccountTx,
+    SecAccount, TransferTransactionMediator, TransferTransactionReceiver,
+    TransferTransactionSender,
 };
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
@@ -113,21 +113,6 @@ impl CreateTransactionOutput {
     #[wasm_bindgen(getter)]
     pub fn init_tx(&self) -> Base64 {
         self.init_tx.clone()
-    }
-}
-
-/// Contains the Zero Knowledge Proof of finalizing a confidential transaction by the receiver.
-#[wasm_bindgen]
-pub struct FinalizedTransactionOutput {
-    finalized_tx: Base64,
-}
-
-#[wasm_bindgen]
-impl FinalizedTransactionOutput {
-    /// The Zero Knowledge proofs of the finalized confidential transaction.
-    #[wasm_bindgen(getter)]
-    pub fn finalized_tx(&self) -> Base64 {
-        self.finalized_tx.clone()
     }
 }
 
@@ -395,15 +380,13 @@ pub fn finalize_transaction(
     amount: Balance,
     init_tx: Base64,
     receiver_account: Account,
-) -> Fallible<FinalizedTransactionOutput> {
+) -> Fallible<()> {
     let init_tx = decode::<InitializedTransferTx>(init_tx)?;
-    let finalized_tx = CtxReceiver
+    CtxReceiver
         .finalize_transaction(&init_tx, receiver_account.to_mercat()?, amount)
         .map_err(|_| WasmError::TransactionFinalizationError)?;
 
-    Ok(FinalizedTransactionOutput {
-        finalized_tx: base64::encode(finalized_tx.encode()),
-    })
+    Ok(())
 }
 
 /// Creates the ZKP for the justification phase of creating a confidential transaction.
@@ -431,13 +414,12 @@ pub fn finalize_transaction(
 #[wasm_bindgen]
 pub fn justify_transaction(
     init_tx: Base64,
-    finalized_tx: Base64,
     mediator_account: MediatorAccount,
     sender_public_account: PubAccount,
     sender_encrypted_pending_balance: Base64,
     receiver_public_account: PubAccount,
     amount: Option<Balance>,
-) -> Fallible<JustifiedTransactionOutput> {
+) -> Fallible<()> {
     let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
     let mediator_keys = mediator_account.to_mercat()?.encryption_key;
@@ -446,11 +428,9 @@ pub fn justify_transaction(
         None => AmountSource::Encrypted(&mediator_keys),
     };
     let init_tx = decode::<InitializedTransferTx>(init_tx)?;
-    let finalized_tx = decode::<FinalizedTransferTx>(finalized_tx)?;
-    let justified_tx = CtxMediator
+    CtxMediator
         .justify_transaction(
             &init_tx,
-            &finalized_tx,
             amount_source,
             &sender_public_account.to_mercat()?,
             &decode::<EncryptedAmount>(sender_encrypted_pending_balance)?,
@@ -460,9 +440,7 @@ pub fn justify_transaction(
         )
         .map_err(|_| WasmError::TransactionJustificationError)?;
 
-    Ok(JustifiedTransactionOutput {
-        justified_tx: base64::encode(justified_tx.encode()),
-    })
+    Ok(())
 }
 
 /// Decrypts an `encrypted_value` given the secret account information.
