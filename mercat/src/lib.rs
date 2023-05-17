@@ -15,7 +15,8 @@ use confidential_identity_core::asset_proofs::{
     errors::{ErrorKind, Fallible},
     range_proof::InRangeProof,
     wellformedness_proof::WellformednessProof,
-    Balance, CipherText, CipherTextWithHint, ElgamalPublicKey, ElgamalSecretKey,
+    Balance, CipherText, CipherTextWithHint, CompressedElgamalPublicKey, ElgamalPublicKey,
+    ElgamalSecretKey,
 };
 use rand_core::{CryptoRng, RngCore};
 
@@ -47,6 +48,9 @@ macro_rules! assert_err {
 
 /// Holds ElGamal encryption public key.
 pub type EncryptionPubKey = ElgamalPublicKey;
+
+/// Holds a compressed ElGamal encryption public key.
+pub type CompressedEncryptionPubKey = CompressedElgamalPublicKey;
 
 /// Holds ElGamal encryption secret key.
 pub type EncryptionSecKey = ElgamalSecretKey;

@@ -209,7 +209,9 @@ pub mod errors;
 #[cfg(feature = "discrete_log")]
 pub mod discrete_log;
 pub mod elgamal_encryption;
-pub use elgamal_encryption::{CipherText, CommitmentWitness, ElgamalPublicKey, ElgamalSecretKey};
+pub use elgamal_encryption::{
+    CipherText, CommitmentWitness, CompressedElgamalPublicKey, ElgamalPublicKey, ElgamalSecretKey,
+};
 pub mod const_time_elgamal_encryption;
 pub use const_time_elgamal_encryption::CipherTextWithHint;
 

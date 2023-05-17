@@ -11,7 +11,10 @@ use crate::{
 
 use bulletproofs::PedersenGens;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
-use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar};
+use curve25519_dalek::{
+    ristretto::{CompressedRistretto, RistrettoPoint},
+    scalar::Scalar,
+};
 #[cfg(feature = "std")]
 use rand::rngs::StdRng;
 use rand_core::{CryptoRng, RngCore};
@@ -21,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
+use scale_info::TypeInfo;
 use sp_std::prelude::*;
 
 /// Prover's representation of the commitment secret.
@@ -198,6 +202,35 @@ impl Decode for ElgamalSecretKey {
         let secret = <ScalarDecoder>::decode(input)?.0;
 
         Ok(ElgamalSecretKey { secret })
+    }
+}
+
+/// Compressed ElgamalPublicKey.
+#[derive(Copy, Clone, Default, Encode, Decode, TypeInfo, PartialEq, Eq, Debug)]
+pub struct CompressedElgamalPublicKey([u8; 32]);
+
+impl CompressedElgamalPublicKey {
+    pub fn from_public_key(key: &ElgamalPublicKey) -> Self {
+        Self(key.pub_key.compress().to_bytes())
+    }
+
+    pub fn into_public_key(&self) -> Option<ElgamalPublicKey> {
+        let compressed = CompressedRistretto(self.0);
+        compressed
+            .decompress()
+            .map(|pub_key| ElgamalPublicKey { pub_key })
+    }
+}
+
+impl From<&ElgamalPublicKey> for CompressedElgamalPublicKey {
+    fn from(other: &ElgamalPublicKey) -> Self {
+        Self::from_public_key(other)
+    }
+}
+
+impl From<ElgamalPublicKey> for CompressedElgamalPublicKey {
+    fn from(other: ElgamalPublicKey) -> Self {
+        Self::from_public_key(&other)
     }
 }
 
