@@ -270,9 +270,9 @@ pub fn create_mediator_account() -> CreateMediatorAccountOutput {
         public_key: mediator_enc_key.public.encode(),
         secret_account: MediatorAccount {
             secret: MercatMediatorAccount {
-                    encryption_key: mediator_enc_key,
-                }
-                .encode(),
+                encryption_key: mediator_enc_key,
+            }
+            .encode(),
         },
     }
 }

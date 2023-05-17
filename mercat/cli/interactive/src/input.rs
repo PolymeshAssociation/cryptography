@@ -158,7 +158,11 @@ pub struct CreateTransactionInfo {
     pub receiver: String,
 
     /// The mediator's hex encoded public encryption key.
-    #[structopt(short, long, help = "The mediator's hex encoded public encryption key.")]
+    #[structopt(
+        short,
+        long,
+        help = "The mediator's hex encoded public encryption key."
+    )]
     pub mediator: String,
 
     /// The sender's hex encoded pending balance.
@@ -204,11 +208,7 @@ pub struct FinalizeTransactionInfo {
     pub receiver: String,
 
     /// The initial transaction hex encoded string.
-    #[structopt(
-        short,
-        long,
-        help = "The initial transaction hex encoded string."
-    )]
+    #[structopt(short, long, help = "The initial transaction hex encoded string.")]
     pub init_tx: String,
 }
 
