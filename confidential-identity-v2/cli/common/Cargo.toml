@@ -14,3 +14,8 @@ serde_bytes = { version = "0.11", default-features = false, features = ["alloc"]
 confidential_identity_v2 = { path = "../../" }
 curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 blake2 = { version = "0.10.2", default-features = false }
+
+[features]
+default = []
+
+nightly = ["curve25519-dalek/nightly"]

@@ -1,18 +1,22 @@
 [package]
 name = "confidential_identity_v1"
-version = "1.1.0"
+version = "1.1.2"
 authors = [ "Polymesh Association" ]
 readme = "README.md"
 license = "Apache-2.0"
 repository = "https://github.com/PolymeshAssociation/cryptography"
 description = "Confidential Identity Library"
 edition = "2018"
-exclude = [".gitignore"]
+exclude = [
+	".gitignore",
+	"cli/*",
+]
 
 [dependencies]
 # Substrate
-sp-std = { version = "5.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12" }
-sp-io = { version = "7.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12" }
+sp-std = { version = "5.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12-1" }
+sp-core-hashing = { version = "5.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12-1", optional = true }
+sp-io = { version = "7.0.0", default-features = false, git = "https://github.com/PolymeshAssociation/substrate", branch = "polymesh-monthly-2022-12-1", optional = true }
 
 # Common
 serde = { version = "1.0.105", default-features = false, features = ["derive"], optional = true }
@@ -42,6 +46,11 @@ wasm-bindgen-test = { version = "0.3.10" }
 
 [features]
 default = ["std", "u64_backend"]
+nightly = ["curve25519-dalek/nightly"]
+
+wasm = [
+  "sp-core-hashing"
+]
 
 # Backends
 u32_backend = [
@@ -55,6 +64,7 @@ u64_backend = [
 avx2_backend = [
 	"curve25519-dalek/avx2_backend",
 	"schnorrkel/avx2_backend",
+	"blake2/simd",
 ]
 
 serde_all = [
@@ -64,7 +74,9 @@ serde_all = [
 	"schnorrkel/serde",
 ]
 
-no_std = [ ]
+no_std = [
+  "u64_backend",
+]
 std = [
 	# General and optional
 	"serde_all",

@@ -25,3 +25,8 @@ failure = { version = "0.1.7" }
 # Crypto
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
 curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
+
+[features]
+default = []
+
+nightly = ["curve25519-dalek/nightly"]

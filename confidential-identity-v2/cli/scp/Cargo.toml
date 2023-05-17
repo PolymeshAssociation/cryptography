@@ -12,7 +12,7 @@ confidential_identity_v2 = { path = "../../" }
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_bytes = { version = "0.11", default-features = false, features = ["alloc"] }
-hex = { version = "0.4.2" }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 
 # Crypto
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
@@ -21,3 +21,8 @@ curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-fea
 
 # Only binaries
 structopt = { version = "0.3", default-features = false }
+
+[features]
+default = []
+
+nightly = ["curve25519-dalek/nightly"]

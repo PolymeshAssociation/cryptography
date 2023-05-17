@@ -57,7 +57,7 @@ pub unsafe extern "C" fn cdd_claim_data_free(ptr: *mut CddClaimData) {
     if ptr.is_null() {
         return;
     }
-    Box::from_raw(ptr);
+    drop(Box::from_raw(ptr));
 }
 
 /// Create a new `ScopeClaimData` object.
@@ -92,7 +92,7 @@ pub unsafe extern "C" fn scope_claim_data_free(ptr: *mut ScopeClaimData) {
     if ptr.is_null() {
         return;
     }
-    Box::from_raw(ptr);
+    drop(Box::from_raw(ptr));
 }
 
 /// Deallocates a `ScopeClaimProofData` object's memory.
@@ -104,7 +104,7 @@ pub unsafe extern "C" fn scope_claim_proof_data_free(ptr: *mut ScopeClaimProofDa
     if ptr.is_null() {
         return;
     }
-    Box::from_raw(ptr);
+    drop(Box::from_raw(ptr));
 }
 
 /// Create a new `ProofPublicKey` object.
@@ -149,7 +149,7 @@ pub unsafe extern "C" fn proof_public_key_free(ptr: *mut ProofPublicKey) {
         return;
     }
 
-    Box::from_raw(ptr);
+    drop(Box::from_raw(ptr));
 }
 
 /// Deallocates a `Signature` object's memory.
@@ -161,7 +161,7 @@ pub unsafe extern "C" fn signature_free(ptr: *mut Signature) {
     if ptr.is_null() {
         return;
     }
-    Box::from_raw(ptr);
+    drop(Box::from_raw(ptr));
 }
 
 // ------------------------------------------------------------------------

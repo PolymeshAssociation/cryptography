@@ -13,13 +13,14 @@ crate-type = ["cdylib"]
 [features]
 default = ["cbindgen"]
 no_std = []
+nightly = ["curve25519-dalek/nightly"]
 
 [dependencies.confidential_identity_v2]
 path = ".."
 
 [dependencies]
 libc = "^0.2"
-curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = [ "alloc"] }
+curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-features = false, features = ["alloc"] }
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
 rand_core = { version = "0.6", default-features = false}
 

@@ -2,7 +2,7 @@ version: 2
 jobs:
   lint:
     docker:
-      - image: polymathnet/rust:debian-nightly-2022-05-10
+      - image: polymeshassociation/rust:debian-nightly-2022-11-02
     environment:
       VERBOSE: "1"
     steps:
@@ -12,7 +12,7 @@ jobs:
           command: ./scripts/lint
   build:
     docker:
-      - image: polymathnet/rust:debian-nightly-2022-05-10
+      - image: polymeshassociation/rust:debian-nightly-2022-11-02
     environment:
       VERBOSE: "1"
     steps:
@@ -35,7 +35,7 @@ jobs:
             - "./target"
   test:
     docker:
-      - image: polymathnet/rust:debian-nightly-2022-05-10
+      - image: polymeshassociation/rust:debian-nightly-2022-11-02
     environment:
       VERBOSE: "1"
     steps:
@@ -55,7 +55,7 @@ jobs:
             # install wasm-pack
             cargo install --git https://github.com/rustwasm/wasm-pack wasm-pack
             # install clang v11 and npm
-            apt install -y clang-11 npm
+            apt update && apt install -y clang-11 npm
             # build wasm module.
             CC="clang-11" CXX="clang-11" wasm-pack build --dev --target nodejs
 
@@ -72,7 +72,7 @@ jobs:
             - "./target"
   build_wasm:
     docker:
-      - image: polymathnet/rust:debian-nightly-2022-05-10
+      - image: polymeshassociation/rust:debian-nightly-2022-11-02
     environment:
       VERBOSE: "1"
     steps:
@@ -107,7 +107,7 @@ jobs:
             - "./target"
   bench:
     docker:
-      - image: polymathnet/rust:debian-nightly-2022-05-10
+      - image: polymeshassociation/rust:debian-nightly-2022-11-02
     environment:
       VERBOSE: "1"
     steps:

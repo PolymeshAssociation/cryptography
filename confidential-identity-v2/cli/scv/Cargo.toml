@@ -18,3 +18,8 @@ curve25519-dalek = { package = "curve25519-dalek-ng", version = "4", default-fea
 
 # Only binaries
 structopt = { version = "0.3", default-features = false }
+
+[features]
+default = []
+
+nightly = ["curve25519-dalek/nightly"]

@@ -15,7 +15,9 @@ use mercat::{
     SecAccount, TransferTransactionMediator, TransferTransactionReceiver,
     TransferTransactionSender,
 };
-use rand_core::OsRng;
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
+use rand_core::{CryptoRng, RngCore};
 use serde::Serialize;
 use serde_json;
 use std::convert::Into;
@@ -280,7 +282,7 @@ pub fn create_account(
     valid_ticker_ids: JsValue,
     ticker_id: String,
 ) -> Fallible<CreateAccountOutput> {
-    let mut rng = OsRng;
+    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
     let valid_ticker_ids: Vec<String> = valid_ticker_ids
         .into_serde()
         .map_err(|_| WasmError::PlainTickerIdsError)?;
@@ -315,7 +317,7 @@ pub fn create_account(
 /// # Errors
 #[wasm_bindgen]
 pub fn create_mediator_account() -> CreateMediatorAccountOutput {
-    let mut rng = OsRng;
+    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
     let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
     let mediator_enc_key = EncryptionKeys {
@@ -350,7 +352,7 @@ pub fn create_mediator_account() -> CreateMediatorAccountOutput {
 /// * `DeserializationError`: If the `issuer_account` cannot be deserialized to a mercat account.
 #[wasm_bindgen]
 pub fn mint_asset(amount: u32, issuer_account: Account) -> Fallible<MintAssetOutput> {
-    let mut rng = OsRng;
+    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
     let asset_tx: InitializedAssetTx = AssetIssuer
         .initialize_asset_transaction(&issuer_account.to_mercat()?, &[], amount, &mut rng)
         .map_err(|_| WasmError::AssetIssuanceError)?;
@@ -387,7 +389,7 @@ pub fn create_transaction(
     receiver_public_account: PubAccount,
     mediator_public_key: Base64,
 ) -> Fallible<CreateTransactionOutput> {
-    let mut rng = OsRng;
+    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
     let init_tx = CtxSender
         .create_transaction(
@@ -428,7 +430,7 @@ pub fn finalize_transaction(
     init_tx: Base64,
     receiver_account: Account,
 ) -> Fallible<FinalizedTransactionOutput> {
-    let mut rng = OsRng;
+    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
     let finalized_tx = CtxReceiver
         .finalize_transaction(
@@ -475,7 +477,7 @@ pub fn justify_transaction(
     receiver_public_account: PubAccount,
     ticker_id: String,
 ) -> Fallible<JustifiedTransactionOutput> {
-    let mut rng = OsRng;
+    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
     let justified_tx = CtxMediator
         .justify_transaction(
@@ -539,7 +541,10 @@ fn ticker_id_to_asset_id(ticker_id: String) -> Fallible<AssetId> {
     Ok(AssetId { id: asset_id })
 }
 
-fn create_secret_account(rng: &mut OsRng, ticker_id: String) -> Fallible<SecAccount> {
+fn create_secret_account<R: RngCore + CryptoRng>(
+    rng: &mut R,
+    ticker_id: String,
+) -> Fallible<SecAccount> {
     let elg_secret = ElgamalSecretKey::new(Scalar::random(rng));
     let elg_pub = elg_secret.get_public_key();
     let enc_keys = EncryptionKeys {

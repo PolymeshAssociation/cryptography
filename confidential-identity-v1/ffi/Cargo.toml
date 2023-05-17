@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 [features]
 default = ["cbindgen"]
 no_std = []
+nightly = ["curve25519-dalek/nightly"]
 
 [dependencies.confidential_identity_v1]
 path = ".."
