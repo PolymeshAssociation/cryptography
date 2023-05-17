@@ -13,7 +13,7 @@ In the root directory of this repository, run
 ```bash
 rm -rf chain_dir # removes the temporary directory that holds users secrets
 cargo build --release
-export RUST_LOG=info # Needed to see the base64 outputs that the cli outputs
+export RUST_LOG=info # Needed to see the hex encoded outputs that the cli outputs
 export PATH=$(pwd)/target/release:$PATH
 ```
 

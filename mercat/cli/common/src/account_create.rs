@@ -57,9 +57,9 @@ pub fn process_create_account(
 
     if stdout {
         info!(
-            "CLI log: tx-{}: Transaction as base64:\n{}\n",
+            "CLI log: tx-{}: Transaction as hex:\n{}\n",
             tx_id,
-            base64::encode(instruction.account_tx.encode())
+            hex::encode(instruction.account_tx.encode())
         );
     }
 

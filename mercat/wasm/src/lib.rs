@@ -26,34 +26,31 @@ use wasm_bindgen::JsValue;
 // -                                  Type Definitions                                -
 // ------------------------------------------------------------------------------------
 
-/// A base64 encoded string.
-pub type Base64 = String;
-
 /// Contains the secret and public account information of a party.
 #[wasm_bindgen]
 pub struct CreateAccountOutput {
-    secret_account: Base64,
-    public_key: Base64,
-    account_tx: Base64,
+    secret_account: Vec<u8>,
+    public_key: Vec<u8>,
+    account_tx: Vec<u8>,
 }
 
 #[wasm_bindgen]
 impl CreateAccountOutput {
     /// The secret account must be kept confidential and not shared with anyone else.
     #[wasm_bindgen(getter)]
-    pub fn secret_account(&self) -> Base64 {
+    pub fn secret_account(&self) -> Vec<u8> {
         self.secret_account.clone()
     }
 
     /// The public cryptographic key of the account.
     #[wasm_bindgen(getter)]
-    pub fn public_key(&self) -> Base64 {
+    pub fn public_key(&self) -> Vec<u8> {
         self.public_key.clone()
     }
 
     /// The Zero Knowledge proofs of the account creation.
     #[wasm_bindgen(getter)]
-    pub fn account_tx(&self) -> Base64 {
+    pub fn account_tx(&self) -> Vec<u8> {
         self.account_tx.clone()
     }
 
@@ -66,7 +63,7 @@ impl CreateAccountOutput {
 #[wasm_bindgen]
 pub struct CreateMediatorAccountOutput {
     secret_account: MediatorAccount,
-    public_key: Base64,
+    public_key: Vec<u8>,
 }
 
 #[wasm_bindgen]
@@ -81,7 +78,7 @@ impl CreateMediatorAccountOutput {
 
     /// The public cryptographic key of the account.
     #[wasm_bindgen(getter)]
-    pub fn public_key(&self) -> Base64 {
+    pub fn public_key(&self) -> Vec<u8> {
         self.public_key.clone()
     }
 }
@@ -89,14 +86,14 @@ impl CreateMediatorAccountOutput {
 /// Contains the Zero Knowledge Proof of minting an asset by the issuer.
 #[wasm_bindgen]
 pub struct MintAssetOutput {
-    asset_tx: Base64,
+    asset_tx: Vec<u8>,
 }
 
 #[wasm_bindgen]
 impl MintAssetOutput {
     /// The Zero Knowledge proofs of the asset minting.
     #[wasm_bindgen(getter)]
-    pub fn asset_tx(&self) -> Base64 {
+    pub fn asset_tx(&self) -> Vec<u8> {
         self.asset_tx.clone()
     }
 }
@@ -104,14 +101,14 @@ impl MintAssetOutput {
 /// Contains the Zero Knowledge Proof of initializing a confidential transaction by the sender.
 #[wasm_bindgen]
 pub struct CreateTransactionOutput {
-    init_tx: Base64,
+    init_tx: Vec<u8>,
 }
 
 #[wasm_bindgen]
 impl CreateTransactionOutput {
     /// The Zero Knowledge proofs of the initialized confidential transaction.
     #[wasm_bindgen(getter)]
-    pub fn init_tx(&self) -> Base64 {
+    pub fn init_tx(&self) -> Vec<u8> {
         self.init_tx.clone()
     }
 }
@@ -119,28 +116,28 @@ impl CreateTransactionOutput {
 /// Contains the Zero Knowledge Proof of justifying a confidential transaction by the mediator.
 #[wasm_bindgen]
 pub struct JustifiedTransactionOutput {
-    justified_tx: Base64,
+    justified_tx: Vec<u8>,
 }
 
 #[wasm_bindgen]
 impl JustifiedTransactionOutput {
     /// The Zero Knowledge proofs of the justified confidential transaction.
     #[wasm_bindgen(getter)]
-    pub fn justified_tx(&self) -> Base64 {
+    pub fn justified_tx(&self) -> Vec<u8> {
         self.justified_tx.clone()
     }
 }
 
-/// A wrapper around base64 encoding of mediator secret account.
+/// A wrapper around mediator secret account.
 #[wasm_bindgen]
 pub struct MediatorAccount {
-    secret: Base64,
+    secret: Vec<u8>,
 }
 
 #[wasm_bindgen]
 impl MediatorAccount {
     #[wasm_bindgen(constructor)]
-    pub fn new(secret: Base64) -> Self {
+    pub fn new(secret: Vec<u8>) -> Self {
         Self { secret }
     }
 
@@ -149,17 +146,17 @@ impl MediatorAccount {
     }
 }
 
-/// A wrapper around base64 encoding of a mercat account.
+/// A wrapper around mercat account.
 #[wasm_bindgen]
 pub struct Account {
-    secret_account: Base64,
+    secret_account: Vec<u8>,
     public_account: PubAccount,
 }
 
 #[wasm_bindgen]
 impl Account {
     #[wasm_bindgen(constructor)]
-    pub fn new(secret_account: Base64, public_account: PubAccount) -> Self {
+    pub fn new(secret_account: Vec<u8>, public_account: PubAccount) -> Self {
         Self {
             secret_account,
             public_account,
@@ -174,16 +171,16 @@ impl Account {
     }
 }
 
-/// A wrapper around base64 encoding of mercat public account.
+/// A wrapper around mercat public account.
 #[wasm_bindgen]
 pub struct PubAccount {
-    public_key: Base64,
+    public_key: Vec<u8>,
 }
 
 #[wasm_bindgen]
 impl PubAccount {
     #[wasm_bindgen(constructor)]
-    pub fn new(public_key: Base64) -> Self {
+    pub fn new(public_key: Vec<u8>) -> Self {
         Self { public_key }
     }
 
@@ -207,7 +204,6 @@ pub enum WasmError {
     TransactionFinalizationError,
     TransactionJustificationError,
     DeserializationError,
-    Base64DecodingError,
     HexDecodingError,
     PlainTickerIdsError,
     DecryptionError,
@@ -245,9 +241,9 @@ pub fn create_account() -> Fallible<CreateAccountOutput> {
         .map_err(|_| WasmError::AccountCreationError)?;
 
     Ok(CreateAccountOutput {
-        secret_account: base64::encode(secret_account.encode()),
-        public_key: base64::encode(secret_account.enc_keys.public.encode()),
-        account_tx: base64::encode(account_tx.encode()),
+        secret_account: secret_account.encode(),
+        public_key: secret_account.enc_keys.public.encode(),
+        account_tx: account_tx.encode(),
     })
 }
 
@@ -271,14 +267,12 @@ pub fn create_mediator_account() -> CreateMediatorAccountOutput {
     };
 
     CreateMediatorAccountOutput {
-        public_key: base64::encode(mediator_enc_key.public.encode()),
+        public_key: mediator_enc_key.public.encode(),
         secret_account: MediatorAccount {
-            secret: base64::encode(
-                MercatMediatorAccount {
+            secret: MercatMediatorAccount {
                     encryption_key: mediator_enc_key,
                 }
                 .encode(),
-            ),
         },
     }
 }
@@ -293,7 +287,6 @@ pub fn create_mediator_account() -> CreateMediatorAccountOutput {
 /// * `MintAssetOutput`: The ZKP of minting the asset.
 ///
 /// # Errors
-/// * `Base64DecodingError`: If the `issuer_account` cannot be decoded from base64.
 /// * `DeserializationError`: If the `issuer_account` cannot be deserialized to a mercat account.
 #[wasm_bindgen]
 pub fn mint_asset(amount: Balance, issuer_account: Account) -> Fallible<MintAssetOutput> {
@@ -303,7 +296,7 @@ pub fn mint_asset(amount: Balance, issuer_account: Account) -> Fallible<MintAsse
         .map_err(|_| WasmError::AssetIssuanceError)?;
 
     Ok(MintAssetOutput {
-        asset_tx: base64::encode(asset_tx.encode()),
+        asset_tx: asset_tx.encode(),
     })
 }
 
@@ -323,17 +316,16 @@ pub fn mint_asset(amount: Balance, issuer_account: Account) -> Fallible<MintAsse
 /// * `CreateAccountOutput`: The ZKP of the initialized transaction.
 ///
 /// # Errors
-/// * `Base64DecodingError`: If either of the inputs cannot be decoded from base64.
 /// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
 /// * `TransactionCreationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn create_transaction(
     amount: Balance,
     sender_account: Account,
-    encrypted_pending_balance: Base64,
+    encrypted_pending_balance: Vec<u8>,
     pending_balance: Balance,
     receiver_public_account: PubAccount,
-    mediator_public_key: Option<Base64>,
+    mediator_public_key: Option<Vec<u8>>,
 ) -> Fallible<CreateTransactionOutput> {
     let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
 
@@ -355,7 +347,7 @@ pub fn create_transaction(
         .map_err(|_| WasmError::TransactionCreationError)?;
 
     Ok(CreateTransactionOutput {
-        init_tx: base64::encode(init_tx.encode()),
+        init_tx: init_tx.encode(),
     })
 }
 
@@ -372,13 +364,12 @@ pub fn create_transaction(
 /// * `FinalizedTransactionOutput`: The ZKP of the finalized transaction.
 ///
 /// # Errors
-/// * `Base64DecodingError`: If either of the inputs cannot be decoded from base64.
 /// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
 /// * `TransactionFinalizationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn finalize_transaction(
     amount: Balance,
-    init_tx: Base64,
+    init_tx: Vec<u8>,
     receiver_account: Account,
 ) -> Fallible<()> {
     let init_tx = decode::<InitializedTransferTx>(init_tx)?;
@@ -408,15 +399,14 @@ pub fn finalize_transaction(
 /// * `JustifiedTransactionOutput`: The ZKP of the justify_transaction transaction.
 ///
 /// # Errors
-/// * `Base64DecodingError`: If either of the inputs cannot be decoded from base64.
 /// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
 /// * `TransactionJustificationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn justify_transaction(
-    init_tx: Base64,
+    init_tx: Vec<u8>,
     mediator_account: MediatorAccount,
     sender_public_account: PubAccount,
-    sender_encrypted_pending_balance: Base64,
+    sender_encrypted_pending_balance: Vec<u8>,
     receiver_public_account: PubAccount,
     amount: Option<Balance>,
 ) -> Fallible<()> {
@@ -453,11 +443,10 @@ pub fn justify_transaction(
 /// * `Balance`: The decrypted value.
 ///
 /// # Errors
-/// * `Base64DecodingError`: If either of the inputs cannot be decoded from base64.
 /// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
 /// * `DecryptionError`: If the mercat library throws an error while decrypting the value.
 #[wasm_bindgen]
-pub fn decrypt(encrypted_value: Base64, account: Account) -> Fallible<Balance> {
+pub fn decrypt(encrypted_value: Vec<u8>, account: Account) -> Fallible<Balance> {
     let enc_balance = decode::<EncryptedAmount>(encrypted_value)?;
     let account = account.to_mercat()?;
 
@@ -475,9 +464,8 @@ pub fn decrypt(encrypted_value: Base64, account: Account) -> Fallible<Balance> {
 // -                               Internal Functions                                 -
 // ------------------------------------------------------------------------------------
 
-fn decode<T: Decode>(data: Base64) -> Fallible<T> {
-    let decoded = base64::decode(data).map_err(|_| WasmError::Base64DecodingError)?;
-    T::decode(&mut &decoded[..]).map_err(|_| WasmError::DeserializationError.into())
+fn decode<T: Decode>(data: Vec<u8>) -> Fallible<T> {
+    T::decode(&mut &data[..]).map_err(|_| WasmError::DeserializationError.into())
 }
 
 fn create_secret_account<R: RngCore + CryptoRng>(rng: &mut R) -> Fallible<SecAccount> {

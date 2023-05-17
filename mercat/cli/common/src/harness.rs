@@ -533,7 +533,7 @@ impl TransactionMode {
                 rng.fill(&mut seed);
                 info!(
                     "Using seed {:?} for interleaving the transactions.",
-                    base64::encode(seed)
+                    hex::encode(seed)
                 );
 
                 let mut rng = StdRng::from_seed(seed);

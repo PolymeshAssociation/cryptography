@@ -19,7 +19,6 @@ env_logger = { version = "0.7.1" }
 structopt = { version = "0.3", default-features = false }
 metrics = { version = "0.12.1" }
 metrics-core = { version = "0.5.2" }
-base64 = { version = "0.12.1" }
 failure = { version = "0.1.7" }
 
 # Crypto

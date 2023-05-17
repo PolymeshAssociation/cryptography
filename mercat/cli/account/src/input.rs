@@ -36,7 +36,7 @@ pub struct CreateAccountInfo {
     /// The seed can be found inside the logs.
     #[structopt(
         long,
-        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+        help = "Initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 
@@ -111,7 +111,7 @@ pub struct IssueAssetInfo {
     /// The seed can be found inside the logs.
     #[structopt(
         long,
-        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+        help = "Initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 
@@ -174,7 +174,7 @@ pub struct CreateTransactionInfo {
     /// The seed can be found inside the logs.
     #[structopt(
         long,
-        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+        help = "Initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 
@@ -246,7 +246,7 @@ pub struct FinalizeTransactionInfo {
     /// The seed can be found inside the logs.
     #[structopt(
         long,
-        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+        help = "Initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 

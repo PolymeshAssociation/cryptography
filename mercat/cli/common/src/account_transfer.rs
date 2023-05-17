@@ -170,9 +170,9 @@ pub fn process_create_tx(
 
     if stdout {
         info!(
-            "CLI log: tx-{}: Transaction as base64:\n{}\n",
+            "CLI log: tx-{}: Transaction as hex:\n{}\n",
             tx_id,
-            base64::encode(init_tx.encode())
+            hex::encode(init_tx.encode())
         );
     }
 
@@ -308,9 +308,9 @@ pub fn process_finalize_tx(
 
     if stdout {
         info!(
-            "CLI log: tx-{}: Transaction as base64:\n{}\n",
+            "CLI log: tx-{}: Transaction as hex:\n{}\n",
             tx_id,
-            base64::encode(finalized_tx.encode())
+            hex::encode(finalized_tx.encode())
         );
     }
 

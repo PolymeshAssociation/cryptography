@@ -70,8 +70,8 @@ pub fn process_create_mediator(
         &private_account,
     )?;
     info!(
-        "CLI log: Mediator keys as base64:\n{}\n",
-        base64::encode(public_account.encode())
+        "CLI log: Mediator keys as hex:\n{}\n",
+        hex::encode(public_account.encode())
     );
     timing!(
         "mediator.save_keys",
@@ -221,9 +221,9 @@ pub fn justify_asset_transfer_transaction(
         )?;
         if stdout {
             info!(
-                "CLI log: tx-{}: Transaction as base64:\n{}\n",
+                "CLI log: tx-{}: Transaction as hex:\n{}\n",
                 tx_id,
-                base64::encode(finalized_tx.encode())
+                hex::encode(finalized_tx.encode())
             );
         }
     } else {
@@ -243,9 +243,9 @@ pub fn justify_asset_transfer_transaction(
         )?;
         if stdout {
             info!(
-                "CLI log: tx-{}: Transaction as base64:\n{}\n",
+                "CLI log: tx-{}: Transaction as hex:\n{}\n",
                 tx_id,
-                base64::encode(justified_tx.encode())
+                hex::encode(justified_tx.encode())
             );
         }
     }

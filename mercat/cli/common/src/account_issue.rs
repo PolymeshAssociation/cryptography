@@ -139,9 +139,9 @@ pub fn process_issue_asset(
 
     if stdout {
         info!(
-            "CLI log: tx-{}: Transaction as base64:\n{}\n",
+            "CLI log: tx-{}: Transaction as hex:\n{}\n",
             tx_id,
-            base64::encode(asset_tx.encode())
+            hex::encode(asset_tx.encode())
         );
     }
 

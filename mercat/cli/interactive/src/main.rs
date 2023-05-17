@@ -17,7 +17,7 @@ use mercat::{
     TransferTransactionMediator, TransferTransactionReceiver, TransferTransactionSender,
 };
 use mercat_common::{
-    account_issue::process_issue_asset, create_rng_from_seed, debug_decrypt_base64_account_balance,
+    account_issue::process_issue_asset, create_rng_from_seed, debug_decrypt_hex_account_balance,
     errors::Error, init_print_logger, justify::process_create_mediator, load_object, save_object,
     user_public_account_file, user_secret_account_file, Balance, OrderedPubAccount, OFF_CHAIN_DIR,
     ON_CHAIN_DIR, SECRET_ACCOUNT_FILE,
@@ -94,7 +94,7 @@ fn main() {
         .unwrap(),
         CLI::Decrypt(cfg) => info!(
             "Account balance: {}",
-            debug_decrypt_base64_account_balance(
+            debug_decrypt_hex_account_balance(
                 cfg.user,
                 cfg.encrypted_value,
                 cfg.ticker,
@@ -136,9 +136,9 @@ fn process_create_account(
     )?;
 
     info!(
-        "CLI log: tx-{}:\n\nAccount Transaction as base64:\n{}\n",
+        "CLI log: tx-{}:\n\nAccount Transaction as hex:\n{}\n",
         TX_ID,
-        base64::encode(account_tx.encode())
+        hex::encode(account_tx.encode())
     );
 
     let ordered_account = OrderedPubAccount {
@@ -196,7 +196,7 @@ pub fn process_create_tx(
     };
 
     // Calculate the pending
-    let mut data: &[u8] = &base64::decode(pending_enc_balance).unwrap();
+    let mut data: &[u8] = &hex::decode(pending_enc_balance).unwrap();
     let pending_enc_balance = EncryptedAmount::decode(&mut data).unwrap(); // For now the same as initial balance
     let pending_balance = sender_account
         .secret
@@ -205,12 +205,12 @@ pub fn process_create_tx(
         .decrypt(&pending_enc_balance)
         .map_err(|error| Error::LibraryError { error })?;
 
-    let mut data1: &[u8] = &base64::decode(&receiver).unwrap();
+    let mut data1: &[u8] = &hex::decode(&receiver).unwrap();
     let receiver_pub_account = PubAccount {
         owner_enc_pub_key: EncryptionPubKey::decode(&mut data1).unwrap(),
     };
 
-    let mut data: &[u8] = &base64::decode(mediator).unwrap();
+    let mut data: &[u8] = &hex::decode(mediator).unwrap();
     let mediator_account = EncryptionPubKey::decode(&mut data).unwrap();
 
     // Initialize the transaction.
@@ -235,8 +235,8 @@ pub fn process_create_tx(
         .map_err(|error| Error::LibraryError { error })?;
 
     info!(
-        "CLI log: Initialized Transaction as base64:\n{}\n",
-        base64::encode(asset_tx.encode())
+        "CLI log: Initialized Transaction as hex:\n{}\n",
+        hex::encode(asset_tx.encode())
     );
 
     Ok(())
@@ -266,7 +266,7 @@ pub fn process_finalize_tx(
         public: receiver_ordered_pub_account.pub_account,
     };
 
-    let mut data: &[u8] = &base64::decode(&init_tx).unwrap();
+    let mut data: &[u8] = &hex::decode(&init_tx).unwrap();
     let tx = InitializedTransferTx::decode(&mut data).unwrap();
 
     // Finalize the transaction.
@@ -277,8 +277,8 @@ pub fn process_finalize_tx(
 
     // Save the artifacts to file.
     info!(
-        "CLI log: Finalized Transaction as base64:\n{}\n",
-        base64::encode(asset_tx.encode())
+        "CLI log: Finalized Transaction as hex:\n{}\n",
+        hex::encode(asset_tx.encode())
     );
 
     Ok(())
@@ -296,21 +296,21 @@ pub fn justify_asset_transfer_transaction(
     // Load the transaction, mediator's credentials, and issuer's public account.
     let mut rng = create_rng_from_seed(Some(seed))?;
 
-    let mut data: &[u8] = &base64::decode(&init_tx).unwrap();
+    let mut data: &[u8] = &hex::decode(&init_tx).unwrap();
     let init_tx = InitializedTransferTx::decode(&mut data).unwrap();
 
     let mediator_account: MediatorAccount =
         load_object(db_dir, OFF_CHAIN_DIR, &mediator, SECRET_ACCOUNT_FILE)?;
 
-    let mut data1: &[u8] = &base64::decode(&sender).unwrap();
+    let mut data1: &[u8] = &hex::decode(&sender).unwrap();
     let sender_pub_account = PubAccount {
         owner_enc_pub_key: EncryptionPubKey::decode(&mut data1).unwrap(),
     };
 
-    let mut data: &[u8] = &base64::decode(&sender_balance).unwrap();
+    let mut data: &[u8] = &hex::decode(&sender_balance).unwrap();
     let sender_balance = EncryptedAmount::decode(&mut data).unwrap();
 
-    let mut data1: &[u8] = &base64::decode(&receiver).unwrap();
+    let mut data1: &[u8] = &hex::decode(&receiver).unwrap();
     let receiver_pub_account = PubAccount {
         owner_enc_pub_key: EncryptionPubKey::decode(&mut data1).unwrap(),
     };
@@ -330,21 +330,21 @@ pub fn justify_asset_transfer_transaction(
         .map_err(|error| Error::LibraryError { error })?;
 
     info!(
-        "CLI log: Justified Transaction as base64:\n{}\n",
-        base64::encode(justified_tx.encode())
+        "CLI log: Justified Transaction as hex:\n{}\n",
+        hex::encode(justified_tx.encode())
     );
 
     Ok(())
 }
 
 fn add_subtract(op: Op, first: String, second: String) -> String {
-    let mut data: &[u8] = &base64::decode(first).unwrap();
+    let mut data: &[u8] = &hex::decode(first).unwrap();
     let first = EncryptedAmount::decode(&mut data).unwrap();
-    let mut data: &[u8] = &base64::decode(second).unwrap();
+    let mut data: &[u8] = &hex::decode(second).unwrap();
     let second = EncryptedAmount::decode(&mut data).unwrap();
 
     match op {
-        Op::Add => base64::encode((first + second).encode()),
-        Op::Subtract => base64::encode((first - second).encode()),
+        Op::Add => hex::encode((first + second).encode()),
+        Op::Subtract => hex::encode((first - second).encode()),
     }
 }

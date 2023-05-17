@@ -217,7 +217,7 @@ impl fmt::Display for PrintableAccountId {
 
 impl PrintableAccountId {
     fn to_string(&self) -> String {
-        base64::encode(self.0.clone())
+        hex::encode(self.0.clone())
     }
 }
 
@@ -488,7 +488,7 @@ pub fn gen_seed() -> String {
     let mut rng = rand::thread_rng();
     let mut seed = [0u8; 32];
     rng.fill(&mut seed);
-    base64::encode(seed)
+    hex::encode(seed)
 }
 
 /// Helper function to generate a random seed using the thread RNG.
@@ -496,14 +496,14 @@ pub fn gen_seed() -> String {
 pub fn gen_seed_from<T: RngCore + CryptoRng>(rng: &mut T) -> String {
     let mut seed = [0u8; 32];
     rng.fill(&mut seed);
-    base64::encode(seed)
+    hex::encode(seed)
 }
 
 /// Helper function to create an RNG from seed.
 #[inline]
 pub fn create_rng_from_seed(seed: Option<String>) -> Result<StdRng, Error> {
     let seed = seed.ok_or(Error::EmptySeed)?;
-    let seed: &[u8] = &base64::decode(seed).map_err(|error| Error::SeedDecodeError { error })?;
+    let seed: &[u8] = &hex::decode(seed).map_err(|error| Error::SeedDecodeError { error })?;
     let seed = seed
         .try_into()
         .map_err(|_| Error::SeedLengthError { length: seed.len() })?;
@@ -940,13 +940,13 @@ pub fn debug_decrypt_account_balance(
 
 /// Use only for debugging purposes.
 #[inline]
-pub fn debug_decrypt_base64_account_balance(
+pub fn debug_decrypt_hex_account_balance(
     user: String,
     encrypted_value: String,
     ticker: String,
     db_dir: PathBuf,
 ) -> Result<Balance, Error> {
-    let mut data: &[u8] = &base64::decode(encrypted_value).unwrap();
+    let mut data: &[u8] = &hex::decode(encrypted_value).unwrap();
     let enc_balance = EncryptedAmount::decode(&mut data).unwrap();
     let scrt: SecAccount = load_object(
         db_dir,

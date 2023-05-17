@@ -36,7 +36,7 @@ pub struct CreateUserAccountInfo {
     /// The seed can be found inside the logs.
     #[structopt(
         long,
-        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+        help = "Initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 }
@@ -70,7 +70,7 @@ pub struct CreateMediatorAccountInfo {
     #[structopt(
         short,
         long,
-        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+        help = "Initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 }
@@ -88,7 +88,7 @@ pub struct IssueAssetInfo {
     /// The seed can be found inside the logs.
     #[structopt(
         long,
-        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+        help = "Initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 
@@ -125,7 +125,7 @@ pub struct CreateTransactionInfo {
     /// The seed can be found inside the logs.
     #[structopt(
         long,
-        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+        help = "Initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 
@@ -149,20 +149,20 @@ pub struct CreateTransactionInfo {
     #[structopt(long, help = "The sender's name.")]
     pub sender: String,
 
-    /// The receiver's base64 public account.
+    /// The receiver's hex encoded public account.
     #[structopt(
         short,
         long,
-        help = "The receiver's base64 public account encryption public key."
+        help = "The receiver's hex encoded public account encryption public key."
     )]
     pub receiver: String,
 
-    /// The mediator's base64 public encryption key.
-    #[structopt(short, long, help = "The mediator's base64 public encryption key.")]
+    /// The mediator's hex encoded public encryption key.
+    #[structopt(short, long, help = "The mediator's hex encoded public encryption key.")]
     pub mediator: String,
 
-    /// The sender's base64 pending balance.
-    #[structopt(short, long, help = "The sender's base64 pending balance.")]
+    /// The sender's hex encoded pending balance.
+    #[structopt(short, long, help = "The sender's hex encoded pending balance.")]
     pub pending_balance: String,
 }
 
@@ -179,7 +179,7 @@ pub struct FinalizeTransactionInfo {
     /// The seed can be found inside the logs.
     #[structopt(
         long,
-        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+        help = "Initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 
@@ -203,11 +203,11 @@ pub struct FinalizeTransactionInfo {
     #[structopt(short, long, help = "The sender's name.")]
     pub receiver: String,
 
-    /// The initial transaction as base64 encoded string.
+    /// The initial transaction hex encoded string.
     #[structopt(
         short,
         long,
-        help = "The initial transaction as base64 encoded string."
+        help = "The initial transaction hex encoded string."
     )]
     pub init_tx: String,
 }
@@ -235,21 +235,21 @@ pub struct JustifyTransferInfo {
     )]
     pub ticker: String,
 
-    /// The sender's base64 public account encryption public key.
+    /// The sender's hex encoded public account encryption public key.
     #[structopt(
         long,
-        help = "The sender's base64 public account encryption public key."
+        help = "The sender's hex encoded public account encryption public key."
     )]
     pub sender: String,
 
-    /// The sender's base64 balance.
-    #[structopt(long, help = "The sender's base64 balance.")]
+    /// The sender's hex encoded balance.
+    #[structopt(long, help = "The sender's hex encoded balance.")]
     pub sender_balance: String,
 
-    /// The receiver's base64 public account encryption public key.
+    /// The receiver's hex encoded public account encryption public key.
     #[structopt(
         long,
-        help = "The receiver's base64 public account encryption public key."
+        help = "The receiver's hex encoded public account encryption public key."
     )]
     pub receiver: String,
 
@@ -262,12 +262,12 @@ pub struct JustifyTransferInfo {
     #[structopt(
         short,
         long,
-        help = "Base64 encoding of an initial seed for the RNG. If not provided, the seed will be chosen at random."
+        help = "Initial seed for the RNG. If not provided, the seed will be chosen at random."
     )]
     pub seed: Option<String>,
 
-    /// Initialized tx as base64.
-    #[structopt(short, long, help = "Initialized tx as base64.")]
+    /// Initialized tx hex encoded.
+    #[structopt(short, long, help = "Initialized tx hex encoded.")]
     pub init_tx: String,
 }
 
@@ -298,19 +298,19 @@ pub struct DecryptAccountInfo {
     )]
     pub ticker: String,
 
-    /// An encrypted value as base64.
-    #[structopt(short, long, help = "An encrypted value as base64.")]
+    /// An encrypted value hex encoded.
+    #[structopt(short, long, help = "An encrypted value hex encoded.")]
     pub encrypted_value: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, StructOpt)]
 pub struct OpsInfo {
     /// The first encrypted value.
-    #[structopt(short, long, help = "The first encrypted value (base64 encoded)")]
+    #[structopt(short, long, help = "The first encrypted value (hex encoded)")]
     pub first: String,
 
     /// The second encrypted value.
-    #[structopt(short, long, help = "The second encrypted value (base64 encoded)")]
+    #[structopt(short, long, help = "The second encrypted value (hex encoded)")]
     pub second: String,
 }
 

@@ -12,9 +12,9 @@ pub enum Error {
     #[fail(display = "The input seed cannot be empty.")]
     EmptySeed,
 
-    /// There was an error in converting the seed from base64 to byte array.
+    /// There was an error in converting the seed from hex to byte array.
     #[fail(display = "Error in decoding the seed value: {:?}", error)]
-    SeedDecodeError { error: base64::DecodeError },
+    SeedDecodeError { error: hex::FromHexError },
 
     /// The length of the provided seed was not equal to 32 bytes.
     #[fail(display = "Want seed length 32, got len: {:?}", length)]

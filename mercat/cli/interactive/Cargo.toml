@@ -15,7 +15,6 @@ serde = { version = "1.0.105", features = ["derive"] }
 log = { version = "0.4.8"}
 env_logger = { version = "0.7.1" }
 structopt = { version = "0.3", default-features = false }
-base64 = { version = "0.12.1" }
 
 # Crypto
 rand = { version = "0.8", features = ["getrandom", "alloc"], default-features = false }
