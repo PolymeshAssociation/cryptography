@@ -28,9 +28,9 @@ use zeroize::Zeroizing;
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
 
 /// The domain label for the wellformedness proof.
-pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathWellformednessFinalResponse";
+pub const WELLFORMEDNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymeshWellformednessFinalResponse";
 /// The domain label for the challenge.
-pub const WELLFORMEDNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathWellformednessProofChallenge";
+pub const WELLFORMEDNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymeshWellformednessProofChallenge";
 
 #[derive(PartialEq, Copy, Clone, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

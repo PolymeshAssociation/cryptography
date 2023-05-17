@@ -29,10 +29,10 @@ use codec::{Decode, Encode, Error as CodecError, Input, Output};
 
 /// The domain label for the encrypting the same value proof.
 pub const ENCRYPTING_SAME_VALUE_PROOF_FINAL_RESPONSE_LABEL: &[u8] =
-    b"PolymathEncryptingSameValueFinalResponse";
+    b"PolymeshEncryptingSameValueFinalResponse";
 /// The domain label for the challenge.
 pub const ENCRYPTING_SAME_VALUE_PROOF_CHALLENGE_LABEL: &[u8] =
-    b"PolymathEncryptingSameValueFinalResponseChallenge";
+    b"PolymeshEncryptingSameValueFinalResponseChallenge";
 
 // ------------------------------------------------------------------------
 // Proof of Two Ciphertexts Encrypting the Same Value Under Different

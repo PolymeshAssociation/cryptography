@@ -36,9 +36,9 @@ use sp_std::{
     prelude::*,
 };
 
-const OOON_PROOF_LABEL: &[u8; 14] = b"PolymathMERCAT";
-const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathOOONProofChallengeLabel";
-const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathR1ProofChallengeLabel";
+const OOON_PROOF_LABEL: &[u8; 14] = b"PolymeshMERCAT";
+const OOON_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymeshOOONProofChallengeLabel";
+const R1_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymeshR1ProofChallengeLabel";
 
 /// One-out-of-Many Proofs are instantiated with a fixed value `N = n^m`,
 /// `n` and `m` are system parameters which choice has a significant impact on the final proof sizes and performance.

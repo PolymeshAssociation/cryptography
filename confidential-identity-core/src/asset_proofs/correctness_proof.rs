@@ -27,9 +27,9 @@ use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use sp_std::convert::From;
 
 /// The domain label for the correctness proof.
-pub const CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymathCorrectnessFinalResponse";
+pub const CORRECTNESS_PROOF_FINAL_RESPONSE_LABEL: &[u8] = b"PolymeshCorrectnessFinalResponse";
 /// The domain label for the challenge.
-pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathCorrectnessChallenge";
+pub const CORRECTNESS_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymeshCorrectnessChallenge";
 
 // ------------------------------------------------------------------------
 // Proof of Correct Encryption of the Given Value

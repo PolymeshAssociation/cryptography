@@ -32,10 +32,10 @@ use codec::{Decode, Encode, Error as CodecError, Input, Output};
 
 /// The domain label for the ciphertext refreshment proof.
 pub const CIPHERTEXT_REFRESHMENT_FINAL_RESPONSE_LABEL: &[u8] =
-    b"PolymathCipherTextRefreshmentFinalResponse";
+    b"PolymeshCipherTextRefreshmentFinalResponse";
 /// The domain label for the challenge.
 pub const CIPHERTEXT_REFRESHMENT_PROOF_CHALLENGE_LABEL: &[u8] =
-    b"PolymathCipherTextRefreshmentChallenge";
+    b"PolymeshCipherTextRefreshmentChallenge";
 
 // ------------------------------------------------------------------------
 // Proof of two ciphertext encrypting the same value under the same

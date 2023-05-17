@@ -10,9 +10,9 @@ use super::errors::{Error, ErrorKind, Fallible};
 use crate::asset_proofs::transcript::{TranscriptProtocol, UpdateTranscript};
 
 /// The domain label for the encryption proofs.
-pub const ENCRYPTION_PROOFS_LABEL: &[u8] = b"PolymathEncryptionProofs";
+pub const ENCRYPTION_PROOFS_LABEL: &[u8] = b"PolymeshEncryptionProofs";
 /// The domain label for the challenge.
-pub const ENCRYPTION_PROOFS_CHALLENGE_LABEL: &[u8] = b"PolymathEncryptionProofsChallenge";
+pub const ENCRYPTION_PROOFS_CHALLENGE_LABEL: &[u8] = b"PolymeshEncryptionProofsChallenge";
 
 // ------------------------------------------------------------------------
 // Sigma Protocol's Prover and Verifier Interfaces

@@ -30,8 +30,8 @@ use zeroize::Zeroizing;
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
 use sp_std::{cmp::min, convert::TryFrom, prelude::*};
 
-pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymathMembershipProofLabel";
-const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymathMembershipProofChallengeLabel";
+pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymeshMembershipProofLabel";
+const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymeshMembershipProofChallengeLabel";
 
 #[derive(Clone, Debug, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

@@ -19,7 +19,7 @@ use rand_core::{CryptoRng, RngCore};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-const RANGE_PROOF_LABEL: &[u8] = b"PolymathRangeProof";
+const RANGE_PROOF_LABEL: &[u8] = b"PolymeshRangeProof";
 
 // ------------------------------------------------------------------------
 // Range Proof
