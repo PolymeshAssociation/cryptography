@@ -1,5 +1,5 @@
 [package]
-name = "polymath-scp-v1"
+name = "polymesh-scp-v1"
 version = "1.0.0"
 authors = [ "Polymesh Association" ]
 repository = "https://github.com/PolymeshAssociation/cryptography"

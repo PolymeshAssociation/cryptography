@@ -35,8 +35,8 @@ mkdir -p "$ROOT/artifacts"
 
 echo "Packing Confidential Identity CLI binaries..."
 mkdir -p "$PREFIX/artifacts/linux-x64"
-cp "$ROOT/target/release/polymath-scp"                       "$PREFIX/artifacts/linux-x64/"
-cp "$ROOT/target/release/polymath-scv"                       "$PREFIX/artifacts/linux-x64/"
+cp "$ROOT/target/release/polymesh-scp"                       "$PREFIX/artifacts/linux-x64/"
+cp "$ROOT/target/release/polymesh-scv"                       "$PREFIX/artifacts/linux-x64/"
 
 echo "Packing Confidential Identity FFI bindings..."
 mkdir -p "$PREFIX/artifacts/ffi"

@@ -1,6 +1,6 @@
 //! A simple commandline application to demonstrate a claim prover's (AKA an investor)
 //! steps to create proofs for their claims.
-//! Use `polymath-scp --help` to see the usage.
+//! Use `polymesh-scp --help` to see the usage.
 //!
 
 use cli_common::{
@@ -27,9 +27,9 @@ pub struct RawScopeClaimData {
     pub investor_unique_id: UniqueID,
 }
 
-/// polymath-scp -- a simple claim prover.
+/// polymesh-scp -- a simple claim prover.
 ///
-/// The polymath-scp/create-claim-proof utility which creates a proof for a scope-claim.
+/// The polymesh-scp/create-claim-proof utility which creates a proof for a scope-claim.
 /// This CLI will generate random content for `cdd-claim` and `scope-claim` parameters if you
 /// pass `-r` to it. Alternatively, you can provide the `cdd-claim` file that you have received
 /// from CDD provider and generate your own `scope-claim` file.
@@ -69,9 +69,9 @@ pub struct CreateClaimProofInfo {
     verbose: bool,
 }
 
-/// polymath-scp -- a simple claim prover.
+/// polymesh-scp -- a simple claim prover.
 ///
-/// The polymath-scp/create-cdd-id utility which creates a CDD Id for a CDD Claim.
+/// The polymesh-scp/create-cdd-id utility which creates a CDD Id for a CDD Claim.
 /// This CLI will generate random content for `cdd-claim` parameter if you pass `-r` to it.
 /// Alternatively, you can provide the `cdd-claim` file that you have created as a CDD provider.
 ///
@@ -101,7 +101,7 @@ pub struct CreateCDDIdInfo {
     verbose: bool,
 }
 
-/// The polymath-scp/create-cdd-id utility which creates an Identity with a mocked CDD Id.
+/// The polymesh-scp/create-cdd-id utility which creates an Identity with a mocked CDD Id.
 #[derive(Clone, Debug, StructOpt)]
 pub struct CreateMockedInvestorUidInfo {
     /// Input DID in hex, i.e "0x0600000000000000000000000000000000000000000000000000000000000000"

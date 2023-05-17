@@ -3,7 +3,7 @@
 
 This library provides WASM binding for Confidential Identity Library.
 The Rust code can be found at
-[polymath CIL library][confidential-identity-rust-lib] and the source
+[Polymesh CIL library][confidential-identity-rust-lib] and the source
 code for the wasm bindings can be found at [WASM bindings][wasm-src].
 
 
@@ -52,7 +52,7 @@ these into any javascript-based project using a wasm-loader.
 
 Note that the name in the `package.json` file will be "confidential-identity".
 But, in order to properly publish the package, the name should be changed to
-`@polymathnetwork/confidential-identity`.
+`@polymeshassociation/confidential-identity`.
 
 
 [cryptography-rust-lib]: https://github.com/PolymeshAssociation/cryptography/tree/master/README.md

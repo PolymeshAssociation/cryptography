@@ -54,8 +54,8 @@ The Scope Claim has the following format.
 [IdentityId]: https://docs.polymesh.live/polymesh_primitives/identity_id/struct.IdentityId.html
 [add-claim]: https://docs.polymesh.live/pallet_identity/enum.Call.html#variant.add_claim
 
-[wiki_main_design]: https://polymath.atlassian.net/wiki/spaces/PC/pages/172523576/Asset+Granularity+Unique+Identity
-[wiki_crypto_design]: https://polymath.atlassian.net/wiki/spaces/CE/pages/202571817/Claim+Proof+Prototype
+[wiki_main_design]: https://polymesh.atlassian.net/wiki/spaces/PC/pages/172523576/Asset+Granularity+Unique+Identity
+[wiki_crypto_design]: https://polymesh.atlassian.net/wiki/spaces/CE/pages/202571817/Claim+Proof+Prototype
 [ffi]: /confidential-identity/ffi/
 [wasm]: /confidential-identity/wasm/
 [cli]: /confidential-identity/clil/

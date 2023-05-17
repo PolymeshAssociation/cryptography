@@ -11,8 +11,8 @@ The library provides the following APIs.
 - WASM library: [./wasm][wasm]
 - CLI: [./cli][cli]
 
-[wiki_main_design]: https://polymath.atlassian.net/wiki/spaces/PC/pages/172523576/Asset+Granularity+Unique+Identity
-[wiki_crypto_design]: https://polymath.atlassian.net/wiki/spaces/CE/pages/202571817/Claim+Proof+Prototype
+[wiki_main_design]: https://polymesh.atlassian.net/wiki/spaces/PC/pages/172523576/Asset+Granularity+Unique+Identity
+[wiki_crypto_design]: https://polymesh.atlassian.net/wiki/spaces/CE/pages/202571817/Claim+Proof+Prototype
 [ffi]: /confidential-identity/ffi/
 [wasm]: /confidential-identity/wasm/
 [cli]: /confidential-identity/clil/

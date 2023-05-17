@@ -1,6 +1,6 @@
 //! A simple commandline application to demonstrate a claim verifier's
 //! steps to verify a claim proof.
-//! Use `polymath-scv --help` to see the usage.
+//! Use `polymesh-scv --help` to see the usage.
 //!
 
 use cli_common::{make_message, Proof};
@@ -9,8 +9,8 @@ use schnorrkel::Signature;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-/// polymath-scv -- a simple claim verifier.{n}
-/// The polymath-scv utility takes in a proof and verifies it.
+/// polymesh-scv -- a simple claim verifier.{n}
+/// The polymesh-scv utility takes in a proof and verifies it.
 #[derive(StructOpt, Debug, Serialize, Deserialize)]
 struct Cli {
     /// Get the Json formatted proof from file.

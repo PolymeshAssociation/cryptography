@@ -2,7 +2,7 @@
 
 
 This library provides WASM binding for MERCAT. The Rust code can be
-found at [polymath mercat library][mercat-rust-lib] and
+found at [Polymesh mercat library][mercat-rust-lib] and
 the source code for the wasm bindings can be found at
 [WASM bindings][wasm-src].
 
@@ -30,7 +30,7 @@ these into any javascript-based project using a wasm-loader.
 
 Note that the name in the `package.json` file will be "mercat".
 But, in order to properly publish the package, the name should be changed to
-`@polymathnetwork/mercat`.
+`@polymeshassociation/mercat`.
 
 
 [cryptography-rust-lib]: https://github.com/PolymeshAssociation/cryptography/tree/develop/README.md
