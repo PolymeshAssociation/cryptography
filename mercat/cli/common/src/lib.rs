@@ -77,7 +77,10 @@ pub enum CoreTransaction {
     TransferJustify {
         init_tx: InitializedTransferTx,
         finalized_tx: FinalizedTransferTx,
+        sender: String,
+        receiver: String,
         mediator: String,
+        ticker: String,
         tx_id: u32,
     },
     Invalid,
@@ -196,6 +199,16 @@ pub struct OrderedTransferInstruction {
     pub ordering_state: OrderingState,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
+}
+
+/// Pending transaction saved state.
+#[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone)]
+pub struct PendingTransactionState {
+    pub init_tx: InitializedTransferTx,
+    pub finalized_tx: FinalizedTransferTx,
+    pub ticker: String,
+    pub sender: String,
+    pub receiver: String,
 }
 
 /// Used for justifying and validating a transfer transaction.
@@ -735,14 +748,6 @@ pub fn compute_enc_pending_balance(
     for core_tx in transfer_inits {
         if let CoreTransaction::TransferInit { tx, .. } = core_tx {
             pending_balance -= tx.memo.enc_amount_using_sender;
-            debug!(
-                "------> decremented by {}.",
-                debug_decrypt(
-                    &tx.memo.sender_account,
-                    tx.memo.enc_amount_using_sender,
-                    db_dir.clone()
-                )?
-            );
         }
     }
     Ok(pending_balance)
@@ -846,25 +851,26 @@ pub fn load_tx_file(
     } else if state == TransferTxState::Finalization(TxSubstate::Started).to_string() {
         let instruction: OrderedTransferInstruction =
             load_object_from(PathBuf::from(tx_file_path))?;
-        let (init_tx, finalized_tx) =
-            <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..])
-                .map_err(|_| Error::DecodeError)?;
+        let tx = <PendingTransactionState>::decode(&mut &instruction.data[..])
+            .map_err(|_| Error::DecodeError)?;
         CoreTransaction::TransferFinalize {
-            init_tx,
-            finalized_tx,
+            init_tx: tx.init_tx,
+            finalized_tx: tx.finalized_tx,
             receiver: user,
             ordering_state: instruction.ordering_state,
             tx_id,
         }
     } else if state == TransferTxState::Justification(TxSubstate::Started).to_string() {
         let instruction: TransferInstruction = load_object_from(PathBuf::from(tx_file_path))?;
-        let (init_tx, finalized_tx) =
-            <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..])
-                .map_err(|_| Error::DecodeError)?;
+        let tx = <PendingTransactionState>::decode(&mut &instruction.data[..])
+            .map_err(|_| Error::DecodeError)?;
         CoreTransaction::TransferJustify {
-            init_tx,
-            finalized_tx,
+            init_tx: tx.init_tx,
+            finalized_tx: tx.finalized_tx,
+            sender: tx.sender,
+            receiver: tx.receiver,
             mediator: user,
+            ticker: tx.ticker,
             tx_id,
         }
     } else if state.starts_with("ticker#") {

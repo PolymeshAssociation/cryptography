@@ -3,7 +3,8 @@ use crate::{
     create_rng_from_seed, debug_decrypt, errors::Error, last_ordering_state, load_object,
     save_object, user_public_account_balance_file, user_public_account_file,
     user_secret_account_file, OrderedPubAccount, OrderedTransferInstruction, OrderingState,
-    COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    PendingTransactionState, COMMON_OBJECTS_DIR, MEDIATOR_PUBLIC_ACCOUNT_FILE, OFF_CHAIN_DIR,
+    ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
 use confidential_identity_core::asset_proofs::Balance;
@@ -243,7 +244,7 @@ pub fn process_finalize_tx(
     // Calculate the pending
     let calc_pending_state_timer = Instant::now();
     let ordering_state = last_ordering_state(
-        receiver,
+        receiver.clone(),
         receiver_ordered_pub_account.last_processed_tx_counter,
         tx_id,
         db_dir.clone(),
@@ -271,8 +272,8 @@ pub fn process_finalize_tx(
 
     // Finalize the transaction.
     let finalize_by_receiver_timer = Instant::now();
-    let receiver = CtxReceiver {};
-    let finalized_tx = receiver
+    let ctx = CtxReceiver {};
+    let finalized_tx = ctx
         .finalize_transaction(&init_tx, receiver_account.clone(), amount)
         .map_err(|error| Error::LibraryError { error })?;
 
@@ -295,7 +296,15 @@ pub fn process_finalize_tx(
     let instruction = OrderedTransferInstruction {
         state,
         ordering_state,
-        data: (&init_tx, &finalized_tx).encode().to_vec(),
+        data: PendingTransactionState {
+            init_tx: init_tx.clone(),
+            finalized_tx: finalized_tx.clone(),
+            sender: sender.clone(),
+            receiver: receiver.clone(),
+            ticker: ticker.clone(),
+        }
+        .encode()
+        .to_vec(),
     };
 
     save_object(

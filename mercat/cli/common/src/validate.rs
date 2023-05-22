@@ -4,8 +4,8 @@ use crate::{
     get_user_from_account, last_ordering_state, load_object, load_tx_file, parse_tx_name,
     save_object, save_to_file, user_public_account_balance_file, user_public_account_file,
     AssetInstruction, CoreTransaction, Direction, OrderedPubAccount, OrderedPubAccountTx,
-    TransferInstruction, ValidationResult, COMMON_OBJECTS_DIR, LAST_VALIDATED_TX_ID_FILE,
-    OFF_CHAIN_DIR, ON_CHAIN_DIR,
+    PendingTransactionState, TransferInstruction, ValidationResult, COMMON_OBJECTS_DIR,
+    LAST_VALIDATED_TX_ID_FILE, OFF_CHAIN_DIR, ON_CHAIN_DIR,
 };
 use codec::{Decode, Encode};
 use confidential_identity_core::asset_proofs::Balance;
@@ -59,10 +59,11 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                 init_tx,
                 finalized_tx,
                 tx_id,
+                sender,
+                receiver,
                 mediator,
+                ticker,
             } => {
-                let (sender, ticker, _) =
-                    get_user_from_account(&init_tx.memo.sender_account, db_dir.clone())?;
                 let sender_ordered_pub_account: OrderedPubAccount = load_object(
                     db_dir.clone(),
                     ON_CHAIN_DIR,
@@ -92,7 +93,7 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                     "------------> validating tx: {}, pending transfer balance: {}",
                     tx_id,
                     debug_decrypt(
-                        &init_tx.memo.sender_account,
+                        &sender_ordered_pub_account.pub_account,
                         pending_balance,
                         db_dir.clone()
                     )?
@@ -101,7 +102,10 @@ pub fn validate_all_pending(db_dir: PathBuf) -> Result<(), Error> {
                     db_dir.clone(),
                     init_tx,
                     finalized_tx,
+                    sender.clone(),
+                    receiver.clone(),
                     mediator,
+                    ticker.clone(),
                     pending_balance,
                     tx_id,
                 );
@@ -418,12 +422,11 @@ fn process_transaction(
     pending_balance: EncryptedAmount,
 ) -> Result<(), Error> {
     let mut rng = OsRng::default();
-    let (init_tx, _finalized_tx) =
-        <(InitializedTransferTx, FinalizedTransferTx)>::decode(&mut &instruction.data[..]).unwrap();
+    let tx = <PendingTransactionState>::decode(&mut &instruction.data[..]).unwrap();
     let validator = TransactionValidator;
     validator
         .verify_transaction(
-            &init_tx,
+            &tx.init_tx,
             &sender_pub_account,
             &pending_balance,
             &receiver_pub_account,
@@ -437,35 +440,15 @@ pub fn validate_transaction(
     db_dir: PathBuf,
     init_tx: InitializedTransferTx,
     _finalized_tx: FinalizedTransferTx,
+    sender: String,
+    receiver: String,
     mediator: String,
+    ticker: String,
     pending_balance: EncryptedAmount,
     tx_id: u32,
 ) -> (ValidationResult, ValidationResult) {
     let load_objects_timer = Instant::now();
     // Load the transaction, mediator's account, and issuer's public account.
-
-    let (sender, _, _) = match get_user_from_account(&init_tx.memo.sender_account, db_dir.clone()) {
-        Err(error) => {
-            error!("Error in validation of tx-{}: {:#?}", tx_id, error);
-            return (
-                ValidationResult::error("n/a", "n/a"),
-                ValidationResult::error("n/a", "n/a"),
-            );
-        }
-        Ok(ok) => ok,
-    };
-
-    let (receiver, ticker, _) =
-        match get_user_from_account(&init_tx.memo.receiver_account, db_dir.clone()) {
-            Err(error) => {
-                error!("Error in validation of tx-{}: {:#?}", tx_id, error);
-                return (
-                    ValidationResult::error("n/a", "n/a"),
-                    ValidationResult::error("n/a", "n/a"),
-                );
-            }
-            Ok(ok) => ok,
-        };
 
     info!(
         "Validating asset transfer{{tx_id: {}, sender: {}, receiver: {}, ticker:{}, mediator: {}}}",

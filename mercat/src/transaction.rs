@@ -51,7 +51,6 @@ impl TransferTransactionSender for CtxSender {
         rng: &mut T,
     ) -> Fallible<InitializedTransferTx> {
         let sender_enc_keys = &sender_account.secret.enc_keys;
-        let sender_pub_account = &sender_account.public;
         let receiver_pub_key = receiver_pub_account.owner_enc_pub_key;
 
         // Ensure the sender has enough funds.
@@ -149,8 +148,6 @@ impl TransferTransactionSender for CtxSender {
             balance_refreshed_same_proof,
             amount_correctness_proof,
             memo: TransferTxMemo {
-                sender_account: sender_pub_account.clone(),
-                receiver_account: receiver_pub_account.clone(),
                 enc_amount_using_sender: sender_new_enc_amount,
                 enc_amount_using_receiver: receiver_new_enc_amount,
                 refreshed_enc_balance,
@@ -218,10 +215,6 @@ impl TransferTransactionReceiver for CtxReceiver {
         receiver_account: Account,
         amount: Balance,
     ) -> Fallible<FinalizedTransferTx> {
-        ensure!(
-            receiver_account.public == init_tx.memo.receiver_account,
-            ErrorKind::AccountIdMismatch
-        );
         // Check that the amount is correct.
         receiver_account
             .secret
@@ -254,15 +247,6 @@ impl TransferTransactionMediator for CtxMediator {
         auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
         rng: &mut R,
     ) -> Fallible<JustifiedTransferTx> {
-        ensure!(
-            sender_account == &init_tx.memo.sender_account,
-            ErrorKind::AccountIdMismatch
-        );
-        ensure!(
-            receiver_account == &init_tx.memo.receiver_account,
-            ErrorKind::AccountIdMismatch
-        );
-
         // Verify sender's part of the transaction.
         // This includes checking the auditors' payload.
         let _ = verify_initialized_transaction(
@@ -310,14 +294,6 @@ impl TransferTransactionVerifier for TransactionValidator {
         auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
         rng: &mut R,
     ) -> Fallible<()> {
-        ensure!(
-            sender_account == &init_tx.memo.sender_account,
-            ErrorKind::AccountIdMismatch
-        );
-        ensure!(
-            receiver_account == &init_tx.memo.receiver_account,
-            ErrorKind::AccountIdMismatch
-        );
         verify_initialized_transaction(
             init_tx,
             sender_account,
@@ -463,18 +439,9 @@ impl TransferTransactionAuditor for CtxAuditor {
         &self,
         init_tx: &InitializedTransferTx,
         sender_account: &PubAccount,
-        receiver_account: &PubAccount,
+        _receiver_account: &PubAccount,
         auditor_enc_key: &(AuditorId, EncryptionKeys),
     ) -> Fallible<()> {
-        ensure!(
-            sender_account == &init_tx.memo.sender_account,
-            ErrorKind::AccountIdMismatch
-        );
-        ensure!(
-            receiver_account == &init_tx.memo.receiver_account,
-            ErrorKind::AccountIdMismatch
-        );
-
         let gens = &PedersenGens::default();
 
         // If all checks pass, decrypt the encrypted amount and verify sender's correctness proof.

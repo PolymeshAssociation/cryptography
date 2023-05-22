@@ -326,8 +326,6 @@ pub struct AuditorPayload {
 #[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TransferTxMemo {
-    pub sender_account: PubAccount,
-    pub receiver_account: PubAccount,
     pub enc_amount_using_sender: EncryptedAmount,
     pub enc_amount_using_receiver: EncryptedAmount,
     pub refreshed_enc_balance: EncryptedAmount,
