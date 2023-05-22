@@ -6,7 +6,10 @@
 use crate::{
     asset_proofs::errors::{ErrorKind, Fallible},
     asset_proofs::Balance,
-    codec_wrapper::{RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder},
+    codec_wrapper::{
+        RistrettoPointDecoder, RistrettoPointEncoder, ScalarDecoder, ScalarEncoder,
+        RISTRETTO_POINT_SIZE,
+    },
 };
 
 use bulletproofs::PedersenGens;
@@ -24,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
-use scale_info::TypeInfo;
+use scale_info::{build::Fields, Path, Type, TypeInfo};
 use sp_std::prelude::*;
 
 /// Prover's representation of the commitment secret.
@@ -113,6 +116,27 @@ impl Decode for CipherText {
         let y = <RistrettoPointDecoder>::decode(input)?.0;
 
         Ok(CipherText { x, y })
+    }
+}
+
+impl TypeInfo for CipherText {
+    type Identity = Self;
+    fn type_info() -> Type {
+        Type::builder()
+            .path(Path::new("CipherText", module_path!()))
+            .composite(
+                Fields::named()
+                    .field(|f| {
+                        f.ty::<[u8; RISTRETTO_POINT_SIZE]>()
+                            .name("x")
+                            .type_name("CompressedRistretto")
+                    })
+                    .field(|f| {
+                        f.ty::<[u8; RISTRETTO_POINT_SIZE]>()
+                            .name("y")
+                            .type_name("CompressedRistretto")
+                    }),
+            )
     }
 }
 
