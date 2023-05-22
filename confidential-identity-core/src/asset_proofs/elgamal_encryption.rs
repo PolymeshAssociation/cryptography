@@ -26,7 +26,7 @@ use rand_core::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-use codec::{Decode, Encode, Error as CodecError, Input, Output};
+use codec::{Decode, Encode, EncodeLike, Error as CodecError, Input, Output};
 use scale_info::{build::Fields, Path, Type, TypeInfo};
 use sp_std::prelude::*;
 
@@ -109,6 +109,8 @@ impl Encode for CipherText {
         RistrettoPointEncoder(&self.y).encode_to(dest);
     }
 }
+
+impl EncodeLike for CipherText {}
 
 impl Decode for CipherText {
     fn decode<I: Input>(input: &mut I) -> Result<Self, CodecError> {
