@@ -91,7 +91,7 @@ impl Decode for CommitmentWitness {
 }
 
 /// Prover's representation of the encrypted secret.
-#[derive(PartialEq, Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CipherText {
     pub x: RistrettoPoint,
