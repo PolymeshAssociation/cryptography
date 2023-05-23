@@ -9,16 +9,15 @@ use mercat::{
     transaction::{CtxMediator, CtxReceiver, CtxSender},
     Account as MercatAccount, AccountCreatorInitializer, AmountSource, AssetTransactionIssuer,
     EncryptedAmount, EncryptionKeys, InitializedAssetTx, InitializedTransferTx,
-    MediatorAccount as MercatMediatorAccount, PubAccount as MercatPubAccount, PubAccountTx,
-    SecAccount, TransferTransactionMediator, TransferTransactionReceiver,
-    TransferTransactionSender,
+    PubAccount as MercatPubAccount, PubAccountTx, SecAccount, TransferTransactionMediator,
+    TransferTransactionReceiver, TransferTransactionSender,
 };
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use rand_core::{CryptoRng, RngCore};
 use serde::Serialize;
 use serde_json;
-use std::convert::Into;
+use std::convert::{Into, TryInto};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
 
@@ -29,8 +28,7 @@ use wasm_bindgen::JsValue;
 /// Contains the secret and public account information of a party.
 #[wasm_bindgen]
 pub struct CreateAccountOutput {
-    secret_account: Vec<u8>,
-    public_key: Vec<u8>,
+    account: Account,
     account_tx: Vec<u8>,
 }
 
@@ -38,14 +36,8 @@ pub struct CreateAccountOutput {
 impl CreateAccountOutput {
     /// The secret account must be kept confidential and not shared with anyone else.
     #[wasm_bindgen(getter)]
-    pub fn secret_account(&self) -> Vec<u8> {
-        self.secret_account.clone()
-    }
-
-    /// The public cryptographic key of the account.
-    #[wasm_bindgen(getter)]
-    pub fn public_key(&self) -> Vec<u8> {
-        self.public_key.clone()
+    pub fn account(&self) -> Account {
+        self.account.clone()
     }
 
     /// The Zero Knowledge proofs of the account creation.
@@ -53,33 +45,20 @@ impl CreateAccountOutput {
     pub fn account_tx(&self) -> Vec<u8> {
         self.account_tx.clone()
     }
-
-    pub fn account(&self) -> Account {
-        Account::new(self.secret_account(), PubAccount::new(self.public_key()))
-    }
 }
 
 /// Contains the secret and public account information of a mediator.
 #[wasm_bindgen]
 pub struct CreateMediatorAccountOutput {
-    secret_account: MediatorAccount,
-    public_key: Vec<u8>,
+    account: Account,
 }
 
 #[wasm_bindgen]
 impl CreateMediatorAccountOutput {
     /// The secret account must be kept confidential and not shared with anyone else.
     #[wasm_bindgen(getter)]
-    pub fn secret_account(&self) -> MediatorAccount {
-        MediatorAccount {
-            secret: self.secret_account.secret.clone(),
-        }
-    }
-
-    /// The public cryptographic key of the account.
-    #[wasm_bindgen(getter)]
-    pub fn public_key(&self) -> Vec<u8> {
-        self.public_key.clone()
+    pub fn account(&self) -> Account {
+        self.account.clone()
     }
 }
 
@@ -113,81 +92,85 @@ impl CreateTransactionOutput {
     }
 }
 
-/// Contains the Zero Knowledge Proof of justifying a confidential transaction by the mediator.
-#[wasm_bindgen]
-pub struct JustifiedTransactionOutput {
-    justified_tx: Vec<u8>,
-}
-
-#[wasm_bindgen]
-impl JustifiedTransactionOutput {
-    /// The Zero Knowledge proofs of the justified confidential transaction.
-    #[wasm_bindgen(getter)]
-    pub fn justified_tx(&self) -> Vec<u8> {
-        self.justified_tx.clone()
-    }
-}
-
-/// A wrapper around mediator secret account.
-#[wasm_bindgen]
-pub struct MediatorAccount {
-    secret: Vec<u8>,
-}
-
-#[wasm_bindgen]
-impl MediatorAccount {
-    #[wasm_bindgen(constructor)]
-    pub fn new(secret: Vec<u8>) -> Self {
-        Self { secret }
-    }
-
-    fn to_mercat(&self) -> Fallible<MercatMediatorAccount> {
-        decode::<MercatMediatorAccount>(self.secret.clone())
-    }
-}
-
 /// A wrapper around mercat account.
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct Account {
-    secret_account: Vec<u8>,
-    public_account: PubAccount,
+    secret: SecAccount,
+    public: PubAccount,
 }
 
 #[wasm_bindgen]
 impl Account {
     #[wasm_bindgen(constructor)]
-    pub fn new(secret_account: Vec<u8>, public_account: PubAccount) -> Self {
-        Self {
-            secret_account,
-            public_account,
-        }
+    pub fn new(secret: Vec<u8>, public: PubAccount) -> Fallible<Account> {
+        Ok(Self {
+            secret: decode::<SecAccount>(secret)?,
+            public,
+        })
+    }
+
+    /// The secret account must be kept confidential and not shared with anyone else.
+    #[wasm_bindgen(getter)]
+    pub fn secret_account(&self) -> Vec<u8> {
+        self.secret.encode()
+    }
+
+    /// The public account.
+    #[wasm_bindgen(getter)]
+    pub fn public_account(&self) -> PubAccount {
+        self.public.clone()
+    }
+
+    fn enc_keys(&self) -> &EncryptionKeys {
+        &self.secret.enc_keys
     }
 
     fn to_mercat(&self) -> Fallible<MercatAccount> {
         Ok(MercatAccount {
-            secret: decode::<SecAccount>(self.secret_account.clone())?,
-            public: self.public_account.to_mercat()?,
+            secret: self.secret.clone(),
+            public: self.public.to_mercat()?,
         })
+    }
+}
+
+impl From<SecAccount> for Account {
+    fn from(sec: SecAccount) -> Self {
+        Self {
+            public: PubAccount::from(&sec),
+            secret: sec,
+        }
     }
 }
 
 /// A wrapper around mercat public account.
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct PubAccount {
-    public_key: Vec<u8>,
+    public_key: MercatPubAccount,
 }
 
 #[wasm_bindgen]
 impl PubAccount {
     #[wasm_bindgen(constructor)]
-    pub fn new(public_key: Vec<u8>) -> Self {
-        Self { public_key }
+    pub fn new(public_key: Vec<u8>) -> Fallible<PubAccount> {
+        Ok(Self {
+            public_key: decode::<MercatPubAccount>(public_key)?,
+        })
     }
 
     fn to_mercat(&self) -> Fallible<MercatPubAccount> {
-        Ok(MercatPubAccount {
-            owner_enc_pub_key: decode::<ElgamalPublicKey>(self.public_key.clone())?,
-        })
+        Ok(self.public_key.clone())
+    }
+}
+
+impl From<&SecAccount> for PubAccount {
+    fn from(sec: &SecAccount) -> Self {
+        Self {
+            public_key: MercatPubAccount {
+                owner_enc_pub_key: sec.enc_keys.public.clone(),
+            },
+        }
     }
 }
 
@@ -207,6 +190,7 @@ pub enum WasmError {
     HexDecodingError,
     PlainTickerIdsError,
     DecryptionError,
+    SeedTooShortError,
 }
 
 impl From<WasmError> for JsValue {
@@ -218,6 +202,13 @@ impl From<WasmError> for JsValue {
 }
 
 type Fallible<T> = Result<T, JsValue>;
+
+fn get_rng(seed: &[u8]) -> Fallible<ChaCha20Rng> {
+    if seed.len() < 32 {
+        return Err(WasmError::SeedTooShortError.into());
+    }
+    Ok(ChaCha20Rng::from_seed(seed[0..32].try_into().unwrap()))
+}
 
 // ------------------------------------------------------------------------------------
 // -                                     Public API                                   -
@@ -232,17 +223,16 @@ type Fallible<T> = Result<T, JsValue>;
 /// # Errors
 /// * `AccountCreationError`: If mercat library throws an error while creating the account.
 #[wasm_bindgen]
-pub fn create_account() -> Fallible<CreateAccountOutput> {
-    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
+pub fn create_account(seed: &[u8]) -> Fallible<CreateAccountOutput> {
+    let mut rng = get_rng(seed)?;
 
-    let secret_account = create_secret_account(&mut rng)?;
+    let account = create_secret_account(&mut rng)?;
     let account_tx: PubAccountTx = AccountCreator
-        .create(&secret_account, &mut rng)
+        .create(&account, &mut rng)
         .map_err(|_| WasmError::AccountCreationError)?;
 
     Ok(CreateAccountOutput {
-        secret_account: secret_account.encode(),
-        public_key: secret_account.enc_keys.public.encode(),
+        account: Account::from(account),
         account_tx: account_tx.encode(),
     })
 }
@@ -257,24 +247,14 @@ pub fn create_account() -> Fallible<CreateAccountOutput> {
 ///
 /// # Errors
 #[wasm_bindgen]
-pub fn create_mediator_account() -> CreateMediatorAccountOutput {
-    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
+pub fn create_mediator_account(seed: &[u8]) -> Fallible<CreateMediatorAccountOutput> {
+    let mut rng = get_rng(seed)?;
 
-    let mediator_elg_secret_key = ElgamalSecretKey::new(Scalar::random(&mut rng));
-    let mediator_enc_key = EncryptionKeys {
-        public: mediator_elg_secret_key.get_public_key(),
-        secret: mediator_elg_secret_key,
-    };
+    let account = create_secret_account(&mut rng)?;
 
-    CreateMediatorAccountOutput {
-        public_key: mediator_enc_key.public.encode(),
-        secret_account: MediatorAccount {
-            secret: MercatMediatorAccount {
-                encryption_key: mediator_enc_key,
-            }
-            .encode(),
-        },
-    }
+    Ok(CreateMediatorAccountOutput {
+        account: Account::from(account),
+    })
 }
 
 /// Creates a Zero Knowledge Proof of minting a confidential asset.
@@ -289,8 +269,12 @@ pub fn create_mediator_account() -> CreateMediatorAccountOutput {
 /// # Errors
 /// * `DeserializationError`: If the `issuer_account` cannot be deserialized to a mercat account.
 #[wasm_bindgen]
-pub fn mint_asset(amount: Balance, issuer_account: Account) -> Fallible<MintAssetOutput> {
-    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
+pub fn mint_asset(
+    seed: &[u8],
+    amount: Balance,
+    issuer_account: Account,
+) -> Fallible<MintAssetOutput> {
+    let mut rng = get_rng(seed)?;
     let asset_tx: InitializedAssetTx = AssetIssuer
         .initialize_asset_transaction(&issuer_account.to_mercat()?, &[], amount, &mut rng)
         .map_err(|_| WasmError::AssetIssuanceError)?;
@@ -320,6 +304,7 @@ pub fn mint_asset(amount: Balance, issuer_account: Account) -> Fallible<MintAsse
 /// * `TransactionCreationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn create_transaction(
+    seed: &[u8],
     amount: Balance,
     sender_account: Account,
     encrypted_pending_balance: Vec<u8>,
@@ -327,7 +312,7 @@ pub fn create_transaction(
     receiver_public_account: PubAccount,
     mediator_public_key: Option<Vec<u8>>,
 ) -> Fallible<CreateTransactionOutput> {
-    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
+    let mut rng = get_rng(seed)?;
 
     let mediator_public_key = match mediator_public_key {
         Some(key) => Some(decode::<ElgamalPublicKey>(key)?),
@@ -360,9 +345,6 @@ pub fn create_transaction(
 /// * `init_tx`: The initialized transaction proof. Can be obtained from the chain.
 /// * `receiver_account`: The mercat account. Can be obtained from `CreateAccountOutput.account`.
 ///
-/// # Outputs
-/// * `FinalizedTransactionOutput`: The ZKP of the finalized transaction.
-///
 /// # Errors
 /// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
 /// * `TransactionFinalizationError`: If the mercat library throws an error when creating the proof.
@@ -382,8 +364,7 @@ pub fn finalize_transaction(
 
 /// Creates the ZKP for the justification phase of creating a confidential transaction.
 /// This function is called by the mediator and depends on secret information from the
-/// mediator and public information of the sender and the receiver. Moreover, this function
-/// expects the plain ticker id which should be communicated to the mediator off-chain.
+/// mediator and public information of the sender and the receiver.
 ///
 /// # Arguments
 /// * `finalized_tx`: The finalized transaction proof. Can be obtained from the chain.
@@ -393,29 +374,26 @@ pub fn finalize_transaction(
 /// * `sender_encrypted_pending_balance`: Sender's encrypted pending balance.
 ///                                       Can be obtained from the chain.
 /// * `receiver_public_account`: Receiver's public account. Can be obtained from the chain.
-/// * `ticker_id`: The plain ticker id. Should be communicated off-chain.
-///
-/// # Outputs
-/// * `JustifiedTransactionOutput`: The ZKP of the justify_transaction transaction.
 ///
 /// # Errors
 /// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
 /// * `TransactionJustificationError`: If the mercat library throws an error when creating the proof.
 #[wasm_bindgen]
 pub fn justify_transaction(
+    seed: &[u8],
     init_tx: Vec<u8>,
-    mediator_account: MediatorAccount,
+    mediator_account: Account,
     sender_public_account: PubAccount,
     sender_encrypted_pending_balance: Vec<u8>,
     receiver_public_account: PubAccount,
     amount: Option<Balance>,
 ) -> Fallible<()> {
-    let mut rng = ChaCha20Rng::from_seed([42u8; 32]);
+    let mut rng = get_rng(seed)?;
 
-    let mediator_keys = mediator_account.to_mercat()?.encryption_key;
+    let mediator_keys = mediator_account.enc_keys();
     let amount_source = match amount {
         Some(amount) => AmountSource::Amount(amount),
-        None => AmountSource::Encrypted(&mediator_keys),
+        None => AmountSource::Encrypted(mediator_keys),
     };
     let init_tx = decode::<InitializedTransferTx>(init_tx)?;
     CtxMediator
