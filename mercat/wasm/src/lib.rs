@@ -97,16 +97,16 @@ impl CreateTransactionOutput {
 #[derive(Clone)]
 pub struct Account {
     secret: SecAccount,
-    public: PubAccount,
+    pub_account: PubAccount,
 }
 
 #[wasm_bindgen]
 impl Account {
     #[wasm_bindgen(constructor)]
-    pub fn new(secret: Vec<u8>, public: PubAccount) -> Fallible<Account> {
+    pub fn new(secret: Vec<u8>, pub_account: PubAccount) -> Fallible<Account> {
         Ok(Self {
             secret: decode::<SecAccount>(secret)?,
-            public,
+            pub_account,
         })
     }
 
@@ -119,7 +119,7 @@ impl Account {
     /// The public account.
     #[wasm_bindgen(getter)]
     pub fn public_account(&self) -> PubAccount {
-        self.public.clone()
+        self.pub_account.clone()
     }
 
     fn enc_keys(&self) -> &EncryptionKeys {
@@ -129,7 +129,7 @@ impl Account {
     fn to_mercat(&self) -> Fallible<MercatAccount> {
         Ok(MercatAccount {
             secret: self.secret.clone(),
-            public: self.public.to_mercat()?,
+            public: self.pub_account.to_mercat()?,
         })
     }
 }
@@ -137,7 +137,7 @@ impl Account {
 impl From<SecAccount> for Account {
     fn from(sec: SecAccount) -> Self {
         Self {
-            public: PubAccount::from(&sec),
+            pub_account: PubAccount::from(&sec),
             secret: sec,
         }
     }
@@ -157,6 +157,12 @@ impl PubAccount {
         Ok(Self {
             public_key: decode::<MercatPubAccount>(public_key)?,
         })
+    }
+
+    /// The public key.
+    #[wasm_bindgen(getter)]
+    pub fn public_key(&self) -> Vec<u8> {
+        self.public_key.encode()
     }
 
     fn to_mercat(&self) -> Fallible<MercatPubAccount> {
