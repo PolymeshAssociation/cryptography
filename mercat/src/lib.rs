@@ -85,6 +85,20 @@ pub struct PubAccount {
     pub owner_enc_pub_key: EncryptionPubKey,
 }
 
+impl From<EncryptionKeys> for PubAccount {
+    fn from(enc_keys: EncryptionKeys) -> Self {
+        Self {
+            owner_enc_pub_key: enc_keys.public,
+        }
+    }
+}
+
+impl From<&EncryptionKeys> for PubAccount {
+    fn from(enc_keys: &EncryptionKeys) -> Self {
+        Self::from(enc_keys.clone())
+    }
+}
+
 /// Holds contents of the public portion of an account which can be safely put on the chain.
 #[derive(Clone, Encode, Decode, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -101,11 +115,44 @@ pub struct SecAccount {
     pub enc_keys: EncryptionKeys,
 }
 
+impl From<EncryptionKeys> for SecAccount {
+    fn from(enc_keys: EncryptionKeys) -> Self {
+        Self {
+            enc_keys,
+        }
+    }
+}
+
+impl From<&EncryptionKeys> for SecAccount {
+    fn from(enc_keys: &EncryptionKeys) -> Self {
+        Self::from(enc_keys.clone())
+    }
+}
+
 /// Wrapper for both the secret and public account info
 #[derive(Clone, Debug)]
 pub struct Account {
     pub public: PubAccount,
     pub secret: SecAccount,
+}
+
+impl From<EncryptionKeys> for Account {
+    fn from(enc_keys: EncryptionKeys) -> Self {
+        Self {
+            public: PubAccount {
+                owner_enc_pub_key: enc_keys.public,
+            },
+            secret: SecAccount {
+                enc_keys,
+            }
+        }
+    }
+}
+
+impl From<&EncryptionKeys> for Account {
+    fn from(enc_keys: &EncryptionKeys) -> Self {
+        Self::from(enc_keys.clone())
+    }
 }
 
 /// The interface for the account creation.
