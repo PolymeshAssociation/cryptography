@@ -88,29 +88,37 @@ impl DiscreteLog {
         Ok(())
     }
 
-    #[cfg(not(feature = "balance_64"))]
     pub fn decode(self, starting_point: RistrettoPoint) -> Option<Balance> {
+        self.decode_limit(starting_point, Balance::MAX)
+    }
+
+    #[cfg(not(feature = "balance_64"))]
+    pub fn decode_limit(self, starting_point: RistrettoPoint, _limit: Balance) -> Option<Balance> {
         self.decode_u32(starting_point)
     }
 
     #[cfg(all(not(feature = "rayon"), feature = "balance_64"))]
-    pub fn decode(self, mut starting_point: RistrettoPoint) -> Option<Balance> {
+    pub fn decode_limit(self, mut starting_point: RistrettoPoint, limit: Balance) -> Option<Balance> {
         if let Some(v) = self.decode_u32(starting_point) {
             return Some(v);
         }
         let step: Balance = u32::MAX as Balance;
         let mut offset = 0;
         loop {
-            starting_point -= *G_U32_MAX;
             offset += step;
+            if offset > limit {
+                break;
+            }
+            starting_point -= *G_U32_MAX;
             if let Some(v) = self.decode_u32(starting_point) {
                 return Some(v + offset);
             }
         }
+        None
     }
 
     #[cfg(all(feature = "rayon", feature = "balance_64"))]
-    pub fn decode(self, mut starting_point: RistrettoPoint) -> Option<Balance> {
+    pub fn decode_limit(self, mut starting_point: RistrettoPoint, limit: Balance) -> Option<Balance> {
         use rayon::prelude::*;
 
         // Use a single thread to check the first 0-u32::MAX range.
@@ -121,9 +129,15 @@ impl DiscreteLog {
         const CHUNK_COUNT: Balance = Balance::max_value() / CHUNK_SIZE;
         (1..CHUNK_COUNT)
             .into_iter()
-            .map(|idx| {
-                starting_point -= *G_U32_MAX;
-                (idx * CHUNK_SIZE, starting_point)
+            .map_while(|idx| {
+                let offset = idx * CHUNK_SIZE;
+                if offset < limit {
+                    starting_point -= *G_U32_MAX;
+                    Some((offset, starting_point))
+                } else {
+                    // Returning `None` will stop the search.
+                    None
+                }
             })
             .par_bridge()
             .find_map_any(|(offset, starting_point)| {

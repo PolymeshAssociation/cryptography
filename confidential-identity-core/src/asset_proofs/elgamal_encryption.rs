@@ -355,6 +355,26 @@ impl ElgamalSecretKey {
     }
 
     /// Decrypt a cipher text that is known to encrypt a Balance.
+    #[cfg(feature = "discrete_log")]
+    pub fn decrypt_discrete_log_with_hint(
+        &self,
+        cipher_text: &CipherText,
+        min: Balance,
+        max: Balance,
+    ) -> Option<Balance> {
+        if min > max {
+            // Bad range.
+            return None;
+        }
+        let gens = PedersenGens::default();
+        // value * h = Y - X / secret_key
+        let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
+        let discrete_log = super::discrete_log::DiscreteLog::new(gens.B);
+        let starting_point = value_h - Scalar::from(min) * gens.B;
+        discrete_log.decode_limit(starting_point, max - min).map(|v| v + min)
+    }
+
+    /// Decrypt a cipher text that is known to encrypt a Balance.
     pub fn decrypt_with_hint(
         &self,
         cipher_text: &CipherText,
