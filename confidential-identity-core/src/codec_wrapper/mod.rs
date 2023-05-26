@@ -1,5 +1,5 @@
 use bulletproofs::RangeProof;
-use codec::{Decode, Encode, Error as CodecError, Input, Output};
+use codec::{Compact, CompactLen, Decode, Encode, Error as CodecError, Input, Output};
 use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
@@ -115,7 +115,7 @@ impl<'a> Encode for RangeProofEncoder<'a> {
         const LOG_OF_NUM_SECRET_BITS: usize = 6;
         const SIZE: usize = (2 * LOG_OF_NUM_SECRET_BITS + 9) * 32;
 
-        SIZE
+        Compact::<u32>::compact_len(&(SIZE as u32)) + SIZE
     }
 
     /// Encodes itself as an array of bytes.
