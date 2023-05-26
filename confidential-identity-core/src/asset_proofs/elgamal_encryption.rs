@@ -127,17 +127,11 @@ impl TypeInfo for CipherText {
         Type::builder()
             .path(Path::new("CipherText", module_path!()))
             .composite(
-                Fields::named()
+                Fields::unnamed()
                     .field(|f| {
-                        f.ty::<[u8; RISTRETTO_POINT_SIZE]>()
-                            .name("x")
-                            .type_name("CompressedRistretto")
+                        f.ty::<[u8; RISTRETTO_POINT_SIZE * 2]>()
+                            .type_name("CompressedCipherText")
                     })
-                    .field(|f| {
-                        f.ty::<[u8; RISTRETTO_POINT_SIZE]>()
-                            .name("y")
-                            .type_name("CompressedRistretto")
-                    }),
             )
     }
 }
