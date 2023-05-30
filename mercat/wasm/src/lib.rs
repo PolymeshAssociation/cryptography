@@ -47,21 +47,6 @@ impl CreateAccountOutput {
     }
 }
 
-/// Contains the secret and public account information of a mediator.
-#[wasm_bindgen]
-pub struct CreateMediatorAccountOutput {
-    account: Account,
-}
-
-#[wasm_bindgen]
-impl CreateMediatorAccountOutput {
-    /// The secret account must be kept confidential and not shared with anyone else.
-    #[wasm_bindgen(getter)]
-    pub fn account(&self) -> Account {
-        self.account.clone()
-    }
-}
-
 /// Contains the Zero Knowledge Proof of minting an asset by the issuer.
 #[wasm_bindgen]
 pub struct MintAssetOutput {
@@ -94,7 +79,7 @@ impl CreateTransactionOutput {
 
 /// A wrapper around mercat account.
 #[wasm_bindgen]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Account {
     secret: SecAccount,
     pub_account: PubAccount,
@@ -103,10 +88,10 @@ pub struct Account {
 #[wasm_bindgen]
 impl Account {
     #[wasm_bindgen(constructor)]
-    pub fn new(secret: Vec<u8>, pub_account: PubAccount) -> Fallible<Account> {
+    pub fn new(secret: Vec<u8>, pub_account: &PubAccount) -> Fallible<Account> {
         Ok(Self {
             secret: decode::<SecAccount>(secret)?,
-            pub_account,
+            pub_account: pub_account.clone(),
         })
     }
 
@@ -145,7 +130,7 @@ impl From<SecAccount> for Account {
 
 /// A wrapper around mercat public account.
 #[wasm_bindgen]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PubAccount {
     public_key: MercatPubAccount,
 }
@@ -249,18 +234,16 @@ pub fn create_account(seed: &[u8]) -> Fallible<CreateAccountOutput> {
 /// # Arguments
 ///
 /// # Outputs
-/// * `CreateMediatorAccountOutput`: Contains the public and secret mediator account.
+/// * `Account`: Contains the public and secret mediator account.
 ///
 /// # Errors
 #[wasm_bindgen]
-pub fn create_mediator_account(seed: &[u8]) -> Fallible<CreateMediatorAccountOutput> {
+pub fn create_mediator_account(seed: &[u8]) -> Fallible<Account> {
     let mut rng = get_rng(seed)?;
 
     let account = create_secret_account(&mut rng)?;
 
-    Ok(CreateMediatorAccountOutput {
-        account: Account::from(account),
-    })
+    Ok(Account::from(account))
 }
 
 /// Creates a Zero Knowledge Proof of minting a confidential asset.
@@ -278,7 +261,7 @@ pub fn create_mediator_account(seed: &[u8]) -> Fallible<CreateMediatorAccountOut
 pub fn mint_asset(
     seed: &[u8],
     amount: Balance,
-    issuer_account: Account,
+    issuer_account: &Account,
 ) -> Fallible<MintAssetOutput> {
     let mut rng = get_rng(seed)?;
     let asset_tx: InitializedAssetTx = AssetIssuer
@@ -312,10 +295,10 @@ pub fn mint_asset(
 pub fn create_transaction(
     seed: &[u8],
     amount: Balance,
-    sender_account: Account,
+    sender_account: &Account,
     encrypted_pending_balance: Vec<u8>,
     pending_balance: Balance,
-    receiver_public_account: PubAccount,
+    receiver_public_account: &PubAccount,
     mediator_public_key: Option<Vec<u8>>,
 ) -> Fallible<CreateTransactionOutput> {
     let mut rng = get_rng(seed)?;
@@ -358,7 +341,7 @@ pub fn create_transaction(
 pub fn finalize_transaction(
     amount: Balance,
     init_tx: Vec<u8>,
-    receiver_account: Account,
+    receiver_account: &Account,
 ) -> Fallible<()> {
     let init_tx = decode::<InitializedTransferTx>(init_tx)?;
     CtxReceiver
@@ -374,8 +357,7 @@ pub fn finalize_transaction(
 ///
 /// # Arguments
 /// * `finalized_tx`: The finalized transaction proof. Can be obtained from the chain.
-/// * `mediator_account`: The secret portion of the mediator's account. Can be obtained from
-///                       `CreateMediatorAccountOutput.secret_account`.
+/// * `mediator_account`: The mediator's account.
 /// * `sender_public_account`: Sender's public account. Can be obtained from the chain.
 /// * `sender_encrypted_pending_balance`: Sender's encrypted pending balance.
 ///                                       Can be obtained from the chain.
@@ -388,10 +370,10 @@ pub fn finalize_transaction(
 pub fn justify_transaction(
     seed: &[u8],
     init_tx: Vec<u8>,
-    mediator_account: Account,
-    sender_public_account: PubAccount,
+    mediator_account: &Account,
+    sender_public_account: &PubAccount,
     sender_encrypted_pending_balance: Vec<u8>,
-    receiver_public_account: PubAccount,
+    receiver_public_account: &PubAccount,
     amount: Option<Balance>,
 ) -> Fallible<()> {
     let mut rng = get_rng(seed)?;
@@ -430,7 +412,7 @@ pub fn justify_transaction(
 /// * `DeserializationError`: If either of the inputs cannot be deserialized to a mercat account.
 /// * `DecryptionError`: If the mercat library throws an error while decrypting the value.
 #[wasm_bindgen]
-pub fn decrypt(encrypted_value: Vec<u8>, account: Account) -> Fallible<Balance> {
+pub fn decrypt(encrypted_value: Vec<u8>, account: &Account) -> Fallible<Balance> {
     let enc_balance = decode::<EncryptedAmount>(encrypted_value)?;
     let account = account.to_mercat()?;
 
