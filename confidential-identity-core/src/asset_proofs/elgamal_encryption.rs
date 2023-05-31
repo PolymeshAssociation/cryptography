@@ -126,13 +126,10 @@ impl TypeInfo for CipherText {
     fn type_info() -> Type {
         Type::builder()
             .path(Path::new("CipherText", module_path!()))
-            .composite(
-                Fields::unnamed()
-                    .field(|f| {
-                        f.ty::<[u8; RISTRETTO_POINT_SIZE * 2]>()
-                            .type_name("CompressedCipherText")
-                    })
-            )
+            .composite(Fields::unnamed().field(|f| {
+                f.ty::<[u8; RISTRETTO_POINT_SIZE * 2]>()
+                    .type_name("CompressedCipherText")
+            }))
     }
 }
 
@@ -365,7 +362,9 @@ impl ElgamalSecretKey {
         let value_h = cipher_text.y - self.secret.invert() * cipher_text.x;
         let discrete_log = super::discrete_log::DiscreteLog::new(gens.B);
         let starting_point = value_h - Scalar::from(min) * gens.B;
-        discrete_log.decode_limit(starting_point, max - min).map(|v| v + min)
+        discrete_log
+            .decode_limit(starting_point, max - min)
+            .map(|v| v + min)
     }
 
     /// Decrypt a cipher text that is known to encrypt a Balance.

@@ -98,7 +98,11 @@ impl DiscreteLog {
     }
 
     #[cfg(all(not(feature = "rayon"), feature = "balance_64"))]
-    pub fn decode_limit(self, mut starting_point: RistrettoPoint, limit: Balance) -> Option<Balance> {
+    pub fn decode_limit(
+        self,
+        mut starting_point: RistrettoPoint,
+        limit: Balance,
+    ) -> Option<Balance> {
         if let Some(v) = self.decode_u32(starting_point) {
             return Some(v);
         }
@@ -118,7 +122,11 @@ impl DiscreteLog {
     }
 
     #[cfg(all(feature = "rayon", feature = "balance_64"))]
-    pub fn decode_limit(self, mut starting_point: RistrettoPoint, limit: Balance) -> Option<Balance> {
+    pub fn decode_limit(
+        self,
+        mut starting_point: RistrettoPoint,
+        limit: Balance,
+    ) -> Option<Balance> {
         use rayon::prelude::*;
 
         // Use a single thread to check the first 0-u32::MAX range.

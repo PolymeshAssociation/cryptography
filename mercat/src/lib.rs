@@ -117,9 +117,7 @@ pub struct SecAccount {
 
 impl From<EncryptionKeys> for SecAccount {
     fn from(enc_keys: EncryptionKeys) -> Self {
-        Self {
-            enc_keys,
-        }
+        Self { enc_keys }
     }
 }
 
@@ -142,9 +140,7 @@ impl From<EncryptionKeys> for Account {
             public: PubAccount {
                 owner_enc_pub_key: enc_keys.public,
             },
-            secret: SecAccount {
-                enc_keys,
-            }
+            secret: SecAccount { enc_keys },
         }
     }
 }
