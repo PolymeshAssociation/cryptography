@@ -311,9 +311,8 @@ pub trait AssetTransactionVerifier {
         amount: Balance,
         justified_asset_tx: &InitializedAssetTx,
         issr_account: &PubAccount,
-        issr_init_balance: &EncryptedAmount,
         auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
-    ) -> Fallible<EncryptedAmount>;
+    ) -> Fallible<()>;
 }
 
 pub trait AssetTransactionAuditor {

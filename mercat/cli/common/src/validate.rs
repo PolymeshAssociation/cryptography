@@ -286,7 +286,6 @@ pub fn validate_asset_issuance(
         error!("Error in validation of tx-{}: {:#?}", tx_id, error);
         return ValidationResult::error(&issuer, &ticker);
     }
-    let issuer_account_balance = issuer_account_balance.unwrap();
 
     timing!(
         "validator.issuance.load_objects",
@@ -298,13 +297,11 @@ pub fn validate_asset_issuance(
     let validate_issuance_transaction_timer = Instant::now();
 
     let validator = AssetValidator;
-    // TODO: CRYP-165: This requires more work to handle properly. At the moment, I am ignoring the the balance returned.
-    let _ = match validator
+    match validator
         .verify_asset_transaction(
             amount,
             &asset_tx,
             &issuer_ordered_pub_account.pub_account,
-            &issuer_account_balance,
             &[],
         )
         .map_err(|error| Error::LibraryError { error })
@@ -313,8 +310,8 @@ pub fn validate_asset_issuance(
             error!("Error in validation of tx-{}: {:#?}", tx_id, error);
             return ValidationResult::error(&issuer, &ticker);
         }
-        Ok(pub_account) => pub_account,
-    };
+        Ok(_) => (),
+    }
 
     timing!(
         "validator.issuance.transaction",

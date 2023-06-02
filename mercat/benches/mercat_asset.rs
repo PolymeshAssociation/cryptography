@@ -3,8 +3,7 @@ use confidential_identity_core::asset_proofs::Balance;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use mercat::{
     asset::{AssetIssuer, AssetValidator},
-    Account, AssetTransactionIssuer, AssetTransactionVerifier, EncryptedAmount, InitializedAssetTx,
-    PubAccount,
+    Account, AssetTransactionIssuer, AssetTransactionVerifier, InitializedAssetTx, PubAccount,
 };
 use rand::thread_rng;
 
@@ -47,7 +46,6 @@ fn bench_transaction_validator(
     c: &mut Criterion,
     transactions: Vec<InitializedAssetTx>,
     issuer_account: PubAccount,
-    issuer_init_balance: EncryptedAmount,
 ) {
     let indexed_transaction: Vec<((String, Balance), InitializedAssetTx)> =
         (MIN_ISSUED_AMOUNT_ORDER..MAX_ISSUED_AMOUNT_ORDER)
@@ -67,13 +65,7 @@ fn bench_transaction_validator(
                 b.iter(|| {
                     let validator = AssetValidator;
                     validator
-                        .verify_asset_transaction(
-                            amount,
-                            &tx,
-                            &issuer_account,
-                            &issuer_init_balance,
-                            &[],
-                        )
+                        .verify_asset_transaction(amount, &tx, &issuer_account, &[])
                         .unwrap()
                 })
             },
@@ -84,7 +76,7 @@ fn bench_transaction_validator(
 
 fn bench_asset_transaction(c: &mut Criterion) {
     let mut rng = thread_rng();
-    let (issuer_account, issuer_init_balance) = utility::create_account_with_amount(&mut rng, 0);
+    let (issuer_account, _issuer_init_balance) = utility::create_account_with_amount(&mut rng, 0);
 
     let issued_amounts: Vec<Balance> = (MIN_ISSUED_AMOUNT_ORDER..MAX_ISSUED_AMOUNT_ORDER)
         .map(|i| (10 as Balance).pow(i))
@@ -94,7 +86,7 @@ fn bench_asset_transaction(c: &mut Criterion) {
     let transactions = bench_transaction_issuer(c, issuer_account.clone(), issued_amounts);
 
     // Validation
-    bench_transaction_validator(c, transactions, issuer_account.public, issuer_init_balance);
+    bench_transaction_validator(c, transactions, issuer_account.public);
 }
 
 criterion_group! {

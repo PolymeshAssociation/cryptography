@@ -517,15 +517,8 @@ mod tests {
         amount: Balance,
         rng: &mut R,
     ) -> TransferTxMemo {
-        let sender_enc_keys = mock_gen_enc_key_pair(18u8);
         let (_, enc_amount_using_receiver) = receiver_pub_key.encrypt_value(amount.into(), rng);
         TransferTxMemo {
-            sender_account: PubAccount {
-                owner_enc_pub_key: sender_enc_keys.public,
-            },
-            receiver_account: PubAccount {
-                owner_enc_pub_key: receiver_pub_key,
-            },
             enc_amount_using_sender: EncryptedAmount::default(),
             enc_amount_using_receiver,
             refreshed_enc_balance: EncryptedAmount::default(),

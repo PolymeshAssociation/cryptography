@@ -1,9 +1,9 @@
 //! The MERCAT's asset issuance implementation.
 
 use crate::{
-    account::deposit, Account, AssetMemo, AssetTransactionAuditor, AssetTransactionIssuer,
-    AssetTransactionVerifier, AuditorId, AuditorPayload, EncryptedAmount, EncryptionKeys,
-    EncryptionPubKey, InitializedAssetTx, PubAccount,
+    Account, AssetMemo, AssetTransactionAuditor, AssetTransactionIssuer, AssetTransactionVerifier,
+    AuditorId, AuditorPayload, EncryptedAmount, EncryptionKeys, EncryptionPubKey,
+    InitializedAssetTx, PubAccount,
 };
 use confidential_identity_core::asset_proofs::{
     bulletproofs::PedersenGens,
@@ -236,9 +236,8 @@ impl AssetTransactionVerifier for AssetValidator {
         amount: Balance,
         initialized_asset_tx: &InitializedAssetTx,
         issr_account: &PubAccount,
-        issr_init_balance: &EncryptedAmount,
         auditors_enc_pub_keys: &[(AuditorId, EncryptionPubKey)],
-    ) -> Fallible<EncryptedAmount> {
+    ) -> Fallible<()> {
         let gens = PedersenGens::default();
 
         // Verify issuer's initialization proofs.
@@ -253,15 +252,7 @@ impl AssetTransactionVerifier for AssetValidator {
             },
             initialized_asset_tx.balance_correctness_proof,
         )?;
-
-        // After successfully verifying the transaction, validator deposits the amount
-        // to issuer's account (aka processing phase).
-        let updated_issr_balance = deposit(
-            issr_init_balance,
-            &initialized_asset_tx.memo.enc_issued_amount,
-        );
-
-        Ok(updated_issr_balance)
+        Ok(())
     }
 }
 
@@ -375,15 +366,10 @@ mod tests {
 
         // Positive test.
         let validator = AssetValidator;
-        let updated_issuer_balance = validator
-            .verify_asset_transaction(
-                issued_amount,
-                &asset_tx,
-                &issuer_public_account,
-                &issuer_init_balance,
-                &[],
-            )
+        validator
+            .verify_asset_transaction(issued_amount, &asset_tx, &issuer_public_account, &[])
             .unwrap();
+        let updated_issuer_balance = issuer_init_balance + asset_tx.memo.enc_issued_amount;
 
         // ----------------------- Processing
         // Check that the issued amount is added to the account balance.
@@ -444,15 +430,15 @@ mod tests {
             issued_amount,
             &asset_tx,
             &issuer_public_account,
-            &issuer_init_balance,
             validator_auditor_list,
         );
         if validator_check_fails {
             assert_err!(result, ErrorKind::AuditorPayloadError);
             return;
         }
+        result.unwrap();
 
-        let updated_issuer_balance = result.unwrap();
+        let updated_issuer_balance = issuer_init_balance + asset_tx.memo.enc_issued_amount;
         // ----------------------- Processing
         // Check that the issued amount is added to the account balance.
         assert!(issuer_enc_key
