@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use codec::{Decode, Encode, Error as CodecError, Input, Output};
-use sp_std::{cmp::min, convert::TryFrom, prelude::*};
+use sp_std::{cmp::min, convert::TryFrom, prelude::*, vec};
 
 pub const MEMBERSHIP_PROOF_LABEL: &[u8] = b"PolymeshMembershipProofLabel";
 const MEMBERSHIP_PROOF_CHALLENGE_LABEL: &[u8] = b"PolymeshMembershipProofChallengeLabel";

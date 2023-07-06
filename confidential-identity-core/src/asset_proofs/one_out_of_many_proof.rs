@@ -34,6 +34,7 @@ use sp_std::{
     mem,
     ops::{Add, Neg, Sub},
     prelude::*,
+    vec,
 };
 
 const OOON_PROOF_LABEL: &[u8; 14] = b"PolymeshMERCAT";
