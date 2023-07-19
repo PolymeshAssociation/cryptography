@@ -6,6 +6,8 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
+use zeroize::{Zeroize, ZeroizeOnDrop};
+
 use codec::{Decode, Encode};
 pub use confidential_identity_core;
 use confidential_identity_core::asset_proofs::{
@@ -58,7 +60,9 @@ pub type EncryptionSecKey = ElgamalSecretKey;
 /// Holds ElGamal encryption keys.
 #[derive(Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct EncryptionKeys {
+    #[zeroize(skip)]
     pub public: EncryptionPubKey,
     pub secret: EncryptionSecKey,
 }
