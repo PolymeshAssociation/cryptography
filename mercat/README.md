@@ -1,3 +1,10 @@
+# DO NOT USE
+
+The zkproofs in this repository have know issues that will not be fixed here.
+
+Work is continuing in repo [Confidential Assets](https://github.com/PolymeshAssociation/confidential_assets),
+if you are interested please [contact us](https://polymesh.network/contact-us).
+
 # MERCAT library
 
 MERCAT (which stands for Mediated, Encrypted, Reversible, SeCure Asset Transfers and is the name of
