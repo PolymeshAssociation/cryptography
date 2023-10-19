@@ -1,3 +1,7 @@
+# ARCHIVING
+
+This repository is no longer being used by Polymesh (version >=6.0).
+
 # Cryptography
 
 Repository for cryptographic libraries used in Polymath products. While these libraries could in
